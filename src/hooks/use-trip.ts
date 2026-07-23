@@ -216,11 +216,12 @@ export function useDeleteJournal() {
   });
 }
 
-export function useWeather(city: string) {
+export function useWeather(city: string, forecast?: number) {
+  const params = forecast ? `&forecast=${forecast}` : "";
   return useQuery<Weather>({
-    queryKey: ["weather", city],
+    queryKey: ["weather", city, forecast],
     queryFn: async () => {
-      const r = await fetch(`/api/weather?city=${city}`);
+      const r = await fetch(`/api/weather?city=${city}${params}`);
       return r.json();
     },
     staleTime: 10 * 60 * 1000,
@@ -395,6 +396,64 @@ export function useDeleteInfo() {
       await fetch(`/api/info?id=${id}`, { method: "DELETE" });
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["info"] }),
+  });
+}
+
+// === Currency ===
+export interface CurrencyRates {
+  base: string;
+  rates: Record<string, number>;
+  updated: string | null;
+  fallback?: boolean;
+}
+
+export function useCurrency() {
+  return useQuery<CurrencyRates>({
+    queryKey: ["currency"],
+    queryFn: async () => {
+      const r = await fetch("/api/currency");
+      return r.json();
+    },
+    staleTime: 60 * 60 * 1000, // 1 час
+  });
+}
+
+// === Phrasebook ===
+export interface Phrase {
+  id: string;
+  category: string;
+  ru: string;
+  cn: string;
+  pinyin: string;
+  favorite: boolean;
+  order: number;
+}
+
+export function usePhrases(category?: string, favoriteOnly?: boolean) {
+  const params = new URLSearchParams();
+  if (category && category !== "all") params.set("category", category);
+  if (favoriteOnly) params.set("favorite", "true");
+  return useQuery<Phrase[]>({
+    queryKey: ["phrases", category, favoriteOnly],
+    queryFn: async () => {
+      const r = await fetch(`/api/phrases?${params}`);
+      return r.json();
+    },
+  });
+}
+
+export function useTogglePhraseFavorite() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, favorite }: { id: string; favorite: boolean }) => {
+      const r = await fetch("/api/phrases", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id, favorite }),
+      });
+      return r.json();
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["phrases"] }),
   });
 }
 

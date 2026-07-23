@@ -112,7 +112,18 @@ export interface Weather {
   emoji: string;
   max: number;
   min: number;
+  forecast?: WeatherDay[];
   fallback?: boolean;
+}
+
+export interface WeatherDay {
+  date: string;
+  max: number;
+  min: number;
+  code: number;
+  label: string;
+  emoji: string;
+  precip: number;
 }
 
 export const CATEGORY_META: Record<string, { label: string; emoji: string; color: string }> = {

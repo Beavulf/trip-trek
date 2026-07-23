@@ -14,6 +14,8 @@ import {
   BookOpen,
   Info,
   Sparkles,
+  Languages,
+  CloudSun,
   Plus,
   Moon,
   Sun,
@@ -30,7 +32,9 @@ const TABS = [
   { key: "budget", label: "Бюджет", icon: Wallet },
   { key: "rest", label: "Chill", icon: Coffee },
   { key: "journal", label: "Дневник", icon: BookOpen },
-  { key: "ai", label: "AI-Итоги", icon: Sparkles },
+  { key: "ai", label: "AI", icon: Sparkles },
+  { key: "phrases", label: "Фразы", icon: Languages },
+  { key: "weather", label: "Погода", icon: CloudSun },
   { key: "info", label: "Инфо", icon: Info },
 ] as const;
 
@@ -70,6 +74,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             {TABS.map((t) => {
               const Icon = t.icon;
               const active = activeTab === t.key;
+              const badge = getTabBadge(t.key, trip);
               return (
                 <button
                   key={t.key}
@@ -90,6 +95,14 @@ export function AppShell({ children }: { children: ReactNode }) {
                   )}
                   <Icon className="size-4 relative z-10" />
                   <span className="relative z-10">{t.label}</span>
+                  {badge !== null && (
+                    <span className={cn(
+                      "relative z-10 ml-0.5 min-w-4 h-4 px-1 rounded-full text-[9px] font-bold grid place-items-center",
+                      active ? "bg-white/25 text-white" : "bg-primary/15 text-primary"
+                    )}>
+                      {badge}
+                    </span>
+                  )}
                 </button>
               );
             })}
@@ -168,4 +181,21 @@ function ThemeToggle() {
       <Moon className="size-4 block dark:hidden" />
     </button>
   );
+}
+
+// Бейджи уведомлений для табов
+function getTabBadge(key: string, trip: ReturnType<typeof useTrip>["data"]): number | null {
+  if (!trip) return null;
+  switch (key) {
+    case "itinerary": {
+      const unvisited = trip.totalPlaces - trip.visitedPlaces;
+      return unvisited > 0 ? unvisited : null;
+    }
+    case "gallery":
+      return trip.totalPhotos > 0 ? trip.totalPhotos : null;
+    case "journal":
+      return trip.totalJournals > 0 ? trip.totalJournals : null;
+    default:
+      return null;
+  }
 }

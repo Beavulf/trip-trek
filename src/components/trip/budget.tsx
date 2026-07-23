@@ -8,6 +8,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
+import { CurrencyConverter } from "./currency-converter";
 
 export function Budget() {
   const { data: expenses, isLoading } = useExpenses();
@@ -175,6 +176,9 @@ export function Budget() {
           ))}
         </div>
       </div>
+
+      {/* Конвертер валют */}
+      <CurrencyConverter />
     </div>
   );
 }

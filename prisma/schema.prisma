@@ -142,3 +142,16 @@ model InfoItem {
   order     Int      @default(0)
   createdAt DateTime @default(now())
 }
+
+// Фраза разговорника
+model Phrase {
+  id         String  @id @default(cuid())
+  category   String  // basics, food, transport, shopping, emergency, social
+  ru         String  // русский перевод
+  cn         String  // китайский (иероглифы)
+  pinyin     String  // пиньинь (транскрипция)
+  audio      String? // опционально аудио URL
+  favorite   Boolean @default(false)
+  order      Int     @default(0)
+  createdAt  DateTime @default(now())
+}

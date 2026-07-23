@@ -11,6 +11,8 @@ import { RestChill } from "@/components/trip/rest-chill";
 import { Journal } from "@/components/trip/journal";
 import { InfoPanel } from "@/components/trip/info-panel";
 import { AISummary } from "@/components/trip/ai-summary";
+import { Phrasebook } from "@/components/trip/phrasebook";
+import { WeatherPanel } from "@/components/trip/weather-panel";
 import { AnimatePresence, motion } from "framer-motion";
 
 // Leaflet работает только в браузере
@@ -40,6 +42,8 @@ export default function Home() {
           {activeTab === "rest" && <RestChill />}
           {activeTab === "journal" && <Journal />}
           {activeTab === "ai" && <AISummary />}
+          {activeTab === "phrases" && <Phrasebook />}
+          {activeTab === "weather" && <WeatherPanel />}
           {activeTab === "info" && <InfoPanel />}
         </motion.div>
       </AnimatePresence>
