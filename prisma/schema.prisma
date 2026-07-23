@@ -155,3 +155,19 @@ model Phrase {
   order      Int     @default(0)
   createdAt  DateTime @default(now())
 }
+
+// Блюдо гастрономического гида
+model FoodItem {
+  id          String   @id @default(cuid())
+  name        String   // название блюда
+  nameCn      String?  // китайское название
+  description String
+  city        String   // где попробовать (cityKey)
+  place       String?  // конкретное место/ресторан
+  price       String?  // цена
+  emoji       String?  // эмодзи блюда
+  tried       Boolean  @default(false)
+  rating      Int?     // оценка 1-5
+  order       Int      @default(0)
+  createdAt   DateTime @default(now())
+}

@@ -457,6 +457,48 @@ export function useTogglePhraseFavorite() {
   });
 }
 
+// === Food Guide ===
+export interface FoodItem {
+  id: string;
+  name: string;
+  nameCn: string | null;
+  description: string;
+  city: string;
+  place: string | null;
+  price: string | null;
+  emoji: string | null;
+  tried: boolean;
+  rating: number | null;
+  order: number;
+}
+
+export function useFoods(city?: string) {
+  const params = new URLSearchParams();
+  if (city && city !== "all") params.set("city", city);
+  return useQuery<FoodItem[]>({
+    queryKey: ["foods", city],
+    queryFn: async () => {
+      const r = await fetch(`/api/foods?${params}`);
+      return r.json();
+    },
+  });
+}
+
+export function useUpdateFood() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, ...data }: { id: string; tried?: boolean; rating?: number | null }) => {
+      const r = await fetch("/api/foods", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id, ...data }),
+      });
+      return r.json();
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["foods"] }),
+  });
+}
+
 // === Nearby places (Overpass API) ===
 export interface NearbyPlace {
   name: string;

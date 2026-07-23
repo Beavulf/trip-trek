@@ -12,6 +12,8 @@ export type TripTab =
   | "ai"
   | "phrases"
   | "weather"
+  | "transport"
+  | "food"
   | "info";
 
 interface TripState {

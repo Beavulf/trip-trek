@@ -16,6 +16,8 @@ import {
   Sparkles,
   Languages,
   CloudSun,
+  Train,
+  UtensilsCrossed,
   Plus,
   Moon,
   Sun,
@@ -33,8 +35,10 @@ const TABS = [
   { key: "rest", label: "Chill", icon: Coffee },
   { key: "journal", label: "Дневник", icon: BookOpen },
   { key: "ai", label: "AI", icon: Sparkles },
+  { key: "food", label: "Еда", icon: UtensilsCrossed },
   { key: "phrases", label: "Фразы", icon: Languages },
   { key: "weather", label: "Погода", icon: CloudSun },
+  { key: "transport", label: "Транспорт", icon: Train },
   { key: "info", label: "Инфо", icon: Info },
 ] as const;
 

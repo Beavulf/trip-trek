@@ -13,6 +13,8 @@ import { InfoPanel } from "@/components/trip/info-panel";
 import { AISummary } from "@/components/trip/ai-summary";
 import { Phrasebook } from "@/components/trip/phrasebook";
 import { WeatherPanel } from "@/components/trip/weather-panel";
+import { TransportMap } from "@/components/trip/transport-map";
+import { FoodGuide } from "@/components/trip/food-guide";
 import { AnimatePresence, motion } from "framer-motion";
 
 // Leaflet работает только в браузере
@@ -42,8 +44,10 @@ export default function Home() {
           {activeTab === "rest" && <RestChill />}
           {activeTab === "journal" && <Journal />}
           {activeTab === "ai" && <AISummary />}
+          {activeTab === "food" && <FoodGuide />}
           {activeTab === "phrases" && <Phrasebook />}
           {activeTab === "weather" && <WeatherPanel />}
+          {activeTab === "transport" && <TransportMap />}
           {activeTab === "info" && <InfoPanel />}
         </motion.div>
       </AnimatePresence>
