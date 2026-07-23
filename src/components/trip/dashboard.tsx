@@ -171,6 +171,9 @@ export function Dashboard() {
       {/* Следующее место */}
       <NextPlaceWidget trip={trip} onGoToItinerary={() => { setSelectedDay(null); setActiveTab("itinerary"); }} />
 
+      {/* Совет дня */}
+      <DailyTip trip={trip} />
+
       {/* Дни — горизонтальный скролл + список */}
       <div className="rounded-2xl bg-card border border-border p-4">
         <div className="flex items-center justify-between mb-3">
@@ -664,5 +667,66 @@ function ActivityChart({ trip }: { trip: TripSummary }) {
         </span>
       </div>
     </div>
+  );
+}
+
+function DailyTip({ trip }: { trip: TripSummary }) {
+  const currentDay = trip.days.find((d) => d.dayNumber === trip.currentDayNumber);
+  if (!currentDay) return null;
+
+  // Советы по городам и дням
+  const cityTips: Record<string, string[]> = {
+    guangzhou: [
+      "Попробуйте уличную еду на Шансяцзю — чашеобразная лапша и манго саго!",
+      "Круиз по Жемчужной реке лучше всего на закате (~18:30-19:00)",
+      "На Beijing Road под стеклянным полом видны древние мостовые",
+      "Димсамы в Yonghe Palace — классика кантонской кухни",
+    ],
+    shenzhen: [
+      "Смотровая Free Sky на 116 этаже Ping An — билеты от $44",
+      "OCT-LOFT — модный район с галереями и % Arabica",
+      "Haidilao — хот-пот с легендарным сервисом",
+      "Пляж Дамейша — атмосфера французского курорта",
+    ],
+    hongkong: [
+      "Пик Виктория — поднимайтесь на историческом трамвайчике",
+      "Симфония огней в 20:00 на набережной Чимсачёй",
+      "Ozone — самый высокий бар мира (118 этаж Ritz-Carlton)",
+      "Lan Kwai Fong — центр ночной жизни Гонконга",
+    ],
+    macau: [
+      "Lord Stow's Bakery — легендарные португальские яичные тарты",
+      "Казино можно просто осматривать — это бесплатно!",
+      "Бесплатные шаттлы от казино до паромных терминалов",
+      "Rua do Cunha — пешеходная улица с деликатесами",
+    ],
+  };
+
+  const tips = cityTips[currentDay.cityKey] ?? [];
+  if (tips.length === 0) return null;
+
+  // Выбираем совет по номеру дня (детерминированно)
+  const tipIndex = (trip.currentDayNumber - 1) % tips.length;
+  const tip = tips[tipIndex];
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="rounded-2xl bg-gradient-to-br from-violet-500/10 to-fuchsia-500/10 border border-violet-500/30 p-4 relative overflow-hidden"
+    >
+      <div className="absolute -top-3 -right-3 size-16 rounded-full bg-violet-500/10 blur-xl" />
+      <div className="relative flex items-start gap-3">
+        <div className="size-10 rounded-xl bg-violet-500/20 grid place-items-center text-xl shrink-0">
+          💡
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="text-[10px] font-semibold uppercase tracking-wide text-violet-600 dark:text-violet-400 mb-0.5">
+            Совет дня · {currentDay.city}
+          </div>
+          <p className="text-sm leading-relaxed">{tip}</p>
+        </div>
+      </div>
+    </motion.div>
   );
 }

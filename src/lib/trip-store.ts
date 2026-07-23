@@ -14,6 +14,7 @@ export type TripTab =
   | "phrases"
   | "weather"
   | "transport"
+  | "board"
   | "achievements"
   | "info";
 

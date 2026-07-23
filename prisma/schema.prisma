@@ -23,6 +23,7 @@ model Participant {
   photos    Photo[]
   expenses  Expense[]
   journals  JournalEntry[]
+  messages  BoardMessage[]
 }
 
 // День поездки (12 дней)
@@ -170,4 +171,14 @@ model FoodItem {
   rating      Int?     // оценка 1-5
   order       Int      @default(0)
   createdAt   DateTime @default(now())
+}
+
+// Сообщение на доске (чат между друзьями)
+model BoardMessage {
+  id            String   @id @default(cuid())
+  content       String
+  participantId String?
+  participant   Participant? @relation(fields: [participantId], references: [id], onDelete: SetNull)
+  pinned        Boolean  @default(false)
+  createdAt     DateTime @default(now())
 }

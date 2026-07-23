@@ -16,6 +16,7 @@ import { WeatherPanel } from "@/components/trip/weather-panel";
 import { TransportMap } from "@/components/trip/transport-map";
 import { FoodGuide } from "@/components/trip/food-guide";
 import { Achievements } from "@/components/trip/achievements";
+import { Board } from "@/components/trip/board";
 import { AnimatePresence, motion } from "framer-motion";
 
 // Leaflet работает только в браузере
@@ -49,6 +50,7 @@ export default function Home() {
           {activeTab === "phrases" && <Phrasebook />}
           {activeTab === "weather" && <WeatherPanel />}
           {activeTab === "transport" && <TransportMap />}
+          {activeTab === "board" && <Board />}
           {activeTab === "achievements" && <Achievements />}
           {activeTab === "info" && <InfoPanel />}
         </motion.div>
