@@ -33,6 +33,7 @@ import {
 import { useState } from "react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { DataBackup } from "./data-backup";
 
 const CHECKLIST_CATS: Record<string, { label: string; emoji: string; color: string }> = {
   documents: { label: "Документы", emoji: "📄", color: "#ef4444" },
@@ -87,6 +88,9 @@ export function InfoPanel() {
       </div>
 
       {tab === "checklist" ? <ChecklistView /> : <InfoView />}
+
+      {/* Резервное копирование */}
+      <DataBackup />
     </div>
   );
 }

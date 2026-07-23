@@ -274,6 +274,9 @@ export function Dashboard() {
           </div>
         </div>
       )}
+
+      {/* Активность по дням — мини-график */}
+      <ActivityChart trip={trip} />
     </div>
   );
 }
@@ -571,5 +574,95 @@ function NextPlaceWidget({ trip, onGoToItinerary }: { trip: TripSummary; onGoToI
         <ChevronRight className="size-5 text-muted-foreground group-hover:text-primary group-hover:translate-x-1 transition-all shrink-0" />
       </div>
     </motion.button>
+  );
+}
+
+function ActivityChart({ trip }: { trip: TripSummary }) {
+  // Подсчёт посещённых мест по дням
+  const dayData = trip.days.map((d) => {
+    const visited = d.places.filter((p) => p.status === "visited").length;
+    const total = d.places.length;
+    return {
+      day: d.dayNumber,
+      city: d.city,
+      cityKey: d.cityKey,
+      accentColor: d.accentColor,
+      visited,
+      total,
+      pct: total > 0 ? Math.round((visited / total) * 100) : 0,
+      isCurrent: d.dayNumber === trip.currentDayNumber,
+      isPast: d.dayNumber < trip.currentDayNumber,
+    };
+  });
+
+  const cityColors: Record<string, string> = {
+    guangzhou: "#f97316",
+    shenzhen: "#06b6d4",
+    hongkong: "#ec4899",
+    macau: "#8b5cf6",
+  };
+
+  return (
+    <div className="rounded-2xl bg-card border border-border p-4">
+      <h2 className="font-semibold flex items-center gap-2 mb-3">
+        <CalendarDays className="size-4" /> Активность по дням
+      </h2>
+
+      {/* Мини-барчарт */}
+      <div className="flex items-end justify-between gap-1 h-24 mb-2">
+        {dayData.map((d) => {
+          const color = cityColors[d.cityKey] ?? "#f97316";
+          return (
+            <div key={d.day} className="flex-1 flex flex-col items-center gap-1 group relative">
+              {/* Tooltip */}
+              <div className="absolute -top-8 opacity-0 group-hover:opacity-100 transition-opacity bg-card border border-border rounded px-1.5 py-0.5 text-[9px] whitespace-nowrap z-10 shadow-md pointer-events-none">
+                {d.visited}/{d.total}
+              </div>
+              {/* Бар */}
+              <div className="w-full flex-1 flex items-end">
+                <motion.div
+                  initial={{ height: 0 }}
+                  animate={{ height: `${Math.max(d.pct, d.total > 0 ? 4 : 0)}%` }}
+                  transition={{ duration: 0.6, delay: d.day * 0.03 }}
+                  className={cn(
+                    "w-full rounded-t-md transition-all",
+                    d.isCurrent && "ring-2 ring-primary ring-offset-1 ring-offset-card"
+                  )}
+                  style={{
+                    background: d.visited === 0 && !d.isPast ? "var(--muted)" : color,
+                    opacity: d.visited === 0 && !d.isPast ? 0.4 : 1,
+                  }}
+                />
+              </div>
+              {/* Номер дня */}
+              <span className={cn(
+                "text-[8px] font-medium",
+                d.isCurrent ? "text-primary" : "text-muted-foreground"
+              )}>
+                {d.day}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Легенда городов */}
+      <div className="flex items-center gap-3 flex-wrap text-[10px] text-muted-foreground pt-2 border-t border-border">
+        {Object.entries({
+          guangzhou: "Гуанчжоу",
+          shenzhen: "Шэньчжэнь",
+          hongkong: "Гонконг",
+          macau: "Макао",
+        }).map(([key, name]) => (
+          <span key={key} className="flex items-center gap-1">
+            <span className="size-2 rounded-full" style={{ background: cityColors[key] }} />
+            {name}
+          </span>
+        ))}
+        <span className="ml-auto">
+          {trip.visitedPlaces}/{trip.totalPlaces} мест посещено
+        </span>
+      </div>
+    </div>
   );
 }

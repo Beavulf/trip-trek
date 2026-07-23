@@ -18,6 +18,20 @@ export const metadata: Metadata = {
   title: "TripTrek: China — путешествие в Китай",
   description: "Приложение для группового путешествия 3 друзей в Китай: Гуанчжоу, Шэньчжэнь, Гонконг, Макао. Маршрут, карта, галерея, бюджет, дневник.",
   keywords: ["China", "travel", "Гуанчжоу", "Шэньчжэнь", "Гонконг", "Макао", "trip"],
+  manifest: "/manifest.webmanifest",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "black-translucent",
+    title: "TripTrek",
+  },
+  icons: {
+    icon: [
+      { url: "/icon.svg", type: "image/svg+xml" },
+      { url: "/icon-192.png", sizes: "192x192", type: "image/png" },
+      { url: "/icon-512.png", sizes: "512x512", type: "image/png" },
+    ],
+    apple: [{ url: "/icon-192.png", sizes: "192x192" }],
+  },
 };
 
 export const viewport = {
