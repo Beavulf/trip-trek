@@ -405,3 +405,30 @@ Stage Summary:
 - Добавлен виджет "Совет дня" на Dashboard (16 советов по 4 городам)
 - Всего разделов: 15 (Обзор, Маршрут, Карта, Галерея, Бюджет, Chill, Дневник, AI, Еда, Фразы, Погода, Транспорт, Чат, Награды, Инфо)
 - Всё проверено в браузере, ошибок нет, lint чист
+
+---
+Task ID: polish-1
+Agent: main (Z.ai Code)
+Task: Визуальная полировка (без новых фич — по запросу пользователя)
+
+Work Log:
+- 🎨 Dashboard hero: плавающая анимация emoji (y + rotate), декоративный blur-круг, улучшенная глубина
+- 🎨 Tab bar: rounded-xl вместо rounded-lg, shadow-md на активном, active:scale-95, иконка scale-110 на активном, transition-all duration-200
+- 🎨 FAB: pulsing ring анимация (scale 1→1.4, opacity 0.4→0), whileTap scale 0.88, whileHover 1.06
+- 🎨 Footer: компактный с разделителями, адаптивный (скрывает маршрут на мобиле)
+- 🎨 Header: glass-strong (blur 20px + saturate 200%), лого с motion entrance + shadow-orange-500/20
+- 🎨 globals.css: smooth scrolling, ::selection с primary tint, :focus-visible outline, font-smoothing antialiased, тонкий скроллбар 6px
+- 🎨 Utility классы: glass-strong (85% + blur 20px), card-hover (shadow transition)
+- 🎨 StatCard: whileTap scale 0.96, card-hover, декоративный blur, rounded-xl иконка, tabular-nums
+- 🎨 DayCard (itinerary): card-hover, shadow с цветом города на иконке, motion.div прогресс-бар, motion ChevronDown rotate, tabular-nums
+- 🎨 Quick-add кнопки: цветные иконки (cyan/green/violet), motion.button whileTap, blur-декор на активном, scale иконки, shadow-primary/10
+- 🎨 Page transitions: улучшенный ease [0.22, 1, 0.36, 1], duration 0.22
+- 🎨 Фоновый градиент: subtle radial-gradient (primary + violet) opacity 0.03 для глубины
+- Проверка: lint чист, ошибок в браузере нет, все разделы работают
+
+Stage Summary:
+- Полировка визуала без новых фич (по запросу)
+- Улучшены: hero, таб-бар, FAB, footer, header, StatCard, DayCard, quick-add кнопки
+- Добавлены: плавающие анимации, pulse-эффекты, blur-декоры, smooth transitions, font-smoothing
+- Фон: subtle градиент для глубины
+- Всё проверено, lint чист, ошибок нет

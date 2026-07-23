@@ -76,9 +76,18 @@ export function Dashboard() {
           background: `linear-gradient(135deg, ${currentDay?.accentColor ?? "#f97316"} 0%, #1c1917 100%)`,
         }}
       >
-        <div className="absolute -top-6 -right-4 text-[140px] opacity-10 select-none leading-none">
+        {/* Плавающие декоративные круги */}
+        <motion.div
+          animate={{ y: [0, -12, 0], rotate: [0, 8, 0] }}
+          transition={{ duration: 6, repeat: Infinity, ease: "easeInOut" }}
+          className="absolute -top-8 -right-6 text-[140px] opacity-10 select-none leading-none"
+        >
           {cityEmoji}
-        </div>
+        </motion.div>
+        <div
+          className="absolute -bottom-12 -left-8 size-40 rounded-full opacity-10 blur-2xl"
+          style={{ background: "white" }}
+        />
         <div className="relative">
           <div className="flex items-center gap-2 text-white/80 text-xs font-medium mb-1">
             <CalendarDays className="size-3.5" />
@@ -305,16 +314,24 @@ function ProgressRow({ label, value, icon, right }: { label: string; value: numb
 
 function StatCard({ icon, value, label, color, onClick }: { icon: React.ReactNode; value: number; label: string; color: string; onClick?: () => void }) {
   return (
-    <button
+    <motion.button
       onClick={onClick}
-      className="rounded-2xl bg-card border border-border p-4 text-left hover:shadow-lg transition-shadow"
+      whileTap={{ scale: 0.96 }}
+      className="rounded-2xl bg-card border border-border p-4 text-left card-hover hover:border-primary/30 relative overflow-hidden"
     >
-      <div className="size-9 rounded-lg grid place-items-center mb-2" style={{ background: `${color}22`, color }}>
-        {icon}
+      {/* Декоративный blur */}
+      <div
+        className="absolute -top-4 -right-4 size-14 rounded-full opacity-10 blur-xl"
+        style={{ background: color }}
+      />
+      <div className="relative">
+        <div className="size-9 rounded-xl grid place-items-center mb-2" style={{ background: `${color}22`, color }}>
+          {icon}
+        </div>
+        <div className="text-2xl font-bold leading-none tabular-nums">{value}</div>
+        <div className="text-xs text-muted-foreground mt-1">{label}</div>
       </div>
-      <div className="text-2xl font-bold leading-none">{value}</div>
-      <div className="text-xs text-muted-foreground mt-1">{label}</div>
-    </button>
+    </motion.button>
   );
 }
 

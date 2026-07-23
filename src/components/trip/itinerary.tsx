@@ -114,14 +114,14 @@ function DayCard({ day, onOpenPlace }: { day: Day; onOpenPlace: (p: Place) => vo
   const progress = day.places.length ? (visited / day.places.length) * 100 : 0;
 
   return (
-    <div className="rounded-2xl bg-card border border-border overflow-hidden">
+    <div className="rounded-2xl bg-card border border-border overflow-hidden card-hover">
       <button
         onClick={() => setExpanded((v) => !v)}
-        className="w-full flex items-center gap-3 p-4 hover:bg-accent/40 transition-colors text-left"
+        className="w-full flex items-center gap-3 p-4 hover:bg-accent/40 transition-colors text-left active:bg-accent/60"
       >
         <div
-          className="size-11 rounded-xl grid place-items-center text-white font-bold shrink-0 shadow-md"
-          style={{ background: day.accentColor ?? "#f97316" }}
+          className="size-11 rounded-xl grid place-items-center text-white font-bold shrink-0 shadow-lg"
+          style={{ background: day.accentColor ?? "#f97316", boxShadow: `0 4px 12px -2px ${day.accentColor ?? "#f97316"}40` }}
         >
           {day.dayNumber}
         </div>
@@ -130,13 +130,21 @@ function DayCard({ day, onOpenPlace }: { day: Day; onOpenPlace: (p: Place) => vo
             <MapPin className="size-3" /> {day.city}
           </div>
           <div className="font-semibold text-sm truncate">{day.title}</div>
-          <div className="mt-1 h-1 rounded-full bg-muted overflow-hidden">
-            <div className="h-full rounded-full transition-all" style={{ width: `${progress}%`, background: day.accentColor ?? "#f97316" }} />
+          <div className="mt-1.5 h-1.5 rounded-full bg-muted overflow-hidden">
+            <motion.div
+              initial={{ width: 0 }}
+              animate={{ width: `${progress}%` }}
+              transition={{ duration: 0.5, ease: "easeOut" }}
+              className="h-full rounded-full"
+              style={{ background: day.accentColor ?? "#f97316" }}
+            />
           </div>
         </div>
-        <div className="text-right shrink-0">
-          <div className="text-xs font-medium">{visited}/{day.places.length}</div>
-          <ChevronDown className={cn("size-4 text-muted-foreground transition-transform", expanded && "rotate-180")} />
+        <div className="text-right shrink-0 flex flex-col items-end gap-1">
+          <div className="text-xs font-medium tabular-nums">{visited}/{day.places.length}</div>
+          <motion.div animate={{ rotate: expanded ? 180 : 0 }} transition={{ duration: 0.2 }}>
+            <ChevronDown className="size-4 text-muted-foreground" />
+          </motion.div>
         </div>
       </button>
 

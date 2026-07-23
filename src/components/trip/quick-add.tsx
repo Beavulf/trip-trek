@@ -13,6 +13,7 @@ import { EXPENSE_CATEGORIES, type Day } from "@/lib/types";
 import { Camera, Wallet, BookOpen, Loader2, Check, X } from "lucide-react";
 import { useRef, useState } from "react";
 import { toast } from "sonner";
+import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
 
 type Mode = "photo" | "expense" | "journal";
@@ -36,25 +37,41 @@ export function QuickAddSheet({ open, onOpenChange }: { open: boolean; onOpenCha
         {/* Выбор режима */}
         <div className="grid grid-cols-3 gap-2.5 mt-4">
           {([
-            { key: "photo", label: "Фото", icon: Camera },
-            { key: "expense", label: "Трата", icon: Wallet },
-            { key: "journal", label: "Заметка", icon: BookOpen },
+            { key: "photo", label: "Фото", icon: Camera, color: "#06b6d4" },
+            { key: "expense", label: "Трата", icon: Wallet, color: "#10b981" },
+            { key: "journal", label: "Заметка", icon: BookOpen, color: "#8b5cf6" },
           ] as const).map((m) => {
             const Icon = m.icon;
+            const active = mode === m.key;
             return (
-              <button
+              <motion.button
                 key={m.key}
                 onClick={() => setMode(m.key)}
+                whileTap={{ scale: 0.94 }}
                 className={cn(
-                  "flex flex-col items-center gap-2 py-4 rounded-2xl border-2 transition-all active:scale-95",
-                  mode === m.key
-                    ? "border-primary bg-primary/10 text-primary"
-                    : "border-border text-muted-foreground hover:bg-accent"
+                  "relative flex flex-col items-center gap-2 py-4 rounded-2xl border-2 transition-all overflow-hidden",
+                  active
+                    ? "border-primary bg-primary/10 text-primary shadow-md shadow-primary/10"
+                    : "border-border text-muted-foreground hover:bg-accent hover:border-primary/20"
                 )}
               >
-                <Icon className="size-7" strokeWidth={2} />
-                <span className="text-sm font-medium">{m.label}</span>
-              </button>
+                {active && (
+                  <div
+                    className="absolute -top-3 -right-3 size-12 rounded-full opacity-15 blur-lg"
+                    style={{ background: m.color }}
+                  />
+                )}
+                <div
+                  className="relative size-10 rounded-xl grid place-items-center transition-transform"
+                  style={{
+                    background: active ? `${m.color}22` : "transparent",
+                    transform: active ? "scale(1.1)" : "scale(1)",
+                  }}
+                >
+                  <Icon className="size-6" strokeWidth={2} style={{ color: active ? m.color : undefined }} />
+                </div>
+                <span className="relative text-sm font-medium">{m.label}</span>
+              </motion.button>
             );
           })}
         </div>

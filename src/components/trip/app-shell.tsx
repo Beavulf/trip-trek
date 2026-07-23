@@ -67,14 +67,22 @@ export function AppShell({ children }: { children: ReactNode }) {
   }, []);
 
   return (
-    <div className="min-h-screen flex flex-col bg-background">
+    <div className="min-h-screen flex flex-col bg-background relative">
+      {/* Декоративный фоновый градиент */}
+      <div className="fixed inset-0 pointer-events-none opacity-[0.03]" style={{
+        backgroundImage: "radial-gradient(circle at 20% 0%, var(--primary) 0%, transparent 50%), radial-gradient(circle at 80% 100%, #8b5cf6 0%, transparent 50%)",
+      }} />
       {/* Header */}
-      <header className="sticky top-0 z-40 glass border-b border-border">
+      <header className="sticky top-0 z-40 glass-strong border-b border-border/80">
         <div className="mx-auto max-w-7xl px-3 sm:px-4 h-14 flex items-center gap-2 sm:gap-3">
           <div className="flex items-center gap-2 min-w-0">
-            <div className="size-8 rounded-xl bg-gradient-to-br from-orange-500 via-rose-500 to-violet-500 grid place-items-center text-white font-bold text-sm shadow-lg shrink-0">
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              className="size-8 rounded-xl bg-gradient-to-br from-orange-500 via-rose-500 to-violet-500 grid place-items-center text-white font-bold text-sm shadow-lg shadow-orange-500/20 shrink-0"
+            >
               T
-            </div>
+            </motion.div>
             <div className="min-w-0 hidden xs:block">
               <div className="font-bold text-sm leading-tight truncate">
                 TripTrek <span className="text-muted-foreground font-normal">China</span>
@@ -113,24 +121,24 @@ export function AppShell({ children }: { children: ReactNode }) {
                   key={t.key}
                   onClick={() => setActiveTab(t.key)}
                   className={cn(
-                    "relative flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs sm:text-sm font-medium whitespace-nowrap transition-colors",
+                    "relative flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl text-xs sm:text-sm font-medium whitespace-nowrap transition-all duration-200 active:scale-95",
                     active
                       ? "text-primary-foreground"
-                      : "text-muted-foreground hover:text-foreground hover:bg-accent"
+                      : "text-muted-foreground hover:text-foreground hover:bg-accent/60"
                   )}
                 >
                   {active && (
                     <motion.div
                       layoutId="tab-bg"
-                      className="absolute inset-0 rounded-lg bg-primary"
+                      className="absolute inset-0 rounded-xl bg-primary shadow-md shadow-primary/30"
                       transition={{ type: "spring", stiffness: 400, damping: 32 }}
                     />
                   )}
-                  <Icon className="size-4 relative z-10" />
+                  <Icon className={cn("size-4 relative z-10 transition-transform", active && "scale-110")} />
                   <span className="relative z-10">{t.label}</span>
                   {badge !== null && (
                     <span className={cn(
-                      "relative z-10 ml-0.5 min-w-4 h-4 px-1 rounded-full text-[9px] font-bold grid place-items-center",
+                      "relative z-10 ml-0.5 min-w-4 h-4 px-1 rounded-full text-[9px] font-bold grid place-items-center transition-colors",
                       active ? "bg-white/25 text-white" : "bg-primary/15 text-primary"
                     )}>
                       {badge}
@@ -149,18 +157,31 @@ export function AppShell({ children }: { children: ReactNode }) {
       </main>
 
       {/* FAB — большой, удобно для пальца на мобиле */}
-      <button
+      <motion.button
         onClick={() => setQuickOpen(true)}
-        className="fixed bottom-5 right-4 sm:right-6 z-40 size-16 sm:size-14 rounded-full bg-gradient-to-br from-orange-500 to-rose-500 text-white shadow-2xl shadow-orange-500/40 grid place-items-center active:scale-90 hover:scale-105 transition-transform border-2 border-white/20"
+        whileTap={{ scale: 0.88 }}
+        whileHover={{ scale: 1.06 }}
+        className="fixed bottom-5 right-4 sm:right-6 z-40 size-16 sm:size-14 rounded-full bg-gradient-to-br from-orange-500 to-rose-500 text-white shadow-2xl shadow-orange-500/40 grid place-items-center transition-transform border-2 border-white/20"
         aria-label="Быстрое добавление"
       >
-        <Plus className="size-8 sm:size-7" strokeWidth={2.5} />
-      </button>
+        {/* Pulsing ring */}
+        <motion.div
+          className="absolute inset-0 rounded-full bg-orange-500"
+          animate={{ scale: [1, 1.4], opacity: [0.4, 0] }}
+          transition={{ duration: 2, repeat: Infinity, ease: "easeOut" }}
+        />
+        <Plus className="size-8 sm:size-7 relative z-10" strokeWidth={2.5} />
+      </motion.button>
 
       {/* Footer */}
-      <footer className="mt-auto border-t border-border bg-card/50">
-        <div className="mx-auto max-w-7xl px-4 py-3 text-center text-xs text-muted-foreground">
-          TripTrek · China 2024 · Гуанчжоу → Шэньчжэнь → Гонконг → Макао · 12 дней в пути 🌏
+      <footer className="mt-auto border-t border-border bg-card/30">
+        <div className="mx-auto max-w-7xl px-4 py-3 flex items-center justify-center gap-2 text-[11px] text-muted-foreground">
+          <span className="font-medium">TripTrek</span>
+          <span className="opacity-40">·</span>
+          <span>China 2024</span>
+          <span className="opacity-40">·</span>
+          <span className="hidden sm:inline">Гуанчжоу → Шэньчжэнь → Гонконг → Макао</span>
+          <span className="sm:hidden">12 дней 🌏</span>
         </div>
       </footer>
 
