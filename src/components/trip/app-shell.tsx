@@ -18,6 +18,7 @@ import {
   CloudSun,
   Train,
   UtensilsCrossed,
+  Trophy,
   Plus,
   Moon,
   Sun,
@@ -41,6 +42,7 @@ const TABS = [
   { key: "phrases", label: "Фразы", icon: Languages },
   { key: "weather", label: "Погода", icon: CloudSun },
   { key: "transport", label: "Транспорт", icon: Train },
+  { key: "achievements", label: "Награды", icon: Trophy },
   { key: "info", label: "Инфо", icon: Info },
 ] as const;
 

@@ -7,6 +7,7 @@ import { useState, useMemo } from "react";
 import { motion } from "framer-motion";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { RestTimer } from "./rest-timer";
 
 const CHILL_CATEGORIES = ["cafe", "bar", "restaurant"];
 
@@ -86,6 +87,9 @@ export function RestChill() {
           <Locate className="size-4" /> Поблизости
         </button>
       </div>
+
+      {/* Таймер отдыха */}
+      <RestTimer />
 
       {view === "route" ? (
         <>

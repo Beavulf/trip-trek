@@ -10,10 +10,11 @@ export type TripTab =
   | "rest"
   | "journal"
   | "ai"
+  | "food"
   | "phrases"
   | "weather"
   | "transport"
-  | "food"
+  | "achievements"
   | "info";
 
 interface TripState {
