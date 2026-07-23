@@ -119,3 +119,24 @@ model TripSettings {
   currency      String   @default("USD")
   currentUserId String?  // выбранный сейчас участник
 }
+
+// Пункт чек-листа (предпоездный)
+model ChecklistItem {
+  id        String   @id @default(cuid())
+  text      String
+  category  String   @default("preparation") // preparation, documents, health, packing
+  done      Boolean  @default(false)
+  order     Int      @default(0)
+  createdAt DateTime @default(now())
+}
+
+// Полезный совет/контакт
+model InfoItem {
+  id        String   @id @default(cuid())
+  type      String   // tip, contact, transport, food
+  title     String
+  content   String
+  icon      String?  // эмодзи
+  order     Int      @default(0)
+  createdAt DateTime @default(now())
+}

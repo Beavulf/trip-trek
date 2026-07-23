@@ -12,9 +12,13 @@ import {
   Wallet,
   Coffee,
   BookOpen,
+  Info,
   Plus,
+  Moon,
+  Sun,
 } from "lucide-react";
 import { useState, type ReactNode } from "react";
+import { useTheme } from "next-themes";
 import { QuickAddSheet } from "./quick-add";
 
 const TABS = [
@@ -25,6 +29,7 @@ const TABS = [
   { key: "budget", label: "Бюджет", icon: Wallet },
   { key: "rest", label: "Chill", icon: Coffee },
   { key: "journal", label: "Дневник", icon: BookOpen },
+  { key: "info", label: "Инфо", icon: Info },
 ] as const;
 
 export function AppShell({ children }: { children: ReactNode }) {
@@ -53,6 +58,7 @@ export function AppShell({ children }: { children: ReactNode }) {
 
           <div className="flex-1" />
 
+          <ThemeToggle />
           <ParticipantAvatars />
         </div>
 
@@ -141,5 +147,23 @@ function ParticipantAvatars() {
         );
       })}
     </div>
+  );
+}
+
+function ThemeToggle() {
+  const { setTheme } = useTheme();
+  const toggle = () => {
+    const isDark = document.documentElement.classList.contains("dark");
+    setTheme(isDark ? "light" : "dark");
+  };
+  return (
+    <button
+      onClick={toggle}
+      title="Сменить тему"
+      className="size-8 rounded-full grid place-items-center bg-secondary border border-border hover:bg-accent transition-colors"
+    >
+      <Sun className="size-4 hidden dark:block" />
+      <Moon className="size-4 block dark:hidden" />
+    </button>
   );
 }

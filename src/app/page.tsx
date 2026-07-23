@@ -9,6 +9,7 @@ import { Gallery } from "@/components/trip/gallery";
 import { Budget } from "@/components/trip/budget";
 import { RestChill } from "@/components/trip/rest-chill";
 import { Journal } from "@/components/trip/journal";
+import { InfoPanel } from "@/components/trip/info-panel";
 import { AnimatePresence, motion } from "framer-motion";
 
 // Leaflet работает только в браузере
@@ -37,6 +38,7 @@ export default function Home() {
           {activeTab === "budget" && <Budget />}
           {activeTab === "rest" && <RestChill />}
           {activeTab === "journal" && <Journal />}
+          {activeTab === "info" && <InfoPanel />}
         </motion.div>
       </AnimatePresence>
     </AppShell>

@@ -8,7 +8,8 @@ export type TripTab =
   | "gallery"
   | "budget"
   | "rest"
-  | "journal";
+  | "journal"
+  | "info";
 
 interface TripState {
   activeTab: TripTab;

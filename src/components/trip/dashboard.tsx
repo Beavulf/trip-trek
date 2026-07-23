@@ -16,20 +16,47 @@ import {
   CheckCircle2,
   Circle,
   CalendarDays,
+  Plane,
+  Clock,
+  Route,
 } from "lucide-react";
 import { CITIES, CATEGORY_META } from "@/lib/types";
 import { cn } from "@/lib/utils";
+
+const CITY_EMOJI: Record<string, string> = {
+  guangzhou: "🏯",
+  shenzhen: "🏙️",
+  hongkong: "🌃",
+  macau: "🎰",
+};
 
 export function Dashboard() {
   const { data: trip, isLoading } = useTrip();
   const { setActiveTab, setSelectedDay } = useTripStore();
 
   if (isLoading || !trip) {
-    return <div className="grid place-items-center py-20 text-muted-foreground">Загрузка…</div>;
+    return <DashboardSkeleton />;
   }
 
   const currentDay = trip.days.find((d) => d.dayNumber === trip.currentDayNumber);
   const currentCityKey = currentDay?.cityKey ?? "guangzhou";
+  const cityEmoji = CITY_EMOJI[currentCityKey] ?? "🏯";
+
+  // Обратный отсчёт / прогресс по времени
+  const now = new Date();
+  const start = new Date(trip.settings.startDate);
+  start.setHours(0, 0, 0, 0);
+  const end = new Date(start);
+  end.setDate(end.getDate() + trip.settings.totalDays - 1);
+  end.setHours(23, 59, 59, 999);
+
+  const isBefore = now < start;
+  const isAfter = now > end;
+  const daysRemaining = isBefore
+    ? Math.ceil((start.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
+    : isAfter
+    ? 0
+    : Math.ceil((end.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
 
   return (
     <div className="space-y-4 animate-fade-up">
@@ -42,8 +69,8 @@ export function Dashboard() {
           background: `linear-gradient(135deg, ${currentDay?.accentColor ?? "#f97316"} 0%, #1c1917 100%)`,
         }}
       >
-        <div className="absolute -top-8 -right-8 text-[120px] opacity-10 select-none">
-          {CITIES.find((c) => c.key === currentCityKey)?.name[0] ?? "🏯"}
+        <div className="absolute -top-6 -right-4 text-[140px] opacity-10 select-none leading-none">
+          {cityEmoji}
         </div>
         <div className="relative">
           <div className="flex items-center gap-2 text-white/80 text-xs font-medium mb-1">
@@ -66,10 +93,19 @@ export function Dashboard() {
 
       {/* Сетка виджетов */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        {/* Обратный отсчёт / статус поездки */}
+        <CountdownCard
+          isBefore={isBefore}
+          isAfter={isAfter}
+          daysRemaining={daysRemaining}
+          currentDay={trip.currentDayNumber}
+          totalDays={trip.settings.totalDays}
+        />
+
         {/* Бюджет */}
         <button
           onClick={() => setActiveTab("budget")}
-          className="col-span-2 lg:col-span-2 rounded-2xl bg-card border border-border p-4 text-left hover:shadow-lg transition-shadow group"
+          className="col-span-2 lg:col-span-1 rounded-2xl bg-card border border-border p-4 text-left hover:shadow-lg transition-shadow group"
         >
           <div className="flex items-center justify-between mb-2">
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -102,6 +138,24 @@ export function Dashboard() {
           label="Фото"
           color="#06b6d4"
           onClick={() => setActiveTab("gallery")}
+        />
+
+        {/* Места */}
+        <StatCard
+          icon={<MapPin className="size-5" />}
+          value={trip.visitedPlaces}
+          label={`из ${trip.totalPlaces} мест`}
+          color="#f97316"
+          onClick={() => setActiveTab("itinerary")}
+        />
+
+        {/* Дневник */}
+        <StatCard
+          icon={<BookOpen className="size-5" />}
+          value={trip.totalJournals}
+          label="Записей"
+          color="#8b5cf6"
+          onClick={() => setActiveTab("journal")}
         />
       </div>
 
@@ -283,4 +337,82 @@ function timeLabel(t: string | null) {
     case "evening": return "🌙 Вечер";
     default: return "Весь день";
   }
+}
+
+function CountdownCard({
+  isBefore,
+  isAfter,
+  daysRemaining,
+  currentDay,
+  totalDays,
+}: {
+  isBefore: boolean;
+  isAfter: boolean;
+  daysRemaining: number;
+  currentDay: number;
+  totalDays: number;
+}) {
+  let icon = <Clock className="size-5" />;
+  let label = "В пути";
+  let value = `${currentDay}/${totalDays}`;
+  let sub = `осталось ${daysRemaining} дн.`;
+  let color = "#10b981";
+
+  if (isBefore) {
+    icon = <Plane className="size-5" />;
+    label = "До поездки";
+    value = `${daysRemaining}`;
+    sub = daysRemaining === 1 ? "день" : daysRemaining < 5 ? "дня" : "дней";
+    color = "#f59e0b";
+  } else if (isAfter) {
+    icon = <Route className="size-5" />;
+    label = "Поездка завершена";
+    value = "✓";
+    sub = `${totalDays} дней позади`;
+    color = "#8b5cf6";
+  }
+
+  return (
+    <div className="col-span-2 lg:col-span-1 rounded-2xl bg-card border border-border p-4 relative overflow-hidden">
+      <div
+        className="absolute -top-3 -right-3 size-16 rounded-full opacity-10 blur-xl"
+        style={{ background: color }}
+      />
+      <div className="flex items-center gap-2 text-sm text-muted-foreground mb-2">
+        <span style={{ color }}>{icon}</span> {label}
+      </div>
+      <div className="flex items-baseline gap-1.5">
+        <span className="text-3xl font-bold leading-none" style={{ color }}>{value}</span>
+        <span className="text-xs text-muted-foreground">{sub}</span>
+      </div>
+      {/* мини-таймлайн */}
+      <div className="mt-3 flex gap-0.5">
+        {Array.from({ length: totalDays }).map((_, i) => (
+          <div
+            key={i}
+            className={cn(
+              "h-1.5 flex-1 rounded-full transition-colors",
+              isBefore ? "bg-muted" : isAfter ? "bg-primary" : i + 1 < currentDay ? "bg-primary" : i + 1 === currentDay ? "bg-primary/60" : "bg-muted"
+            )}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function DashboardSkeleton() {
+  return (
+    <div className="space-y-4 animate-pulse">
+      <div className="rounded-3xl h-40 bg-muted" />
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <div className="col-span-2 lg:col-span-1 rounded-2xl h-24 bg-muted" />
+        <div className="col-span-2 lg:col-span-1 rounded-2xl h-24 bg-muted" />
+        <div className="rounded-2xl h-24 bg-muted" />
+        <div className="rounded-2xl h-24 bg-muted" />
+      </div>
+      <div className="rounded-2xl h-32 bg-muted" />
+      <div className="rounded-2xl h-48 bg-muted" />
+    </div>
+  );
 }

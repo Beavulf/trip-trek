@@ -189,3 +189,84 @@ export function useSetCurrentUser() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ["trip"] }),
   });
 }
+
+// === Checklist ===
+export interface ChecklistItem {
+  id: string;
+  text: string;
+  category: string;
+  done: boolean;
+  order: number;
+}
+
+export function useChecklist() {
+  return useQuery<ChecklistItem[]>({
+    queryKey: ["checklist"],
+    queryFn: async () => {
+      const r = await fetch("/api/checklist");
+      return r.json();
+    },
+  });
+}
+
+export function useToggleChecklist() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, done }: { id: string; done: boolean }) => {
+      const r = await fetch("/api/checklist", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id, done }),
+      });
+      return r.json();
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["checklist"] }),
+  });
+}
+
+export function useAddChecklist() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ text, category }: { text: string; category: string }) => {
+      const r = await fetch("/api/checklist", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text, category }),
+      });
+      return r.json();
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["checklist"] }),
+  });
+}
+
+export function useDeleteChecklist() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      await fetch(`/api/checklist?id=${id}`, { method: "DELETE" });
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["checklist"] }),
+  });
+}
+
+// === Info ===
+export interface InfoItem {
+  id: string;
+  type: string;
+  title: string;
+  content: string;
+  icon: string | null;
+  order: number;
+}
+
+export function useInfo(type?: string) {
+  const params = new URLSearchParams();
+  if (type) params.set("type", type);
+  return useQuery<InfoItem[]>({
+    queryKey: ["info", type],
+    queryFn: async () => {
+      const r = await fetch(`/api/info?${params}`);
+      return r.json();
+    },
+  });
+}
