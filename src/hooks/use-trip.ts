@@ -457,6 +457,38 @@ export function useTogglePhraseFavorite() {
   });
 }
 
+// === Budget Plan ===
+export interface BudgetPlan {
+  id: string;
+  category: string;
+  amount: number;
+}
+
+export function useBudgetPlan() {
+  return useQuery<BudgetPlan[]>({
+    queryKey: ["budget-plan"],
+    queryFn: async () => {
+      const r = await fetch("/api/budget-plan");
+      return r.json();
+    },
+  });
+}
+
+export function useUpdateBudgetPlan() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ category, amount }: { category: string; amount: number }) => {
+      const r = await fetch("/api/budget-plan", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ category, amount }),
+      });
+      return r.json();
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["budget-plan"] }),
+  });
+}
+
 // === Board (сообщения) ===
 export interface BoardMessage {
   id: string;

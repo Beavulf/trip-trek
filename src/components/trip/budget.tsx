@@ -9,6 +9,7 @@ import { toast } from "sonner";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { CurrencyConverter } from "./currency-converter";
+import { BudgetPlanWidget } from "./budget-plan-widget";
 
 export function Budget() {
   const { data: expenses, isLoading } = useExpenses();
@@ -156,6 +157,9 @@ export function Budget() {
           </div>
         );
       })()}
+
+      {/* План vs Факт по категориям */}
+      <BudgetPlanWidget />
 
       {/* Персональные бюджеты */}
       <div className="rounded-2xl bg-card border border-border p-4">

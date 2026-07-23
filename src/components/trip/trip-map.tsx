@@ -6,7 +6,8 @@ import { CATEGORY_META, CITIES, type Place, type Day } from "@/lib/types";
 import { MapContainer, TileLayer, Marker, Popup, useMap, useMapEvents } from "react-leaflet";
 import L from "leaflet";
 import { useEffect, useMemo, useState } from "react";
-import { CheckCircle2, Circle, MapPin, Star, Coffee, Filter, Navigation, Plus, Hand } from "lucide-react";
+import { CheckCircle2, Circle, MapPin, Star, Coffee, Filter, Navigation, Plus, Hand, Moon, Sun } from "lucide-react";
+import { useTheme } from "next-themes";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { AddPlaceSheet, type AddPlaceData } from "./add-place-sheet";
@@ -32,7 +33,14 @@ export default function TripMap() {
   const [addMode, setAddMode] = useState(false);
   const [addData, setAddData] = useState<AddPlaceData | null>(null);
   const [addOpen, setAddOpen] = useState(false);
-  const [tileLayer, setTileLayer] = useState<"voyager" | "satellite" | "light">("voyager");
+  const [autoTheme, setAutoTheme] = useState(true);
+  const [manualLayer, setManualLayer] = useState<"voyager" | "satellite" | "light" | "dark">("voyager");
+  const { resolvedTheme } = useTheme();
+
+  // Автоматический выбор слоя по теме
+  const tileLayer = autoTheme
+    ? resolvedTheme === "dark" ? "dark" : "voyager"
+    : manualLayer;
 
   const TILE_LAYERS = {
     voyager: {
@@ -45,6 +53,10 @@ export default function TripMap() {
     },
     light: {
       url: "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png",
+      attr: "&copy; OpenStreetMap &copy; CARTO",
+    },
+    dark: {
+      url: "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",
       attr: "&copy; OpenStreetMap &copy; CARTO",
     },
   };
@@ -204,18 +216,31 @@ export default function TripMap() {
         )}
         {/* Переключатель слоёв карты */}
         <div className="absolute top-2 right-2 z-[500] flex flex-col gap-1 bg-card/90 backdrop-blur rounded-lg p-1 shadow-lg">
+          {/* Auto — по теме */}
+          <button
+            onClick={() => setAutoTheme(true)}
+            title="Авто (по теме)"
+            className={cn(
+              "size-9 rounded-md text-base grid place-items-center transition-colors",
+              autoTheme ? "bg-primary text-primary-foreground" : "hover:bg-accent"
+            )}
+          >
+            {resolvedTheme === "dark" ? <Moon className="size-4" /> : <Sun className="size-4" />}
+          </button>
+          {/* Ручные слои */}
           {([
             { key: "voyager", label: "🗺️", title: "Подробная" },
             { key: "satellite", label: "🛰️", title: "Спутник" },
+            { key: "dark", label: "🌙", title: "Тёмная" },
             { key: "light", label: "⚪", title: "Светлая" },
           ] as const).map((l) => (
             <button
               key={l.key}
-              onClick={() => setTileLayer(l.key)}
+              onClick={() => { setAutoTheme(false); setManualLayer(l.key); }}
               title={l.title}
               className={cn(
                 "size-9 rounded-md text-base grid place-items-center transition-colors",
-                tileLayer === l.key ? "bg-primary text-primary-foreground" : "hover:bg-accent"
+                !autoTheme && tileLayer === l.key ? "bg-primary text-primary-foreground" : "hover:bg-accent"
               )}
             >
               {l.label}

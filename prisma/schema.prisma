@@ -182,3 +182,10 @@ model BoardMessage {
   pinned        Boolean  @default(false)
   createdAt     DateTime @default(now())
 }
+
+// Плановый бюджет по категории
+model BudgetPlan {
+  id        String  @id @default(cuid())
+  category  String  @unique // accommodation, food, transport, attractions, casino, shopping, other
+  amount    Float   // плановая сумма
+}
