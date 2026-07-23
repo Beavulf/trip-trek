@@ -1,0 +1,121 @@
+// TripTrek China — Prisma schema
+// Приложение для группового путешествия 3 друзей в Китай
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// Участники поездки (3 друга)
+model Participant {
+  id        String   @id @default(cuid())
+  name      String
+  color     String   // hex цвет для аватара/маркеров
+  emoji     String   // эмодзи аватар
+  role      String?  // роль/прозвище
+  createdAt DateTime @default(now())
+
+  photos    Photo[]
+  expenses  Expense[]
+  journals  JournalEntry[]
+}
+
+// День поездки (12 дней)
+model Day {
+  id          String   @id @default(cuid())
+  dayNumber   Int      // 1-12
+  date        DateTime
+  city        String   // Гуанчжоу / Шэньчжэнь / Гонконг / Макао
+  cityKey     String   // guangzhou / shenzhen / hongkong / macau
+  title       String   // заголовок дня
+  summary     String?  // краткое описание
+  accentColor String?  // цвет города для UI
+
+  places      Place[]
+  photos      Photo[]
+  expenses    Expense[]
+  journals    JournalEntry[]
+}
+
+// Место в маршруте (достопримечательность, кафе, бар и т.д.)
+model Place {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  category    String   // sight, temple, viewpoint, beach, market, casino, restaurant, cafe, bar, hotel, transport, park
+  lat         Float
+  lng         Float
+  dayId       String
+  day         Day      @relation(fields: [dayId], references: [id], onDelete: Cascade)
+  timeOfDay   String?  // morning / afternoon / evening
+  status      String   @default("planned") // planned / visited / current
+  budget      Float?   // примерный бюджет $
+  address     String?
+  notes       String?  // пользовательские заметки
+  rating      Int?     // оценка 1-5
+  visitedAt   DateTime?
+  order       Int      @default(0) // порядок в дне
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  photos      Photo[]
+}
+
+// Фото
+model Photo {
+  id            String   @id @default(cuid())
+  url           String   // путь /uploads/...
+  thumbUrl      String?
+  caption       String?
+  placeId       String?
+  place         Place?   @relation(fields: [placeId], references: [id], onDelete: SetNull)
+  dayId         String
+  day           Day      @relation(fields: [dayId], references: [id], onDelete: Cascade)
+  participantId String?
+  participant   Participant? @relation(fields: [participantId], references: [id], onDelete: SetNull)
+  takenAt       DateTime @default(now())
+  width         Int?
+  height        Int?
+  createdAt     DateTime @default(now())
+}
+
+// Трата
+model Expense {
+  id          String   @id @default(cuid())
+  amount      Float    // сумма в $
+  category    String   // accommodation, food, transport, attractions, casino, shopping, other
+  description String
+  paidById    String   // кто заплатил
+  paidBy      Participant @relation(fields: [paidById], references: [id])
+  dayId       String?
+  day         Day?     @relation(fields: [dayId], references: [id], onDelete: SetNull)
+  createdAt   DateTime @default(now())
+}
+
+// Запись дневника
+model JournalEntry {
+  id            String   @id @default(cuid())
+  dayId         String
+  day           Day      @relation(fields: [dayId], references: [id], onDelete: Cascade)
+  participantId String?
+  participant   Participant? @relation(fields: [participantId], references: [id], onDelete: SetNull)
+  mood          String?  // эмодзи настроения
+  content       String
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+// Настройки поездки (singleton)
+model TripSettings {
+  id            String   @id @default("default")
+  title         String   @default("TripTrek: China")
+  startDate     DateTime
+  totalDays     Int      @default(12)
+  totalBudget   Float    @default(1100)
+  currency      String   @default("USD")
+  currentUserId String?  // выбранный сейчас участник
+}
