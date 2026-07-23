@@ -43,6 +43,58 @@ export function useUpdatePlace() {
   });
 }
 
+export function useCreatePlace() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (data: {
+      name: string;
+      description?: string;
+      category: string;
+      lat: number;
+      lng: number;
+      dayId: string;
+      timeOfDay?: string;
+      budget?: number;
+      address?: string;
+    }) => {
+      const r = await fetch("/api/places", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+      if (!r.ok) throw new Error("create place failed");
+      return r.json();
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["days"] });
+      qc.invalidateQueries({ queryKey: ["trip"] });
+    },
+  });
+}
+
+export function useDeletePlace() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      await fetch(`/api/places/${id}`, { method: "DELETE" });
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["days"] });
+      qc.invalidateQueries({ queryKey: ["trip"] });
+    },
+  });
+}
+
+export function useGeocode() {
+  return useMutation({
+    mutationFn: async ({ lat, lng }: { lat: number; lng: number }) => {
+      const r = await fetch(`/api/geocode?lat=${lat}&lng=${lng}`);
+      if (!r.ok) throw new Error("geocode failed");
+      return r.json() as Promise<{ address: string; short: string; fallback?: boolean }>;
+    },
+  });
+}
+
 export function usePhotos(dayId?: string, placeId?: string) {
   const params = new URLSearchParams();
   if (dayId) params.set("dayId", dayId);
@@ -190,6 +242,25 @@ export function useSetCurrentUser() {
   });
 }
 
+export function useUpdateTripDates() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ startDate, endDate }: { startDate?: string; endDate?: string }) => {
+      const r = await fetch("/api/trip/dates", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ startDate, endDate }),
+      });
+      if (!r.ok) throw new Error("update dates failed");
+      return r.json();
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["trip"] });
+      qc.invalidateQueries({ queryKey: ["days"] });
+    },
+  });
+}
+
 // === Checklist ===
 export interface ChecklistItem {
   id: string;
@@ -212,11 +283,11 @@ export function useChecklist() {
 export function useToggleChecklist() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ id, done }: { id: string; done: boolean }) => {
+    mutationFn: async ({ id, ...data }: { id: string; done?: boolean; text?: string; category?: string }) => {
       const r = await fetch("/api/checklist", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id, done }),
+        body: JSON.stringify({ id, ...data }),
       });
       return r.json();
     },
@@ -268,5 +339,65 @@ export function useInfo(type?: string) {
       const r = await fetch(`/api/info?${params}`);
       return r.json();
     },
+  });
+}
+
+export function useAddInfo() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (data: { type: string; title: string; content: string; icon?: string }) => {
+      const r = await fetch("/api/info", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+      return r.json();
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["info"] }),
+  });
+}
+
+export function useUpdateInfo() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, ...data }: { id: string; title?: string; content?: string; icon?: string; type?: string }) => {
+      const r = await fetch("/api/info", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id, ...data }),
+      });
+      return r.json();
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["info"] }),
+  });
+}
+
+export function useDeleteInfo() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      await fetch(`/api/info?id=${id}`, { method: "DELETE" });
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["info"] }),
+  });
+}
+
+// === AI Summary ===
+export function useAISummary() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ type }: { type: "summary" | "day" | "tips" }) => {
+      const r = await fetch("/api/ai-summary", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ type }),
+      });
+      if (!r.ok) {
+        const err = await r.json().catch(() => ({}));
+        throw new Error(err.error || "AI request failed");
+      }
+      return r.json() as Promise<{ content: string; type: string }>;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["ai-summary"] }),
   });
 }

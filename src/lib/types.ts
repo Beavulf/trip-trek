@@ -80,6 +80,7 @@ export interface TripSummary {
     id: string;
     title: string;
     startDate: string;
+    endDate: string | null;
     totalDays: number;
     totalBudget: number;
     currency: string;

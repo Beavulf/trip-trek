@@ -6,7 +6,11 @@ import {
   useAddChecklist,
   useDeleteChecklist,
   useInfo,
+  useAddInfo,
+  useUpdateInfo,
+  useDeleteInfo,
   type ChecklistItem,
+  type InfoItem,
 } from "@/hooks/use-trip";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -22,6 +26,9 @@ import {
   Loader2,
   ClipboardList,
   ShieldCheck,
+  Pencil,
+  Check,
+  X,
 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -185,6 +192,18 @@ function ChecklistView() {
 }
 
 function ChecklistRow({ item, onToggle, onDelete }: { item: ChecklistItem; onToggle: () => void; onDelete: () => void }) {
+  const update = useToggleChecklist();
+  const [editing, setEditing] = useState(false);
+  const [text, setText] = useState(item.text);
+
+  const save = () => {
+    if (text.trim() && text !== item.text) {
+      update.mutate({ id: item.id, text: text.trim() });
+      toast.success("Обновлено");
+    }
+    setEditing(false);
+  };
+
   return (
     <motion.div
       layout
@@ -200,13 +219,42 @@ function ChecklistRow({ item, onToggle, onDelete }: { item: ChecklistItem; onTog
           <Circle className="size-5 text-muted-foreground group-hover:text-primary transition-colors" />
         )}
       </button>
-      <span className={cn("text-sm flex-1", item.done && "line-through opacity-50")}>{item.text}</span>
-      <button
-        onClick={onDelete}
-        className="size-6 rounded-md opacity-0 group-hover:opacity-100 hover:bg-red-500/10 hover:text-red-500 grid place-items-center transition-opacity"
-      >
-        <Trash2 className="size-3.5" />
-      </button>
+      {editing ? (
+        <input
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") save();
+            if (e.key === "Escape") { setText(item.text); setEditing(false); }
+          }}
+          onBlur={save}
+          autoFocus
+          className="flex-1 text-sm bg-background border border-input rounded px-2 py-1 outline-none focus:ring-1 ring-primary"
+        />
+      ) : (
+        <span
+          className={cn("text-sm flex-1 cursor-text", item.done && "line-through opacity-50")}
+          onClick={() => setEditing(true)}
+        >
+          {item.text}
+        </span>
+      )}
+      {!editing && (
+        <>
+          <button
+            onClick={() => { setText(item.text); setEditing(true); }}
+            className="size-6 rounded-md opacity-0 group-hover:opacity-100 hover:bg-accent grid place-items-center text-muted-foreground transition-opacity"
+          >
+            <Pencil className="size-3.5" />
+          </button>
+          <button
+            onClick={onDelete}
+            className="size-6 rounded-md opacity-0 group-hover:opacity-100 hover:bg-red-500/10 hover:text-red-500 grid place-items-center transition-opacity"
+          >
+            <Trash2 className="size-3.5" />
+          </button>
+        </>
+      )}
     </motion.div>
   );
 }
@@ -214,29 +262,46 @@ function ChecklistRow({ item, onToggle, onDelete }: { item: ChecklistItem; onTog
 function InfoView() {
   const [activeType, setActiveType] = useState<string>("tip");
   const { data: items, isLoading } = useInfo(activeType);
+  const [adding, setAdding] = useState(false);
 
   return (
     <div className="space-y-3">
       {/* Подтабы */}
-      <div className="flex gap-1.5 overflow-x-auto no-scrollbar">
-        {INFO_TABS.map((t) => {
-          const Icon = t.icon;
-          const active = activeType === t.key;
-          return (
-            <button
-              key={t.key}
-              onClick={() => setActiveType(t.key)}
-              className={cn(
-                "flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-all",
-                active ? "text-white shadow-md" : "bg-card border border-border hover:bg-accent"
-              )}
-              style={active ? { background: t.color } : undefined}
-            >
-              <Icon className="size-3.5" /> {t.label}
-            </button>
-          );
-        })}
+      <div className="flex items-center gap-2">
+        <div className="flex gap-1.5 overflow-x-auto no-scrollbar flex-1">
+          {INFO_TABS.map((t) => {
+            const Icon = t.icon;
+            const active = activeType === t.key;
+            return (
+              <button
+                key={t.key}
+                onClick={() => setActiveType(t.key)}
+                className={cn(
+                  "flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-all",
+                  active ? "text-white shadow-md" : "bg-card border border-border hover:bg-accent"
+                )}
+                style={active ? { background: t.color } : undefined}
+              >
+                <Icon className="size-3.5" /> {t.label}
+              </button>
+            );
+          })}
+        </div>
+        <button
+          onClick={() => setAdding(true)}
+          className="shrink-0 size-9 rounded-full bg-primary text-primary-foreground grid place-items-center shadow-md active:scale-95 transition-transform"
+          title="Добавить"
+        >
+          <Plus className="size-4" />
+        </button>
       </div>
+
+      {adding && (
+        <InfoEditForm
+          type={activeType}
+          onDone={() => setAdding(false)}
+        />
+      )}
 
       {isLoading ? (
         <Skeleton />
@@ -245,37 +310,163 @@ function InfoView() {
           {items.map((item) => {
             const tabMeta = INFO_TABS.find((t) => t.key === item.type);
             return (
-              <motion.div
-                key={item.id}
-                layout
-                initial={{ opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="rounded-2xl bg-card border border-border p-4 hover:shadow-md transition-shadow"
-              >
-                <div className="flex items-start gap-3">
-                  <div
-                    className="size-10 rounded-xl grid place-items-center text-xl shrink-0"
-                    style={{ background: `${tabMeta?.color}22` }}
-                  >
-                    {item.icon || tabMeta?.icon ? (
-                      <span className="text-xl">{item.icon}</span>
-                    ) : null}
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <h3 className="font-semibold text-sm leading-tight">{item.title}</h3>
-                    <p className="text-xs text-muted-foreground mt-1 leading-relaxed">{item.content}</p>
-                  </div>
-                </div>
-              </motion.div>
+              <InfoCard key={item.id} item={item} color={tabMeta?.color ?? "#94a3b8"} defaultIcon={tabMeta?.icon} />
             );
           })}
         </div>
       ) : (
         <div className="rounded-2xl border-2 border-dashed border-border py-12 text-center">
           <p className="text-sm text-muted-foreground">Нет данных</p>
+          <p className="text-xs text-muted-foreground/70 mt-1">Нажмите + чтобы добавить</p>
         </div>
       )}
     </div>
+  );
+}
+
+function InfoCard({ item, color, defaultIcon }: { item: InfoItem; color: string; defaultIcon?: typeof Plane }) {
+  const update = useUpdateInfo();
+  const del = useDeleteInfo();
+  const [editing, setEditing] = useState(false);
+  const [title, setTitle] = useState(item.title);
+  const [content, setContent] = useState(item.content);
+  const [icon, setIcon] = useState(item.icon || "");
+
+  if (editing) {
+    const save = () => {
+      update.mutate({ id: item.id, title: title.trim(), content: content.trim(), icon: icon.trim() || null });
+      toast.success("Обновлено");
+      setEditing(false);
+    };
+    return (
+      <motion.div layout className="rounded-2xl bg-card border-2 border-primary p-4 space-y-2">
+        <div className="flex gap-2">
+          <input
+            value={icon}
+            onChange={(e) => setIcon(e.target.value)}
+            placeholder="📌"
+            className="w-12 text-center text-xl rounded-lg border border-input bg-background px-1 py-1.5"
+          />
+          <input
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            placeholder="Заголовок"
+            className="flex-1 text-sm font-semibold rounded-lg border border-input bg-background px-2 py-1.5"
+          />
+        </div>
+        <textarea
+          value={content}
+          onChange={(e) => setContent(e.target.value)}
+          placeholder="Содержание"
+          rows={2}
+          className="w-full text-xs rounded-lg border border-input bg-background px-2 py-1.5 resize-none"
+        />
+        <div className="flex gap-2">
+          <button onClick={() => { setTitle(item.title); setContent(item.content); setIcon(item.icon || ""); setEditing(false); }} className="flex-1 rounded-lg bg-secondary py-1.5 text-xs font-medium">
+            Отмена
+          </button>
+          <button onClick={save} className="flex-1 rounded-lg bg-primary text-primary-foreground py-1.5 text-xs font-medium flex items-center justify-center gap-1">
+            <Check className="size-3.5" /> Сохранить
+          </button>
+        </div>
+      </motion.div>
+    );
+  }
+
+  return (
+    <motion.div
+      layout
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="rounded-2xl bg-card border border-border p-4 hover:shadow-md transition-shadow group relative"
+    >
+      <div className="flex items-start gap-3">
+        <div
+          className="size-10 rounded-xl grid place-items-center text-xl shrink-0"
+          style={{ background: `${color}22` }}
+        >
+          {item.icon ? <span>{item.icon}</span> : defaultIcon ? <defaultIcon className="size-5" style={{ color }} /> : <span>📌</span>}
+        </div>
+        <div className="min-w-0 flex-1">
+          <h3 className="font-semibold text-sm leading-tight">{item.title}</h3>
+          <p className="text-xs text-muted-foreground mt-1 leading-relaxed whitespace-pre-wrap">{item.content}</p>
+        </div>
+      </div>
+      <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+        <button
+          onClick={() => setEditing(true)}
+          className="size-7 rounded-md hover:bg-accent grid place-items-center text-muted-foreground"
+        >
+          <Pencil className="size-3.5" />
+        </button>
+        <button
+          onClick={() => { del.mutate(item.id); toast.success("Удалено"); }}
+          className="size-7 rounded-md hover:bg-red-500/10 hover:text-red-500 grid place-items-center text-muted-foreground"
+        >
+          <Trash2 className="size-3.5" />
+        </button>
+      </div>
+    </motion.div>
+  );
+}
+
+function InfoEditForm({ type, onDone }: { type: string; onDone: () => void }) {
+  const add = useAddInfo();
+  const [title, setTitle] = useState("");
+  const [content, setContent] = useState("");
+  const [icon, setIcon] = useState("");
+
+  const submit = async () => {
+    if (!title.trim() || !content.trim()) {
+      toast.error("Заполните заголовок и содержание");
+      return;
+    }
+    await add.mutateAsync({ type, title: title.trim(), content: content.trim(), icon: icon.trim() || undefined });
+    toast.success("Добавлено");
+    onDone();
+  };
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, height: 0 }}
+      animate={{ opacity: 1, height: "auto" }}
+      className="rounded-2xl bg-card border-2 border-primary p-4 space-y-2 overflow-hidden"
+    >
+      <div className="flex gap-2">
+        <input
+          value={icon}
+          onChange={(e) => setIcon(e.target.value)}
+          placeholder="📌"
+          className="w-12 text-center text-xl rounded-lg border border-input bg-background px-1 py-1.5"
+        />
+        <input
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          placeholder="Заголовок"
+          autoFocus
+          className="flex-1 text-sm font-semibold rounded-lg border border-input bg-background px-2 py-1.5"
+        />
+      </div>
+      <textarea
+        value={content}
+        onChange={(e) => setContent(e.target.value)}
+        placeholder="Содержание"
+        rows={2}
+        className="w-full text-xs rounded-lg border border-input bg-background px-2 py-1.5 resize-none"
+      />
+      <div className="flex gap-2">
+        <button onClick={onDone} className="flex-1 rounded-lg bg-secondary py-1.5 text-xs font-medium">
+          Отмена
+        </button>
+        <button
+          onClick={submit}
+          disabled={add.isPending}
+          className="flex-1 rounded-lg bg-primary text-primary-foreground py-1.5 text-xs font-medium flex items-center justify-center gap-1"
+        >
+          <Plus className="size-3.5" /> Добавить
+        </button>
+      </div>
+    </motion.div>
   );
 }
 

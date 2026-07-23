@@ -17,11 +17,15 @@ export async function POST(req: NextRequest) {
   return NextResponse.json(item);
 }
 
-// PATCH — отметить/снять
+// PATCH — отметить/снять или редактировать текст
 export async function PATCH(req: NextRequest) {
   const body = await req.json();
-  const { id, done } = body;
-  const item = await db.checklistItem.update({ where: { id }, data: { done } });
+  const { id, done, text, category } = body;
+  const data: Record<string, unknown> = {};
+  if (typeof done === "boolean") data.done = done;
+  if (typeof text === "string") data.text = text;
+  if (typeof category === "string") data.category = category;
+  const item = await db.checklistItem.update({ where: { id }, data });
   return NextResponse.json(item);
 }
 

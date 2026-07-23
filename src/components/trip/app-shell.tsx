@@ -13,6 +13,7 @@ import {
   Coffee,
   BookOpen,
   Info,
+  Sparkles,
   Plus,
   Moon,
   Sun,
@@ -29,6 +30,7 @@ const TABS = [
   { key: "budget", label: "Бюджет", icon: Wallet },
   { key: "rest", label: "Chill", icon: Coffee },
   { key: "journal", label: "Дневник", icon: BookOpen },
+  { key: "ai", label: "AI-Итоги", icon: Sparkles },
   { key: "info", label: "Инфо", icon: Info },
 ] as const;
 

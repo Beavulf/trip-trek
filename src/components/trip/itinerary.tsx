@@ -1,6 +1,6 @@
 "use client";
 
-import { useDays, useUpdatePlace, useUploadPhoto, usePhotos } from "@/hooks/use-trip";
+import { useDays, useUpdatePlace, useUploadPhoto, useDeletePlace } from "@/hooks/use-trip";
 import { useTripStore } from "@/lib/trip-store";
 import { CATEGORY_META, type Place, type Day } from "@/lib/types";
 import { motion, AnimatePresence } from "framer-motion";
@@ -16,24 +16,47 @@ import {
   Loader2,
   ChevronDown,
   NotebookPen,
+  Plus,
+  Trash2,
 } from "lucide-react";
 import { useState, useRef } from "react";
+import { createPortal } from "react-dom";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { AddPlaceSheet, type AddPlaceData } from "./add-place-sheet";
 
 export function Itinerary() {
   const { data: days, isLoading } = useDays();
   const { selectedDay, setSelectedDay } = useTripStore();
   const [openPlace, setOpenPlace] = useState<Place | null>(null);
+  const [addOpen, setAddOpen] = useState(false);
+  const [addData, setAddData] = useState<AddPlaceData | null>(null);
 
   if (isLoading || !days) return <div className="py-20 text-center text-muted-foreground">Загрузка маршрута…</div>;
 
   const filteredDays = selectedDay ? days.filter((d) => d.dayNumber === selectedDay) : days;
 
+  // координаты центра города выбранного дня (для добавления места)
+  const currentDay = selectedDay ? days.find((d) => d.dayNumber === selectedDay) : days[0];
+
+  const openAdd = () => {
+    // дефолтные координаты — центр города текущего дня
+    const cityCoords: Record<string, { lat: number; lng: number }> = {
+      guangzhou: { lat: 23.1291, lng: 113.2644 },
+      shenzhen: { lat: 22.5431, lng: 114.0579 },
+      hongkong: { lat: 22.3193, lng: 114.1694 },
+      macau: { lat: 22.1987, lng: 113.5439 },
+    };
+    const c = currentDay ? cityCoords[currentDay.cityKey] : cityCoords.guangzhou;
+    setAddData({ lat: c.lat, lng: c.lng, dayId: currentDay?.id });
+    setAddOpen(true);
+  };
+
   return (
     <div className="space-y-3 animate-fade-up">
-      {/* Фильтр по дню */}
-      <div className="flex gap-1.5 overflow-x-auto no-scrollbar pb-1">
+      {/* Кнопка добавления + фильтр по дню */}
+      <div className="flex items-center gap-2">
+        <div className="flex gap-1.5 overflow-x-auto no-scrollbar pb-1 flex-1">
         <button
           onClick={() => setSelectedDay(null)}
           className={cn(
@@ -63,6 +86,14 @@ export function Itinerary() {
             </button>
           );
         })}
+        </div>
+        <button
+          onClick={openAdd}
+          className="shrink-0 size-9 rounded-full bg-primary text-primary-foreground grid place-items-center shadow-md active:scale-95 transition-transform"
+          title="Добавить место"
+        >
+          <Plus className="size-4" />
+        </button>
       </div>
 
       {/* Дни */}
@@ -71,6 +102,7 @@ export function Itinerary() {
       ))}
 
       <PlaceDialog place={openPlace} onClose={() => setOpenPlace(null)} />
+      <AddPlaceSheet open={addOpen} onOpenChange={setAddOpen} initial={addData} />
     </div>
   );
 }
@@ -142,24 +174,42 @@ function PlaceRow({ place, accentColor, onOpen }: { place: Place; accentColor: s
   };
 
   return (
-    <div
+    <motion.div
+      layout
       onClick={onOpen}
+      whileTap={{ scale: 0.99 }}
       className={cn(
-        "flex items-center gap-3 p-2.5 rounded-xl cursor-pointer transition-colors group",
+        "flex items-center gap-3 p-2.5 rounded-xl cursor-pointer transition-colors group relative overflow-hidden",
         visited ? "bg-green-500/5" : "hover:bg-accent"
       )}
     >
-      <button onClick={toggle} className="shrink-0">
+      {/* Левая цветная полоска категории */}
+      <div
+        className="absolute left-0 top-0 bottom-0 w-1"
+        style={{ background: visited ? "#22c55e" : meta?.color ?? accentColor }}
+      />
+      <button onClick={toggle} className="shrink-0 ml-1">
         {visited ? (
           <CheckCircle2 className="size-6 text-green-500" />
         ) : (
           <Circle className="size-6 text-muted-foreground group-hover:text-primary transition-colors" />
         )}
       </button>
-      <span className="text-xl shrink-0">{meta?.emoji}</span>
+      <div
+        className="size-9 rounded-lg grid place-items-center text-lg shrink-0 transition-transform group-hover:scale-110"
+        style={{ background: `${meta?.color}22` }}
+      >
+        {meta?.emoji}
+      </div>
       <div className="min-w-0 flex-1">
         <div className={cn("text-sm font-medium leading-tight", visited && "line-through opacity-60")}>{place.name}</div>
-        <div className="flex items-center gap-2 text-[11px] text-muted-foreground mt-0.5">
+        <div className="flex items-center gap-2 text-[11px] text-muted-foreground mt-0.5 flex-wrap">
+          <span
+            className="px-1.5 py-0.5 rounded text-[9px] font-medium uppercase tracking-wide"
+            style={{ background: `${meta?.color}18`, color: meta?.color }}
+          >
+            {meta?.label}
+          </span>
           {place.timeOfDay && (
             <span className="flex items-center gap-0.5"><Clock className="size-2.5" /> {timeLabel(place.timeOfDay)}</span>
           )}
@@ -169,8 +219,12 @@ function PlaceRow({ place, accentColor, onOpen }: { place: Place; accentColor: s
           {place.rating ? <span className="flex items-center gap-0.5 text-amber-500"><Star className="size-2.5 fill-current" /> {place.rating}</span> : null}
         </div>
       </div>
-      <div className="size-1.5 rounded-full shrink-0" style={{ background: visited ? "#22c55e" : accentColor }} />
-    </div>
+      {visited && (
+        <span className="shrink-0 text-[9px] font-bold uppercase tracking-wide text-green-600 bg-green-500/10 px-1.5 py-0.5 rounded">
+          ✓
+        </span>
+      )}
+    </motion.div>
   );
 }
 
@@ -184,6 +238,8 @@ function PlaceDialog({ place, onClose }: { place: Place | null; onClose: () => v
   const day = trip?.find((d) => d.id === place?.dayId);
   const photos = day?.photos.filter((p) => p.placeId === place?.id) ?? [];
 
+  // Рендерим через портал на document.body — избегаем stacking context от motion.div
+  if (typeof document === "undefined") return null;
   if (!place) return null;
   const meta = CATEGORY_META[place.category];
   const visited = place.status === "visited";
@@ -199,45 +255,62 @@ function PlaceDialog({ place, onClose }: { place: Place | null; onClose: () => v
     fd.append("file", f);
     fd.append("dayId", place.dayId);
     fd.append("placeId", place.id);
-    fd.append("participantId", trip?.[0] ? "" : "");
     await upload.mutateAsync(fd);
     toast.success("Фото добавлено к месту 📸");
   };
 
-  return (
+  return createPortal(
     <AnimatePresence>
       <motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
         onClick={onClose}
-        className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm grid place-items-end sm:place-items-center p-0 sm:p-4"
+        className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex items-end sm:items-center justify-center sm:p-4"
       >
         <motion.div
-          initial={{ y: "100%", opacity: 0, scale: 0.98 }}
-          animate={{ y: 0, opacity: 1, scale: 1 }}
+          initial={{ y: "100%", opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
           exit={{ y: "100%", opacity: 0 }}
-          transition={{ type: "spring", stiffness: 300, damping: 30 }}
+          transition={{ type: "spring", stiffness: 320, damping: 32 }}
           onClick={(e) => e.stopPropagation()}
-          className="bg-card w-full sm:max-w-lg max-h-[92vh] rounded-t-3xl sm:rounded-3xl overflow-y-auto"
+          className="bg-card w-full sm:max-w-lg max-h-[88vh] rounded-t-3xl sm:rounded-3xl overflow-y-auto flex flex-col"
         >
+          {/* handle bar для мобильного */}
+          <div className="sm:hidden flex justify-center pt-2.5 pb-1 shrink-0">
+            <div className="w-10 h-1 rounded-full bg-muted-foreground/30" />
+          </div>
+
           {/* header */}
-          <div className="sticky top-0 bg-card/90 backdrop-blur px-5 py-4 border-b border-border flex items-start gap-3">
-            <div className="size-12 rounded-xl grid place-items-center text-2xl shrink-0" style={{ background: `${meta?.color}22` }}>
+          <div className="sticky top-0 bg-card/95 backdrop-blur px-4 sm:px-5 py-3 border-b border-border flex items-start gap-3 shrink-0">
+            <div className="size-11 sm:size-12 rounded-xl grid place-items-center text-xl sm:text-2xl shrink-0" style={{ background: `${meta?.color}22` }}>
               {meta?.emoji}
             </div>
             <div className="min-w-0 flex-1">
-              <div className="text-xs text-muted-foreground flex items-center gap-1.5">
-                <MapPin className="size-3" /> День {day?.dayNumber} · {day?.city} · {meta?.label}
+              <div className="text-xs text-muted-foreground flex items-center gap-1 flex-wrap">
+                <MapPin className="size-3 shrink-0" />
+                <span>День {day?.dayNumber} · {day?.city}</span>
+                <span
+                  className="px-1.5 py-0.5 rounded text-[9px] font-medium uppercase"
+                  style={{ background: `${meta?.color}18`, color: meta?.color }}
+                >
+                  {meta?.label}
+                </span>
               </div>
-              <h2 className="font-bold text-lg leading-tight">{place.name}</h2>
+              <h2 className="font-bold text-base sm:text-lg leading-tight mt-0.5">{place.name}</h2>
+              {place.address && (
+                <div className="text-[11px] text-muted-foreground mt-0.5 flex items-start gap-1">
+                  <MapPin className="size-2.5 mt-0.5 shrink-0" />
+                  <span className="line-clamp-2">{place.address}</span>
+                </div>
+              )}
             </div>
-            <button onClick={onClose} className="size-8 rounded-full hover:bg-accent grid place-items-center shrink-0">
+            <button onClick={onClose} className="size-8 rounded-full hover:bg-accent grid place-items-center shrink-0" aria-label="Закрыть">
               <X className="size-4" />
             </button>
           </div>
 
-          <div className="p-5 space-y-4">
+          <div className="p-4 sm:p-5 space-y-4 overflow-y-auto">
             {place.description && (
               <p className="text-sm text-muted-foreground leading-relaxed">{place.description}</p>
             )}
@@ -320,10 +393,49 @@ function PlaceDialog({ place, onClose }: { place: Place | null; onClose: () => v
                 </div>
               )}
             </div>
+
+            {/* удалить место */}
+            <DeletePlaceButton placeId={place.id} placeName={place.name} onDeleted={onClose} />
           </div>
         </motion.div>
       </motion.div>
-    </AnimatePresence>
+    </AnimatePresence>,
+    document.body
+  );
+}
+
+function DeletePlaceButton({ placeId, placeName, onDeleted }: { placeId: string; placeName: string; onDeleted: () => void }) {
+  const del = useDeletePlace();
+  const [confirm, setConfirm] = useState(false);
+  if (!confirm) {
+    return (
+      <button
+        onClick={() => setConfirm(true)}
+        className="w-full rounded-lg border border-red-500/30 text-red-500 py-2 text-xs font-medium flex items-center justify-center gap-1.5 hover:bg-red-500/5 transition-colors"
+      >
+        <Trash2 className="size-3.5" /> Удалить место
+      </button>
+    );
+  }
+  return (
+    <div className="flex gap-2">
+      <button
+        onClick={() => setConfirm(false)}
+        className="flex-1 rounded-lg bg-secondary py-2 text-xs font-medium"
+      >
+        Отмена
+      </button>
+      <button
+        onClick={() => {
+          del.mutate(placeId);
+          toast.success("Место удалено");
+          onDeleted();
+        }}
+        className="flex-1 rounded-lg bg-red-500 text-white py-2 text-xs font-medium flex items-center justify-center gap-1.5"
+      >
+        <Trash2 className="size-3.5" /> Удалить «{placeName.slice(0, 12)}{placeName.length > 12 ? "…" : ""}»
+      </button>
+    </div>
   );
 }
 

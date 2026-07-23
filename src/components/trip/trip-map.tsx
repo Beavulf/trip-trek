@@ -3,12 +3,13 @@
 import { useDays, useUpdatePlace } from "@/hooks/use-trip";
 import { useTripStore } from "@/lib/trip-store";
 import { CATEGORY_META, CITIES, type Place, type Day } from "@/lib/types";
-import { MapContainer, TileLayer, Marker, Popup, useMap } from "react-leaflet";
+import { MapContainer, TileLayer, Marker, Popup, useMap, useMapEvents } from "react-leaflet";
 import L from "leaflet";
 import { useEffect, useMemo, useState } from "react";
-import { CheckCircle2, Circle, MapPin, Star, Coffee, Filter, Navigation } from "lucide-react";
+import { CheckCircle2, Circle, MapPin, Star, Coffee, Filter, Navigation, Plus, Hand } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { AddPlaceSheet, type AddPlaceData } from "./add-place-sheet";
 
 // Кастомный пин
 function makeIcon(category: string, status: string, emoji: string) {
@@ -28,6 +29,9 @@ function makeIcon(category: string, status: string, emoji: string) {
 export default function TripMap() {
   const { data: days, isLoading } = useDays();
   const { mapCityFilter, setMapCityFilter, mapOnlyUnvisited, setMapOnlyUnvisited, mapOnlyChill, setMapOnlyChill } = useTripStore();
+  const [addMode, setAddMode] = useState(false);
+  const [addData, setAddData] = useState<AddPlaceData | null>(null);
+  const [addOpen, setAddOpen] = useState(false);
 
   const allPlaces = useMemo(() => {
     if (!days) return [];
@@ -49,8 +53,32 @@ export default function TripMap() {
 
   if (isLoading) return <div className="py-20 text-center text-muted-foreground">Загрузка карты…</div>;
 
+  const handleMapClick = (lat: number, lng: number) => {
+    if (!addMode) return;
+    const dayForPlace = mapCityFilter
+      ? days?.find((d) => d.cityKey === mapCityFilter)?.id
+      : days?.[0]?.id;
+    setAddData({ lat, lng, dayId: dayForPlace });
+    setAddOpen(true);
+    setAddMode(false);
+  };
+
   return (
     <div className="space-y-3 animate-fade-up">
+      {/* Подсказка режима добавления */}
+      {addMode && (
+        <div className="rounded-2xl bg-primary/10 border border-primary/30 p-3 flex items-center gap-2 text-sm">
+          <Hand className="size-4 text-primary animate-pulse" />
+          <span className="text-primary font-medium">Тапните по карте, чтобы добавить место</span>
+          <button
+            onClick={() => setAddMode(false)}
+            className="ml-auto text-xs text-muted-foreground hover:text-foreground underline"
+          >
+            Отмена
+          </button>
+        </div>
+      )}
+
       {/* Фильтры */}
       <div className="rounded-2xl bg-card border border-border p-3 space-y-2">
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
@@ -82,7 +110,7 @@ export default function TripMap() {
           ))}
         </div>
 
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
           <button
             onClick={() => setMapOnlyUnvisited(!mapOnlyUnvisited)}
             className={cn(
@@ -90,7 +118,7 @@ export default function TripMap() {
               mapOnlyUnvisited ? "bg-primary/10 text-primary border border-primary/30" : "bg-secondary hover:bg-accent"
             )}
           >
-            <Circle className="size-3" /> Только непосещённые
+            <Circle className="size-3" /> Непосещённые
           </button>
           <button
             onClick={() => setMapOnlyChill(!mapOnlyChill)}
@@ -101,11 +129,21 @@ export default function TripMap() {
           >
             <Coffee className="size-3" /> Кафе и бары
           </button>
+          <button
+            onClick={() => setAddMode(!addMode)}
+            className={cn(
+              "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ml-auto",
+              addMode ? "bg-primary text-primary-foreground" : "bg-secondary hover:bg-accent"
+            )}
+          >
+            {addMode ? <Hand className="size-3" /> : <Plus className="size-3" />}
+            {addMode ? "Тапайте по карте" : "Добавить место"}
+          </button>
         </div>
       </div>
 
       {/* Легенда */}
-      <div className="flex items-center gap-3 text-[11px] text-muted-foreground px-1">
+      <div className="flex items-center gap-2 sm:gap-3 text-[11px] text-muted-foreground px-1 flex-wrap">
         <span className="flex items-center gap-1"><span className="size-2.5 rounded-full bg-slate-400" /> Запланировано</span>
         <span className="flex items-center gap-1"><span className="size-2.5 rounded-full bg-orange-500" /> Сейчас здесь</span>
         <span className="flex items-center gap-1"><span className="size-2.5 rounded-full bg-green-500" /> Посещено</span>
@@ -113,7 +151,10 @@ export default function TripMap() {
       </div>
 
       {/* Карта */}
-      <div className="rounded-2xl overflow-hidden border border-border h-[60vh] min-h-[400px]">
+      <div className={cn(
+        "rounded-2xl overflow-hidden border h-[55vh] min-h-[380px] relative",
+        addMode ? "border-primary ring-2 ring-primary/30" : "border-border"
+      )}>
         <MapContainer
           center={[center.lat, center.lng]}
           zoom={mapCityFilter ? 12 : 8}
@@ -126,6 +167,7 @@ export default function TripMap() {
             url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
           />
           <FlyTo center={center} />
+          {addMode && <MapClickHandler onClick={handleMapClick} />}
           {filtered.map(({ place, day }) => (
             <Marker
               key={place.id}
@@ -138,9 +180,26 @@ export default function TripMap() {
             </Marker>
           ))}
         </MapContainer>
+        {addMode && (
+          <div className="absolute top-2 left-1/2 -translate-x-1/2 z-[500] bg-primary text-primary-foreground text-xs font-medium px-3 py-1.5 rounded-full shadow-lg pointer-events-none">
+            👆 Тапните по карте
+          </div>
+        )}
       </div>
+
+      <AddPlaceSheet open={addOpen} onOpenChange={setAddOpen} initial={addData} />
     </div>
   );
+}
+
+// Компонент для перехвата кликов по карте
+function MapClickHandler({ onClick }: { onClick: (lat: number, lng: number) => void }) {
+  useMapEvents({
+    click(e) {
+      onClick(e.latlng.lat, e.latlng.lng);
+    },
+  });
+  return null;
 }
 
 function FlyTo({ center }: { center: { lat: number; lng: number } }) {

@@ -114,6 +114,7 @@ model TripSettings {
   id            String   @id @default("default")
   title         String   @default("TripTrek: China")
   startDate     DateTime
+  endDate       DateTime?
   totalDays     Int      @default(12)
   totalBudget   Float    @default(1100)
   currency      String   @default("USD")

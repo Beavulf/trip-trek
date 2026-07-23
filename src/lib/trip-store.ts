@@ -9,7 +9,8 @@ export type TripTab =
   | "budget"
   | "rest"
   | "journal"
-  | "info";
+  | "info"
+  | "ai";
 
 interface TripState {
   activeTab: TripTab;

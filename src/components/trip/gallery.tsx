@@ -62,10 +62,18 @@ export function Gallery() {
       </div>
 
       {filtered.length === 0 ? (
-        <div className="rounded-2xl border-2 border-dashed border-border py-16 text-center">
-          <Images className="size-10 mx-auto text-muted-foreground/50 mb-2" />
-          <p className="text-sm text-muted-foreground">Пока нет фото</p>
-          <p className="text-xs text-muted-foreground/70 mt-1">Нажмите + чтобы добавить</p>
+        <div className="rounded-2xl border-2 border-dashed border-border py-16 text-center bg-card/50">
+          <motion.div
+            animate={{ y: [0, -6, 0], rotate: [0, -3, 3, 0] }}
+            transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
+            className="text-6xl mb-3 inline-block"
+          >
+            📸
+          </motion.div>
+          <p className="text-sm font-medium">Пока нет фото</p>
+          <p className="text-xs text-muted-foreground mt-1 max-w-xs mx-auto">
+            Запечатлейте моменты из поездки — нажмите кнопку <span className="inline-flex items-center justify-center size-5 rounded-full bg-primary text-primary-foreground text-[10px] font-bold align-middle mx-0.5">+</span> снизу
+          </p>
         </div>
       ) : (
         <div className="masonry-grid">

@@ -1,6 +1,6 @@
 "use client";
 
-import { useTrip, useWeather } from "@/hooks/use-trip";
+import { useTrip, useWeather, useUpdateTripDates } from "@/hooks/use-trip";
 import { useTripStore } from "@/lib/trip-store";
 import { motion } from "framer-motion";
 import {
@@ -19,9 +19,12 @@ import {
   Plane,
   Clock,
   Route,
+  Settings2,
 } from "lucide-react";
 import { CITIES, CATEGORY_META } from "@/lib/types";
 import { cn } from "@/lib/utils";
+import { useState } from "react";
+import { toast } from "sonner";
 
 const CITY_EMOJI: Record<string, string> = {
   guangzhou: "🏯",
@@ -46,8 +49,12 @@ export function Dashboard() {
   const now = new Date();
   const start = new Date(trip.settings.startDate);
   start.setHours(0, 0, 0, 0);
-  const end = new Date(start);
-  end.setDate(end.getDate() + trip.settings.totalDays - 1);
+  const end = trip.settings.endDate
+    ? new Date(trip.settings.endDate)
+    : new Date(start);
+  if (!trip.settings.endDate) {
+    end.setDate(end.getDate() + trip.settings.totalDays - 1);
+  }
   end.setHours(23, 59, 59, 999);
 
   const isBefore = now < start;
@@ -100,6 +107,8 @@ export function Dashboard() {
           daysRemaining={daysRemaining}
           currentDay={trip.currentDayNumber}
           totalDays={trip.settings.totalDays}
+          startDate={trip.settings.startDate}
+          endDate={trip.settings.endDate}
         />
 
         {/* Бюджет */}
@@ -345,13 +354,18 @@ function CountdownCard({
   daysRemaining,
   currentDay,
   totalDays,
+  startDate,
+  endDate,
 }: {
   isBefore: boolean;
   isAfter: boolean;
   daysRemaining: number;
   currentDay: number;
   totalDays: number;
+  startDate: string;
+  endDate: string | null;
 }) {
+  const [showEditor, setShowEditor] = useState(false);
   let icon = <Clock className="size-5" />;
   let label = "В пути";
   let value = `${currentDay}/${totalDays}`;
@@ -372,12 +386,22 @@ function CountdownCard({
     color = "#8b5cf6";
   }
 
+  const startStr = new Date(startDate).toISOString().slice(0, 10);
+  const endStr = endDate ? new Date(endDate).toISOString().slice(0, 10) : "";
+
   return (
     <div className="col-span-2 lg:col-span-1 rounded-2xl bg-card border border-border p-4 relative overflow-hidden">
       <div
         className="absolute -top-3 -right-3 size-16 rounded-full opacity-10 blur-xl"
         style={{ background: color }}
       />
+      <button
+        onClick={() => setShowEditor((v) => !v)}
+        className="absolute top-2 right-2 size-6 rounded-md hover:bg-accent grid place-items-center text-muted-foreground z-10"
+        title="Изменить даты"
+      >
+        <Settings2 className="size-3.5" />
+      </button>
       <div className="flex items-center gap-2 text-sm text-muted-foreground mb-2">
         <span style={{ color }}>{icon}</span> {label}
       </div>
@@ -396,6 +420,57 @@ function CountdownCard({
             )}
           />
         ))}
+      </div>
+
+      {showEditor && <DatesEditor startStr={startStr} endStr={endStr} onDone={() => setShowEditor(false)} />}
+    </div>
+  );
+}
+
+function DatesEditor({ startStr, endStr, onDone }: { startStr: string; endStr: string; onDone: () => void }) {
+  const update = useUpdateTripDates();
+  const [start, setStart] = useState(startStr);
+  const [end, setEnd] = useState(endStr);
+
+  const save = async () => {
+    await update.mutateAsync({ startDate: start, endDate: end || undefined });
+    toast.success("Даты обновлены");
+    onDone();
+  };
+
+  return (
+    <div className="mt-3 pt-3 border-t border-border space-y-2 relative z-20">
+      <div className="grid grid-cols-2 gap-2">
+        <div>
+          <label className="text-[10px] text-muted-foreground block mb-0.5">Вылет ✈️</label>
+          <input
+            type="date"
+            value={start}
+            onChange={(e) => setStart(e.target.value)}
+            className="w-full text-xs rounded-lg border border-input bg-background px-2 py-1.5"
+          />
+        </div>
+        <div>
+          <label className="text-[10px] text-muted-foreground block mb-0.5">Прилёт обратно 🛬</label>
+          <input
+            type="date"
+            value={end}
+            onChange={(e) => setEnd(e.target.value)}
+            className="w-full text-xs rounded-lg border border-input bg-background px-2 py-1.5"
+          />
+        </div>
+      </div>
+      <div className="flex gap-2">
+        <button onClick={onDone} className="flex-1 rounded-lg bg-secondary py-1.5 text-xs font-medium">
+          Отмена
+        </button>
+        <button
+          onClick={save}
+          disabled={update.isPending}
+          className="flex-1 rounded-lg bg-primary text-primary-foreground py-1.5 text-xs font-medium"
+        >
+          {update.isPending ? "…" : "Сохранить"}
+        </button>
       </div>
     </div>
   );
