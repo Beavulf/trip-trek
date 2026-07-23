@@ -102,13 +102,13 @@ export function AppShell({ children }: { children: ReactNode }) {
         {children}
       </main>
 
-      {/* FAB */}
+      {/* FAB — большой, удобно для пальца на мобиле */}
       <button
         onClick={() => setQuickOpen(true)}
-        className="fixed bottom-5 right-4 sm:right-6 z-40 size-14 rounded-full bg-gradient-to-br from-orange-500 to-rose-500 text-white shadow-xl shadow-orange-500/30 grid place-items-center active:scale-95 transition-transform"
+        className="fixed bottom-5 right-4 sm:right-6 z-40 size-16 sm:size-14 rounded-full bg-gradient-to-br from-orange-500 to-rose-500 text-white shadow-2xl shadow-orange-500/40 grid place-items-center active:scale-90 hover:scale-105 transition-transform border-2 border-white/20"
         aria-label="Быстрое добавление"
       >
-        <Plus className="size-7" />
+        <Plus className="size-8 sm:size-7" strokeWidth={2.5} />
       </button>
 
       {/* Footer */}

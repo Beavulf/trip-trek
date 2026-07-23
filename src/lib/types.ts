@@ -4,6 +4,7 @@ export interface Participant {
   color: string;
   emoji: string;
   role: string | null;
+  budget: number | null;
 }
 
 export interface Place {

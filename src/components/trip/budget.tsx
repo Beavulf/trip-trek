@@ -1,9 +1,9 @@
 "use client";
 
-import { useExpenses, useAddExpense, useDeleteExpense, useTrip } from "@/hooks/use-trip";
+import { useExpenses, useAddExpense, useDeleteExpense, useTrip, useUpdateParticipant } from "@/hooks/use-trip";
 import { EXPENSE_CATEGORIES, type Expense, type Participant } from "@/lib/types";
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from "recharts";
-import { Wallet, Plus, Trash2, TrendingDown, ArrowRight, Loader2, Scale } from "lucide-react";
+import { Wallet, Plus, Trash2, TrendingDown, ArrowRight, Loader2, Scale, UserCircle, Pencil } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { motion, AnimatePresence } from "framer-motion";
@@ -99,6 +99,19 @@ export function Budget() {
           </div>
         </div>
       )}
+
+      {/* Персональные бюджеты */}
+      <div className="rounded-2xl bg-card border border-border p-4">
+        <h2 className="font-semibold text-sm mb-3 flex items-center gap-2"><UserCircle className="size-4" /> Бюджет каждого</h2>
+        <div className="space-y-2">
+          {trip.participants.map((p) => (
+            <ParticipantBudgetRow key={p.id} participant={p} spent={expenses.filter((e) => e.paidById === p.id).reduce((s, e) => s + e.amount, 0)} />
+          ))}
+        </div>
+        <p className="text-[11px] text-muted-foreground mt-2.5">
+          Общий бюджет группы: ${trip.settings.totalBudget}. Тапни по сумме, чтобы задать личный бюджет.
+        </p>
+      </div>
 
       {/* Расчёт между друзьями */}
       <div className="rounded-2xl bg-card border border-border p-4">
@@ -277,6 +290,73 @@ function AddExpenseForm({ onDone }: { onDone: () => void }) {
         </button>
       </div>
     </motion.div>
+  );
+}
+
+function ParticipantBudgetRow({ participant, spent }: { participant: Participant; spent: number }) {
+  const update = useUpdateParticipant();
+  const [editing, setEditing] = useState(false);
+  const [val, setVal] = useState(participant.budget?.toString() ?? "");
+
+  const budget = participant.budget;
+  const remaining = budget !== null ? budget - spent : null;
+  const pct = budget && budget > 0 ? Math.min(100, (spent / budget) * 100) : null;
+
+  const save = () => {
+    const num = val.trim() ? parseFloat(val) : null;
+    update.mutate({ id: participant.id, budget: num });
+    toast.success("Бюджет обновлён");
+    setEditing(false);
+  };
+
+  return (
+    <div className="flex items-center gap-2.5 p-2 rounded-lg hover:bg-accent/50">
+      <div className="size-8 rounded-full grid place-items-center text-sm shrink-0" style={{ background: participant.color }}>
+        {participant.emoji}
+      </div>
+      <div className="flex-1 min-w-0">
+        <div className="text-sm font-medium">{participant.name}</div>
+        <div className="text-[11px] text-muted-foreground">потратил ${spent.toFixed(0)}</div>
+        {pct !== null && (
+          <div className="mt-1 h-1 rounded-full bg-muted overflow-hidden max-w-[120px]">
+            <div
+              className={cn("h-full rounded-full", pct > 90 ? "bg-red-500" : pct > 70 ? "bg-amber-500" : "bg-green-500")}
+              style={{ width: `${pct}%` }}
+            />
+          </div>
+        )}
+      </div>
+      {editing ? (
+        <div className="flex items-center gap-1">
+          <input
+            type="number"
+            inputMode="decimal"
+            value={val}
+            onChange={(e) => setVal(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter") save(); if (e.key === "Escape") setEditing(false); }}
+            onBlur={save}
+            autoFocus
+            placeholder="—"
+            className="w-20 text-sm rounded-lg border border-input bg-background px-2 py-1 text-right"
+          />
+        </div>
+      ) : (
+        <button
+          onClick={() => { setVal(participant.budget?.toString() ?? ""); setEditing(true); }}
+          className="text-right group"
+        >
+          <div className={cn("text-sm font-semibold", remaining !== null && remaining < 0 && "text-red-500")}>
+            {budget !== null ? `$${budget}` : "—"}
+          </div>
+          {remaining !== null && (
+            <div className={cn("text-[10px]", remaining < 0 ? "text-red-500" : "text-muted-foreground")}>
+              ост. ${remaining.toFixed(0)}
+            </div>
+          )}
+          <Pencil className="size-2.5 text-muted-foreground/0 group-hover:text-muted-foreground transition-colors inline-block ml-1" />
+        </button>
+      )}
+    </div>
   );
 }
 

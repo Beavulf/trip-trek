@@ -18,6 +18,7 @@ import {
   NotebookPen,
   Plus,
   Trash2,
+  Navigation,
 } from "lucide-react";
 import { useState, useRef } from "react";
 import { createPortal } from "react-dom";
@@ -203,6 +204,13 @@ function PlaceRow({ place, accentColor, onOpen }: { place: Place; accentColor: s
       </div>
       <div className="min-w-0 flex-1">
         <div className={cn("text-sm font-medium leading-tight", visited && "line-through opacity-60")}>{place.name}</div>
+        {/* Адрес */}
+        {place.address && (
+          <div className="flex items-start gap-1 text-[10px] text-muted-foreground mt-0.5">
+            <MapPin className="size-2.5 mt-0.5 shrink-0" />
+            <span className="line-clamp-1">{place.address}</span>
+          </div>
+        )}
         <div className="flex items-center gap-2 text-[11px] text-muted-foreground mt-0.5 flex-wrap">
           <span
             className="px-1.5 py-0.5 rounded text-[9px] font-medium uppercase tracking-wide"
@@ -218,6 +226,16 @@ function PlaceRow({ place, accentColor, onOpen }: { place: Place; accentColor: s
           ) : null}
           {place.rating ? <span className="flex items-center gap-0.5 text-amber-500"><Star className="size-2.5 fill-current" /> {place.rating}</span> : null}
         </div>
+        {/* Кнопка "как добраться" */}
+        <a
+          href={`https://www.openstreetmap.org/directions?from=&to=${place.lat}%2C${place.lng}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          onClick={(e) => e.stopPropagation()}
+          className="inline-flex items-center gap-1 text-[10px] text-primary hover:underline mt-1"
+        >
+          <Navigation className="size-2.5" /> Как добраться
+        </a>
       </div>
       {visited && (
         <span className="shrink-0 text-[9px] font-bold uppercase tracking-wide text-green-600 bg-green-500/10 px-1.5 py-0.5 rounded">

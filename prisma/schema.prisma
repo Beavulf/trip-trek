@@ -17,6 +17,7 @@ model Participant {
   color     String   // hex цвет для аватара/маркеров
   emoji     String   // эмодзи аватар
   role      String?  // роль/прозвище
+  budget    Float?   // персональный бюджет (null = общий)
   createdAt DateTime @default(now())
 
   photos    Photo[]

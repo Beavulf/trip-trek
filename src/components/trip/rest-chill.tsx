@@ -1,8 +1,8 @@
 "use client";
 
-import { useDays, useUpdatePlace } from "@/hooks/use-trip";
-import { CATEGORY_META, type Place, type Day } from "@/lib/types";
-import { Coffee, Star, MapPin, Clock, CheckCircle2, Circle, Search } from "lucide-react";
+import { useDays, useUpdatePlace, useNearby, type NearbyPlace } from "@/hooks/use-trip";
+import { CATEGORY_META, CITIES, type Place, type Day } from "@/lib/types";
+import { Coffee, Star, MapPin, Clock, CheckCircle2, Circle, Search, Navigation, Loader2, Locate, ListPlus } from "lucide-react";
 import { useState, useMemo } from "react";
 import { motion } from "framer-motion";
 import { toast } from "sonner";
@@ -14,6 +14,8 @@ export function RestChill() {
   const { data: days, isLoading } = useDays();
   const [filter, setFilter] = useState<string>("all");
   const [query, setQuery] = useState("");
+  const [view, setView] = useState<"route" | "nearby">("route");
+  const [nearbyCat, setNearbyCat] = useState<string>("all");
 
   const places = useMemo(() => {
     if (!days) return [];
@@ -40,7 +42,7 @@ export function RestChill() {
   };
 
   return (
-    <div className="space-y-4 animate-fade-up">
+    <div className="space-y-4 animate-fade-up pb-20">
       {/* Hero */}
       <div className="rounded-3xl p-5 bg-gradient-to-br from-amber-500 to-orange-600 text-white shadow-xl relative overflow-hidden">
         <div className="absolute -bottom-6 -right-6 text-[100px] opacity-15 select-none">☕</div>
@@ -49,7 +51,7 @@ export function RestChill() {
             <Coffee className="size-4" /> Rest & Chill
           </div>
           <h1 className="text-2xl font-bold">Где присесть и отдохнуть</h1>
-          <p className="text-white/80 text-sm mt-1">Кафе, бары и рестораны из маршрута</p>
+          <p className="text-white/80 text-sm mt-1">Кафе, бары и рестораны из маршрута и поблизости</p>
           <div className="flex gap-4 mt-3">
             <div>
               <div className="text-2xl font-bold">{stats.visited}</div>
@@ -57,17 +59,41 @@ export function RestChill() {
             </div>
             <div>
               <div className="text-2xl font-bold">{stats.total}</div>
-              <div className="text-xs text-white/70">всего мест</div>
+              <div className="text-xs text-white/70">в маршруте</div>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Поиск + фильтры */}
-      <div className="space-y-2">
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
-          <input
+      {/* Переключатель: маршрут / поблизости */}
+      <div className="grid grid-cols-2 gap-2 p-1 bg-card border border-border rounded-2xl">
+        <button
+          onClick={() => setView("route")}
+          className={cn(
+            "rounded-xl py-2.5 text-sm font-medium flex items-center justify-center gap-1.5 transition-all",
+            view === "route" ? "bg-primary text-primary-foreground shadow" : "text-muted-foreground hover:bg-accent"
+          )}
+        >
+          <ListPlus className="size-4" /> Из маршрута
+        </button>
+        <button
+          onClick={() => setView("nearby")}
+          className={cn(
+            "rounded-xl py-2.5 text-sm font-medium flex items-center justify-center gap-1.5 transition-all",
+            view === "nearby" ? "bg-primary text-primary-foreground shadow" : "text-muted-foreground hover:bg-accent"
+          )}
+        >
+          <Locate className="size-4" /> Поблизости
+        </button>
+      </div>
+
+      {view === "route" ? (
+        <>
+          {/* Поиск + фильтры */}
+          <div className="space-y-2">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+              <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Поиск места…"
@@ -105,7 +131,119 @@ export function RestChill() {
       {filtered.length === 0 && (
         <div className="text-center py-12 text-muted-foreground text-sm">Ничего не найдено</div>
       )}
+        </>
+      ) : (
+        <NearbyView category={nearbyCat} onCategoryChange={setNearbyCat} />
+      )}
     </div>
+  );
+}
+
+function NearbyView({ category, onCategoryChange }: { category: string; onCategoryChange: (c: string) => void }) {
+  const [cityKey, setCityKey] = useState("guangzhou");
+  const city = CITIES.find((c) => c.key === cityKey)!;
+  const { data, isLoading, error } = useNearby(city.lat, city.lng, category, true);
+
+  return (
+    <div className="space-y-3">
+      {/* Город + категория */}
+      <div className="flex gap-2 flex-wrap">
+        <select
+          value={cityKey}
+          onChange={(e) => setCityKey(e.target.value)}
+          className="rounded-lg border border-input bg-card px-3 py-1.5 text-sm"
+        >
+          {CITIES.map((c) => (
+            <option key={c.key} value={c.key}>{c.name}</option>
+          ))}
+        </select>
+        <div className="flex gap-1.5 flex-wrap">
+          {[
+            { key: "all", label: "Все", emoji: "✨" },
+            { key: "cafe", label: "Кафе", emoji: "☕" },
+            { key: "restaurant", label: "Еда", emoji: "🍽️" },
+            { key: "bar", label: "Бары", emoji: "🍸" },
+          ].map((f) => (
+            <button
+              key={f.key}
+              onClick={() => onCategoryChange(f.key)}
+              className={cn(
+                "flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-medium transition-colors",
+                category === f.key ? "bg-primary text-primary-foreground" : "bg-card border border-border hover:bg-accent"
+              )}
+            >
+              <span>{f.emoji}</span> {f.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <p className="text-[11px] text-muted-foreground px-1">
+        📍 Реальные места рядом с центром {city.name} (радиус 1.5 км) · данные OpenStreetMap
+      </p>
+
+      {isLoading ? (
+        <div className="flex items-center justify-center gap-2 py-12 text-muted-foreground">
+          <Loader2 className="size-5 animate-spin" /> Ищем места поблизости…
+        </div>
+      ) : error ? (
+        <div className="text-center py-12 text-red-500 text-sm">
+          Не удалось загрузить: {error.message}
+        </div>
+      ) : data?.places && data.places.length > 0 ? (
+        <div className="grid sm:grid-cols-2 gap-2">
+          {data.places.map((p, i) => (
+            <NearbyCard key={i} place={p} />
+          ))}
+        </div>
+      ) : (
+        <div className="text-center py-12 text-muted-foreground text-sm">
+          Поблизости ничего не найдено
+        </div>
+      )}
+    </div>
+  );
+}
+
+function NearbyCard({ place }: { place: NearbyPlace }) {
+  return (
+    <motion.div
+      layout
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="rounded-2xl bg-card border border-border p-3 hover:shadow-md transition-shadow"
+    >
+      <div className="flex items-start gap-2.5">
+        <div className="size-10 rounded-xl grid place-items-center text-xl shrink-0 bg-amber-500/10">
+          {place.emoji}
+        </div>
+        <div className="min-w-0 flex-1">
+          <h3 className="font-semibold text-sm leading-tight line-clamp-1">{place.name}</h3>
+          {place.cuisine && (
+            <div className="text-[11px] text-muted-foreground mt-0.5 line-clamp-1">{place.cuisine}</div>
+          )}
+          {place.address && (
+            <div className="flex items-start gap-1 text-[10px] text-muted-foreground mt-0.5">
+              <MapPin className="size-2.5 mt-0.5 shrink-0" />
+              <span className="line-clamp-1">{place.address}</span>
+            </div>
+          )}
+          <div className="flex items-center gap-2 mt-1">
+            <span className="text-[10px] text-primary font-medium flex items-center gap-0.5">
+              <Navigation className="size-2.5" /> {place.distance < 1000 ? `${place.distance} м` : `${(place.distance / 1000).toFixed(1)} км`}
+            </span>
+            <a
+              href={`https://www.openstreetmap.org/directions?from=&to=${place.lat}%2C${place.lng}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-[10px] text-primary hover:underline"
+            >
+              Как добраться
+            </a>
+          </div>
+        </div>
+      </div>
+    </motion.div>
   );
 }
 

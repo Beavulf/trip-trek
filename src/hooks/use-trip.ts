@@ -261,6 +261,22 @@ export function useUpdateTripDates() {
   });
 }
 
+export function useUpdateParticipant() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, ...data }: { id: string; budget?: number | null; name?: string; role?: string | null }) => {
+      const r = await fetch(`/api/participants/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+      if (!r.ok) throw new Error("update participant failed");
+      return r.json();
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["trip"] }),
+  });
+}
+
 // === Checklist ===
 export interface ChecklistItem {
   id: string;
@@ -379,6 +395,30 @@ export function useDeleteInfo() {
       await fetch(`/api/info?id=${id}`, { method: "DELETE" });
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["info"] }),
+  });
+}
+
+// === Nearby places (Overpass API) ===
+export interface NearbyPlace {
+  name: string;
+  category: string;
+  emoji: string;
+  cuisine: string | null;
+  address: string | null;
+  lat: number;
+  lng: number;
+  distance: number;
+}
+
+export function useNearby(lat: number | null, lng: number | null, category: string, enabled: boolean) {
+  return useQuery<{ places: NearbyPlace[]; source?: string; error?: string }>({
+    queryKey: ["nearby", lat, lng, category],
+    queryFn: async () => {
+      const r = await fetch(`/api/nearby?lat=${lat}&lng=${lng}&category=${category}`);
+      return r.json();
+    },
+    enabled: enabled && lat !== null && lng !== null,
+    staleTime: 5 * 60 * 1000,
   });
 }
 

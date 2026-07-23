@@ -34,7 +34,7 @@ export function QuickAddSheet({ open, onOpenChange }: { open: boolean; onOpenCha
         </SheetHeader>
 
         {/* Выбор режима */}
-        <div className="grid grid-cols-3 gap-2 mt-4">
+        <div className="grid grid-cols-3 gap-2.5 mt-4">
           {([
             { key: "photo", label: "Фото", icon: Camera },
             { key: "expense", label: "Трата", icon: Wallet },
@@ -46,14 +46,14 @@ export function QuickAddSheet({ open, onOpenChange }: { open: boolean; onOpenCha
                 key={m.key}
                 onClick={() => setMode(m.key)}
                 className={cn(
-                  "flex flex-col items-center gap-1.5 py-3 rounded-xl border-2 transition-all",
+                  "flex flex-col items-center gap-2 py-4 rounded-2xl border-2 transition-all active:scale-95",
                   mode === m.key
                     ? "border-primary bg-primary/10 text-primary"
                     : "border-border text-muted-foreground hover:bg-accent"
                 )}
               >
-                <Icon className="size-5" />
-                <span className="text-xs font-medium">{m.label}</span>
+                <Icon className="size-7" strokeWidth={2} />
+                <span className="text-sm font-medium">{m.label}</span>
               </button>
             );
           })}
@@ -153,9 +153,9 @@ function PhotoForm({ onDone }: { onDone: () => void }) {
       ) : (
         <button
           onClick={() => inputRef.current?.click()}
-          className="w-full border-2 border-dashed border-border rounded-xl py-10 flex flex-col items-center gap-2 text-muted-foreground hover:border-primary hover:text-primary transition-colors"
+          className="w-full border-2 border-dashed border-border rounded-2xl py-12 flex flex-col items-center gap-2 text-muted-foreground hover:border-primary hover:text-primary transition-colors"
         >
-          <Camera className="size-8" />
+          <Camera className="size-10" />
           <span className="text-sm font-medium">Выбрать фото</span>
         </button>
       )}
@@ -170,7 +170,7 @@ function PhotoForm({ onDone }: { onDone: () => void }) {
       <button
         onClick={submit}
         disabled={!file || upload.isPending}
-        className="w-full rounded-lg bg-primary text-primary-foreground py-2.5 font-medium flex items-center justify-center gap-2 disabled:opacity-50"
+        className="w-full rounded-xl bg-primary text-primary-foreground py-3.5 text-base font-medium flex items-center justify-center gap-2 disabled:opacity-50"
       >
         {upload.isPending ? <Loader2 className="size-4 animate-spin" /> : <Check className="size-4" />}
         {upload.isPending ? "Загрузка…" : "Добавить фото"}
@@ -249,7 +249,7 @@ function ExpenseForm({ onDone }: { onDone: () => void }) {
       <button
         onClick={submit}
         disabled={addExpense.isPending}
-        className="w-full rounded-lg bg-primary text-primary-foreground py-2.5 font-medium flex items-center justify-center gap-2 disabled:opacity-50"
+        className="w-full rounded-xl bg-primary text-primary-foreground py-3.5 text-base font-medium flex items-center justify-center gap-2 disabled:opacity-50"
       >
         {addExpense.isPending ? <Loader2 className="size-4 animate-spin" /> : <Check className="size-4" />}
         Добавить трату
@@ -319,7 +319,7 @@ function JournalForm({ onDone }: { onDone: () => void }) {
       <button
         onClick={submit}
         disabled={addJournal.isPending}
-        className="w-full rounded-lg bg-primary text-primary-foreground py-2.5 font-medium flex items-center justify-center gap-2 disabled:opacity-50"
+        className="w-full rounded-xl bg-primary text-primary-foreground py-3.5 text-base font-medium flex items-center justify-center gap-2 disabled:opacity-50"
       >
         {addJournal.isPending ? <Loader2 className="size-4 animate-spin" /> : <Check className="size-4" />}
         Сохранить запись

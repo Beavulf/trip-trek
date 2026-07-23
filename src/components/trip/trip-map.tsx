@@ -32,6 +32,22 @@ export default function TripMap() {
   const [addMode, setAddMode] = useState(false);
   const [addData, setAddData] = useState<AddPlaceData | null>(null);
   const [addOpen, setAddOpen] = useState(false);
+  const [tileLayer, setTileLayer] = useState<"voyager" | "satellite" | "light">("voyager");
+
+  const TILE_LAYERS = {
+    voyager: {
+      url: "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png",
+      attr: "&copy; OpenStreetMap &copy; CARTO",
+    },
+    satellite: {
+      url: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+      attr: "&copy; Esri",
+    },
+    light: {
+      url: "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png",
+      attr: "&copy; OpenStreetMap &copy; CARTO",
+    },
+  };
 
   const allPlaces = useMemo(() => {
     if (!days) return [];
@@ -163,8 +179,9 @@ export default function TripMap() {
           key={mapCityFilter || "all"}
         >
           <TileLayer
-            attribution='&copy; OpenStreetMap'
-            url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
+            key={tileLayer}
+            attribution={TILE_LAYERS[tileLayer].attr}
+            url={TILE_LAYERS[tileLayer].url}
           />
           <FlyTo center={center} />
           {addMode && <MapClickHandler onClick={handleMapClick} />}
@@ -185,7 +202,33 @@ export default function TripMap() {
             👆 Тапните по карте
           </div>
         )}
+        {/* Переключатель слоёв карты */}
+        <div className="absolute top-2 right-2 z-[500] flex flex-col gap-1 bg-card/90 backdrop-blur rounded-lg p-1 shadow-lg">
+          {([
+            { key: "voyager", label: "🗺️", title: "Подробная" },
+            { key: "satellite", label: "🛰️", title: "Спутник" },
+            { key: "light", label: "⚪", title: "Светлая" },
+          ] as const).map((l) => (
+            <button
+              key={l.key}
+              onClick={() => setTileLayer(l.key)}
+              title={l.title}
+              className={cn(
+                "size-9 rounded-md text-base grid place-items-center transition-colors",
+                tileLayer === l.key ? "bg-primary text-primary-foreground" : "hover:bg-accent"
+              )}
+            >
+              {l.label}
+            </button>
+          ))}
+        </div>
       </div>
+
+      {/* Инфо о картах */}
+      <p className="text-[10px] text-muted-foreground px-1 leading-relaxed">
+        🗺️ Карты: OpenStreetMap (CARTO/Esri) — работают в Китае без VPN. Все метки сохранены.
+        Для лучшей навигации в Китае рекомендуем Amap (高德地图) или Baidu Maps как отдельное приложение.
+      </p>
 
       <AddPlaceSheet open={addOpen} onOpenChange={setAddOpen} initial={addData} />
     </div>
