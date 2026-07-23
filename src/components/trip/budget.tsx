@@ -1,9 +1,9 @@
 "use client";
 
 import { useExpenses, useAddExpense, useDeleteExpense, useTrip, useUpdateParticipant } from "@/hooks/use-trip";
-import { EXPENSE_CATEGORIES, type Expense, type Participant } from "@/lib/types";
-import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from "recharts";
-import { Wallet, Plus, Trash2, TrendingDown, ArrowRight, Loader2, Scale, UserCircle, Pencil } from "lucide-react";
+import { EXPENSE_CATEGORIES, CITIES, type Expense, type Participant } from "@/lib/types";
+import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, BarChart, Bar, XAxis, YAxis, CartesianGrid } from "recharts";
+import { Wallet, Plus, Trash2, TrendingDown, ArrowRight, Loader2, Scale, UserCircle, Pencil, BarChart3 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { motion, AnimatePresence } from "framer-motion";
@@ -100,6 +100,62 @@ export function Budget() {
           </div>
         </div>
       )}
+
+      {/* График тренда по дням */}
+      {(() => {
+        const dailyData = trip.days.map((d) => {
+          const dayExpenses = expenses.filter((e) => e.dayId === d.id);
+          const sum = dayExpenses.reduce((s, e) => s + e.amount, 0);
+          return {
+            day: `Д${d.dayNumber}`,
+            amount: Math.round(sum),
+            city: d.city,
+          };
+        }).filter((d) => d.amount > 0);
+
+        if (dailyData.length === 0) return null;
+
+        const maxAmount = Math.max(...dailyData.map((d) => d.amount), 1);
+
+        return (
+          <div className="rounded-2xl bg-card border border-border p-4">
+            <h2 className="font-semibold text-sm mb-3 flex items-center gap-2"><BarChart3 className="size-4" /> Траты по дням</h2>
+            <div className="h-48">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={dailyData} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
+                  <XAxis
+                    dataKey="day"
+                    tick={{ fontSize: 10, fill: "var(--muted-foreground)" }}
+                    axisLine={{ stroke: "var(--border)" }}
+                    tickLine={false}
+                  />
+                  <YAxis
+                    tick={{ fontSize: 10, fill: "var(--muted-foreground)" }}
+                    axisLine={false}
+                    tickLine={false}
+                    width={28}
+                  />
+                  <Tooltip
+                    formatter={(v: number) => [`$${v}`, "Потрачено"]}
+                    contentStyle={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: 8, fontSize: 12 }}
+                    cursor={{ fill: "var(--accent)" }}
+                  />
+                  <Bar dataKey="amount" radius={[6, 6, 0, 0]} maxBarSize={40}>
+                    {dailyData.map((entry, i) => {
+                      const city = CITIES.find((c) => c.name === entry.city);
+                      return <Cell key={i} fill={city?.color ?? "#f97316"} />;
+                    })}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+            <p className="text-[11px] text-muted-foreground mt-2">
+              Всего {dailyData.length} дней с тратами · средний день: ${Math.round(dailyData.reduce((s, d) => s + d.amount, 0) / dailyData.length)}
+            </p>
+          </div>
+        );
+      })()}
 
       {/* Персональные бюджеты */}
       <div className="rounded-2xl bg-card border border-border p-4">

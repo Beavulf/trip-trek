@@ -21,10 +21,12 @@ import {
   Plus,
   Moon,
   Sun,
+  Search,
 } from "lucide-react";
-import { useState, type ReactNode } from "react";
+import { useState, useEffect, type ReactNode } from "react";
 import { useTheme } from "next-themes";
 import { QuickAddSheet } from "./quick-add";
+import { GlobalSearch } from "./global-search";
 
 const TABS = [
   { key: "dashboard", label: "Обзор", icon: LayoutDashboard },
@@ -44,8 +46,21 @@ const TABS = [
 
 export function AppShell({ children }: { children: ReactNode }) {
   const [quickOpen, setQuickOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
   const { activeTab, setActiveTab } = useTripStore();
   const { data: trip } = useTrip();
+
+  // Горячая клавиша: Cmd/Ctrl + K — открыть поиск
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === "k") {
+        e.preventDefault();
+        setSearchOpen((v) => !v);
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, []);
 
   return (
     <div className="min-h-screen flex flex-col bg-background">
@@ -56,7 +71,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             <div className="size-8 rounded-xl bg-gradient-to-br from-orange-500 via-rose-500 to-violet-500 grid place-items-center text-white font-bold text-sm shadow-lg shrink-0">
               T
             </div>
-            <div className="min-w-0">
+            <div className="min-w-0 hidden xs:block">
               <div className="font-bold text-sm leading-tight truncate">
                 TripTrek <span className="text-muted-foreground font-normal">China</span>
               </div>
@@ -67,6 +82,16 @@ export function AppShell({ children }: { children: ReactNode }) {
           </div>
 
           <div className="flex-1" />
+
+          {/* Кнопка поиска */}
+          <button
+            onClick={() => setSearchOpen(true)}
+            className="size-8 rounded-full grid place-items-center bg-secondary border border-border hover:bg-accent transition-colors"
+            title="Поиск (Ctrl+K)"
+            aria-label="Поиск"
+          >
+            <Search className="size-4" />
+          </button>
 
           <ThemeToggle />
           <ParticipantAvatars />
@@ -136,6 +161,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       </footer>
 
       <QuickAddSheet open={quickOpen} onOpenChange={setQuickOpen} />
+      <GlobalSearch open={searchOpen} onOpenChange={setSearchOpen} />
     </div>
   );
 }

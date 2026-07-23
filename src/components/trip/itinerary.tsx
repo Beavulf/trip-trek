@@ -33,7 +33,7 @@ export function Itinerary() {
   const [addOpen, setAddOpen] = useState(false);
   const [addData, setAddData] = useState<AddPlaceData | null>(null);
 
-  if (isLoading || !days) return <div className="py-20 text-center text-muted-foreground">Загрузка маршрута…</div>;
+  if (isLoading || !days) return <ItinerarySkeleton />;
 
   const filteredDays = selectedDay ? days.filter((d) => d.dayNumber === selectedDay) : days;
 
@@ -464,4 +464,43 @@ function timeLabel(t: string | null) {
     case "evening": return "Вечер";
     default: return "";
   }
+}
+
+function ItinerarySkeleton() {
+  return (
+    <div className="space-y-3 animate-pulse">
+      {/* Фильтр дней */}
+      <div className="flex gap-1.5 overflow-hidden">
+        {[0, 1, 2, 3, 4].map((i) => (
+          <div key={i} className="h-7 w-20 rounded-full bg-muted" />
+        ))}
+        <div className="size-9 rounded-full bg-muted ml-auto" />
+      </div>
+      {/* Карточки дней */}
+      {[0, 1, 2].map((i) => (
+        <div key={i} className="rounded-2xl bg-card border border-border p-4">
+          <div className="flex items-center gap-3">
+            <div className="size-11 rounded-xl bg-muted" />
+            <div className="flex-1 space-y-2">
+              <div className="h-3 bg-muted rounded w-1/4" />
+              <div className="h-2.5 bg-muted rounded w-1/2" />
+            </div>
+            <div className="size-4 bg-muted rounded" />
+          </div>
+          <div className="mt-3 space-y-1.5">
+            {[0, 1].map((j) => (
+              <div key={j} className="flex items-center gap-3 p-2.5 rounded-xl bg-muted/50">
+                <div className="size-6 rounded-full bg-muted" />
+                <div className="size-9 rounded-lg bg-muted" />
+                <div className="flex-1 space-y-1.5">
+                  <div className="h-3 bg-muted rounded w-2/3" />
+                  <div className="h-2 bg-muted rounded w-1/3" />
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
 }

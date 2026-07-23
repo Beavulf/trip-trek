@@ -25,7 +25,23 @@ export function Gallery() {
   }, [photos, filterDay, filterCity]);
 
   if (isLoading) {
-    return <div className="py-20 text-center text-muted-foreground flex items-center justify-center gap-2"><Loader2 className="size-4 animate-spin" /> Загрузка галереи…</div>;
+    return (
+      <div className="space-y-3 animate-fade-up">
+        <div className="flex items-center justify-between">
+          <div className="h-6 w-24 bg-muted rounded animate-pulse" />
+          <div className="h-4 w-12 bg-muted rounded animate-pulse" />
+        </div>
+        <div className="flex gap-2">
+          <div className="h-9 w-28 bg-muted rounded-lg animate-pulse" />
+          <div className="h-9 w-20 bg-muted rounded-lg animate-pulse" />
+        </div>
+        <div className="masonry-grid">
+          {[0, 1, 2, 3, 4, 5].map((i) => (
+            <div key={i} className="masonry-item rounded-xl overflow-hidden bg-muted" style={{ height: `${120 + (i % 3) * 60}px` }} />
+          ))}
+        </div>
+      </div>
+    );
   }
 
   return (
