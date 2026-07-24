@@ -262,6 +262,22 @@ export function useUpdateTripDates() {
   });
 }
 
+export function useUpdateTripBudget() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (totalBudget: number) => {
+      const r = await fetch("/api/trip/budget", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ totalBudget }),
+      });
+      if (!r.ok) throw new Error("update budget failed");
+      return r.json();
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["trip"] }),
+  });
+}
+
 export function useUpdateParticipant() {
   const qc = useQueryClient();
   return useMutation({

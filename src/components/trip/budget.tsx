@@ -1,9 +1,9 @@
 "use client";
 
-import { useExpenses, useAddExpense, useDeleteExpense, useTrip, useUpdateParticipant } from "@/hooks/use-trip";
+import { useExpenses, useAddExpense, useDeleteExpense, useTrip, useUpdateParticipant, useUpdateTripBudget } from "@/hooks/use-trip";
 import { EXPENSE_CATEGORIES, CITIES, type Expense, type Participant } from "@/lib/types";
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, BarChart, Bar, XAxis, YAxis, CartesianGrid } from "recharts";
-import { Wallet, Plus, Trash2, TrendingDown, ArrowRight, Loader2, Scale, UserCircle, Pencil, BarChart3 } from "lucide-react";
+import { Wallet, Plus, Trash2, TrendingDown, ArrowRight, Loader2, Scale, UserCircle, Pencil, BarChart3, Check, X } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { motion, AnimatePresence } from "framer-motion";
@@ -42,30 +42,13 @@ export function Budget() {
 
   return (
     <div className="space-y-4 animate-fade-up">
-      {/* Hero budget */}
-      <div className="rounded-3xl p-5 bg-gradient-to-br from-orange-500 to-rose-500 text-white shadow-xl">
-        <div className="flex items-center gap-2 text-white/80 text-sm mb-1">
-          <Wallet className="size-4" /> Бюджет поездки
-        </div>
-        <div className="flex items-end gap-2">
-          <span className="text-4xl font-bold">${totalSpent.toFixed(0)}</span>
-          <span className="text-white/80 mb-1">/ ${trip.settings.totalBudget}</span>
-        </div>
-        <div className="mt-3 h-2.5 rounded-full bg-white/20 overflow-hidden">
-          <motion.div
-            initial={{ width: 0 }}
-            animate={{ width: `${Math.min(100, budgetPct)}%` }}
-            transition={{ duration: 0.8 }}
-            className={cn("h-full rounded-full", budgetPct > 90 ? "bg-red-300" : "bg-white")}
-          />
-        </div>
-        <div className="flex items-center justify-between mt-2 text-sm">
-          <span className="text-white/80">Потрачено {budgetPct.toFixed(0)}%</span>
-          <span className={cn("font-semibold", remaining < 0 ? "text-red-200" : "text-white")}>
-            {remaining >= 0 ? `Остаток $${remaining.toFixed(0)}` : `Перерасход $${Math.abs(remaining).toFixed(0)}`}
-          </span>
-        </div>
-      </div>
+      {/* Hero budget — с редактированием общего бюджета */}
+      <BudgetHero
+        totalSpent={totalSpent}
+        totalBudget={trip.settings.totalBudget}
+        budgetPct={budgetPct}
+        remaining={remaining}
+      />
 
       {/* График по категориям */}
       {byCategory.length > 0 && (
@@ -425,6 +408,93 @@ function ParticipantBudgetRow({ participant, spent }: { participant: Participant
 }
 
 // Алгоритм упрощения долгов (greedy)
+function BudgetHero({ totalSpent, totalBudget, budgetPct, remaining }: {
+  totalSpent: number;
+  totalBudget: number;
+  budgetPct: number;
+  remaining: number;
+}) {
+  const update = useUpdateTripBudget();
+  const [editing, setEditing] = useState(false);
+  const [val, setVal] = useState(String(totalBudget));
+
+  const save = () => {
+    const num = parseFloat(val);
+    if (!isNaN(num) && num >= 0) {
+      update.mutate(num);
+      toast.success("Бюджет обновлён");
+    }
+    setEditing(false);
+  };
+
+  return (
+    <div className="rounded-3xl p-5 bg-gradient-to-br from-orange-500 to-rose-500 text-white shadow-xl relative overflow-hidden">
+      <div className="absolute -bottom-6 -right-4 text-[100px] opacity-10 select-none">💰</div>
+      <div className="relative">
+        <div className="flex items-center gap-2 text-white/80 text-sm mb-1">
+          <Wallet className="size-4" /> Бюджет поездки
+          {!editing && (
+            <button
+              onClick={() => { setVal(String(totalBudget)); setEditing(true); }}
+              className="ml-auto size-7 rounded-lg bg-white/15 hover:bg-white/25 grid place-items-center transition-colors"
+              title="Изменить бюджет"
+            >
+              <Pencil className="size-3.5" />
+            </button>
+          )}
+        </div>
+
+        <div className="flex items-end gap-2 flex-wrap">
+          <span className="text-4xl font-bold tabular-nums">${totalSpent.toFixed(0)}</span>
+          <span className="text-white/80 mb-1">/</span>
+          {editing ? (
+            <div className="flex items-center gap-1.5 mb-0.5">
+              <span className="text-white/80">$</span>
+              <input
+                type="number"
+                inputMode="decimal"
+                value={val}
+                onChange={(e) => setVal(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") save();
+                  if (e.key === "Escape") setEditing(false);
+                }}
+                onBlur={save}
+                autoFocus
+                className="w-24 text-2xl font-bold bg-white/15 rounded-lg px-2 py-0.5 outline-none placeholder:text-white/50"
+                placeholder="1100"
+              />
+              <button onClick={save} className="size-7 rounded-lg bg-white/20 hover:bg-white/30 grid place-items-center">
+                <Check className="size-4" />
+              </button>
+              <button onClick={() => setEditing(false)} className="size-7 rounded-lg bg-white/20 hover:bg-white/30 grid place-items-center">
+                <X className="size-4" />
+              </button>
+            </div>
+          ) : (
+            <span className="text-white/80 mb-1 font-semibold">${totalBudget}</span>
+          )}
+        </div>
+
+        <div className="mt-3 h-2.5 rounded-full bg-white/20 overflow-hidden">
+          <motion.div
+            initial={{ width: 0 }}
+            animate={{ width: `${Math.min(100, budgetPct)}%` }}
+            transition={{ duration: 0.8 }}
+            className={cn("h-full rounded-full", budgetPct > 90 ? "bg-red-300" : "bg-white")}
+          />
+        </div>
+        <div className="flex items-center justify-between mt-2 text-sm">
+          <span className="text-white/80">Потрачено {budgetPct.toFixed(0)}%</span>
+          <span className={cn("font-semibold", remaining < 0 ? "text-red-200" : "text-white")}>
+            {remaining >= 0 ? `Остаток $${remaining.toFixed(0)}` : `Перерасход $${Math.abs(remaining).toFixed(0)}`}
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function settleDebts(balances: { participant: Participant; paid: number; balance: number }[]) {
   const creditors = balances.filter((b) => b.balance > 0.01).sort((a, b) => b.balance - a.balance);
   const debtors = balances.filter((b) => b.balance < -0.01).sort((a, b) => a.balance - b.balance);

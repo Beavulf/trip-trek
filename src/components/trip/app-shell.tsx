@@ -110,7 +110,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         </div>
 
         {/* Tab bar */}
-        <nav className="mx-auto max-w-7xl px-2 sm:px-4 pb-1.5">
+        <nav className="mx-auto max-w-7xl px-2 sm:px-4 pb-1.5 relative">
           <div className="flex gap-1 overflow-x-auto no-scrollbar">
             {TABS.map((t) => {
               const Icon = t.icon;
@@ -148,6 +148,9 @@ export function AppShell({ children }: { children: ReactNode }) {
               );
             })}
           </div>
+          {/* Fade-индикаторы: показывают что есть ещё кнопки */}
+          <div className="pointer-events-none absolute right-0 top-0 bottom-1.5 w-8 bg-gradient-to-l from-background to-transparent sm:hidden" />
+          <div className="pointer-events-none absolute left-0 top-0 bottom-1.5 w-8 bg-gradient-to-r from-background to-transparent sm:hidden opacity-0" id="tab-fade-left" />
         </nav>
       </header>
 

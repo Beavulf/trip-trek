@@ -132,17 +132,68 @@ function PhraseCard({ phrase, categoryMeta }: { phrase: Phrase; categoryMeta?: {
 
   const speak = () => {
     if (typeof window === "undefined" || !("speechSynthesis" in window)) {
-      toast.error("Озвучка не поддерживается в этом браузере");
+      toast.error("Озвучка не поддерживается в этом браузере", {
+        description: "Попробуйте Chrome или Safari на телефоне",
+      });
       return;
     }
-    window.speechSynthesis.cancel();
+
+    const synth = window.speechSynthesis;
+
+    // Получаем голоса (могут загружаться асинхронно)
+    const getVoices = (): SpeechSynthesisVoice[] => {
+      let voices = synth.getVoices();
+      return voices;
+    };
+
+    let voices = getVoices();
+
+    // Если голоса ещё не загружены — ждём
+    if (voices.length === 0) {
+      toast.info("Загружаем голоса…", { duration: 1500 });
+      // Принудительная загрузка
+      synth.getVoices();
+      // Ждём 500мс и пробуем снова
+      setTimeout(() => {
+        voices = synth.getVoices();
+        doSpeak(voices);
+      }, 500);
+      return;
+    }
+
+    doSpeak(voices);
+  };
+
+  const doSpeak = (voices: SpeechSynthesisVoice[]) => {
+    const synth = window.speechSynthesis;
+
+    // Проверяем есть ли китайский голос
+    const zhVoice = voices.find((v) => v.lang.startsWith("zh"));
+    if (!zhVoice) {
+      toast.error("Нет китайского голоса", {
+        description: "Установите китайский (zh-CN) в настройках TTS телефона, или используйте Google Translate для прослушивания",
+        duration: 6000,
+      });
+      return;
+    }
+
+    synth.cancel();
     const utter = new SpeechSynthesisUtterance(phrase.cn);
     utter.lang = "zh-CN";
-    utter.rate = 0.85;
+    utter.voice = zhVoice;
+    utter.rate = 0.8;
+    utter.pitch = 1;
+
     utter.onstart = () => setSpeaking(true);
     utter.onend = () => setSpeaking(false);
-    utter.onerror = () => setSpeaking(false);
-    window.speechSynthesis.speak(utter);
+    utter.onerror = () => {
+      setSpeaking(false);
+      toast.error("Ошибка воспроизведения", {
+        description: "Попробуйте Google Translate для прослушивания",
+      });
+    };
+
+    synth.speak(utter);
   };
 
   return (
