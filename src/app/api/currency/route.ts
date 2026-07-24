@@ -17,6 +17,7 @@ export async function GET() {
       HKD: data.rates?.HKD ?? 7.8,
       MOP: data.rates?.MOP ?? 8.0,
       RUB: data.rates?.RUB ?? 92,
+      BYN: data.rates?.BYN ?? 3.2,
     };
 
     return NextResponse.json({

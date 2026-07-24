@@ -12,6 +12,7 @@ const CURRENCIES = [
   { code: "HKD", flag: "🇭🇰", name: "Гонконг$" },
   { code: "MOP", flag: "🇲🇴", name: "Патака" },
   { code: "RUB", flag: "🇷🇺", name: "Рубль" },
+  { code: "BYN", flag: "🇧🇾", name: "Бел.рубль" },
 ];
 
 export function CurrencyConverter() {

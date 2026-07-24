@@ -4,6 +4,7 @@ import dynamic from "next/dynamic";
 import { useTripStore } from "@/lib/trip-store";
 import { AppShell } from "@/components/trip/app-shell";
 import { Dashboard } from "@/components/trip/dashboard";
+import { Timeline } from "@/components/trip/timeline";
 import { Itinerary } from "@/components/trip/itinerary";
 import { Gallery } from "@/components/trip/gallery";
 import { Budget } from "@/components/trip/budget";
@@ -39,6 +40,7 @@ export default function Home() {
           transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
         >
           {activeTab === "dashboard" && <Dashboard />}
+          {activeTab === "timeline" && <Timeline />}
           {activeTab === "itinerary" && <Itinerary />}
           {activeTab === "map" && <TripMap />}
           {activeTab === "gallery" && <Gallery />}

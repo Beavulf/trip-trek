@@ -3,6 +3,7 @@ import { persist } from "zustand/middleware";
 
 export type TripTab =
   | "dashboard"
+  | "timeline"
   | "itinerary"
   | "map"
   | "gallery"

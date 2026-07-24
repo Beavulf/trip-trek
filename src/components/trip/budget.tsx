@@ -64,8 +64,10 @@ export function Budget() {
                     ))}
                   </Pie>
                   <Tooltip
-                    formatter={(v: number) => `$${v.toFixed(0)}`}
+                    formatter={(v: number) => [`$${v.toFixed(0)}`, ""]}
                     contentStyle={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: 8, fontSize: 12, color: "var(--foreground)" }}
+                    labelStyle={{ color: "var(--foreground)" }}
+                    itemStyle={{ color: "var(--foreground)" }}
                   />
                 </PieChart>
               </ResponsiveContainer>

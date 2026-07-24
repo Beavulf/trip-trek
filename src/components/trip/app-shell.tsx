@@ -20,6 +20,7 @@ import {
   UtensilsCrossed,
   Trophy,
   MessagesSquare,
+  Rss,
   Plus,
   Moon,
   Sun,
@@ -36,6 +37,7 @@ import { GlobalSearch } from "./global-search";
 
 const TABS = [
   { key: "dashboard", label: "Обзор", icon: LayoutDashboard },
+  { key: "timeline", label: "Лента", icon: Rss },
   { key: "itinerary", label: "Маршрут", icon: ListChecks },
   { key: "map", label: "Карта", icon: MapIcon },
   { key: "gallery", label: "Галерея", icon: Images },
@@ -172,28 +174,28 @@ export function AppShell({ children }: { children: ReactNode }) {
           </div>
           {/* Индикаторы скролла — стрелки + градиент */}
           {showLeftArrow && (
-            <button
-              onClick={() => tabScrollRef.current?.scrollBy({ left: -200, behavior: "smooth" })}
-              className="absolute left-0 top-1/2 -translate-y-1/2 z-20 size-7 rounded-full bg-card border border-border shadow-md grid place-items-center hover:bg-accent transition-all"
-              aria-label="Влево"
-            >
-              <ChevronLeft className="size-4" />
-            </button>
-          )}
-          {showLeftArrow && (
-            <div className="pointer-events-none absolute left-7 top-0 bottom-1.5 w-6 bg-gradient-to-r from-background to-transparent z-10" />
-          )}
-          {showRightArrow && (
-            <div className="pointer-events-none absolute right-7 top-0 bottom-1.5 w-6 bg-gradient-to-l from-background to-transparent z-10" />
+            <>
+              <div className="pointer-events-none absolute left-0 top-0 bottom-1.5 w-12 bg-gradient-to-r from-background via-background/80 to-transparent z-10" />
+              <button
+                onClick={() => tabScrollRef.current?.scrollBy({ left: -200, behavior: "smooth" })}
+                className="absolute left-0 top-1/2 -translate-y-1/2 z-20 size-9 rounded-full bg-primary/90 backdrop-blur text-primary-foreground shadow-lg grid place-items-center active:scale-90 transition-all hover:bg-primary"
+                aria-label="Влево"
+              >
+                <ChevronLeft className="size-5" />
+              </button>
+            </>
           )}
           {showRightArrow && (
-            <button
-              onClick={() => tabScrollRef.current?.scrollBy({ left: 200, behavior: "smooth" })}
-              className="absolute right-0 top-1/2 -translate-y-1/2 z-20 size-7 rounded-full bg-card border border-border shadow-md grid place-items-center hover:bg-accent transition-all"
-              aria-label="Вправо"
-            >
-              <ChevronRight className="size-4" />
-            </button>
+            <>
+              <div className="pointer-events-none absolute right-0 top-0 bottom-1.5 w-12 bg-gradient-to-l from-background via-background/80 to-transparent z-10" />
+              <button
+                onClick={() => tabScrollRef.current?.scrollBy({ left: 200, behavior: "smooth" })}
+                className="absolute right-0 top-1/2 -translate-y-1/2 z-20 size-9 rounded-full bg-primary/90 backdrop-blur text-primary-foreground shadow-lg grid place-items-center active:scale-90 transition-all hover:bg-primary"
+                aria-label="Вправо"
+              >
+                <ChevronRight className="size-5" />
+              </button>
+            </>
           )}
         </nav>
       </header>

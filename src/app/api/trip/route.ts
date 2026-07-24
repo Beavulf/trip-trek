@@ -33,8 +33,14 @@ export async function GET() {
   const dayProgress = Math.min(100, Math.round(((diffDays + 1) / settings.totalDays) * 100));
   const placeProgress = places.length > 0 ? Math.round((visitedPlaces / places.length) * 100) : 0;
 
+  // totalBudget = сумма бюджетов участников (если у всех есть budget), иначе из настроек
+  const allHaveBudget = participants.length > 0 && participants.every((p) => p.budget != null);
+  const calculatedBudget = allHaveBudget
+    ? participants.reduce((sum, p) => sum + (p.budget ?? 0), 0)
+    : settings.totalBudget;
+
   return NextResponse.json({
-    settings,
+    settings: { ...settings, totalBudget: calculatedBudget },
     participants,
     currentDayNumber,
     dayProgress,
@@ -42,7 +48,7 @@ export async function GET() {
     visitedPlaces,
     totalPlaces: places.length,
     totalSpent,
-    remainingBudget: settings.totalBudget - totalSpent,
+    remainingBudget: calculatedBudget - totalSpent,
     totalPhotos: photos,
     totalJournals: journals,
     days,

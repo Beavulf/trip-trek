@@ -39,6 +39,8 @@ const CHECKLIST_CATS: Record<string, { label: string; emoji: string; color: stri
   documents: { label: "Документы", emoji: "📄", color: "#ef4444" },
   health: { label: "Здоровье", emoji: "💊", color: "#10b981" },
   preparation: { label: "Подготовка", emoji: "🎒", color: "#f59e0b" },
+  packing_there: { label: "Сборы туда", emoji: "🧳", color: "#8b5cf6" },
+  packing_back: { label: "Сборы обратно", emoji: "↩️", color: "#06b6d4" },
 };
 
 const INFO_TABS = [

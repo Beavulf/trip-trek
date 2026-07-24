@@ -609,3 +609,46 @@ Stage Summary:
 - EXIF уже работает (чтение GPS из фото при загрузке из галереи)
 - Budget: общий + личный — не менял
 - Предложения новых фич: timeline, slideshow, budget alerts, packing list, share card, offline mode
+
+---
+Task ID: bugfix-6
+Agent: main (Z.ai Code)
+Task: 5 правок + Timeline + чек-лист сборов + BYN + budget calc
+
+Work Log:
+- 🐛 Tooltip в бюджете: добавлены labelStyle + itemStyle с color: var(--foreground) для всех Tooltip
+- ✅ BYN (белорусский рубль) добавлен в конвертер валют (currency-converter.tsx + API)
+- ✅ Стрелки навигации: улучшены — size-9 (44px touch), bg-primary/90, backdrop-blur, shadow-lg, wider gradient (w-12)
+- 🐛 EXIF геолокация: улучшена логика
+  - Полный парсинг EXIF (не только gps+tiff)
+  - Проверка разных вариантов полей (latitude/GPSLatitude)
+  - Toast "📍 Координаты из фото" при успехе
+  - ВСЕГДА fallback на GPS телефона если EXIF GPS нет
+  - Toast "📍 В фото нет GPS, запрашиваем текущую геолокацию…"
+  - Причина проблемы: iOS при съёмке через capture может не сохранять GPS в EXIF → fallback на текущую геолокацию телефона
+- ✅ totalBudget = сумма бюджетов участников
+  - API /api/trip: если все участники имеют budget → calculatedBudget = сумма
+  - Если хоть один без budget → используется settings.totalBudget
+  - Проверено: 2500+2000+1500 = 6000 ✓
+- ✅ Лента поездки (Timeline) — новый раздел
+  - Хронологический поток: места (visited), фото, траты
+  - Группировка по датам с липкими заголовками
+  - Цветные иконки по типу события
+  - Мини-фото для фото-событий
+  - Таймлайн с точками и линией
+- ✅ Чек-лист сборов (туда/обратно)
+  - 2 новые категории: packing_there (🧳) и packing_back (↩️)
+  - Сид: 23 пункта для сборов туда + 11 для обратно
+  - Отображаются в разделе Инфо → Чек-лист
+- ℹ️ AliPay: объяснил — напрямую API нет, лучший вариант скриншот+OCR (VLM)
+- Проверка: лента работает ✓, чек-лист сборов ✓, бюджет 6000 = 2500+2000+1500 ✓, нет ошибок, lint чист
+
+Stage Summary:
+- Tooltip: исправлен (labelStyle + itemStyle)
+- BYN: добавлен в конвертер
+- Навигация: стрелки улучшены (primary, 44px, backdrop-blur)
+- EXIF: улучшен с fallback + toast
+- Budget: auto-расчёт из суммы участников
+- Timeline: новый раздел с хронологией событий
+- Чек-лист сборов: 34 пункта (туда + обратно)
+- AliPay: объяснены варианты (скриншот+OCR возможно)

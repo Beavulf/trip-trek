@@ -153,26 +153,37 @@ function PhotoForm({ onDone }: { onDone: () => void }) {
     // 1. Пытаемся прочитать EXIF (GPS + дата) из самого фото
     let exifCoords: { lat: number; lng: number } | null = null;
     try {
-      const exif = await exifr.parse(f, { gps: true, tiff: true });
-      if (exif && exif.latitude && exif.longitude) {
-        exifCoords = { lat: exif.latitude, lng: exif.longitude };
-        setGeoCoords(exifCoords);
-        setGeoStatus("granted");
-        // Reverse geocode
-        try {
-          const r = await fetch(`/api/geocode?lat=${exifCoords.lat}&lng=${exifCoords.lng}`);
-          const data = await r.json();
-          if (data.address) setGeoAddress(data.address);
-        } catch {
-          // ignore
+      // Полный парсинг — gps, exif, tiff
+      const exif = await exifr.parse(f);
+      if (exif) {
+        // Проверяем разные варианты полей GPS
+        const lat = exif.latitude ?? exif.GPSLatitude;
+        const lng = exif.longitude ?? exif.GPSLongitude;
+        if (lat != null && lng != null) {
+          exifCoords = { lat, lng };
+          setGeoCoords(exifCoords);
+          setGeoStatus("granted");
+          toast.success("📍 Координаты из фото", { description: "GPS найден в EXIF" });
+          // Reverse geocode
+          try {
+            const r = await fetch(`/api/geocode?lat=${lat}&lng=${lng}`);
+            const data = await r.json();
+            if (data.address) setGeoAddress(data.address);
+          } catch {
+            // ignore
+          }
         }
       }
     } catch {
       // EXIF нет или не читается
     }
 
-    // 2. Если EXIF GPS нет — запрашиваем текущую геолокацию
-    if (!exifCoords && geoStatus === "idle") {
+    // 2. Если EXIF GPS нет — ВСЕГДА запрашиваем текущую геолокацию
+    if (!exifCoords) {
+      toast.info("📍 В фото нет GPS, запрашиваем текущую геолокацию…", {
+        description: "Разрешите доступ к геолокации",
+        duration: 3000,
+      });
       const coords = await requestGeo();
       if (coords) {
         try {
