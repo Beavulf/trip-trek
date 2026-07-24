@@ -65,7 +65,7 @@ export function Budget() {
                   </Pie>
                   <Tooltip
                     formatter={(v: number) => `$${v.toFixed(0)}`}
-                    contentStyle={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: 8, fontSize: 12 }}
+                    contentStyle={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: 8, fontSize: 12, color: "var(--foreground)" }}
                   />
                 </PieChart>
               </ResponsiveContainer>
@@ -122,7 +122,7 @@ export function Budget() {
                   />
                   <Tooltip
                     formatter={(v: number) => [`$${v}`, "Потрачено"]}
-                    contentStyle={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: 8, fontSize: 12 }}
+                    contentStyle={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: 8, fontSize: 12, color: "var(--foreground)" }}
                     cursor={{ fill: "var(--accent)" }}
                   />
                   <Bar dataKey="amount" radius={[6, 6, 0, 0]} maxBarSize={40}>

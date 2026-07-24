@@ -588,3 +588,24 @@ Stage Summary:
 - NextAuth: полная авторизация (регистрация, вход, сессии, выход) — self-contained для Docker
 - Real-time: polling каждые 30с + refetchOnWindowFocus
 - Тестовые аккаунты: you@triptrek.com/1234, leha@/1234, den@/1234
+
+---
+Task ID: bugfix-5
+Agent: main (Z.ai Code)
+Task: 5 багфиксов + улучшения UX
+
+Work Log:
+- 🐛 #1 Food lightbox: фото открывалось не по центру viewport (stacking context от motion.div). Исправлено через createPortal(…, document.body) + flex-col items-center justify-center.
+- 🐛 #2 Budget tooltip в тёмной теме: текст был чёрный. Добавлен color: "var(--foreground)" в contentStyle обоих Tooltip (pie chart + bar chart).
+- 🐛 #3 Фразы кнопки: текст слишком близко к иконке. Заменён конфликтующий grid+flex на чистый inline-flex items-center justify-center gap-2 px-3.
+- ✨ #4 Навигация: добавлены стрелки ChevronLeft/ChevronRight + градиенты. Scroll detection через onScroll — стрелки появляются/исчезают в зависимости от позиции скролла. Клик по стрелке — smooth scroll на 200px.
+- ✨ #5 Карта фото попап: добавлена кнопка "📷 Открыть на весь экран" в попапе фото-метки. Полноэкранный просмотр через createPortal с кнопкой закрытия, подписью, адресом, автором.
+- ✅ #6 EXIF: уже реализован (exifr библиотека). При загрузке из галереи читается GPS из EXIF → reverse geocode → адрес. Если EXIF нет — fallback на текущую геолокацию.
+- ℹ️ #3 Budget: totalBudget = общий бюджет группы (не сумма личных). Личный бюджет каждого — отдельно (participant.budget). Не менял — пользователь сказал "если не задумывал, не меняй".
+- Проверка: lightbox центрирован ✓, tooltip виден в тёмной теме ✓, фразы с отступами ✓, стрелки навигации ✓, нет ошибок, lint чист
+
+Stage Summary:
+- 5 багфиксов: lightbox, tooltip, фразы, навигация, карта фото
+- EXIF уже работает (чтение GPS из фото при загрузке из галереи)
+- Budget: общий + личный — не менял
+- Предложения новых фич: timeline, slideshow, budget alerts, packing list, share card, offline mode

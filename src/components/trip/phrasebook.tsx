@@ -232,12 +232,12 @@ function PhraseCard({ phrase, categoryMeta }: { phrase: Phrase; categoryMeta?: {
         <button
           onClick={speak}
           className={cn(
-            "flex-1 h-10 rounded-xl grid place-items-center gap-1.5 transition-all active:scale-95 flex-row inline-flex",
+            "flex-1 h-10 rounded-xl inline-flex items-center justify-center gap-2 px-3 transition-all active:scale-95",
             speaking ? "bg-primary text-primary-foreground animate-pulse" : "bg-primary/10 text-primary hover:bg-primary/20"
           )}
           title="Произнести (TTS телефона)"
         >
-          <Volume2 className="size-4" />
+          <Volume2 className="size-4 shrink-0" />
           <span className="text-xs font-medium">{speaking ? "Играет…" : "Слушать"}</span>
         </button>
         {/* Google Translate */}
@@ -245,10 +245,10 @@ function PhraseCard({ phrase, categoryMeta }: { phrase: Phrase; categoryMeta?: {
           href={`https://translate.google.com/?sl=zh-CN&tl=ru&text=${encodeURIComponent(phrase.cn)}&op=translate`}
           target="_blank"
           rel="noopener noreferrer"
-          className="flex-1 h-10 rounded-xl grid place-items-center gap-1.5 transition-all active:scale-95 bg-blue-500/10 text-blue-500 hover:bg-blue-500/20 inline-flex flex-row"
+          className="flex-1 h-10 rounded-xl inline-flex items-center justify-center gap-2 px-3 transition-all active:scale-95 bg-blue-500/10 text-blue-500 hover:bg-blue-500/20"
           title="Google Translate (озвучка + перевод)"
         >
-          <ExternalLink className="size-4" />
+          <ExternalLink className="size-4 shrink-0" />
           <span className="text-xs font-medium">Translate</span>
         </a>
         {/* Избранное */}

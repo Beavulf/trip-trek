@@ -6,9 +6,10 @@ import { CATEGORY_META, CITIES, type Place, type Day, type Photo } from "@/lib/t
 import { MapContainer, TileLayer, Marker, Popup, useMap, useMapEvents } from "react-leaflet";
 import L from "leaflet";
 import { useEffect, useMemo, useState } from "react";
-import { CheckCircle2, Circle, MapPin, Star, Coffee, Filter, Navigation, Plus, Hand, Moon, Sun, Camera } from "lucide-react";
+import { CheckCircle2, Circle, MapPin, Star, Coffee, Filter, Navigation, Plus, Hand, Moon, Sun, Camera, X } from "lucide-react";
 import { useTheme } from "next-themes";
 import { useQuery } from "@tanstack/react-query";
+import { createPortal } from "react-dom";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { AddPlaceSheet, type AddPlaceData } from "./add-place-sheet";
@@ -53,6 +54,7 @@ export default function TripMap() {
   const [manualLayer, setManualLayer] = useState<"voyager" | "satellite" | "light" | "dark">("voyager");
   const [showPhotos, setShowPhotos] = useState(true);
   const [onlyPhotos, setOnlyPhotos] = useState(false);
+  const [fullscreenPhoto, setFullscreenPhoto] = useState<Photo | null>(null);
   const { resolvedTheme } = useTheme();
 
   // Фото с геолокацией для карты
@@ -279,6 +281,12 @@ export default function TripMap() {
                     <div className="text-[10px] text-muted-foreground mt-0.5">
                       {photo.participant?.emoji} {photo.participant?.name} · День {photo.day?.dayNumber}
                     </div>
+                    <button
+                      onClick={() => setFullscreenPhoto(photo)}
+                      className="mt-1.5 w-full text-[10px] font-medium bg-primary/10 text-primary rounded-lg py-1 hover:bg-primary/20 transition-colors"
+                    >
+                      📷 Открыть на весь экран
+                    </button>
                   </div>
                 </Popup>
               </Marker>
@@ -332,6 +340,39 @@ export default function TripMap() {
       </p>
 
       <AddPlaceSheet open={addOpen} onOpenChange={setAddOpen} initial={addData} />
+
+      {/* Полноэкранный просмотр фото */}
+      {fullscreenPhoto && typeof document !== "undefined" && createPortal(
+        <div
+          className="fixed inset-0 z-[300] bg-black/95 flex flex-col items-center justify-center p-4"
+          onClick={() => setFullscreenPhoto(null)}
+        >
+          <button
+            className="absolute top-4 right-4 size-10 rounded-full bg-white/10 text-white grid place-items-center hover:bg-white/20 z-10"
+            onClick={() => setFullscreenPhoto(null)}
+          >
+            <X className="size-5" />
+          </button>
+          <img
+            src={fullscreenPhoto.url}
+            alt={fullscreenPhoto.caption || ""}
+            className="max-w-full max-h-[75vh] object-contain rounded-lg shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          />
+          <div className="mt-4 text-center max-w-md">
+            {fullscreenPhoto.caption && <div className="text-white font-medium text-sm">{fullscreenPhoto.caption}</div>}
+            {fullscreenPhoto.address && (
+              <div className="text-white/60 text-xs mt-1 flex items-center justify-center gap-1">
+                <MapPin className="size-3" /> {fullscreenPhoto.address}
+              </div>
+            )}
+            <div className="text-white/50 text-xs mt-1">
+              {fullscreenPhoto.participant?.emoji} {fullscreenPhoto.participant?.name} · День {fullscreenPhoto.day?.dayNumber}
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
     </div>
   );
 }

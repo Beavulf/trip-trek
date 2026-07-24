@@ -24,8 +24,10 @@ import {
   Moon,
   Sun,
   Search,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
-import { useState, useEffect, type ReactNode } from "react";
+import { useState, useEffect, useRef, type ReactNode } from "react";
 import { useTheme } from "next-themes";
 import { useSession, signOut } from "next-auth/react";
 import { useRouter } from "next/navigation";
@@ -55,6 +57,20 @@ export function AppShell({ children }: { children: ReactNode }) {
   const [searchOpen, setSearchOpen] = useState(false);
   const { activeTab, setActiveTab } = useTripStore();
   const { data: trip } = useTrip();
+  const tabScrollRef = useRef<HTMLDivElement>(null);
+  const [showLeftArrow, setShowLeftArrow] = useState(false);
+  const [showRightArrow, setShowRightArrow] = useState(false);
+
+  const handleTabScroll = () => {
+    const el = tabScrollRef.current;
+    if (!el) return;
+    setShowLeftArrow(el.scrollLeft > 10);
+    setShowRightArrow(el.scrollLeft < el.scrollWidth - el.clientWidth - 10);
+  };
+
+  useEffect(() => {
+    handleTabScroll();
+  }, []);
 
   // Горячая клавиша: Cmd/Ctrl + K — открыть поиск
   useEffect(() => {
@@ -113,7 +129,11 @@ export function AppShell({ children }: { children: ReactNode }) {
 
         {/* Tab bar */}
         <nav className="mx-auto max-w-7xl px-2 sm:px-4 pb-1.5 relative">
-          <div className="flex gap-1 overflow-x-auto no-scrollbar">
+          <div
+            className="flex gap-1 overflow-x-auto no-scrollbar scroll-smooth"
+            ref={tabScrollRef}
+            onScroll={handleTabScroll}
+          >
             {TABS.map((t) => {
               const Icon = t.icon;
               const active = activeTab === t.key;
@@ -150,9 +170,31 @@ export function AppShell({ children }: { children: ReactNode }) {
               );
             })}
           </div>
-          {/* Fade-индикаторы: показывают что есть ещё кнопки */}
-          <div className="pointer-events-none absolute right-0 top-0 bottom-1.5 w-8 bg-gradient-to-l from-background to-transparent sm:hidden" />
-          <div className="pointer-events-none absolute left-0 top-0 bottom-1.5 w-8 bg-gradient-to-r from-background to-transparent sm:hidden opacity-0" id="tab-fade-left" />
+          {/* Индикаторы скролла — стрелки + градиент */}
+          {showLeftArrow && (
+            <button
+              onClick={() => tabScrollRef.current?.scrollBy({ left: -200, behavior: "smooth" })}
+              className="absolute left-0 top-1/2 -translate-y-1/2 z-20 size-7 rounded-full bg-card border border-border shadow-md grid place-items-center hover:bg-accent transition-all"
+              aria-label="Влево"
+            >
+              <ChevronLeft className="size-4" />
+            </button>
+          )}
+          {showLeftArrow && (
+            <div className="pointer-events-none absolute left-7 top-0 bottom-1.5 w-6 bg-gradient-to-r from-background to-transparent z-10" />
+          )}
+          {showRightArrow && (
+            <div className="pointer-events-none absolute right-7 top-0 bottom-1.5 w-6 bg-gradient-to-l from-background to-transparent z-10" />
+          )}
+          {showRightArrow && (
+            <button
+              onClick={() => tabScrollRef.current?.scrollBy({ left: 200, behavior: "smooth" })}
+              className="absolute right-0 top-1/2 -translate-y-1/2 z-20 size-7 rounded-full bg-card border border-border shadow-md grid place-items-center hover:bg-accent transition-all"
+              aria-label="Вправо"
+            >
+              <ChevronRight className="size-4" />
+            </button>
+          )}
         </nav>
       </header>
 

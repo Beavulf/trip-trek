@@ -5,6 +5,7 @@ import { CITIES } from "@/lib/types";
 import { motion, AnimatePresence } from "framer-motion";
 import { UtensilsCrossed, Star, MapPin, DollarSign, CheckCircle2, Circle, Loader2, Camera, X } from "lucide-react";
 import { useState, useMemo, useRef } from "react";
+import { createPortal } from "react-dom";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
@@ -289,25 +290,27 @@ function FoodCard({ food, cityColor }: { food: FoodItem; cityColor: string }) {
         </div>
       </div>
 
-      {/* Lightbox для фото */}
-      {lightbox && food.imageUrl && (
+      {/* Lightbox для фото — через портал чтобы избежать stacking context */}
+      {lightbox && food.imageUrl && typeof document !== "undefined" && createPortal(
         <div
-          className="fixed inset-0 z-[100] bg-black/90 grid place-items-center p-4"
+          className="fixed inset-0 z-[200] bg-black/95 flex flex-col items-center justify-center p-4"
           onClick={() => setLightbox(false)}
         >
-          <button className="absolute top-4 right-4 size-10 rounded-full bg-white/10 text-white grid place-items-center hover:bg-white/20">
+          <button className="absolute top-4 right-4 size-10 rounded-full bg-white/10 text-white grid place-items-center hover:bg-white/20 z-10">
             <X className="size-5" />
           </button>
           <img
             src={food.imageUrl}
             alt={food.name}
-            className="max-w-full max-h-[80vh] object-contain rounded-lg"
+            className="max-w-full max-h-[75vh] object-contain rounded-lg shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           />
-          <div className="absolute bottom-4 left-1/2 -translate-x-1/2 text-white text-sm font-medium">
+          <div className="mt-4 text-white text-sm font-medium text-center">
             {food.name}
+            {food.nameCn && <span className="text-white/60 ml-2">{food.nameCn}</span>}
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </motion.div>
   );
