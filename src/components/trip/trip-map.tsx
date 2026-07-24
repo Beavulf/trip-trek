@@ -2,12 +2,13 @@
 
 import { useDays, useUpdatePlace } from "@/hooks/use-trip";
 import { useTripStore } from "@/lib/trip-store";
-import { CATEGORY_META, CITIES, type Place, type Day } from "@/lib/types";
+import { CATEGORY_META, CITIES, type Place, type Day, type Photo } from "@/lib/types";
 import { MapContainer, TileLayer, Marker, Popup, useMap, useMapEvents } from "react-leaflet";
 import L from "leaflet";
 import { useEffect, useMemo, useState } from "react";
-import { CheckCircle2, Circle, MapPin, Star, Coffee, Filter, Navigation, Plus, Hand, Moon, Sun } from "lucide-react";
+import { CheckCircle2, Circle, MapPin, Star, Coffee, Filter, Navigation, Plus, Hand, Moon, Sun, Camera } from "lucide-react";
 import { useTheme } from "next-themes";
+import { useQuery } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { AddPlaceSheet, type AddPlaceData } from "./add-place-sheet";
@@ -27,6 +28,21 @@ function makeIcon(category: string, status: string, emoji: string) {
   });
 }
 
+// Фото-пин (маленький круглый с миниатюрой)
+function makePhotoIcon(thumbUrl: string) {
+  return L.divIcon({
+    className: "trip-photo-pin",
+    html: `<div style="
+      width:40px;height:40px;border-radius:50%;overflow:hidden;
+      border:3px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,0.3);
+      background:#000;
+    "><img src="${thumbUrl}" style="width:100%;height:100%;object-fit:cover;" /></div>`,
+    iconSize: [40, 40],
+    iconAnchor: [20, 20],
+    popupAnchor: [0, -20],
+  });
+}
+
 export default function TripMap() {
   const { data: days, isLoading } = useDays();
   const { mapCityFilter, setMapCityFilter, mapOnlyUnvisited, setMapOnlyUnvisited, mapOnlyChill, setMapOnlyChill } = useTripStore();
@@ -35,7 +51,17 @@ export default function TripMap() {
   const [addOpen, setAddOpen] = useState(false);
   const [autoTheme, setAutoTheme] = useState(true);
   const [manualLayer, setManualLayer] = useState<"voyager" | "satellite" | "light" | "dark">("voyager");
+  const [showPhotos, setShowPhotos] = useState(true);
   const { resolvedTheme } = useTheme();
+
+  // Фото с геолокацией для карты
+  const { data: geoPhotos } = useQuery<Photo[]>({
+    queryKey: ["photos-geo"],
+    queryFn: async () => {
+      const r = await fetch("/api/photos/geo");
+      return r.json();
+    },
+  });
 
   // Автоматический выбор слоя по теме
   const tileLayer = autoTheme
@@ -158,6 +184,15 @@ export default function TripMap() {
             <Coffee className="size-3" /> Кафе и бары
           </button>
           <button
+            onClick={() => setShowPhotos((v) => !v)}
+            className={cn(
+              "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors",
+              showPhotos ? "bg-cyan-500/10 text-cyan-600 border border-cyan-500/30" : "bg-secondary hover:bg-accent"
+            )}
+          >
+            <Camera className="size-3" /> Фото {geoPhotos?.length ? `(${geoPhotos.length})` : ""}
+          </button>
+          <button
             onClick={() => setAddMode(!addMode)}
             className={cn(
               "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ml-auto",
@@ -175,7 +210,10 @@ export default function TripMap() {
         <span className="flex items-center gap-1"><span className="size-2.5 rounded-full bg-slate-400" /> Запланировано</span>
         <span className="flex items-center gap-1"><span className="size-2.5 rounded-full bg-orange-500" /> Сейчас здесь</span>
         <span className="flex items-center gap-1"><span className="size-2.5 rounded-full bg-green-500" /> Посещено</span>
-        <span className="ml-auto">{filtered.length} мест</span>
+        {showPhotos && geoPhotos && geoPhotos.length > 0 && (
+          <span className="flex items-center gap-1"><span className="size-2.5 rounded-full border-2 border-white bg-cyan-500" /> Фото</span>
+        )}
+        <span className="ml-auto">{filtered.length} мест{geoPhotos && geoPhotos.length > 0 ? ` · ${geoPhotos.length} фото` : ""}</span>
       </div>
 
       {/* Карта */}
@@ -207,6 +245,31 @@ export default function TripMap() {
                 <PlacePopup place={place} day={day} />
               </Popup>
             </Marker>
+          ))}
+          {/* Фото-метки (отдельная группа) */}
+          {showPhotos && geoPhotos?.map((photo) => (
+            photo.lat && photo.lng && (
+              <Marker
+                key={`photo-${photo.id}`}
+                position={[photo.lat, photo.lng]}
+                icon={makePhotoIcon(photo.thumbUrl || photo.url)}
+              >
+                <Popup>
+                  <div className="p-1 w-48">
+                    <img src={photo.url} alt={photo.caption || ""} className="w-full h-32 object-cover rounded-lg mb-1.5" />
+                    {photo.caption && <div className="text-xs font-medium">{photo.caption}</div>}
+                    {photo.address && (
+                      <div className="text-[10px] text-muted-foreground flex items-center gap-0.5 mt-0.5">
+                        <MapPin className="size-2.5" /> {photo.address.slice(0, 50)}
+                      </div>
+                    )}
+                    <div className="text-[10px] text-muted-foreground mt-0.5">
+                      {photo.participant?.emoji} {photo.participant?.name} · День {photo.day?.dayNumber}
+                    </div>
+                  </div>
+                </Popup>
+              </Marker>
+            )
           ))}
         </MapContainer>
         {addMode && (

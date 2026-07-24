@@ -509,3 +509,41 @@ Stage Summary:
 - Пользователь видит как выглядит блюдо до того как попробует
 - Lightbox по клику на фото — просмотр на весь экран
 - Ручная загрузка/замена фото тоже сохранена (кнопка Camera)
+
+---
+Task ID: camera-geo-photos
+Agent: main (Z.ai Code)
+Task: Камера + геолокация фото + фото-метки на карте
+
+Work Log:
+- ✅ Камера: 2 кнопки в PhotoForm — "Снять фото" (capture=environment) и "Из галереи"
+  - На мобиле "Снять фото" открывает камеру напрямую
+  - "Из галереи" — обычный выбор файла
+- ✅ Геолокация фото:
+  - При выборе фото запрашивается navigator.geolocation.getCurrentPosition
+  - Если разрешено — reverse geocode через /api/geocode → адрес
+  - Статусы: idle/requesting/granted/denied с индикаторами
+  - Координаты + адрес сохраняются с фото (lat/lng/address в Photo model)
+  - Toast "с геолокацией" при успешной загрузке
+  - Если геолокация отключена — фото без метки, предупреждение на превью
+- ✅ Фото-метки на карте (отдельная группа):
+  - API /api/photos/geo — фото с координатами
+  - makePhotoIcon — круглые пины 40px с миниатюрой фото
+  - Toggle кнопка "Фото (N)" в фильтрах карты (cyan)
+  - Popup: фото + подпись + адрес + участник + день
+  - Легенда обновлена: добавлена метка "Фото" + счётчик
+- ✅ Галерея: в lightbox показывается адрес фото (cyan) если есть
+- 🐛 Bug fix: controlled/uncontrolled select warning — убран defaultValue
+- Проверка: камера ✓, галерея ✓, фото-фильтр на карте ✓, нет ошибок, lint чист
+
+Архитектура auth+realtime для VPS (объяснено пользователю):
+- NextAuth.js (уже установлен) с credentials provider (email+пароль) — self-contained для Docker
+- Polling каждые 15с через TanStack Query refetchInterval — достаточно для 3 друзей, без websocket
+- Или WebSocket mini-service на socket.io если нужен мгновенный real-time
+
+Stage Summary:
+- Камера: "Снять фото" открывает камеру, "Из галереи" — выбор файла
+- Геолокация: автоматический запрос GPS при загрузке, reverse geocode → адрес
+- Карта: отдельная группа фото-меток (круглые с миниатюрой), toggle, popup с фото+адрес
+- Галерея: адрес фото в lightbox
+- Auth+realtime: объяснена архитектура для VPS (NextAuth + polling)

@@ -10,7 +10,7 @@ import {
 import { useTrip, useUploadPhoto, useAddExpense, useAddJournal } from "@/hooks/use-trip";
 import { useTripStore } from "@/lib/trip-store";
 import { EXPENSE_CATEGORIES, type Day } from "@/lib/types";
-import { Camera, Wallet, BookOpen, Loader2, Check, X } from "lucide-react";
+import { Camera, Wallet, BookOpen, Loader2, Check, X, Images } from "lucide-react";
 import { useRef, useState } from "react";
 import { toast } from "sonner";
 import { motion } from "framer-motion";
@@ -98,7 +98,6 @@ function DayPicker({ value, onChange }: { value: string; onChange: (id: string) 
     <select
       value={value}
       onChange={(e) => onChange(e.target.value)}
-      defaultValue={currentDay?.id}
       className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm"
     >
       {trip.days.map((d: Day) => (
@@ -113,27 +112,78 @@ function DayPicker({ value, onChange }: { value: string; onChange: (id: string) 
 function PhotoForm({ onDone }: { onDone: () => void }) {
   const { data: trip } = useTrip();
   const upload = useUploadPhoto();
-  const inputRef = useRef<HTMLInputElement>(null);
+  const cameraRef = useRef<HTMLInputElement>(null);
+  const galleryRef = useRef<HTMLInputElement>(null);
   const [preview, setPreview] = useState<string | null>(null);
   const [file, setFile] = useState<File | null>(null);
   const [caption, setCaption] = useState("");
   const [dayId, setDayId] = useState(trip?.days.find((d) => d.dayNumber === trip.currentDayNumber)?.id ?? "");
+  const [geoStatus, setGeoStatus] = useState<"idle" | "requesting" | "granted" | "denied">("idle");
+  const [geoCoords, setGeoCoords] = useState<{ lat: number; lng: number } | null>(null);
+  const [geoAddress, setGeoAddress] = useState<string | null>(null);
 
-  const onFile = (f: File) => {
+  const requestGeo = (): Promise<{ lat: number; lng: number } | null> => {
+    return new Promise((resolve) => {
+      if (typeof navigator === "undefined" || !navigator.geolocation) {
+        resolve(null);
+        return;
+      }
+      setGeoStatus("requesting");
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          const coords = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+          setGeoCoords(coords);
+          setGeoStatus("granted");
+          resolve(coords);
+        },
+        () => {
+          setGeoStatus("denied");
+          resolve(null);
+        },
+        { enableHighAccuracy: true, timeout: 10000 }
+      );
+    });
+  };
+
+  const onFile = async (f: File) => {
     setFile(f);
     setPreview(URL.createObjectURL(f));
+    // Запрашиваем геолокацию при выборе фото
+    if (geoStatus === "idle") {
+      const coords = await requestGeo();
+      if (coords) {
+        // Reverse geocode
+        try {
+          const r = await fetch(`/api/geocode?lat=${coords.lat}&lng=${coords.lng}`);
+          const data = await r.json();
+          if (data.address) setGeoAddress(data.address);
+        } catch {
+          // ignore
+        }
+      }
+    }
   };
 
   const submit = async () => {
     if (!file || !dayId) return;
+    // Если геолокация ещё не запрашивалась — запросим
+    let coords = geoCoords;
+    if (!coords && geoStatus === "idle") {
+      coords = await requestGeo();
+    }
     const fd = new FormData();
     fd.append("file", file);
     fd.append("dayId", dayId);
     fd.append("participantId", trip?.settings.currentUserId ?? "");
     if (caption) fd.append("caption", caption);
+    if (coords) {
+      fd.append("lat", String(coords.lat));
+      fd.append("lng", String(coords.lng));
+      if (geoAddress) fd.append("address", geoAddress);
+    }
     try {
       await upload.mutateAsync(fd);
-      toast.success("Фото добавлено 📸");
+      toast.success("Фото добавлено 📸" + (coords ? " с геолокацией" : ""));
       setFile(null);
       setPreview(null);
       setCaption("");
@@ -150,31 +200,75 @@ function PhotoForm({ onDone }: { onDone: () => void }) {
         <DayPicker value={dayId} onChange={setDayId} />
       </div>
 
+      {/* Скрытые input'ы: камера и галерея */}
       <input
-        ref={inputRef}
+        ref={cameraRef}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        className="hidden"
+        onChange={(e) => e.target.files?.[0] && onFile(e.target.files[0])}
+      />
+      <input
+        ref={galleryRef}
         type="file"
         accept="image/*"
         className="hidden"
         onChange={(e) => e.target.files?.[0] && onFile(e.target.files[0])}
       />
+
       {preview ? (
         <div className="relative rounded-xl overflow-hidden border border-border">
           <img src={preview} alt="preview" className="w-full max-h-60 object-cover" />
           <button
-            onClick={() => { setFile(null); setPreview(null); }}
+            onClick={() => { setFile(null); setPreview(null); setGeoCoords(null); setGeoAddress(null); }}
             className="absolute top-2 right-2 size-7 rounded-full bg-black/60 text-white grid place-items-center"
           >
             <X className="size-4" />
           </button>
+          {/* Индикатор геолокации */}
+          {geoStatus === "granted" && geoAddress && (
+            <div className="absolute bottom-2 left-2 right-2 bg-black/60 text-white text-[10px] px-2 py-1 rounded-lg flex items-center gap-1">
+              📍 {geoAddress.slice(0, 50)}{geoAddress.length > 50 ? "…" : ""}
+            </div>
+          )}
+          {geoStatus === "denied" && (
+            <div className="absolute bottom-2 left-2 right-2 bg-amber-500/80 text-white text-[10px] px-2 py-1 rounded-lg">
+              📍 Геолокация отключена — фото без метки на карте
+            </div>
+          )}
         </div>
       ) : (
-        <button
-          onClick={() => inputRef.current?.click()}
-          className="w-full border-2 border-dashed border-border rounded-2xl py-12 flex flex-col items-center gap-2 text-muted-foreground hover:border-primary hover:text-primary transition-colors"
-        >
-          <Camera className="size-10" />
-          <span className="text-sm font-medium">Выбрать фото</span>
-        </button>
+        <div className="grid grid-cols-2 gap-2">
+          {/* Снять фото */}
+          <button
+            onClick={() => cameraRef.current?.click()}
+            className="border-2 border-dashed border-border rounded-2xl py-8 flex flex-col items-center gap-2 text-muted-foreground hover:border-primary hover:text-primary transition-colors"
+          >
+            <Camera className="size-8" />
+            <span className="text-xs font-medium">Снять фото</span>
+          </button>
+          {/* Из галереи */}
+          <button
+            onClick={() => galleryRef.current?.click()}
+            className="border-2 border-dashed border-border rounded-2xl py-8 flex flex-col items-center gap-2 text-muted-foreground hover:border-primary hover:text-primary transition-colors"
+          >
+            <Images className="size-8" />
+            <span className="text-xs font-medium">Из галереи</span>
+          </button>
+        </div>
+      )}
+
+      {/* Статус геолокации при выборе */}
+      {geoStatus === "requesting" && (
+        <div className="text-[11px] text-muted-foreground flex items-center gap-1.5">
+          <Loader2 className="size-3 animate-spin" /> Определяем местоположение…
+        </div>
+      )}
+      {geoStatus === "granted" && geoAddress && (
+        <div className="text-[11px] text-green-600 flex items-center gap-1">
+          📍 Адрес определён: {geoAddress.slice(0, 60)}{geoAddress.length > 60 ? "…" : ""}
+        </div>
       )}
 
       <input

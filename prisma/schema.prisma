@@ -79,6 +79,9 @@ model Photo {
   day           Day      @relation(fields: [dayId], references: [id], onDelete: Cascade)
   participantId String?
   participant   Participant? @relation(fields: [participantId], references: [id], onDelete: SetNull)
+  lat           Float?
+  lng           Float?
+  address       String?
   takenAt       DateTime @default(now())
   width         Int?
   height        Int?

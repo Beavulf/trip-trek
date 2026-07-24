@@ -171,13 +171,19 @@ export function Gallery() {
               <div className="mt-3 flex items-center justify-between text-white/90 text-sm">
                 <div className="space-y-1">
                   {filtered[lightbox].caption && <div className="font-medium">{filtered[lightbox].caption}</div>}
-                  <div className="flex items-center gap-3 text-xs text-white/70">
+                  <div className="flex items-center gap-3 text-xs text-white/70 flex-wrap">
                     <span className="flex items-center gap-1"><Calendar className="size-3" /> День {filtered[lightbox].day?.dayNumber}</span>
                     <span className="flex items-center gap-1"><MapPin className="size-3" /> {filtered[lightbox].day?.city}</span>
                     {filtered[lightbox].participant && (
                       <span className="flex items-center gap-1"><User className="size-3" /> {filtered[lightbox].participant.name}</span>
                     )}
                   </div>
+                  {filtered[lightbox].address && (
+                    <div className="flex items-start gap-1 text-xs text-cyan-300/90 mt-1">
+                      <MapPin className="size-3 mt-0.5 shrink-0" />
+                      <span>{filtered[lightbox].address}</span>
+                    </div>
+                  )}
                 </div>
                 <button
                   onClick={() => {

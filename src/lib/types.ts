@@ -50,6 +50,9 @@ export interface Photo {
   participant: Participant | null;
   place: Place | null;
   day: { dayNumber: number; city: string; cityKey: string } | null;
+  lat: number | null;
+  lng: number | null;
+  address: string | null;
   takenAt: string;
 }
 

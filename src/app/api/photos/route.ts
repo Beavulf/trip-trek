@@ -32,6 +32,9 @@ export async function POST(req: NextRequest) {
   const placeId = (formData.get("placeId") as string) || null;
   const participantId = (formData.get("participantId") as string) || null;
   const caption = (formData.get("caption") as string) || null;
+  const lat = formData.get("lat") ? parseFloat(formData.get("lat") as string) : null;
+  const lng = formData.get("lng") ? parseFloat(formData.get("lng") as string) : null;
+  const address = (formData.get("address") as string) || null;
 
   if (!file || !dayId) {
     return NextResponse.json({ error: "file and dayId required" }, { status: 400 });
@@ -56,6 +59,9 @@ export async function POST(req: NextRequest) {
       dayId,
       placeId,
       participantId,
+      lat,
+      lng,
+      address,
       takenAt: new Date(),
     },
     include: { place: true, participant: true, day: true },
