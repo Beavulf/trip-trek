@@ -575,6 +575,7 @@ export interface FoodItem {
   place: string | null;
   price: string | null;
   emoji: string | null;
+  imageUrl: string | null;
   tried: boolean;
   rating: number | null;
   order: number;
@@ -601,6 +602,21 @@ export function useUpdateFood() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ id, ...data }),
       });
+      return r.json();
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["foods"] }),
+  });
+}
+
+export function useUploadFoodPhoto() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, file }: { id: string; file: File }) => {
+      const fd = new FormData();
+      fd.append("file", file);
+      fd.append("id", id);
+      const r = await fetch("/api/foods", { method: "PATCH", body: fd });
+      if (!r.ok) throw new Error("upload failed");
       return r.json();
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["foods"] }),

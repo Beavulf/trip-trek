@@ -1,10 +1,10 @@
 "use client";
 
-import { useFoods, useUpdateFood, type FoodItem } from "@/hooks/use-trip";
+import { useFoods, useUpdateFood, useUploadFoodPhoto, type FoodItem } from "@/hooks/use-trip";
 import { CITIES } from "@/lib/types";
 import { motion, AnimatePresence } from "framer-motion";
-import { UtensilsCrossed, Star, MapPin, DollarSign, CheckCircle2, Circle, Loader2 } from "lucide-react";
-import { useState, useMemo } from "react";
+import { UtensilsCrossed, Star, MapPin, DollarSign, CheckCircle2, Circle, Loader2, Camera, X } from "lucide-react";
+import { useState, useMemo, useRef } from "react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
@@ -159,11 +159,20 @@ export function FoodGuide() {
 
 function FoodCard({ food, cityColor }: { food: FoodItem; cityColor: string }) {
   const update = useUpdateFood();
+  const upload = useUploadFoodPhoto();
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [lightbox, setLightbox] = useState(false);
+
   const toggle = () => {
     update.mutate({ id: food.id, tried: !food.tried });
     toast(food.tried ? "Убрано из попробованных" : "Отмечено как попробованное! 🍽️", {
       description: food.name,
     });
+  };
+
+  const onFile = async (f: File) => {
+    await upload.mutateAsync({ id: food.id, file: f });
+    toast.success("Фото блюда добавлено 📸");
   };
 
   return (
@@ -182,9 +191,39 @@ function FoodCard({ food, cityColor }: { food: FoodItem; cityColor: string }) {
         style={{ background: food.tried ? "#22c55e" : cityColor }}
       />
       <div className="flex items-start gap-3 ml-1">
-        {/* Эмодзи блюда */}
-        <div className="size-12 rounded-xl grid place-items-center text-2xl shrink-0 bg-orange-500/10">
-          {food.emoji || "🍽️"}
+        {/* Фото блюда или эмодзи */}
+        <div className="shrink-0 relative group">
+          {food.imageUrl ? (
+            <button
+              onClick={() => setLightbox(true)}
+              className="size-16 rounded-xl overflow-hidden bg-muted block"
+            >
+              <img src={food.imageUrl} alt={food.name} className="w-full h-full object-cover" />
+            </button>
+          ) : (
+            <div className="size-16 rounded-xl grid place-items-center text-3xl bg-orange-500/10">
+              {food.emoji || "🍽️"}
+            </div>
+          )}
+          {/* Кнопка загрузки фото */}
+          <button
+            onClick={() => inputRef.current?.click()}
+            disabled={upload.isPending}
+            className={cn(
+              "absolute -bottom-1 -right-1 size-6 rounded-full grid place-items-center shadow-md transition-transform active:scale-90",
+              food.imageUrl ? "bg-primary text-primary-foreground" : "bg-card border border-border text-muted-foreground hover:text-primary"
+            )}
+            title={food.imageUrl ? "Заменить фото" : "Добавить фото"}
+          >
+            {upload.isPending ? <Loader2 className="size-3 animate-spin" /> : <Camera className="size-3" />}
+          </button>
+          <input
+            ref={inputRef}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={(e) => e.target.files?.[0] && onFile(e.target.files[0])}
+          />
         </div>
 
         <div className="min-w-0 flex-1">
@@ -249,6 +288,27 @@ function FoodCard({ food, cityColor }: { food: FoodItem; cityColor: string }) {
           )}
         </div>
       </div>
+
+      {/* Lightbox для фото */}
+      {lightbox && food.imageUrl && (
+        <div
+          className="fixed inset-0 z-[100] bg-black/90 grid place-items-center p-4"
+          onClick={() => setLightbox(false)}
+        >
+          <button className="absolute top-4 right-4 size-10 rounded-full bg-white/10 text-white grid place-items-center hover:bg-white/20">
+            <X className="size-5" />
+          </button>
+          <img
+            src={food.imageUrl}
+            alt={food.name}
+            className="max-w-full max-h-[80vh] object-contain rounded-lg"
+            onClick={(e) => e.stopPropagation()}
+          />
+          <div className="absolute bottom-4 left-1/2 -translate-x-1/2 text-white text-sm font-medium">
+            {food.name}
+          </div>
+        </div>
+      )}
     </motion.div>
   );
 }

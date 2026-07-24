@@ -167,6 +167,7 @@ model FoodItem {
   place       String?  // конкретное место/ресторан
   price       String?  // цена
   emoji       String?  // эмодзи блюда
+  imageUrl    String?  // фото блюда
   tried       Boolean  @default(false)
   rating      Int?     // оценка 1-5
   order       Int      @default(0)

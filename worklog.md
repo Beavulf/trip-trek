@@ -461,3 +461,29 @@ Stage Summary:
 - Навигация: fade-индикатор справа показывает что есть ещё вкладки
 - Бюджет: кнопка-карандаш в hero для редактирования общего бюджета (inline input)
 - Всё проверено в браузере, lint чист
+
+---
+Task ID: bugfix-4
+Agent: main (Z.ai Code)
+Task: 4 правки — toast close, Google Translate, фото блюд, инфо о картах
+
+Work Log:
+- ✅ Кнопка закрытия toast: добавлен closeButton + toastOptions duration 5000 в Toaster (layout.tsx)
+- ✅ Фразы — кнопка Google Translate: ссылка на translate.google.com с фразой (sl=zh-CN&tl=ru)
+  - Работает БЕЗ установки китайских голосов — открывает Google Translate с озвучкой + переводом
+  - Иконка ExternalLink, синий цвет, рядом с кнопкой TTS
+  - TTS кнопка оставлена (если голос установлен — работает локально)
+- ✅ Фото блюд в разделе Еда: поле imageUrl в FoodItem (schema + db push)
+  - API PATCH /api/foods поддерживает multipart upload (file + id)
+  - Хук useUploadFoodPhoto
+  - FoodCard: фото 16x16 с кнопкой Camera (загрузка/замена), lightbox по клику
+  - Если фото нет — показывает эмодзи блюда
+- ℹ️ Карты: рассказал пользователю про варианты (Google Maps заблокирован в Китае, Amap/Baidu лучшие но нужны ключи, Leaflet текущая работает но метки менее точные). Не менял — оставил Leaflet.
+- Проверка: toast close ✓, Google Translate ссылка ✓, кнопки "Добавить фото" ✓, нет ошибок, lint чист
+
+Stage Summary:
+- Toast теперь с кнопкой закрытия (×) и автозакрытие 5с
+- Фразы: 2 кнопки — TTS (локально) + Google Translate (всегда работает, озвучка + перевод)
+- Еда: загрузка фото для каждого блюда с lightbox просмотром
+- Карты: оставлены Leaflet (инфо о вариантах дано пользователю)
+- Всё проверено в браузере, ошибок нет, lint чист

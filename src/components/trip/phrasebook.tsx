@@ -2,7 +2,7 @@
 
 import { usePhrases, useTogglePhraseFavorite, type Phrase } from "@/hooks/use-trip";
 import { motion, AnimatePresence } from "framer-motion";
-import { Languages, Search, Star, Volume2, Loader2, Heart } from "lucide-react";
+import { Languages, Search, Star, Volume2, Loader2, ExternalLink } from "lucide-react";
 import { useState, useMemo } from "react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -226,16 +226,27 @@ function PhraseCard({ phrase, categoryMeta }: { phrase: Phrase; categoryMeta?: {
           </span>
         </div>
         <div className="flex flex-col gap-1.5 shrink-0">
+          {/* Озвучка через TTS телефона */}
           <button
             onClick={speak}
             className={cn(
               "size-10 rounded-xl grid place-items-center transition-all active:scale-90",
               speaking ? "bg-primary text-primary-foreground animate-pulse" : "bg-primary/10 text-primary hover:bg-primary/20"
             )}
-            title="Произнести"
+            title="Произнести (TTS телефона)"
           >
             <Volume2 className="size-5" />
           </button>
+          {/* Google Translate — озвучка + перевод, работает всегда */}
+          <a
+            href={`https://translate.google.com/?sl=zh-CN&tl=ru&text=${encodeURIComponent(phrase.cn)}&op=translate`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="size-10 rounded-xl grid place-items-center transition-all active:scale-90 bg-blue-500/10 text-blue-500 hover:bg-blue-500/20"
+            title="Google Translate (озвучка + перевод)"
+          >
+            <ExternalLink className="size-4" />
+          </a>
           <button
             onClick={() => toggle.mutate({ id: phrase.id, favorite: !phrase.favorite })}
             className={cn(
