@@ -27,6 +27,8 @@ import {
 } from "lucide-react";
 import { useState, useEffect, type ReactNode } from "react";
 import { useTheme } from "next-themes";
+import { useSession, signOut } from "next-auth/react";
+import { useRouter } from "next/navigation";
 import { QuickAddSheet } from "./quick-add";
 import { GlobalSearch } from "./global-search";
 
@@ -197,7 +199,31 @@ export function AppShell({ children }: { children: ReactNode }) {
 function ParticipantAvatars() {
   const { data: trip } = useTrip();
   const { setCurrentUserId } = useTripStore();
+  const { data: session } = useSession();
+  const router = useRouter();
   if (!trip) return null;
+
+  // Если авторизован — показываем только текущего пользователя + выход
+  const authedUser = session?.user;
+  if (authedUser) {
+    const current = trip.participants.find((p) => p.id === (authedUser as { id?: string }).id);
+    return (
+      <div className="flex items-center gap-1.5">
+        {current && (
+          <button
+            onClick={() => signOut({ callbackUrl: "/login" })}
+            title={`${current.name} — нажми для выхода`}
+            className="size-8 rounded-full grid place-items-center text-sm border-2 border-background ring-2 ring-primary transition-transform hover:scale-110"
+            style={{ background: current.color }}
+          >
+            <span>{current.emoji}</span>
+          </button>
+        )}
+      </div>
+    );
+  }
+
+  // Не авторизован — старый режим (переключение)
   const current = trip.participants.find((p) => p.id === trip.settings.currentUserId) || trip.participants[0];
 
   return (

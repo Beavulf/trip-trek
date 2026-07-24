@@ -10,10 +10,11 @@ import {
 import { useTrip, useUploadPhoto, useAddExpense, useAddJournal } from "@/hooks/use-trip";
 import { useTripStore } from "@/lib/trip-store";
 import { EXPENSE_CATEGORIES, type Day } from "@/lib/types";
-import { Camera, Wallet, BookOpen, Loader2, Check, X, Images } from "lucide-react";
+import { Camera, Wallet, BookOpen, Loader2, Check, X, Images, MapPin } from "lucide-react";
 import { useRef, useState } from "react";
 import { toast } from "sonner";
 import { motion } from "framer-motion";
+import exifr from "exifr";
 import { cn } from "@/lib/utils";
 
 type Mode = "photo" | "expense" | "journal";
@@ -148,11 +149,32 @@ function PhotoForm({ onDone }: { onDone: () => void }) {
   const onFile = async (f: File) => {
     setFile(f);
     setPreview(URL.createObjectURL(f));
-    // Запрашиваем геолокацию при выборе фото
-    if (geoStatus === "idle") {
+
+    // 1. Пытаемся прочитать EXIF (GPS + дата) из самого фото
+    let exifCoords: { lat: number; lng: number } | null = null;
+    try {
+      const exif = await exifr.parse(f, { gps: true, tiff: true });
+      if (exif && exif.latitude && exif.longitude) {
+        exifCoords = { lat: exif.latitude, lng: exif.longitude };
+        setGeoCoords(exifCoords);
+        setGeoStatus("granted");
+        // Reverse geocode
+        try {
+          const r = await fetch(`/api/geocode?lat=${exifCoords.lat}&lng=${exifCoords.lng}`);
+          const data = await r.json();
+          if (data.address) setGeoAddress(data.address);
+        } catch {
+          // ignore
+        }
+      }
+    } catch {
+      // EXIF нет или не читается
+    }
+
+    // 2. Если EXIF GPS нет — запрашиваем текущую геолокацию
+    if (!exifCoords && geoStatus === "idle") {
       const coords = await requestGeo();
       if (coords) {
-        // Reverse geocode
         try {
           const r = await fetch(`/api/geocode?lat=${coords.lat}&lng=${coords.lng}`);
           const data = await r.json();
@@ -230,6 +252,11 @@ function PhotoForm({ onDone }: { onDone: () => void }) {
           {geoStatus === "granted" && geoAddress && (
             <div className="absolute bottom-2 left-2 right-2 bg-black/60 text-white text-[10px] px-2 py-1 rounded-lg flex items-center gap-1">
               📍 {geoAddress.slice(0, 50)}{geoAddress.length > 50 ? "…" : ""}
+            </div>
+          )}
+          {geoStatus === "granted" && !geoAddress && geoCoords && (
+            <div className="absolute bottom-2 left-2 right-2 bg-black/60 text-white text-[10px] px-2 py-1 rounded-lg flex items-center gap-1">
+              📍 {geoCoords.lat.toFixed(4)}, {geoCoords.lng.toFixed(4)}
             </div>
           )}
           {geoStatus === "denied" && (

@@ -547,3 +547,44 @@ Stage Summary:
 - Карта: отдельная группа фото-меток (круглые с миниатюрой), toggle, popup с фото+адрес
 - Галерея: адрес фото в lightbox
 - Auth+realtime: объяснена архитектура для VPS (NextAuth + polling)
+
+---
+Task ID: auth-camera-exif-photos
+Agent: main (Z.ai Code)
+Task: Фильтр фото на карте + EXIF + UI фраз + NextAuth авторизация
+
+Work Log:
+- ✅ Карта: фильтр "Только фото" — скрывает все метки мест, показывает только фото-пины
+  - Кнопка "Только фото" (cyan) появляется только когда есть фото
+  - Места скрываются: {!onlyPhotos && filtered.map(...)}
+- ✅ EXIF чтение из фото (библиотека exifr):
+  - При загрузке из галереи читается GPS (latitude/longitude) и дата из EXIF
+  - Если EXIF GPS есть — используется он (фото сделано раньше, метка точная)
+  - Если EXIF GPS нет — запрашивается текущая геолокация
+  - Reverse geocode для адреса в обоих случаях
+  - Пользователь может сфоткать всё на телефон, потом закинуть — координаты подтянутся из EXIF
+- ✅ Фразы: переделан UI карточки
+  - Кнопки горизонтально внизу через border-t
+  - "Слушать" (flex-1) + "Translate" (flex-1) + ⭐ (size-10)
+  - Категория сверху, потом китайский крупнее (text-2xl), русский
+- ✅ NextAuth авторизация (для VPS/Docker):
+  - Модель Participant: +email @unique +password (hashed bcrypt)
+  - /src/lib/auth.ts — authOptions с CredentialsProvider
+  - /api/auth/[...nextauth] — NextAuth handler
+  - /api/auth/register — регистрация (email+password+name, bcrypt hash)
+  - /login страница — вход/регистрация, градиент hero, переключатель режимов
+  - SessionProvider в providers.tsx
+  - ParticipantAvatars: если авторизован — только текущий + клик = выход
+  - Сид: пароли для 3 участников (you@triptrek.com/1234, leha@/1234, den@/1234)
+  - .env: NEXTAUTH_SECRET + NEXTAUTH_URL
+- ✅ Real-time: refetchInterval 30с + refetchOnWindowFocus в QueryClient
+- 🐛 scroll-behavior warning — добавлен data-scroll-behavior="smooth" на <html>
+- Проверка: /login 200, вход с you@triptrek.com/1234 → редирект на главную, dashboard работает, нет ошибок, lint чист
+
+Stage Summary:
+- Карта: фильтр "Только фото" (скрывает места)
+- EXIF: автоматическое чтение GPS+даты из фото при загрузке из галереи
+- Фразы: кнопки горизонтально внизу (Слушать/Translate/⭐)
+- NextAuth: полная авторизация (регистрация, вход, сессии, выход) — self-contained для Docker
+- Real-time: polling каждые 30с + refetchOnWindowFocus
+- Тестовые аккаунты: you@triptrek.com/1234, leha@/1234, den@/1234

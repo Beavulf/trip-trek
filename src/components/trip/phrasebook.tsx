@@ -202,62 +202,66 @@ function PhraseCard({ phrase, categoryMeta }: { phrase: Phrase; categoryMeta?: {
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, x: -20 }}
-      className="rounded-2xl bg-card border border-border p-3.5 hover:shadow-md transition-shadow relative overflow-hidden"
+      className="rounded-2xl bg-card border border-border p-4 hover:shadow-md transition-shadow relative overflow-hidden"
     >
       <div
         className="absolute left-0 top-0 bottom-0 w-1"
         style={{ background: categoryMeta?.color ?? "#94a3b8" }}
       />
-      <div className="flex items-start gap-3">
-        <div className="min-w-0 flex-1">
-          {/* Китайский */}
-          <div className="flex items-baseline gap-2 flex-wrap">
-            <span className="text-xl font-bold leading-tight">{phrase.cn}</span>
-            <span className="text-sm text-muted-foreground italic">{phrase.pinyin}</span>
-          </div>
-          {/* Русский */}
-          <p className="text-sm text-foreground/80 mt-1">{phrase.ru}</p>
-          {/* Категория */}
-          <span
-            className="inline-block mt-1.5 text-[9px] font-medium uppercase tracking-wide px-1.5 py-0.5 rounded"
-            style={{ background: `${categoryMeta?.color}18`, color: categoryMeta?.color }}
-          >
-            {categoryMeta?.emoji} {CATEGORIES.find((c) => c.key === phrase.category)?.label}
-          </span>
+      {/* Контент */}
+      <div className="ml-1">
+        {/* Категория */}
+        <span
+          className="inline-block text-[9px] font-medium uppercase tracking-wide px-1.5 py-0.5 rounded mb-2"
+          style={{ background: `${categoryMeta?.color}18`, color: categoryMeta?.color }}
+        >
+          {categoryMeta?.emoji} {CATEGORIES.find((c) => c.key === phrase.category)?.label}
+        </span>
+        {/* Китайский */}
+        <div className="flex items-baseline gap-2 flex-wrap">
+          <span className="text-2xl font-bold leading-tight">{phrase.cn}</span>
+          <span className="text-sm text-muted-foreground italic">{phrase.pinyin}</span>
         </div>
-        <div className="flex flex-col gap-1.5 shrink-0">
-          {/* Озвучка через TTS телефона */}
-          <button
-            onClick={speak}
-            className={cn(
-              "size-10 rounded-xl grid place-items-center transition-all active:scale-90",
-              speaking ? "bg-primary text-primary-foreground animate-pulse" : "bg-primary/10 text-primary hover:bg-primary/20"
-            )}
-            title="Произнести (TTS телефона)"
-          >
-            <Volume2 className="size-5" />
-          </button>
-          {/* Google Translate — озвучка + перевод, работает всегда */}
-          <a
-            href={`https://translate.google.com/?sl=zh-CN&tl=ru&text=${encodeURIComponent(phrase.cn)}&op=translate`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="size-10 rounded-xl grid place-items-center transition-all active:scale-90 bg-blue-500/10 text-blue-500 hover:bg-blue-500/20"
-            title="Google Translate (озвучка + перевод)"
-          >
-            <ExternalLink className="size-4" />
-          </a>
-          <button
-            onClick={() => toggle.mutate({ id: phrase.id, favorite: !phrase.favorite })}
-            className={cn(
-              "size-10 rounded-xl grid place-items-center transition-all active:scale-90",
-              phrase.favorite ? "bg-amber-500 text-white" : "bg-muted text-muted-foreground hover:bg-accent"
-            )}
-            title="В избранное"
-          >
-            <Star className={cn("size-5", phrase.favorite && "fill-current")} />
-          </button>
-        </div>
+        {/* Русский */}
+        <p className="text-sm text-foreground/80 mt-1">{phrase.ru}</p>
+      </div>
+
+      {/* Кнопки — горизонтально внизу */}
+      <div className="flex items-center gap-2 mt-3 pt-3 border-t border-border">
+        {/* Озвучка через TTS телефона */}
+        <button
+          onClick={speak}
+          className={cn(
+            "flex-1 h-10 rounded-xl grid place-items-center gap-1.5 transition-all active:scale-95 flex-row inline-flex",
+            speaking ? "bg-primary text-primary-foreground animate-pulse" : "bg-primary/10 text-primary hover:bg-primary/20"
+          )}
+          title="Произнести (TTS телефона)"
+        >
+          <Volume2 className="size-4" />
+          <span className="text-xs font-medium">{speaking ? "Играет…" : "Слушать"}</span>
+        </button>
+        {/* Google Translate */}
+        <a
+          href={`https://translate.google.com/?sl=zh-CN&tl=ru&text=${encodeURIComponent(phrase.cn)}&op=translate`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex-1 h-10 rounded-xl grid place-items-center gap-1.5 transition-all active:scale-95 bg-blue-500/10 text-blue-500 hover:bg-blue-500/20 inline-flex flex-row"
+          title="Google Translate (озвучка + перевод)"
+        >
+          <ExternalLink className="size-4" />
+          <span className="text-xs font-medium">Translate</span>
+        </a>
+        {/* Избранное */}
+        <button
+          onClick={() => toggle.mutate({ id: phrase.id, favorite: !phrase.favorite })}
+          className={cn(
+            "size-10 rounded-xl grid place-items-center transition-all active:scale-90 shrink-0",
+            phrase.favorite ? "bg-amber-500 text-white" : "bg-muted text-muted-foreground hover:bg-accent"
+          )}
+          title="В избранное"
+        >
+          <Star className={cn("size-5", phrase.favorite && "fill-current")} />
+        </button>
       </div>
     </motion.div>
   );

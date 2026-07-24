@@ -52,6 +52,7 @@ export default function TripMap() {
   const [autoTheme, setAutoTheme] = useState(true);
   const [manualLayer, setManualLayer] = useState<"voyager" | "satellite" | "light" | "dark">("voyager");
   const [showPhotos, setShowPhotos] = useState(true);
+  const [onlyPhotos, setOnlyPhotos] = useState(false);
   const { resolvedTheme } = useTheme();
 
   // Фото с геолокацией для карты
@@ -192,6 +193,17 @@ export default function TripMap() {
           >
             <Camera className="size-3" /> Фото {geoPhotos?.length ? `(${geoPhotos.length})` : ""}
           </button>
+          {showPhotos && geoPhotos && geoPhotos.length > 0 && (
+            <button
+              onClick={() => setOnlyPhotos((v) => !v)}
+              className={cn(
+                "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors",
+                onlyPhotos ? "bg-cyan-500 text-white" : "bg-secondary hover:bg-accent text-muted-foreground"
+              )}
+            >
+              {onlyPhotos ? "📍 Только фото" : "Только фото"}
+            </button>
+          )}
           <button
             onClick={() => setAddMode(!addMode)}
             className={cn(
@@ -235,7 +247,8 @@ export default function TripMap() {
           />
           <FlyTo center={center} />
           {addMode && <MapClickHandler onClick={handleMapClick} />}
-          {filtered.map(({ place, day }) => (
+          {/* Места — скрываются в режиме "Только фото" */}
+          {!onlyPhotos && filtered.map(({ place, day }) => (
             <Marker
               key={place.id}
               position={[place.lat, place.lng]}
