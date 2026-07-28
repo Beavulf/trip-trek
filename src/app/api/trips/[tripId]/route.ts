@@ -3,10 +3,10 @@ import { db } from "@/lib/db";
 import { emitWS } from "@/lib/ws-emit";
 
 // GET /api/trips/[id] — детали поездки
-export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params;
+export async function GET(req: NextRequest, { params }: { params: Promise<{ tripId: string }> }) {
+  const { tripId } = await params;
   const trip = await db.trip.findUnique({
-    where: { id },
+    where: { id: tripId },
     include: {
       members: { include: { user: true } },
       _count: { select: { places: true, photos: true, expenses: true, journals: true, days: true } },
@@ -17,8 +17,8 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 }
 
 // PATCH /api/trips/[id] — обновить поездку
-export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params;
+export async function PATCH(req: NextRequest, { params }: { params: Promise<{ tripId: string }> }) {
+  const { tripId } = await params;
   const body = await req.json();
   const allowed = ["title", "destination", "startDate", "endDate", "totalDays", "totalBudget", "currency", "status", "coverColor", "coverEmoji"];
   const data: Record<string, unknown> = {};
@@ -31,14 +31,14 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       }
     }
   }
-  const trip = await db.trip.update({ where: { id }, data });
-  emitWS("trip:updated", id, {});
+  const trip = await db.trip.update({ where: { id: tripId }, data });
+  emitWS("trip:updated", tripId, {});
   return NextResponse.json(trip);
 }
 
 // DELETE /api/trips/[id]
-export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params;
-  await db.trip.delete({ where: { id } });
+export async function DELETE(req: NextRequest, { params }: { params: Promise<{ tripId: string }> }) {
+  const { tripId } = await params;
+  await db.trip.delete({ where: { id: tripId } });
   return NextResponse.json({ ok: true });
 }

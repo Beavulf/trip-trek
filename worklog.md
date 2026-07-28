@@ -928,3 +928,33 @@ Stage Summary:
 - Все компоненты используют user (вместо participant)
 - Аватары "кто добавил" работают на фото, тратах, заметках, сообщениях
 - WS-уведомления включают имя пользователя
+
+---
+Task ID: phase3-budget
+Agent: main (Z.ai Code)
+Task: Фаза 3 — Budget (модалка бюджетов участников)
+
+Work Log:
+- API /api/trips/[tripId]/members/[memberId] — PATCH для обновления бюджета
+  - Принимает memberId ИЛИ userId (найти по tripId_userId)
+  - Обновляет budget, displayName, emoji, color
+  - emitWS trip:updated
+- Fix: переименован /api/trips/[id] → /api/trips/[tripId] (slug конфликт)
+- Hook: useUpdateParticipant → useUpdateMember (TripMember вместо Participant)
+- BudgetEditModal:
+  - Модалка со списком участников (аватар, имя, роль, input $)
+  - Инициализация через useEffect при открытии
+  - Общий = сумма всех бюджетов (live)
+  - Кнопка "Сохранить" — патчит всех через API
+  - Toast "Бюджеты обновлены! 💰"
+- Budget section:
+  - Кнопка "Настроить" (✏️) открывает модалку
+  - Текст: "Общий бюджет группы — сумма бюджетов участников"
+  - ParticipantBudgetRow — inline редактирование бюджета
+- Проверка: lint чист, HTTP 200, "Бюджет" виден
+
+Stage Summary:
+- Модалка настройки бюджетов участников работает
+- Общий = сумма всех member.budget
+- API PATCH /api/trips/[tripId]/members/[memberId]
+- Slug конфликт исправлен ([id] → [tripId])

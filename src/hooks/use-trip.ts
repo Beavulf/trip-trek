@@ -291,19 +291,22 @@ export function useUpdateTripBudget() {
   });
 }
 
-export function useUpdateParticipant() {
+export function useUpdateMember() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ id, ...data }: { id: string; budget?: number | null; name?: string; role?: string | null }) => {
-      const r = await fetch(`/api/participants/${id}`, {
+    mutationFn: async ({ memberId, tripId, ...data }: { memberId: string; tripId: string; budget?: number | null; displayName?: string; emoji?: string; color?: string }) => {
+      const r = await fetch(`/api/trips/${tripId}/members/${memberId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(data),
       });
-      if (!r.ok) throw new Error("update participant failed");
+      if (!r.ok) throw new Error("update member failed");
       return r.json();
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["trip"] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["trip"] });
+      qc.invalidateQueries({ queryKey: ["budget-plan"] });
+    },
   });
 }
 
