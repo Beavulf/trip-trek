@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { Loader2, Plane, UserPlus, LogIn, Globe } from "lucide-react";
@@ -38,12 +37,29 @@ export default function LoginPage() {
         if (!res.ok) throw new Error(data.error);
       }
 
-      const result = await signIn("credentials", { email, password, redirect: false });
-      if (result?.error) throw new Error("Неверный email или пароль");
+      // Прямой логин через NextAuth API (без signIn из next-auth/react)
+      const csrfRes = await fetch("/api/auth/csrf");
+      const csrfData = await csrfRes.json();
+
+      const formData = new URLSearchParams();
+      formData.set("email", email);
+      formData.set("password", password);
+      formData.set("csrfToken", csrfData.csrfToken);
+      formData.set("json", "true");
+
+      const authRes = await fetch("/api/auth/callback/credentials", {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: formData.toString(),
+      });
+      const authData = await authRes.json();
+
+      if (authData.url && authData.url.includes("signin?csrf")) {
+        throw new Error("Неверный email или пароль");
+      }
 
       toast.success(mode === "register" ? "Добро пожаловать! 🎉" : "С возвращением! 👋");
-      router.push("/");
-      router.refresh();
+      window.location.assign("/");
     } catch (e) {
       toast.error((e as Error).message);
     } finally {

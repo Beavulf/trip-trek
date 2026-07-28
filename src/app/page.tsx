@@ -19,6 +19,9 @@ import { FoodGuide } from "@/components/trip/food-guide";
 import { Achievements } from "@/components/trip/achievements";
 import { Board } from "@/components/trip/board";
 import { AnimatePresence, motion } from "framer-motion";
+import { useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
+import { Loader2 } from "lucide-react";
 
 // Leaflet работает только в браузере
 const TripMap = dynamic(() => import("@/components/trip/trip-map"), {
@@ -28,6 +31,38 @@ const TripMap = dynamic(() => import("@/components/trip/trip-map"), {
 
 export default function Home() {
   const { activeTab } = useTripStore();
+  const router = useRouter();
+  const [authChecked, setAuthChecked] = useState(false);
+  const [authenticated, setAuthenticated] = useState(false);
+
+  // Проверка сессии через API
+  useEffect(() => {
+    fetch("/api/auth/session")
+      .then((r) => r.json())
+      .then((data) => {
+        if (data?.user) {
+          setAuthenticated(true);
+        } else {
+          router.push("/login");
+        }
+        setAuthChecked(true);
+      })
+      .catch(() => {
+        router.push("/login");
+        setAuthChecked(true);
+      });
+  }, [router]);
+
+  if (!authChecked || !authenticated) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="flex flex-col items-center gap-3">
+          <Loader2 className="size-8 animate-spin text-primary" />
+          <p className="text-sm text-muted-foreground">Загрузка…</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <AppShell>

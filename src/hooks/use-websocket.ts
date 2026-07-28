@@ -148,6 +148,30 @@ export function useWebSocket(tripId: string) {
       }
     });
 
+    // Toast + push уведомления
+    socket.on("notification", (data: { type: string; message: string; emoji: string }) => {
+      // Показываем toast
+      import("sonner").then(({ toast }) => {
+        toast.success(data.message, {
+          icon: data.emoji,
+          duration: 4000,
+        });
+      });
+
+      // Отправляем push (если разрешено)
+      if (typeof window !== "undefined" && "Notification" in window && Notification.permission === "granted") {
+        navigator.serviceWorker?.ready.then((reg) => {
+          reg.showNotification("TripTrek", {
+            body: data.message,
+            icon: "/icon-192.png",
+            badge: "/icon-192.png",
+            tag: data.type,
+            vibrate: [100, 50, 100],
+          });
+        }).catch(() => {});
+      }
+    });
+
     return () => {
       socket?.disconnect();
       socket = null;

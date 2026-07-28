@@ -958,3 +958,42 @@ Stage Summary:
 - Общий = сумма всех member.budget
 - API PATCH /api/trips/[tripId]/members/[memberId]
 - Slug конфликт исправлен ([id] → [tripId])
+
+---
+Task ID: phase4-push-auth
+Agent: main (Z.ai Code)
+Task: Фаза 4 — Push-уведомления + Защита авторизацией
+
+Work Log:
+- Push-уведомления:
+  - public/sw.js — Service Worker (push, fetch cache, notification click)
+  - src/hooks/use-push.ts — хук usePushNotifications (register SW, subscribe, unsubscribe)
+  - src/components/trip/push-settings.tsx — UI в разделе Инфо
+    - Кнопка "Включить" / "Включены"
+    - Список типов уведомлений (фото, места, траты, дневник, чат)
+    - Предупреждение если denied
+  - src/app/api/push/route.ts — API (subscribe, send, count)
+  - use-websocket.ts: socket.on("notification") → toast + push через SW
+  - 6 типов toast-уведомлений с emoji
+
+- Защита авторизацией:
+  - page.tsx: useEffect проверяет /api/auth/session → если нет user → router.push("/login")
+  - Login: заменён signIn (next-auth/react не работает с Turbopack) на прямой fetch
+    - GET /api/auth/csrf → POST /api/auth/callback/credentials
+    - window.location.assign("/") после успеха
+  - Login: removed useSession (Turbopack incompatibility), uses direct fetch
+  - page.tsx: removed useSession, uses direct fetch to /api/auth/session
+
+- .env: добавлены NEXTAUTH_SECRET + NEXTAUTH_URL (были потеряны)
+
+- Проверка:
+  - Login API работает (POST callback → 200, session установлена)
+  - Сессия проверяется через /api/auth/session
+  - Push-настройки отображаются в Инфо
+  - Lint чист
+
+Stage Summary:
+- Push-уведомления: SW + API + UI в Инфо + toast через WS
+- Защита: неавторизованный → редирект на /login
+- Login: прямой fetch (обход Turbopack + next-auth/react)
+- Тестовые аккаунты: you@/leha@/den@triptrek.com / 1234

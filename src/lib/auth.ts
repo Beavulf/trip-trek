@@ -1,7 +1,32 @@
 import type { NextAuthOptions } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
-import bcrypt from "bcryptjs";
 import { db } from "@/lib/db";
+import crypto from "crypto";
+
+// Простой hash проверка без bcrypt (надёжнее в Turbopack)
+function verifyPassword(password: string, hash: string): boolean {
+  try {
+    // Если хеш от bcrypt — пробуем bcrypt
+    if (hash.startsWith("$2a$") || hash.startsWith("$2b$")) {
+      // Динамический импорт bcryptjs
+      return bcryptCompareSync(password, hash);
+    }
+    return false;
+  } catch {
+    return false;
+  }
+}
+
+// Динамический импорт bcryptjs
+function bcryptCompareSync(password: string, hash: string): boolean {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const bcrypt = require("bcryptjs");
+    return bcrypt.compareSync(password, hash);
+  } catch {
+    return false;
+  }
+}
 
 export const authOptions: NextAuthOptions = {
   providers: [
@@ -24,7 +49,7 @@ export const authOptions: NextAuthOptions = {
           return null;
         }
 
-        const isValid = await bcrypt.compare(credentials.password, user.password);
+        const isValid = verifyPassword(credentials.password, user.password);
         if (!isValid) {
           return null;
         }
