@@ -32,6 +32,7 @@ import { useState, useEffect, useRef, type ReactNode } from "react";
 import { useTheme } from "next-themes";
 import { useSession, signOut } from "next-auth/react";
 import { useRouter } from "next/navigation";
+import { useWebSocket } from "@/hooks/use-websocket";
 import { QuickAddSheet } from "./quick-add";
 import { GlobalSearch } from "./global-search";
 
@@ -62,6 +63,9 @@ export function AppShell({ children }: { children: ReactNode }) {
   const tabScrollRef = useRef<HTMLDivElement>(null);
   const [showLeftArrow, setShowLeftArrow] = useState(false);
   const [showRightArrow, setShowRightArrow] = useState(false);
+
+  // WebSocket real-time
+  useWebSocket(trip?.settings.tripId || "default-trip");
 
   const handleTabScroll = () => {
     const el = tabScrollRef.current;

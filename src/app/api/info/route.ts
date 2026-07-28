@@ -1,32 +1,33 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 
-// GET /api/info
+// GET /api/info?tripId=...&type=...
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
+  const tripId = searchParams.get("tripId");
   const type = searchParams.get("type");
+  const where: Record<string, unknown> = {};
+  if (tripId) where.tripId = tripId;
+  if (type) where.type = type;
+
   const items = await db.infoItem.findMany({
-    where: type ? { type } : undefined,
+    where,
     orderBy: [{ type: "asc" }, { order: "asc" }],
   });
   return NextResponse.json(items);
 }
 
-// POST — создать карточку
 export async function POST(req: NextRequest) {
   const body = await req.json();
-  const { type, title, content, icon } = body;
-  if (!type || !title || !content) {
-    return NextResponse.json({ error: "type, title, content required" }, { status: 400 });
+  const { type, title, content, icon, tripId } = body;
+  if (!type || !title || !content || !tripId) {
+    return NextResponse.json({ error: "type, title, content, tripId required" }, { status: 400 });
   }
-  const order = await db.infoItem.count({ where: { type } });
-  const item = await db.infoItem.create({
-    data: { type, title, content, icon: icon || null, order },
-  });
+  const order = await db.infoItem.count({ where: { tripId, type } });
+  const item = await db.infoItem.create({ data: { type, title, content, icon: icon || null, tripId, order } });
   return NextResponse.json(item);
 }
 
-// PATCH — обновить
 export async function PATCH(req: NextRequest) {
   const body = await req.json();
   const { id, title, content, icon, type } = body;
@@ -39,7 +40,6 @@ export async function PATCH(req: NextRequest) {
   return NextResponse.json(item);
 }
 
-// DELETE
 export async function DELETE(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const id = searchParams.get("id");

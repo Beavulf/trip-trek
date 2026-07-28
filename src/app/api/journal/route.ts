@@ -1,33 +1,36 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 
-// GET /api/journal — записи дневника
+// GET /api/journal?tripId=...&dayId=...
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
+  const tripId = searchParams.get("tripId");
   const dayId = searchParams.get("dayId");
+  const where: Record<string, unknown> = {};
+  if (tripId) where.tripId = tripId;
+  if (dayId) where.dayId = dayId;
+
   const entries = await db.journalEntry.findMany({
-    where: dayId ? { dayId } : undefined,
+    where,
     orderBy: { createdAt: "desc" },
-    include: { participant: true, day: { select: { dayNumber: true, city: true } } },
+    include: { user: true, day: { select: { dayNumber: true, city: true } } },
   });
   return NextResponse.json(entries);
 }
 
-// POST
 export async function POST(req: NextRequest) {
   const body = await req.json();
-  const { dayId, content, mood, participantId } = body;
-  if (!dayId || !content) {
-    return NextResponse.json({ error: "dayId, content required" }, { status: 400 });
+  const { dayId, content, mood, userId, tripId } = body;
+  if (!dayId || !content || !tripId) {
+    return NextResponse.json({ error: "dayId, content, tripId required" }, { status: 400 });
   }
   const entry = await db.journalEntry.create({
-    data: { dayId, content, mood: mood || null, participantId: participantId || null },
-    include: { participant: true, day: true },
+    data: { dayId, tripId, content, mood: mood || null, userId: userId || null },
+    include: { user: true, day: true },
   });
   return NextResponse.json(entry);
 }
 
-// DELETE
 export async function DELETE(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const id = searchParams.get("id");

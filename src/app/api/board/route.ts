@@ -1,30 +1,30 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 
-// GET /api/board — все сообщения (pinned сверху, потом по времени)
-export async function GET() {
+// GET /api/board?tripId=...
+export async function GET(req: NextRequest) {
+  const { searchParams } = new URL(req.url);
+  const tripId = searchParams.get("tripId") || "default-trip";
+
   const messages = await db.boardMessage.findMany({
+    where: { tripId },
     orderBy: [{ pinned: "desc" }, { createdAt: "desc" }],
-    include: { participant: true },
+    include: { user: true },
   });
   return NextResponse.json(messages);
 }
 
-// POST — добавить сообщение
 export async function POST(req: NextRequest) {
   const body = await req.json();
-  const { content, participantId } = body;
-  if (!content || !content.trim()) {
-    return NextResponse.json({ error: "content required" }, { status: 400 });
-  }
+  const { content, userId, tripId } = body;
+  if (!content || !tripId) return NextResponse.json({ error: "content, tripId required" }, { status: 400 });
   const msg = await db.boardMessage.create({
-    data: { content: content.trim(), participantId: participantId || null },
-    include: { participant: true },
+    data: { content: content.trim(), userId: userId || null, tripId },
+    include: { user: true },
   });
   return NextResponse.json(msg);
 }
 
-// PATCH — закрепить/открепить
 export async function PATCH(req: NextRequest) {
   const body = await req.json();
   const { id, pinned } = body;
@@ -32,7 +32,6 @@ export async function PATCH(req: NextRequest) {
   return NextResponse.json(msg);
 }
 
-// DELETE
 export async function DELETE(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const id = searchParams.get("id");

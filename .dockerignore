@@ -1,0 +1,12 @@
+node_modules
+.git
+.next
+dev.log
+server.log
+*.md
+prisma/*.db
+prisma/*.db-journal
+db/
+public/uploads
+screenshot-*.png
+qa-*.png

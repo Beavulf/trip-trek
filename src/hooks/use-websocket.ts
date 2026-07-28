@@ -1,0 +1,156 @@
+"use client";
+
+import { useEffect, useRef } from "react";
+import { io, type Socket } from "socket.io-client";
+import { useQueryClient } from "@tanstack/react-query";
+
+let socket: Socket | null = null;
+
+export function getSocket(): Socket | null {
+  return socket;
+}
+
+export function useWebSocket(tripId: string) {
+  const qc = useQueryClient();
+  const connectedRef = useRef(false);
+
+  useEffect(() => {
+    if (!tripId || connectedRef.current) return;
+
+    const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+    const host = window.location.hostname;
+    const wsPort = process.env.NEXT_PUBLIC_WS_PORT || "3001";
+    const wsUrl = `${protocol}//${host}:${wsPort}`;
+
+    socket = io(wsUrl, {
+      transports: ["websocket"],
+      reconnection: true,
+      reconnectionAttempts: 10,
+      reconnectionDelay: 2000,
+    });
+
+    socket.on("connect", () => {
+      console.log("[WS] Connected:", socket?.id);
+      connectedRef.current = true;
+      socket?.emit("trip:join", tripId);
+    });
+
+    socket.on("disconnect", () => {
+      console.log("[WS] Disconnected");
+      connectedRef.current = false;
+    });
+
+    // Real-time events → invalidate queries
+    socket.on("place:updated", (data: { tripId: string }) => {
+      if (data.tripId === tripId) {
+        qc.invalidateQueries({ queryKey: ["days"] });
+        qc.invalidateQueries({ queryKey: ["trip"] });
+      }
+    });
+
+    socket.on("place:created", (data: { tripId: string }) => {
+      if (data.tripId === tripId) {
+        qc.invalidateQueries({ queryKey: ["days"] });
+        qc.invalidateQueries({ queryKey: ["trip"] });
+      }
+    });
+
+    socket.on("place:deleted", (data: { tripId: string }) => {
+      if (data.tripId === tripId) {
+        qc.invalidateQueries({ queryKey: ["days"] });
+        qc.invalidateQueries({ queryKey: ["trip"] });
+      }
+    });
+
+    socket.on("photo:added", (data: { tripId: string }) => {
+      if (data.tripId === tripId) {
+        qc.invalidateQueries({ queryKey: ["photos"] });
+        qc.invalidateQueries({ queryKey: ["days"] });
+        qc.invalidateQueries({ queryKey: ["trip"] });
+      }
+    });
+
+    socket.on("expense:added", (data: { tripId: string }) => {
+      if (data.tripId === tripId) {
+        qc.invalidateQueries({ queryKey: ["expenses"] });
+        qc.invalidateQueries({ queryKey: ["trip"] });
+      }
+    });
+
+    socket.on("expense:deleted", (data: { tripId: string }) => {
+      if (data.tripId === tripId) {
+        qc.invalidateQueries({ queryKey: ["expenses"] });
+        qc.invalidateQueries({ queryKey: ["trip"] });
+      }
+    });
+
+    socket.on("journal:added", (data: { tripId: string }) => {
+      if (data.tripId === tripId) {
+        qc.invalidateQueries({ queryKey: ["journal"] });
+        qc.invalidateQueries({ queryKey: ["trip"] });
+      }
+    });
+
+    socket.on("journal:deleted", (data: { tripId: string }) => {
+      if (data.tripId === tripId) {
+        qc.invalidateQueries({ queryKey: ["journal"] });
+        qc.invalidateQueries({ queryKey: ["trip"] });
+      }
+    });
+
+    socket.on("board:added", (data: { tripId: string }) => {
+      if (data.tripId === tripId) {
+        qc.invalidateQueries({ queryKey: ["board"] });
+      }
+    });
+
+    socket.on("board:deleted", (data: { tripId: string }) => {
+      if (data.tripId === tripId) {
+        qc.invalidateQueries({ queryKey: ["board"] });
+      }
+    });
+
+    socket.on("checklist:updated", (data: { tripId: string }) => {
+      if (data.tripId === tripId) {
+        qc.invalidateQueries({ queryKey: ["checklist"] });
+      }
+    });
+
+    socket.on("food:updated", (data: { tripId: string }) => {
+      if (data.tripId === tripId) {
+        qc.invalidateQueries({ queryKey: ["foods"] });
+      }
+    });
+
+    socket.on("phrase:updated", (data: { tripId: string }) => {
+      if (data.tripId === tripId) {
+        qc.invalidateQueries({ queryKey: ["phrases"] });
+      }
+    });
+
+    socket.on("info:updated", (data: { tripId: string }) => {
+      if (data.tripId === tripId) {
+        qc.invalidateQueries({ queryKey: ["info"] });
+      }
+    });
+
+    socket.on("budget:updated", (data: { tripId: string }) => {
+      if (data.tripId === tripId) {
+        qc.invalidateQueries({ queryKey: ["budget-plan"] });
+        qc.invalidateQueries({ queryKey: ["trip"] });
+      }
+    });
+
+    socket.on("trip:updated", (data: { tripId: string }) => {
+      if (data.tripId === tripId) {
+        qc.invalidateQueries({ queryKey: ["trip"] });
+      }
+    });
+
+    return () => {
+      socket?.disconnect();
+      socket = null;
+      connectedRef.current = false;
+    };
+  }, [tripId, qc]);
+}

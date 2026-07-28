@@ -3,12 +3,24 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import type { TripSummary, Day, Photo, Expense, JournalEntry, Weather } from "@/lib/types";
 
+// Текущий tripId (из localStorage)
+export function getTripId(): string {
+  if (typeof window === "undefined") return "default-trip";
+  return localStorage.getItem("triptrek-current-trip") || "default-trip";
+}
+
+export function setTripId(id: string) {
+  if (typeof window !== "undefined") {
+    localStorage.setItem("triptrek-current-trip", id);
+  }
+}
+
 // Сводка поездки
 export function useTrip() {
   return useQuery<TripSummary>({
     queryKey: ["trip"],
     queryFn: async () => {
-      const r = await fetch("/api/trip");
+      const r = await fetch(`/api/trip?tripId=${getTripId()}`);
       if (!r.ok) throw new Error("fetch trip");
       return r.json();
     },
@@ -19,7 +31,7 @@ export function useDays() {
   return useQuery<Day[]>({
     queryKey: ["days"],
     queryFn: async () => {
-      const r = await fetch("/api/days");
+      const r = await fetch(`/api/days?tripId=${getTripId()}`);
       return r.json();
     },
   });
@@ -112,6 +124,7 @@ export function useUploadPhoto() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (formData: FormData) => {
+      formData.append("tripId", getTripId());
       const r = await fetch("/api/photos", { method: "POST", body: formData });
       if (!r.ok) throw new Error("upload failed");
       return r.json();
@@ -142,7 +155,7 @@ export function useExpenses() {
   return useQuery<Expense[]>({
     queryKey: ["expenses"],
     queryFn: async () => {
-      const r = await fetch("/api/expenses");
+      const r = await fetch(`/api/expenses?tripId=${getTripId()}`);
       return r.json();
     },
   });
@@ -155,7 +168,7 @@ export function useAddExpense() {
       const r = await fetch("/api/expenses", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
+        body: JSON.stringify({ ...data, tripId: getTripId() }),
       });
       return r.json();
     },
@@ -307,7 +320,7 @@ export function useChecklist() {
   return useQuery<ChecklistItem[]>({
     queryKey: ["checklist"],
     queryFn: async () => {
-      const r = await fetch("/api/checklist");
+      const r = await fetch(`/api/checklist?tripId=${getTripId()}`);
       return r.json();
     },
   });
@@ -379,7 +392,7 @@ export function useAddInfo() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (data: { type: string; title: string; content: string; icon?: string }) => {
-      const r = await fetch("/api/info", {
+      const r = await fetch(`/api/info?tripId=${getTripId()}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(data),
@@ -394,7 +407,7 @@ export function useUpdateInfo() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ id, ...data }: { id: string; title?: string; content?: string; icon?: string; type?: string }) => {
-      const r = await fetch("/api/info", {
+      const r = await fetch(`/api/info?tripId=${getTripId()}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ id, ...data }),
@@ -484,7 +497,7 @@ export function useBudgetPlan() {
   return useQuery<BudgetPlan[]>({
     queryKey: ["budget-plan"],
     queryFn: async () => {
-      const r = await fetch("/api/budget-plan");
+      const r = await fetch(`/api/budget-plan?tripId=${getTripId()}`);
       return r.json();
     },
   });
@@ -519,7 +532,7 @@ export function useBoard() {
   return useQuery<BoardMessage[]>({
     queryKey: ["board"],
     queryFn: async () => {
-      const r = await fetch("/api/board");
+      const r = await fetch(`/api/board?tripId=${getTripId()}`);
       return r.json();
     },
   });

@@ -16,30 +16,30 @@ export const authOptions: NextAuthOptions = {
           return null;
         }
 
-        const participant = await db.participant.findUnique({
+        const user = await db.user.findUnique({
           where: { email: credentials.email },
         });
 
-        if (!participant || !participant.password) {
+        if (!user || !user.password) {
           return null;
         }
 
-        const isValid = await bcrypt.compare(credentials.password, participant.password);
+        const isValid = await bcrypt.compare(credentials.password, user.password);
         if (!isValid) {
           return null;
         }
 
         return {
-          id: participant.id,
-          name: participant.name,
-          email: participant.email,
+          id: user.id,
+          name: user.name,
+          email: user.email,
         };
       },
     }),
   ],
   session: {
     strategy: "jwt",
-    maxAge: 30 * 24 * 60 * 60, // 30 дней
+    maxAge: 30 * 24 * 60 * 60,
   },
   callbacks: {
     async jwt({ token, user }) {

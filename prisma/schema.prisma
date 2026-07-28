@@ -1,5 +1,5 @@
-// TripTrek China — Prisma schema
-// Приложение для группового путешествия 3 друзей в Китай
+// TripTrek — Prisma schema (PostgreSQL-compatible, works on SQLite)
+// Multi-trip architecture
 
 generator client {
   provider = "prisma-client-js"
@@ -10,77 +10,127 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// Участники поездки (3 друга)
-model Participant {
+// === Пользователь (глобальный аккаунт) ===
+model User {
   id        String   @id @default(cuid())
+  email     String   @unique
   name      String
-  color     String   // hex цвет для аватара/маркеров
-  emoji     String   // эмодзи аватар
-  role      String?  // роль/прозвище
-  budget    Float?   // персональный бюджет (null = общий)
-  email     String?  @unique // для привязки к аккаунту
-  password  String?  // хеш пароля (для auth)
+  password  String   // bcrypt hash
+  emoji     String   @default("👤")
+  color     String   @default("#94a3b8")
   createdAt DateTime @default(now())
 
-  photos    Photo[]
-  expenses  Expense[]
-  journals  JournalEntry[]
-  messages  BoardMessage[]
+  memberships TripMember[]
+  photos      Photo[]
+  expenses    Expense[]
+  journals    JournalEntry[]
+  messages    BoardMessage[]
 }
 
-// День поездки (12 дней)
+// === Поездка ===
+model Trip {
+  id          String    @id @default(cuid())
+  title       String
+  destination String    @default("China")
+  startDate   DateTime
+  endDate     DateTime?
+  totalDays   Int       @default(12)
+  totalBudget Float     @default(1100)
+  currency    String    @default("USD")
+  inviteCode  String    @unique @default(cuid())
+  coverColor  String    @default("#f97316")
+  coverEmoji  String    @default("🌏")
+  status      String    @default("planning") // planning / active / completed
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  members      TripMember[]
+  days         Day[]
+  places       Place[]
+  photos       Photo[]
+  expenses     Expense[]
+  journals     JournalEntry[]
+  messages     BoardMessage[]
+  checklist    ChecklistItem[]
+  info         InfoItem[]
+  phrases      Phrase[]
+  foods        FoodItem[]
+  budgetPlans  BudgetPlan[]
+}
+
+// === Участник поездки (связь User ↔ Trip) ===
+model TripMember {
+  id          String   @id @default(cuid())
+  tripId      String
+  userId      String
+  role        String   @default("member") // owner / member
+  displayName String   // имя в рамках поездки
+  emoji       String   @default("👤")
+  color       String   @default("#94a3b8")
+  budget      Float?   // персональный бюджет
+  joinedAt    DateTime @default(now())
+
+  trip        Trip     @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([tripId, userId])
+}
+
+// === День поездки ===
 model Day {
   id          String   @id @default(cuid())
-  dayNumber   Int      // 1-12
+  tripId      String
+  dayNumber   Int
   date        DateTime
-  city        String   // Гуанчжоу / Шэньчжэнь / Гонконг / Макао
-  cityKey     String   // guangzhou / shenzhen / hongkong / macau
-  title       String   // заголовок дня
-  summary     String?  // краткое описание
-  accentColor String?  // цвет города для UI
+  city        String
+  cityKey     String
+  title       String
+  summary     String?
+  accentColor String?
 
+  trip        Trip     @relation(fields: [tripId], references: [id], onDelete: Cascade)
   places      Place[]
   photos      Photo[]
   expenses    Expense[]
   journals    JournalEntry[]
 }
 
-// Место в маршруте (достопримечательность, кафе, бар и т.д.)
+// === Место ===
 model Place {
   id          String   @id @default(cuid())
+  tripId      String
   name        String
   description String?
-  category    String   // sight, temple, viewpoint, beach, market, casino, restaurant, cafe, bar, hotel, transport, park
+  category    String
   lat         Float
   lng         Float
   dayId       String
-  day         Day      @relation(fields: [dayId], references: [id], onDelete: Cascade)
-  timeOfDay   String?  // morning / afternoon / evening
-  status      String   @default("planned") // planned / visited / current
-  budget      Float?   // примерный бюджет $
+  timeOfDay   String?
+  status      String   @default("planned")
+  budget      Float?
   address     String?
-  notes       String?  // пользовательские заметки
-  rating      Int?     // оценка 1-5
+  notes       String?
+  rating      Int?
   visitedAt   DateTime?
-  order       Int      @default(0) // порядок в дне
+  order       Int      @default(0)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
+  trip        Trip     @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  day         Day      @relation(fields: [dayId], references: [id], onDelete: Cascade)
   photos      Photo[]
 }
 
-// Фото
+// === Фото ===
 model Photo {
   id            String   @id @default(cuid())
-  url           String   // путь /uploads/...
+  tripId        String
+  url           String
   thumbUrl      String?
   caption       String?
   placeId       String?
-  place         Place?   @relation(fields: [placeId], references: [id], onDelete: SetNull)
   dayId         String
-  day           Day      @relation(fields: [dayId], references: [id], onDelete: Cascade)
-  participantId String?
-  participant   Participant? @relation(fields: [participantId], references: [id], onDelete: SetNull)
+  userId        String?  // кто загрузил (был participantId)
   lat           Float?
   lng           Float?
   address       String?
@@ -88,110 +138,129 @@ model Photo {
   width         Int?
   height        Int?
   createdAt     DateTime @default(now())
+
+  trip          Trip     @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  place         Place?   @relation(fields: [placeId], references: [id], onDelete: SetNull)
+  day           Day      @relation(fields: [dayId], references: [id], onDelete: Cascade)
+  user          User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
 }
 
-// Трата
+// === Трата ===
 model Expense {
   id          String   @id @default(cuid())
-  amount      Float    // сумма в $
-  category    String   // accommodation, food, transport, attractions, casino, shopping, other
+  tripId      String
+  amount      Float
+  category    String
   description String
-  paidById    String   // кто заплатил
-  paidBy      Participant @relation(fields: [paidById], references: [id])
+  paidById    String   // userId кто заплатил
   dayId       String?
-  day         Day?     @relation(fields: [dayId], references: [id], onDelete: SetNull)
   createdAt   DateTime @default(now())
+
+  trip        Trip     @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  paidBy      User     @relation(fields: [paidById], references: [id])
+  day         Day?     @relation(fields: [dayId], references: [id], onDelete: SetNull)
 }
 
-// Запись дневника
+// === Запись дневника ===
 model JournalEntry {
   id            String   @id @default(cuid())
+  tripId        String
   dayId         String
-  day           Day      @relation(fields: [dayId], references: [id], onDelete: Cascade)
-  participantId String?
-  participant   Participant? @relation(fields: [participantId], references: [id], onDelete: SetNull)
-  mood          String?  // эмодзи настроения
+  userId        String?  // был participantId
+  mood          String?
   content       String
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
+
+  trip          Trip     @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  day           Day      @relation(fields: [dayId], references: [id], onDelete: Cascade)
+  user          User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
 }
 
-// Настройки поездки (singleton)
-model TripSettings {
-  id            String   @id @default("default")
-  title         String   @default("TripTrek: China")
-  startDate     DateTime
-  endDate       DateTime?
-  totalDays     Int      @default(12)
-  totalBudget   Float    @default(1100)
-  currency      String   @default("USD")
-  currentUserId String?  // выбранный сейчас участник
+// === Сообщение на доске ===
+model BoardMessage {
+  id            String   @id @default(cuid())
+  tripId        String
+  content       String
+  userId        String?  // был participantId
+  pinned        Boolean  @default(false)
+  createdAt     DateTime @default(now())
+
+  trip          Trip     @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  user          User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
 }
 
-// Пункт чек-листа (предпоездный)
+// === Чек-лист ===
 model ChecklistItem {
   id        String   @id @default(cuid())
+  tripId    String
   text      String
-  category  String   @default("preparation") // preparation, documents, health, packing
+  category  String   @default("preparation")
   done      Boolean  @default(false)
   order     Int      @default(0)
   createdAt DateTime @default(now())
+
+  trip      Trip     @relation(fields: [tripId], references: [id], onDelete: Cascade)
 }
 
-// Полезный совет/контакт
+// === Справка ===
 model InfoItem {
   id        String   @id @default(cuid())
-  type      String   // tip, contact, transport, food
+  tripId    String
+  type      String
   title     String
   content   String
-  icon      String?  // эмодзи
+  icon      String?
   order     Int      @default(0)
   createdAt DateTime @default(now())
+
+  trip      Trip     @relation(fields: [tripId], references: [id], onDelete: Cascade)
 }
 
-// Фраза разговорника
+// === Фраза разговорника ===
 model Phrase {
-  id         String  @id @default(cuid())
-  category   String  // basics, food, transport, shopping, emergency, social
-  ru         String  // русский перевод
-  cn         String  // китайский (иероглифы)
-  pinyin     String  // пиньинь (транскрипция)
-  audio      String? // опционально аудио URL
-  favorite   Boolean @default(false)
-  order      Int     @default(0)
+  id         String   @id @default(cuid())
+  tripId     String
+  category   String
+  ru         String
+  cn         String
+  pinyin     String
+  audio      String?
+  favorite   Boolean  @default(false)
+  order      Int      @default(0)
   createdAt  DateTime @default(now())
+
+  trip       Trip     @relation(fields: [tripId], references: [id], onDelete: Cascade)
 }
 
-// Блюдо гастрономического гида
+// === Блюдо ===
 model FoodItem {
   id          String   @id @default(cuid())
-  name        String   // название блюда
-  nameCn      String?  // китайское название
+  tripId      String
+  name        String
+  nameCn      String?
   description String
-  city        String   // где попробовать (cityKey)
-  place       String?  // конкретное место/ресторан
-  price       String?  // цена
-  emoji       String?  // эмодзи блюда
-  imageUrl    String?  // фото блюда
+  city        String
+  place       String?
+  price       String?
+  emoji       String?
+  imageUrl    String?
   tried       Boolean  @default(false)
-  rating      Int?     // оценка 1-5
+  rating      Int?
   order       Int      @default(0)
   createdAt   DateTime @default(now())
+
+  trip        Trip     @relation(fields: [tripId], references: [id], onDelete: Cascade)
 }
 
-// Сообщение на доске (чат между друзьями)
-model BoardMessage {
-  id            String   @id @default(cuid())
-  content       String
-  participantId String?
-  participant   Participant? @relation(fields: [participantId], references: [id], onDelete: SetNull)
-  pinned        Boolean  @default(false)
-  createdAt     DateTime @default(now())
-}
-
-// Плановый бюджет по категории
+// === Плановый бюджет по категории ===
 model BudgetPlan {
-  id        String  @id @default(cuid())
-  category  String  @unique // accommodation, food, transport, attractions, casino, shopping, other
-  amount    Float   // плановая сумма
+  id        String   @id @default(cuid())
+  tripId    String
+  category  String
+  amount    Float
+
+  trip      Trip     @relation(fields: [tripId], references: [id], onDelete: Cascade)
+
+  @@unique([tripId, category])
 }

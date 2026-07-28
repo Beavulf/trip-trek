@@ -89,6 +89,17 @@ export interface TripSummary {
     totalBudget: number;
     currency: string;
     currentUserId: string | null;
+    inviteCode?: string;
+    tripId?: string;
+  };
+  trip?: {
+    id: string;
+    title: string;
+    destination: string;
+    inviteCode: string;
+    coverColor: string;
+    coverEmoji: string;
+    status: string;
   };
   participants: Participant[];
   currentDayNumber: number;

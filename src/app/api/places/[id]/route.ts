@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { emitWS } from "@/lib/ws-emit";
 
 // PATCH /api/places/[id] — обновить место (статус, заметки, рейтинг, адрес, имя, категория, бюджет)
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -14,12 +15,19 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     data.visitedAt = new Date();
   }
   const place = await db.place.update({ where: { id }, data });
+
+  // WS: уведомить участников поездки
+  const tripId = (place as { tripId?: string }).tripId;
+  if (tripId) emitWS("place:updated", tripId, { placeId: id, placeName: place.name, userName: body.userName || "Кто-то" });
+
   return NextResponse.json(place);
 }
 
 // DELETE /api/places/[id]
 export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  await db.place.delete({ where: { id } });
+  const place = await db.place.delete({ where: { id } });
+  const tripId = (place as { tripId?: string }).tripId;
+  if (tripId) emitWS("place:deleted", tripId, { placeId: id });
   return NextResponse.json({ ok: true });
 }

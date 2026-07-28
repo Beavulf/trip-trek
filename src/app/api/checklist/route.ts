@@ -1,23 +1,26 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 
-// GET /api/checklist
-export async function GET() {
-  const items = await db.checklistItem.findMany({ orderBy: [{ category: "asc" }, { order: "asc" }] });
+// GET /api/checklist?tripId=...
+export async function GET(req: NextRequest) {
+  const { searchParams } = new URL(req.url);
+  const tripId = searchParams.get("tripId");
+  const items = await db.checklistItem.findMany({
+    where: tripId ? { tripId } : undefined,
+    orderBy: [{ category: "asc" }, { order: "asc" }],
+  });
   return NextResponse.json(items);
 }
 
-// POST — добавить пункт
 export async function POST(req: NextRequest) {
   const body = await req.json();
-  const { text, category } = body;
-  if (!text) return NextResponse.json({ error: "text required" }, { status: 400 });
-  const order = await db.checklistItem.count({ where: { category: category || "preparation" } });
-  const item = await db.checklistItem.create({ data: { text, category: category || "preparation", order } });
+  const { text, category, tripId } = body;
+  if (!text || !tripId) return NextResponse.json({ error: "text, tripId required" }, { status: 400 });
+  const order = await db.checklistItem.count({ where: { tripId, category: category || "preparation" } });
+  const item = await db.checklistItem.create({ data: { text, category: category || "preparation", tripId, order } });
   return NextResponse.json(item);
 }
 
-// PATCH — отметить/снять или редактировать текст
 export async function PATCH(req: NextRequest) {
   const body = await req.json();
   const { id, done, text, category } = body;
@@ -29,7 +32,6 @@ export async function PATCH(req: NextRequest) {
   return NextResponse.json(item);
 }
 
-// DELETE
 export async function DELETE(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const id = searchParams.get("id");

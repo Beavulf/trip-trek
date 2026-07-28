@@ -26,6 +26,9 @@ interface TripState {
   setCurrentUserId: (id: string | null) => void;
   selectedDay: number | null;
   setSelectedDay: (d: number | null) => void;
+  // Мульти-поездки
+  currentTripId: string;
+  setCurrentTripId: (id: string) => void;
   // фильтр карты
   mapCityFilter: string | null;
   setMapCityFilter: (c: string | null) => void;
@@ -44,6 +47,8 @@ export const useTripStore = create<TripState>()(
       setCurrentUserId: (id) => set({ currentUserId: id }),
       selectedDay: null,
       setSelectedDay: (d) => set({ selectedDay: d }),
+      currentTripId: "default-trip",
+      setCurrentTripId: (id) => set({ currentTripId: id }),
       mapCityFilter: null,
       setMapCityFilter: (c) => set({ mapCityFilter: c }),
       mapOnlyUnvisited: false,
