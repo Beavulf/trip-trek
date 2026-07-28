@@ -123,13 +123,12 @@ function PhotoForm({ onDone }: { onDone: () => void }) {
   const [geoCoords, setGeoCoords] = useState<{ lat: number; lng: number } | null>(null);
   const [geoAddress, setGeoAddress] = useState<string | null>(null);
 
-  const requestGeo = (): Promise<{ lat: number; lng: number } | null> => {
+  const requestGeo = async (): Promise<{ lat: number; lng: number } | null> => {
+    if (typeof navigator === "undefined" || !navigator.geolocation) {
+      return null;
+    }
+    setGeoStatus("requesting");
     return new Promise((resolve) => {
-      if (typeof navigator === "undefined" || !navigator.geolocation) {
-        resolve(null);
-        return;
-      }
-      setGeoStatus("requesting");
       navigator.geolocation.getCurrentPosition(
         (pos) => {
           const coords = { lat: pos.coords.latitude, lng: pos.coords.longitude };
