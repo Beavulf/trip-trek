@@ -12,13 +12,15 @@ datasource db {
 
 // === Пользователь (глобальный аккаунт) ===
 model User {
-  id        String   @id @default(cuid())
-  email     String   @unique
-  name      String
-  password  String   // bcrypt hash
-  emoji     String   @default("👤")
-  color     String   @default("#94a3b8")
-  createdAt DateTime @default(now())
+  id         String   @id @default(cuid())
+  email      String   @unique
+  name       String
+  password   String   // bcrypt hash
+  emoji      String   @default("👤")
+  color      String   @default("#94a3b8")
+  plan       String   @default("free") // free / premium
+  planExpiry DateTime? // для премиума
+  createdAt  DateTime @default(now())
 
   memberships TripMember[]
   photos      Photo[]

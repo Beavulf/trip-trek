@@ -2,18 +2,20 @@
 
 import { useState, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Plane, Plus, ChevronRight, X, Loader2, Globe, Users, Calendar, ArrowRight } from "lucide-react";
+import { Plane, Plus, ChevronRight, X, Loader2, Globe, Users, Calendar, ArrowRight, Crown } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useSession } from "next-auth/react";
 import { toast } from "sonner";
 import { setTripId, getTripId } from "@/hooks/use-trip";
 import { useRouter } from "next/navigation";
+import { PremiumModal } from "./premium-modal";
 import { createPortal } from "react-dom";
 import { cn } from "@/lib/utils";
 
 export function TripSwitcher() {
   const [open, setOpen] = useState(false);
   const [showCreate, setShowCreate] = useState(false);
+  const [premiumOpen, setPremiumOpen] = useState(false);
   const { data: session } = useSession();
   const router = useRouter();
   const qc = useQueryClient();
@@ -33,16 +35,27 @@ export function TripSwitcher() {
   const currentTripId = typeof window !== "undefined" ? getTripId() : "default-trip";
   const currentTrip = trips?.find((t) => t.id === currentTripId) || trips?.[0];
 
-  // Создать поездку
+  // Создать поездку — через /api/limits с проверкой
   const createTrip = useMutation({
     mutationFn: async (data: { title: string; destination: string; startDate: string; totalDays: number; totalBudget: number; userId: string; displayName: string; emoji: string; color: string }) => {
-      const r = await fetch("/api/trips", {
+      const r = await fetch("/api/limits", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(data),
       });
+      if (r.status === 403) {
+        const err = await r.json();
+        throw new Error(err.upgrade ? "LIMIT_REACHED" : "create failed");
+      }
       if (!r.ok) throw new Error("create failed");
       return r.json();
+    },
+    onError: (error) => {
+      if (error.message === "LIMIT_REACHED") {
+        setPremiumOpen(true);
+      } else {
+        toast.error("Не удалось создать поездку");
+      }
     },
     onSuccess: (data) => {
       setTripId(data.id);
@@ -208,6 +221,15 @@ export function TripSwitcher() {
                       <span className="text-sm font-medium">Присоединиться по коду</span>
                       <ArrowRight className="size-4" />
                     </button>
+
+                    {/* Premium кнопка */}
+                    <button
+                      onClick={() => setPremiumOpen(true)}
+                      className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl bg-gradient-to-r from-amber-500 to-orange-500 text-white font-medium mt-2"
+                    >
+                      <Crown className="size-4" />
+                      <span className="text-sm">Premium</span>
+                    </button>
                   </>
                 )}
               </div>
@@ -216,6 +238,8 @@ export function TripSwitcher() {
         </AnimatePresence>,
         document.body
       )}
+
+      <PremiumModal open={premiumOpen} onOpenChange={setPremiumOpen} />
     </>
   );
 }

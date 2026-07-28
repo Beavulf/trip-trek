@@ -1030,3 +1030,34 @@ Stage Summary:
 - Скачать PNG / Поделиться (navigator.share) / Копировать ссылку
 - Кнопка в header (📱)
 - Мобильная адаптация проверена
+
+---
+Task ID: phase6-freemium
+Agent: main (Z.ai Code)
+Task: Фаза 6 — Freemium модель
+
+Work Log:
+- Schema: User — добавлены поля plan (free/premium) и planExpiry
+- API /api/limits:
+  - GET ?userId=... — проверить лимиты (plan, maxTrips, maxMembers, usage)
+  - POST — создать поездку (с проверкой лимита)
+    - Free: 1 поездка, 5 участников
+    - Premium: безлимит
+    - 403 + { upgrade: true } если лимит исчерпан
+  - PATCH — проверить лимит участников при приглашении
+- TripSwitcher:
+  - Создание через /api/limits (с проверкой)
+  - onError: если LIMIT_REACHED → открывает PremiumModal
+  - Кнопка "Premium" в списке (градиент amber→orange)
+- PremiumModal:
+  - Сравнение Free vs Premium (4 фичи)
+  - 2 тарифа: $5/поездка, $30/год ($2.5/мес)
+  - Кнопки работают (демо-режим, toast "Premium активирован")
+  - Мобильная адаптация: sheet снизу, handle bar
+- Проверка: lint чист, кнопка Premium видна, модалка открывается
+
+Stage Summary:
+- Freemium: Free (1 поездка, 5 участников) vs Premium ($5/$30)
+- API проверяет лимиты при создании поездки и приглашении
+- PremiumModal с тарифами и сравнением
+- Демо-режим (в проде — Stripe)
