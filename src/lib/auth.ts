@@ -58,7 +58,10 @@ export const authOptions: NextAuthOptions = {
           id: user.id,
           name: user.name,
           email: user.email,
-        };
+          emoji: user.emoji,
+          color: user.color,
+          plan: user.plan,
+        } as { id: string; name: string; email: string; emoji?: string; color?: string; plan?: string };
       },
     }),
   ],
@@ -70,12 +73,18 @@ export const authOptions: NextAuthOptions = {
     async jwt({ token, user }) {
       if (user) {
         token.id = user.id;
+        token.emoji = (user as { emoji?: string }).emoji;
+        token.color = (user as { color?: string }).color;
+        token.plan = (user as { plan?: string }).plan;
       }
       return token;
     },
     async session({ session, token }) {
       if (session.user) {
         (session.user as { id?: string }).id = token.id as string;
+        (session.user as { emoji?: string }).emoji = token.emoji as string;
+        (session.user as { color?: string }).color = token.color as string;
+        (session.user as { plan?: string }).plan = token.plan as string;
       }
       return session;
     },

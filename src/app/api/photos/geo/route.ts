@@ -12,7 +12,7 @@ export async function GET() {
     },
     orderBy: { takenAt: "desc" },
     include: {
-      participant: true,
+      user: true,
       day: { select: { dayNumber: true, city: true, cityKey: true } },
     },
   });

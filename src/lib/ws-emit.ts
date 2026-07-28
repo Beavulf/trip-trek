@@ -6,6 +6,7 @@ const WS_INTERNAL_URL = process.env.WS_INTERNAL_URL || "http://localhost:3000";
 type WSEvent =
   | "place:visited"
   | "place:created"
+  | "place:updated"
   | "place:deleted"
   | "photo:added"
   | "expense:added"
@@ -22,12 +23,12 @@ type WSEvent =
   | "budget:updated"
   | "trip:updated";
 
-export async function emitWS(event: WSEvent, data: Record<string, unknown>) {
+export async function emitWS(event: WSEvent, tripId: string, data?: Record<string, unknown>) {
   try {
     await fetch(`${WS_INTERNAL_URL}/emit`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ event, ...data }),
+      body: JSON.stringify({ event, tripId, ...data }),
     });
   } catch {
     // WS сервер может быть недоступен — silent fail

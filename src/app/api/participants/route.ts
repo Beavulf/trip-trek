@@ -1,16 +1,23 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 
-// GET /api/participants
-export async function GET() {
-  const participants = await db.participant.findMany({ orderBy: { createdAt: "asc" } });
-  return NextResponse.json(participants);
+// GET /api/participants?tripId=...
+export async function GET(req: NextRequest) {
+  const { searchParams } = new URL(req.url);
+  const tripId = searchParams.get("tripId") || "default-trip";
+
+  const members = await db.tripMember.findMany({
+    where: { tripId },
+    orderBy: { joinedAt: "asc" },
+  });
+  return NextResponse.json(members);
 }
 
-// PATCH /api/participants — установить текущего пользователя
+// PATCH /api/participants — установить текущего пользователя.
+// В новой multi-trip архитектуре текущий пользователь определяется сессией/auth,
+// поэтому эндпоинт больше не пишет в БД, но сохраняет контракт с фронтендом.
 export async function PATCH(req: NextRequest) {
   const body = await req.json();
   const { currentUserId } = body;
-  await db.tripSettings.update({ where: { id: "default" }, data: { currentUserId } });
   return NextResponse.json({ ok: true, currentUserId });
 }

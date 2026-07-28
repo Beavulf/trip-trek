@@ -81,9 +81,9 @@ export function QuickAddSheet({ open, onOpenChange }: { open: boolean; onOpenCha
         </div>
 
         <div className="mt-4">
-          {mode === "photo" && <PhotoForm onDone={() => onOpenChange(false)} />}
-          {mode === "expense" && <ExpenseForm onDone={() => onOpenChange(false)} />}
-          {mode === "journal" && <JournalForm onDone={() => onOpenChange(false)} />}
+          {mode === "photo" && <PhotoForm userId={userId} onDone={() => onOpenChange(false)} />}
+          {mode === "expense" && <ExpenseForm userId={userId} onDone={() => onOpenChange(false)} />}
+          {mode === "journal" && <JournalForm userId={userId} onDone={() => onOpenChange(false)} />}
         </div>
       </SheetContent>
     </Sheet>
@@ -113,7 +113,7 @@ function DayPicker({ value, onChange }: { value: string; onChange: (id: string) 
   );
 }
 
-function PhotoForm({ onDone }: { onDone: () => void }) {
+function PhotoForm({ userId, onDone }: { userId: string; onDone: () => void }) {
   const { data: trip } = useTrip();
   const upload = useUploadPhoto();
   const cameraRef = useRef<HTMLInputElement>(null);
@@ -330,7 +330,7 @@ function PhotoForm({ onDone }: { onDone: () => void }) {
   );
 }
 
-function ExpenseForm({ onDone }: { onDone: () => void }) {
+function ExpenseForm({ userId, onDone }: { userId: string; onDone: () => void }) {
   const { data: trip } = useTrip();
   const addExpense = useAddExpense();
   const [amount, setAmount] = useState("");
@@ -409,7 +409,7 @@ function ExpenseForm({ onDone }: { onDone: () => void }) {
   );
 }
 
-function JournalForm({ onDone }: { onDone: () => void }) {
+function JournalForm({ userId, onDone }: { userId: string; onDone: () => void }) {
   const { data: trip } = useTrip();
   const addJournal = useAddJournal();
   const [content, setContent] = useState("");

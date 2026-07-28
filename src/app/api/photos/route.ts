@@ -34,6 +34,18 @@ export async function POST(req: NextRequest) {
   const file = formData.get("file") as File | null;
   const dayId = formData.get("dayId") as string;
   const tripId = formData.get("tripId") as string;
+
+  // Validate file type
+  if (file) {
+    const allowedTypes = ["image/jpeg", "image/png", "image/webp", "image/gif", "image/heic", "image/heif"];
+    if (file.type && !allowedTypes.includes(file.type)) {
+      return NextResponse.json({ error: "Invalid file type" }, { status: 400 });
+    }
+    // Max 20MB
+    if (file.size > 20 * 1024 * 1024) {
+      return NextResponse.json({ error: "File too large (max 20MB)" }, { status: 400 });
+    }
+  }
   const placeId = (formData.get("placeId") as string) || null;
   const userId = (formData.get("userId") as string) || null;
   const caption = (formData.get("caption") as string) || null;

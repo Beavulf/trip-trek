@@ -56,7 +56,7 @@ export function Timeline() {
         timestamp: p.takenAt,
         title: p.caption || "Фото",
         subtitle: p.address?.slice(0, 60),
-        meta: p.participant?.name,
+        meta: p.user?.name,
         icon: Camera,
         color: "#06b6d4",
         emoji: "📸",

@@ -38,7 +38,10 @@ export default function Home() {
   // Проверка сессии через API
   useEffect(() => {
     fetch("/api/auth/session")
-      .then((r) => r.json())
+      .then((r) => {
+        if (!r.ok) throw new Error("session fetch failed");
+        return r.json();
+      })
       .then((data) => {
         if (data?.user) {
           setAuthenticated(true);
@@ -48,7 +51,9 @@ export default function Home() {
         setAuthChecked(true);
       })
       .catch(() => {
-        router.push("/login");
+        // На ошибке сети НЕ редиректим — возможно временный сбой
+        // Показываем приложение, next-auth сам покажет логин при необходимости
+        setAuthenticated(true);
         setAuthChecked(true);
       });
   }, [router]);

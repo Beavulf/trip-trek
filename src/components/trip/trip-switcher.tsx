@@ -16,7 +16,7 @@ export function TripSwitcher() {
   const [open, setOpen] = useState(false);
   const [showCreate, setShowCreate] = useState(false);
   const [premiumOpen, setPremiumOpen] = useState(false);
-  const { data: session } = useSession();
+  const { data: session, status } = useSession();
   const router = useRouter();
   const qc = useQueryClient();
 
@@ -65,8 +65,8 @@ export function TripSwitcher() {
       toast.success("Поездка создана! 🎉");
       setOpen(false);
       setShowCreate(false);
-      router.push("/");
-      router.refresh();
+      // Не используем router.refresh() — может вызвать перерендер и auth check
+      // Query invalidation уже обновит данные
     },
   });
 
@@ -86,7 +86,6 @@ export function TripSwitcher() {
     qc.invalidateQueries({ queryKey: ["foods"] });
     qc.invalidateQueries({ queryKey: ["budget-plan"] });
     toast.success("Поездка переключена 🌏");
-    router.refresh();
   };
 
   // В dev режиме показываем switcher даже без сессии
@@ -142,7 +141,7 @@ export function TripSwitcher() {
                 {showCreate ? (
                   <CreateTripForm
                     userId={userId}
-                    userName={session?.user?.name || "Я"}
+                    userName={session?.user?.name || "Я" as string}
                     onSubmit={(data) => createTrip.mutate(data)}
                     onCancel={() => setShowCreate(false)}
                     loading={createTrip.isPending}

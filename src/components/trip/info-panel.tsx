@@ -344,7 +344,7 @@ function InfoCard({ item, color, defaultIcon }: { item: InfoItem; color: string;
 
   if (editing) {
     const save = () => {
-      update.mutate({ id: item.id, title: title.trim(), content: content.trim(), icon: icon.trim() || null });
+      update.mutate({ id: item.id, title: title.trim(), content: content.trim(), icon: icon.trim() || undefined });
       toast.success("Обновлено");
       setEditing(false);
     };

@@ -26,11 +26,11 @@ export async function POST(req: NextRequest) {
     });
 
     // Если есть tripId или inviteCode — добавляем в поездку
-    let trip = null;
+    let trip: { id: string } | null = null;
     if (tripId) {
-      trip = await db.trip.findUnique({ where: { id: tripId } });
+      trip = await db.trip.findUnique({ where: { id: tripId }, select: { id: true } });
     } else if (inviteCode) {
-      trip = await db.trip.findUnique({ where: { inviteCode } });
+      trip = await db.trip.findUnique({ where: { inviteCode }, select: { id: true } });
     }
 
     if (trip) {

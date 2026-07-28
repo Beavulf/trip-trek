@@ -279,7 +279,7 @@ export default function TripMap() {
                       </div>
                     )}
                     <div className="text-[10px] text-muted-foreground mt-0.5">
-                      {photo.participant?.emoji} {photo.participant?.name} · День {photo.day?.dayNumber}
+                      {photo.user?.emoji} {photo.user?.name} · День {photo.day?.dayNumber}
                     </div>
                     <button
                       onClick={() => setFullscreenPhoto(photo)}
@@ -367,7 +367,7 @@ export default function TripMap() {
               </div>
             )}
             <div className="text-white/50 text-xs mt-1">
-              {fullscreenPhoto.participant?.emoji} {fullscreenPhoto.participant?.name} · День {fullscreenPhoto.day?.dayNumber}
+              {fullscreenPhoto.user?.emoji} {fullscreenPhoto.user?.name} · День {fullscreenPhoto.day?.dayNumber}
             </div>
           </div>
         </div>,

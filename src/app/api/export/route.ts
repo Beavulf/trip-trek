@@ -1,42 +1,41 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 
-// GET /api/export — экспорт всех данных поездки в JSON
-export async function GET() {
-  const [settings, participants, days, places, photos, expenses, journals, checklist, info, phrases, foods] = await Promise.all([
-    db.tripSettings.findUnique({ where: { id: "default" } }),
-    db.participant.findMany(),
-    db.day.findMany({ orderBy: { dayNumber: "asc" } }),
-    db.place.findMany(),
-    db.photo.findMany(),
-    db.expense.findMany(),
-    db.journalEntry.findMany(),
-    db.checklistItem.findMany(),
-    db.infoItem.findMany(),
-    db.phrase.findMany(),
-    db.foodItem.findMany(),
+// GET /api/export?tripId=... — экспорт данных поездки в JSON
+export async function GET(req: NextRequest) {
+  const { searchParams } = new URL(req.url);
+  const tripId = searchParams.get("tripId");
+  if (!tripId) return NextResponse.json({ error: "tripId required" }, { status: 400 });
+
+  const [trip, days, places, photos, expenses, journals, messages, checklist, info, phrases, foods, budgetPlans] = await Promise.all([
+    db.trip.findUnique({ where: { id: tripId } }),
+    db.day.findMany({ where: { tripId }, orderBy: { dayNumber: "asc" } }),
+    db.place.findMany({ where: { tripId }, orderBy: { order: "asc" } }),
+    db.photo.findMany({ where: { tripId } }),
+    db.expense.findMany({ where: { tripId } }),
+    db.journalEntry.findMany({ where: { tripId } }),
+    db.boardMessage.findMany({ where: { tripId } }),
+    db.checklistItem.findMany({ where: { tripId } }),
+    db.infoItem.findMany({ where: { tripId } }),
+    db.phrase.findMany({ where: { tripId } }),
+    db.foodItem.findMany({ where: { tripId } }),
+    db.budgetPlan.findMany({ where: { tripId } }),
   ]);
 
-  const data = {
-    version: 1,
-    exportedAt: new Date().toISOString(),
-    app: "TripTrek China",
-    settings,
-    participants,
+  return NextResponse.json({
+    trip,
     days,
     places,
-    photos: photos.map((p) => ({ ...p, url: p.url })), // URL остаётся, файлы в /uploads
+    photos,
     expenses,
     journals,
+    messages,
     checklist,
     info,
     phrases,
     foods,
-  };
-
-  return NextResponse.json(data, {
-    headers: {
-      "Content-Disposition": `attachment; filename="triptrek-china-${new Date().toISOString().slice(0, 10)}.json"`,
-    },
+    budgetPlans,
+    exportedAt: new Date().toISOString(),
+    version: "2.0",
   });
 }

@@ -36,7 +36,7 @@ export default function JoinPage({ params }: { params: Promise<{ code: string }>
   }, [code]);
 
   const join = async () => {
-    if (!session?.user?.id) {
+    if (!(session?.user as { id?: string } | undefined)?.id) {
       toast.error("Войдите чтобы присоединиться");
       router.push("/login");
       return;
@@ -48,8 +48,8 @@ export default function JoinPage({ params }: { params: Promise<{ code: string }>
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          userId: (session.user as { id: string }).id,
-          displayName: session.user.name || "Я",
+          userId: (session!.user as { id: string }).id,
+          displayName: session!.user?.name || "Я",
           emoji: "👤",
           color: "#94a3b8",
         }),

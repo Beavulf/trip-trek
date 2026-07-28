@@ -166,7 +166,8 @@ export function useWebSocket(tripId: string) {
             icon: "/icon-192.png",
             badge: "/icon-192.png",
             tag: data.type,
-            vibrate: [100, 50, 100],
+            // @ts-expect-error - vibration works on supported devices
+      vibrate: [100, 50, 100],
           });
         }).catch(() => {});
       }

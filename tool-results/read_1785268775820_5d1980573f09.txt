@@ -1,0 +1,750 @@
+     1→"use client";
+     2→
+     3→import { useTrip, useWeather, useUpdateTripDates } from "@/hooks/use-trip";
+     4→import { useTripStore } from "@/lib/trip-store";
+     5→import { motion } from "framer-motion";
+     6→import {
+     7→  MapPin,
+     8→  Camera,
+     9→  BookOpen,
+    10→  Wallet,
+    11→  TrendingDown,
+    12→  Sun,
+    13→  Wind,
+    14→  Droplets,
+    15→  ChevronRight,
+    16→  CheckCircle2,
+    17→  Circle,
+    18→  CalendarDays,
+    19→  Plane,
+    20→  Clock,
+    21→  Route,
+    22→  Settings2,
+    23→} from "lucide-react";
+    24→import { CITIES, CATEGORY_META, type TripSummary } from "@/lib/types";
+    25→import { cn } from "@/lib/utils";
+    26→import { useState } from "react";
+    27→import { toast } from "sonner";
+    28→
+    29→const CITY_EMOJI: Record<string, string> = {
+    30→  guangzhou: "🏯",
+    31→  shenzhen: "🏙️",
+    32→  hongkong: "🌃",
+    33→  macau: "🎰",
+    34→};
+    35→
+    36→export function Dashboard() {
+    37→  const { data: trip, isLoading } = useTrip();
+    38→  const { setActiveTab, setSelectedDay } = useTripStore();
+    39→
+    40→  if (isLoading || !trip) {
+    41→    return <DashboardSkeleton />;
+    42→  }
+    43→
+    44→  const currentDay = trip.days.find((d) => d.dayNumber === trip.currentDayNumber);
+    45→  const currentCityKey = currentDay?.cityKey ?? "guangzhou";
+    46→  const cityEmoji = CITY_EMOJI[currentCityKey] ?? "🏯";
+    47→
+    48→  // Обратный отсчёт / прогресс по времени
+    49→  const now = new Date();
+    50→  const start = new Date(trip.settings.startDate);
+    51→  start.setHours(0, 0, 0, 0);
+    52→  const end = trip.settings.endDate
+    53→    ? new Date(trip.settings.endDate)
+    54→    : new Date(start);
+    55→  if (!trip.settings.endDate) {
+    56→    end.setDate(end.getDate() + trip.settings.totalDays - 1);
+    57→  }
+    58→  end.setHours(23, 59, 59, 999);
+    59→
+    60→  const isBefore = now < start;
+    61→  const isAfter = now > end;
+    62→  const daysRemaining = isBefore
+    63→    ? Math.ceil((start.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
+    64→    : isAfter
+    65→    ? 0
+    66→    : Math.ceil((end.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+    67→
+    68→  return (
+    69→    <div className="space-y-4 animate-fade-up">
+    70→      {/* Hero — текущий день */}
+    71→      <motion.div
+    72→        initial={{ opacity: 0, y: 8 }}
+    73→        animate={{ opacity: 1, y: 0 }}
+    74→        className="relative overflow-hidden rounded-3xl p-5 sm:p-6 text-white shadow-xl"
+    75→        style={{
+    76→          background: `linear-gradient(135deg, ${currentDay?.accentColor ?? "#f97316"} 0%, #1c1917 100%)`,
+    77→        }}
+    78→      >
+    79→        {/* Плавающие декоративные круги */}
+    80→        <motion.div
+    81→          animate={{ y: [0, -12, 0], rotate: [0, 8, 0] }}
+    82→          transition={{ duration: 6, repeat: Infinity, ease: "easeInOut" }}
+    83→          className="absolute -top-8 -right-6 text-[140px] opacity-10 select-none leading-none"
+    84→        >
+    85→          {cityEmoji}
+    86→        </motion.div>
+    87→        <div
+    88→          className="absolute -bottom-12 -left-8 size-40 rounded-full opacity-10 blur-2xl"
+    89→          style={{ background: "white" }}
+    90→        />
+    91→        <div className="relative">
+    92→          <div className="flex items-center gap-2 text-white/80 text-xs font-medium mb-1">
+    93→            <CalendarDays className="size-3.5" />
+    94→            День {trip.currentDayNumber} из {trip.settings.totalDays}
+    95→          </div>
+    96→          <h1 className="text-2xl sm:text-3xl font-bold leading-tight">{currentDay?.title}</h1>
+    97→          <p className="text-white/80 text-sm mt-1">
+    98→            {currentDay?.city} · {currentDay?.summary}
+    99→          </p>
+   100→
+   101→          {/* прогресс */}
+   102→          <div className="mt-4 space-y-2">
+   103→            <ProgressRow label="Прогресс поездки" value={trip.dayProgress} icon={<CalendarDays className="size-3.5" />} />
+   104→            <ProgressRow label="Мест посещено" value={trip.placeProgress} icon={<MapPin className="size-3.5" />}
+   105→              right={`${trip.visitedPlaces}/${trip.totalPlaces}`} />
+   106→          </div>
+   107→        </div>
+   108→      </motion.div>
+   109→
+   110→      {/* Сетка виджетов */}
+   111→      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+   112→        {/* Обратный отсчёт / статус поездки */}
+   113→        <CountdownCard
+   114→          isBefore={isBefore}
+   115→          isAfter={isAfter}
+   116→          daysRemaining={daysRemaining}
+   117→          currentDay={trip.currentDayNumber}
+   118→          totalDays={trip.settings.totalDays}
+   119→          startDate={trip.settings.startDate}
+   120→          endDate={trip.settings.endDate}
+   121→        />
+   122→
+   123→        {/* Бюджет */}
+   124→        <button
+   125→          onClick={() => setActiveTab("budget")}
+   126→          className="col-span-2 lg:col-span-1 rounded-2xl bg-card border border-border p-4 text-left hover:shadow-lg transition-shadow group"
+   127→        >
+   128→          <div className="flex items-center justify-between mb-2">
+   129→            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+   130→              <Wallet className="size-4" /> Бюджет
+   131→            </div>
+   132→            <TrendingDown className="size-4 text-muted-foreground group-hover:translate-x-1 transition-transform" />
+   133→          </div>
+   134→          <div className="flex items-end gap-2">
+   135→            <span className="text-2xl font-bold">${trip.totalSpent.toFixed(0)}</span>
+   136→            <span className="text-sm text-muted-foreground mb-1">/ ${trip.settings.totalBudget}</span>
+   137→          </div>
+   138→          <div className="mt-2 h-2 rounded-full bg-muted overflow-hidden">
+   139→            <div
+   140→              className="h-full rounded-full bg-gradient-to-r from-orange-500 to-rose-500"
+   141→              style={{ width: `${Math.min(100, (trip.totalSpent / trip.settings.totalBudget) * 100)}%` }}
+   142→            />
+   143→          </div>
+   144→          <div className="text-xs text-muted-foreground mt-1.5">
+   145→            Остаток: ${trip.remainingBudget.toFixed(0)}
+   146→          </div>
+   147→        </button>
+   148→
+   149→        {/* Погода */}
+   150→        <WeatherWidget cityKey={currentCityKey} />
+   151→
+   152→        {/* Фото */}
+   153→        <StatCard
+   154→          icon={<Camera className="size-5" />}
+   155→          value={trip.totalPhotos}
+   156→          label="Фото"
+   157→          color="#06b6d4"
+   158→          onClick={() => setActiveTab("gallery")}
+   159→        />
+   160→
+   161→        {/* Места */}
+   162→        <StatCard
+   163→          icon={<MapPin className="size-5" />}
+   164→          value={trip.visitedPlaces}
+   165→          label={`из ${trip.totalPlaces} мест`}
+   166→          color="#f97316"
+   167→          onClick={() => setActiveTab("itinerary")}
+   168→        />
+   169→
+   170→        {/* Дневник */}
+   171→        <StatCard
+   172→          icon={<BookOpen className="size-5" />}
+   173→          value={trip.totalJournals}
+   174→          label="Записей"
+   175→          color="#8b5cf6"
+   176→          onClick={() => setActiveTab("journal")}
+   177→        />
+   178→      </div>
+   179→
+   180→      {/* Следующее место */}
+   181→      <NextPlaceWidget trip={trip} onGoToItinerary={() => { setSelectedDay(null); setActiveTab("itinerary"); }} />
+   182→
+   183→      {/* Совет дня */}
+   184→      <DailyTip trip={trip} />
+   185→
+   186→      {/* Дни — горизонтальный скролл + список */}
+   187→      <div className="rounded-2xl bg-card border border-border p-4">
+   188→        <div className="flex items-center justify-between mb-3">
+   189→          <h2 className="font-semibold flex items-center gap-2">
+   190→            <CalendarDays className="size-4" /> Маршрут по дням
+   191→          </h2>
+   192→          <button
+   193→            onClick={() => setActiveTab("itinerary")}
+   194→            className="text-xs text-primary flex items-center gap-1 hover:underline"
+   195→          >
+   196→            Все дни <ChevronRight className="size-3" />
+   197→          </button>
+   198→        </div>
+   199→
+   200→        <div className="flex gap-2 overflow-x-auto no-scrollbar pb-1">
+   201→          {trip.days.map((d) => {
+   202→            const visited = d.places.filter((p) => p.status === "visited").length;
+   203→            const isCurrent = d.dayNumber === trip.currentDayNumber;
+   204→            const isPast = d.dayNumber < trip.currentDayNumber;
+   205→            return (
+   206→              <button
+   207→                key={d.id}
+   208→                onClick={() => {
+   209→                  setSelectedDay(d.dayNumber);
+   210→                  setActiveTab("itinerary");
+   211→                }}
+   212→                className={cn(
+   213→                  "min-w-[160px] rounded-xl border p-3 text-left transition-all hover:shadow-md",
+   214→                  isCurrent ? "border-primary ring-2 ring-primary/30 bg-primary/5" : "border-border hover:border-primary/40"
+   215→                )}
+   216→              >
+   217→                <div className="flex items-center gap-2 mb-1">
+   218→                  <div
+   219→                    className="size-7 rounded-lg grid place-items-center text-white text-xs font-bold"
+   220→                    style={{ background: d.accentColor ?? "#f97316" }}
+   221→                  >
+   222→                    {d.dayNumber}
+   223→                  </div>
+   224→                  <div className="min-w-0">
+   225→                    <div className="text-xs font-medium truncate">{d.city}</div>
+   226→                    <div className="text-[10px] text-muted-foreground">
+   227→                      {isCurrent ? "сегодня" : isPast ? "прошёл" : "впереди"}
+   228→                    </div>
+   229→                  </div>
+   230→                </div>
+   231→                <div className="text-xs font-medium line-clamp-2 leading-tight mb-2">{d.title}</div>
+   232→                <div className="flex items-center gap-1 text-[10px] text-muted-foreground">
+   233→                  <CheckCircle2 className="size-3" />
+   234→                  {visited}/{d.places.length} мест
+   235→                </div>
+   236→                <div className="mt-1.5 h-1 rounded-full bg-muted overflow-hidden">
+   237→                  <div
+   238→                    className="h-full rounded-full"
+   239→                    style={{
+   240→                      width: `${d.places.length ? (visited / d.places.length) * 100 : 0}%`,
+   241→                      background: d.accentColor ?? "#f97316",
+   242→                    }}
+   243→                  />
+   244→                </div>
+   245→              </button>
+   246→            );
+   247→          })}
+   248→        </div>
+   249→      </div>
+   250→
+   251→      {/* Места сегодняшнего дня */}
+   252→      {currentDay && (
+   253→        <div className="rounded-2xl bg-card border border-border p-4">
+   254→          <h2 className="font-semibold flex items-center gap-2 mb-3">
+   255→            <MapPin className="size-4" /> Сегодня в плане
+   256→          </h2>
+   257→          <div className="space-y-2">
+   258→            {currentDay.places.map((p) => {
+   259→              const meta = CATEGORY_META[p.category];
+   260→              return (
+   261→                <div
+   262→                  key={p.id}
+   263→                  className={cn(
+   264→                    "flex items-center gap-3 p-2 rounded-lg transition-colors",
+   265→                    p.status === "visited" ? "opacity-60" : "hover:bg-accent"
+   266→                  )}
+   267→                >
+   268→                  {p.status === "visited" ? (
+   269→                    <CheckCircle2 className="size-5 text-green-500 shrink-0" />
+   270→                  ) : (
+   271→                    <Circle className="size-5 text-muted-foreground shrink-0" />
+   272→                  )}
+   273→                  <span className="text-lg">{meta?.emoji}</span>
+   274→                  <div className="min-w-0 flex-1">
+   275→                    <div className={cn("text-sm font-medium truncate", p.status === "visited" && "line-through")}>
+   276→                      {p.name}
+   277→                    </div>
+   278→                    <div className="text-[11px] text-muted-foreground flex items-center gap-2">
+   279→                      <span>{timeLabel(p.timeOfDay)}</span>
+   280→                      {p.budget ? <span>· ${p.budget}</span> : null}
+   281→                    </div>
+   282→                  </div>
+   283→                </div>
+   284→              );
+   285→            })}
+   286→          </div>
+   287→        </div>
+   288→      )}
+   289→
+   290→      {/* Активность по дням — мини-график */}
+   291→      <ActivityChart trip={trip} />
+   292→    </div>
+   293→  );
+   294→}
+   295→
+   296→function ProgressRow({ label, value, icon, right }: { label: string; value: number; icon: React.ReactNode; right?: string }) {
+   297→  return (
+   298→    <div>
+   299→      <div className="flex items-center justify-between text-[11px] text-white/80 mb-0.5">
+   300→        <span className="flex items-center gap-1">{icon} {label}</span>
+   301→        {right && <span>{right}</span>}
+   302→      </div>
+   303→      <div className="h-1.5 rounded-full bg-white/20 overflow-hidden">
+   304→        <motion.div
+   305→          initial={{ width: 0 }}
+   306→          animate={{ width: `${value}%` }}
+   307→          transition={{ duration: 0.8, ease: "easeOut" }}
+   308→          className="h-full rounded-full bg-white"
+   309→        />
+   310→      </div>
+   311→    </div>
+   312→  );
+   313→}
+   314→
+   315→function StatCard({ icon, value, label, color, onClick }: { icon: React.ReactNode; value: number; label: string; color: string; onClick?: () => void }) {
+   316→  return (
+   317→    <motion.button
+   318→      onClick={onClick}
+   319→      whileTap={{ scale: 0.96 }}
+   320→      className="rounded-2xl bg-card border border-border p-4 text-left card-hover hover:border-primary/30 relative overflow-hidden"
+   321→    >
+   322→      {/* Декоративный blur */}
+   323→      <div
+   324→        className="absolute -top-4 -right-4 size-14 rounded-full opacity-10 blur-xl"
+   325→        style={{ background: color }}
+   326→      />
+   327→      <div className="relative">
+   328→        <div className="size-9 rounded-xl grid place-items-center mb-2" style={{ background: `${color}22`, color }}>
+   329→          {icon}
+   330→        </div>
+   331→        <div className="text-2xl font-bold leading-none tabular-nums">{value}</div>
+   332→        <div className="text-xs text-muted-foreground mt-1">{label}</div>
+   333→      </div>
+   334→    </motion.button>
+   335→  );
+   336→}
+   337→
+   338→function WeatherWidget({ cityKey }: { cityKey: string }) {
+   339→  const { data: weather, isLoading } = useWeather(cityKey);
+   340→  return (
+   341→    <div className="rounded-2xl bg-card border border-border p-4">
+   342→      <div className="flex items-center gap-2 text-sm text-muted-foreground mb-2">
+   343→        <Sun className="size-4" /> Погода
+   344→      </div>
+   345→      {isLoading || !weather ? (
+   346→        <div className="text-2xl">…</div>
+   347→      ) : (
+   348→        <div>
+   349→          <div className="flex items-center gap-2">
+   350→            <span className="text-3xl">{weather.emoji}</span>
+   351→            <div>
+   352→              <div className="text-2xl font-bold leading-none">{weather.temperature}°</div>
+   353→              <div className="text-[11px] text-muted-foreground">{weather.label}</div>
+   354→            </div>
+   355→          </div>
+   356→          <div className="flex items-center gap-3 mt-2 text-[10px] text-muted-foreground">
+   357→            <span className="flex items-center gap-0.5"><Wind className="size-3" /> {weather.wind}</span>
+   358→            <span className="flex items-center gap-0.5"><Droplets className="size-3" /> {weather.humidity}%</span>
+   359→            <span>{weather.max}°/{weather.min}°</span>
+   360→          </div>
+   361→          <div className="text-[10px] text-muted-foreground mt-1">{weather.city}</div>
+   362→        </div>
+   363→      )}
+   364→    </div>
+   365→  );
+   366→}
+   367→
+   368→function timeLabel(t: string | null) {
+   369→  switch (t) {
+   370→    case "morning": return "🌅 Утро";
+   371→    case "afternoon": return "☀️ День";
+   372→    case "evening": return "🌙 Вечер";
+   373→    default: return "Весь день";
+   374→  }
+   375→}
+   376→
+   377→function CountdownCard({
+   378→  isBefore,
+   379→  isAfter,
+   380→  daysRemaining,
+   381→  currentDay,
+   382→  totalDays,
+   383→  startDate,
+   384→  endDate,
+   385→}: {
+   386→  isBefore: boolean;
+   387→  isAfter: boolean;
+   388→  daysRemaining: number;
+   389→  currentDay: number;
+   390→  totalDays: number;
+   391→  startDate: string;
+   392→  endDate: string | null;
+   393→}) {
+   394→  const [showEditor, setShowEditor] = useState(false);
+   395→  let icon = <Clock className="size-5" />;
+   396→  let label = "В пути";
+   397→  let value = `${currentDay}/${totalDays}`;
+   398→  let sub = `осталось ${daysRemaining} дн.`;
+   399→  let color = "#10b981";
+   400→
+   401→  if (isBefore) {
+   402→    icon = <Plane className="size-5" />;
+   403→    label = "До поездки";
+   404→    value = `${daysRemaining}`;
+   405→    sub = daysRemaining === 1 ? "день" : daysRemaining < 5 ? "дня" : "дней";
+   406→    color = "#f59e0b";
+   407→  } else if (isAfter) {
+   408→    icon = <Route className="size-5" />;
+   409→    label = "Поездка завершена";
+   410→    value = "✓";
+   411→    sub = `${totalDays} дней позади`;
+   412→    color = "#8b5cf6";
+   413→  }
+   414→
+   415→  const startStr = new Date(startDate).toISOString().slice(0, 10);
+   416→  const endStr = endDate ? new Date(endDate).toISOString().slice(0, 10) : "";
+   417→
+   418→  return (
+   419→    <div className="col-span-2 lg:col-span-1 rounded-2xl bg-card border border-border p-4 relative overflow-hidden">
+   420→      <div
+   421→        className="absolute -top-3 -right-3 size-16 rounded-full opacity-10 blur-xl"
+   422→        style={{ background: color }}
+   423→      />
+   424→      <button
+   425→        onClick={() => setShowEditor((v) => !v)}
+   426→        className="absolute top-2 right-2 size-6 rounded-md hover:bg-accent grid place-items-center text-muted-foreground z-10"
+   427→        title="Изменить даты"
+   428→      >
+   429→        <Settings2 className="size-3.5" />
+   430→      </button>
+   431→      <div className="flex items-center gap-2 text-sm text-muted-foreground mb-2">
+   432→        <span style={{ color }}>{icon}</span> {label}
+   433→      </div>
+   434→      <div className="flex items-baseline gap-1.5">
+   435→        <span className="text-3xl font-bold leading-none" style={{ color }}>{value}</span>
+   436→        <span className="text-xs text-muted-foreground">{sub}</span>
+   437→      </div>
+   438→      {/* мини-таймлайн */}
+   439→      <div className="mt-3 flex gap-0.5">
+   440→        {Array.from({ length: totalDays }).map((_, i) => (
+   441→          <div
+   442→            key={i}
+   443→            className={cn(
+   444→              "h-1.5 flex-1 rounded-full transition-colors",
+   445→              isBefore ? "bg-muted" : isAfter ? "bg-primary" : i + 1 < currentDay ? "bg-primary" : i + 1 === currentDay ? "bg-primary/60" : "bg-muted"
+   446→            )}
+   447→          />
+   448→        ))}
+   449→      </div>
+   450→
+   451→      {showEditor && <DatesEditor startStr={startStr} endStr={endStr} onDone={() => setShowEditor(false)} />}
+   452→    </div>
+   453→  );
+   454→}
+   455→
+   456→function DatesEditor({ startStr, endStr, onDone }: { startStr: string; endStr: string; onDone: () => void }) {
+   457→  const update = useUpdateTripDates();
+   458→  const [start, setStart] = useState(startStr);
+   459→  const [end, setEnd] = useState(endStr);
+   460→
+   461→  const save = async () => {
+   462→    await update.mutateAsync({ startDate: start, endDate: end || undefined });
+   463→    toast.success("Даты обновлены");
+   464→    onDone();
+   465→  };
+   466→
+   467→  return (
+   468→    <div className="mt-3 pt-3 border-t border-border space-y-2 relative z-20">
+   469→      <div className="grid grid-cols-2 gap-2">
+   470→        <div>
+   471→          <label className="text-[10px] text-muted-foreground block mb-0.5">Вылет ✈️</label>
+   472→          <input
+   473→            type="date"
+   474→            value={start}
+   475→            onChange={(e) => setStart(e.target.value)}
+   476→            className="w-full text-xs rounded-lg border border-input bg-background px-2 py-1.5"
+   477→          />
+   478→        </div>
+   479→        <div>
+   480→          <label className="text-[10px] text-muted-foreground block mb-0.5">Прилёт обратно 🛬</label>
+   481→          <input
+   482→            type="date"
+   483→            value={end}
+   484→            onChange={(e) => setEnd(e.target.value)}
+   485→            className="w-full text-xs rounded-lg border border-input bg-background px-2 py-1.5"
+   486→          />
+   487→        </div>
+   488→      </div>
+   489→      <div className="flex gap-2">
+   490→        <button onClick={onDone} className="flex-1 rounded-lg bg-secondary py-1.5 text-xs font-medium">
+   491→          Отмена
+   492→        </button>
+   493→        <button
+   494→          onClick={save}
+   495→          disabled={update.isPending}
+   496→          className="flex-1 rounded-lg bg-primary text-primary-foreground py-1.5 text-xs font-medium"
+   497→        >
+   498→          {update.isPending ? "…" : "Сохранить"}
+   499→        </button>
+   500→      </div>
+   501→    </div>
+   502→  );
+   503→}
+   504→
+   505→function DashboardSkeleton() {
+   506→  return (
+   507→    <div className="space-y-4 animate-pulse">
+   508→      <div className="rounded-3xl h-40 bg-muted" />
+   509→      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+   510→        <div className="col-span-2 lg:col-span-1 rounded-2xl h-24 bg-muted" />
+   511→        <div className="col-span-2 lg:col-span-1 rounded-2xl h-24 bg-muted" />
+   512→        <div className="rounded-2xl h-24 bg-muted" />
+   513→        <div className="rounded-2xl h-24 bg-muted" />
+   514→      </div>
+   515→      <div className="rounded-2xl h-32 bg-muted" />
+   516→      <div className="rounded-2xl h-48 bg-muted" />
+   517→    </div>
+   518→  );
+   519→}
+   520→
+   521→function NextPlaceWidget({ trip, onGoToItinerary }: { trip: TripSummary; onGoToItinerary: () => void }) {
+   522→  // Находим следующее непосещённое место текущего дня (или следующего дня)
+   523→  const currentDay = trip.days.find((d) => d.dayNumber === trip.currentDayNumber);
+   524→  let nextPlace = currentDay?.places.find((p) => p.status !== "visited");
+   525→
+   526→  // Если в текущем дне нет — ищем в следующих днях
+   527→  if (!nextPlace) {
+   528→    const upcomingDays = trip.days.filter((d) => d.dayNumber >= trip.currentDayNumber);
+   529→    for (const d of upcomingDays) {
+   530→      const found = d.places.find((p) => p.status !== "visited");
+   531→      if (found) {
+   532→        nextPlace = found;
+   533→        break;
+   534→      }
+   535→    }
+   536→  }
+   537→
+   538→  if (!nextPlace) {
+   539→    return (
+   540→      <motion.div
+   541→        initial={{ opacity: 0, y: 8 }}
+   542→        animate={{ opacity: 1, y: 0 }}
+   543→        className="rounded-2xl bg-gradient-to-br from-green-500/10 to-emerald-500/10 border border-green-500/30 p-4"
+   544→      >
+   545→        <div className="flex items-center gap-3">
+   546→          <div className="size-12 rounded-xl grid place-items-center text-2xl bg-green-500/20">🎉</div>
+   547→          <div>
+   548→            <h3 className="font-semibold text-sm">Все места посещены!</h3>
+   549→            <p className="text-xs text-muted-foreground">Поздравляем с завершением маршрута</p>
+   550→          </div>
+   551→        </div>
+   552→      </motion.div>
+   553→    );
+   554→  }
+   555→
+   556→  const meta = CATEGORY_META[nextPlace.category];
+   557→  const dayOfPlace = trip.days.find((d) => d.id === nextPlace.dayId);
+   558→
+   559→  return (
+   560→    <motion.button
+   561→      initial={{ opacity: 0, y: 8 }}
+   562→      animate={{ opacity: 1, y: 0 }}
+   563→      whileTap={{ scale: 0.98 }}
+   564→      onClick={onGoToItinerary}
+   565→      className="w-full rounded-2xl bg-card border-2 border-primary/20 hover:border-primary/40 p-4 text-left transition-colors relative overflow-hidden group"
+   566→    >
+   567→      {/* Декоративный фон */}
+   568→      <div
+   569→        className="absolute -top-4 -right-4 size-20 rounded-full opacity-10 blur-2xl"
+   570→        style={{ background: meta?.color ?? "#f97316" }}
+   571→      />
+   572→      <div className="relative flex items-center gap-3">
+   573→        <div
+   574→          className="size-14 rounded-2xl grid place-items-center text-2xl shrink-0 transition-transform group-hover:scale-110"
+   575→          style={{ background: `${meta?.color}22` }}
+   576→        >
+   577→          {meta?.emoji}
+   578→        </div>
+   579→        <div className="min-w-0 flex-1">
+   580→          <div className="flex items-center gap-1.5 text-[10px] text-primary font-medium uppercase tracking-wide mb-0.5">
+   581→            <MapPin className="size-2.5" /> Следующее место
+   582→          </div>
+   583→          <h3 className="font-bold text-sm leading-tight truncate">{nextPlace.name}</h3>
+   584→          <div className="flex items-center gap-2 text-[11px] text-muted-foreground mt-0.5">
+   585→            <span>День {dayOfPlace?.dayNumber} · {dayOfPlace?.city}</span>
+   586→            {nextPlace.timeOfDay && <span>· {timeLabel(nextPlace.timeOfDay)}</span>}
+   587→          </div>
+   588→          {nextPlace.address && (
+   589→            <div className="text-[10px] text-muted-foreground mt-0.5 truncate flex items-center gap-0.5">
+   590→              <MapPin className="size-2" /> {nextPlace.address}
+   591→            </div>
+   592→          )}
+   593→        </div>
+   594→        <ChevronRight className="size-5 text-muted-foreground group-hover:text-primary group-hover:translate-x-1 transition-all shrink-0" />
+   595→      </div>
+   596→    </motion.button>
+   597→  );
+   598→}
+   599→
+   600→function ActivityChart({ trip }: { trip: TripSummary }) {
+   601→  // Подсчёт посещённых мест по дням
+   602→  const dayData = trip.days.map((d) => {
+   603→    const visited = d.places.filter((p) => p.status === "visited").length;
+   604→    const total = d.places.length;
+   605→    return {
+   606→      day: d.dayNumber,
+   607→      city: d.city,
+   608→      cityKey: d.cityKey,
+   609→      accentColor: d.accentColor,
+   610→      visited,
+   611→      total,
+   612→      pct: total > 0 ? Math.round((visited / total) * 100) : 0,
+   613→      isCurrent: d.dayNumber === trip.currentDayNumber,
+   614→      isPast: d.dayNumber < trip.currentDayNumber,
+   615→    };
+   616→  });
+   617→
+   618→  const cityColors: Record<string, string> = {
+   619→    guangzhou: "#f97316",
+   620→    shenzhen: "#06b6d4",
+   621→    hongkong: "#ec4899",
+   622→    macau: "#8b5cf6",
+   623→  };
+   624→
+   625→  return (
+   626→    <div className="rounded-2xl bg-card border border-border p-4">
+   627→      <h2 className="font-semibold flex items-center gap-2 mb-3">
+   628→        <CalendarDays className="size-4" /> Активность по дням
+   629→      </h2>
+   630→
+   631→      {/* Мини-барчарт */}
+   632→      <div className="flex items-end justify-between gap-1 h-24 mb-2">
+   633→        {dayData.map((d) => {
+   634→          const color = cityColors[d.cityKey] ?? "#f97316";
+   635→          return (
+   636→            <div key={d.day} className="flex-1 flex flex-col items-center gap-1 group relative">
+   637→              {/* Tooltip */}
+   638→              <div className="absolute -top-8 opacity-0 group-hover:opacity-100 transition-opacity bg-card border border-border rounded px-1.5 py-0.5 text-[9px] whitespace-nowrap z-10 shadow-md pointer-events-none">
+   639→                {d.visited}/{d.total}
+   640→              </div>
+   641→              {/* Бар */}
+   642→              <div className="w-full flex-1 flex items-end">
+   643→                <motion.div
+   644→                  initial={{ height: 0 }}
+   645→                  animate={{ height: `${Math.max(d.pct, d.total > 0 ? 4 : 0)}%` }}
+   646→                  transition={{ duration: 0.6, delay: d.day * 0.03 }}
+   647→                  className={cn(
+   648→                    "w-full rounded-t-md transition-all",
+   649→                    d.isCurrent && "ring-2 ring-primary ring-offset-1 ring-offset-card"
+   650→                  )}
+   651→                  style={{
+   652→                    background: d.visited === 0 && !d.isPast ? "var(--muted)" : color,
+   653→                    opacity: d.visited === 0 && !d.isPast ? 0.4 : 1,
+   654→                  }}
+   655→                />
+   656→              </div>
+   657→              {/* Номер дня */}
+   658→              <span className={cn(
+   659→                "text-[8px] font-medium",
+   660→                d.isCurrent ? "text-primary" : "text-muted-foreground"
+   661→              )}>
+   662→                {d.day}
+   663→              </span>
+   664→            </div>
+   665→          );
+   666→        })}
+   667→      </div>
+   668→
+   669→      {/* Легенда городов */}
+   670→      <div className="flex items-center gap-3 flex-wrap text-[10px] text-muted-foreground pt-2 border-t border-border">
+   671→        {Object.entries({
+   672→          guangzhou: "Гуанчжоу",
+   673→          shenzhen: "Шэньчжэнь",
+   674→          hongkong: "Гонконг",
+   675→          macau: "Макао",
+   676→        }).map(([key, name]) => (
+   677→          <span key={key} className="flex items-center gap-1">
+   678→            <span className="size-2 rounded-full" style={{ background: cityColors[key] }} />
+   679→            {name}
+   680→          </span>
+   681→        ))}
+   682→        <span className="ml-auto">
+   683→          {trip.visitedPlaces}/{trip.totalPlaces} мест посещено
+   684→        </span>
+   685→      </div>
+   686→    </div>
+   687→  );
+   688→}
+   689→
+   690→function DailyTip({ trip }: { trip: TripSummary }) {
+   691→  const currentDay = trip.days.find((d) => d.dayNumber === trip.currentDayNumber);
+   692→  if (!currentDay) return null;
+   693→
+   694→  // Советы по городам и дням
+   695→  const cityTips: Record<string, string[]> = {
+   696→    guangzhou: [
+   697→      "Попробуйте уличную еду на Шансяцзю — чашеобразная лапша и манго саго!",
+   698→      "Круиз по Жемчужной реке лучше всего на закате (~18:30-19:00)",
+   699→      "На Beijing Road под стеклянным полом видны древние мостовые",
+   700→      "Димсамы в Yonghe Palace — классика кантонской кухни",
+   701→    ],
+   702→    shenzhen: [
+   703→      "Смотровая Free Sky на 116 этаже Ping An — билеты от $44",
+   704→      "OCT-LOFT — модный район с галереями и % Arabica",
+   705→      "Haidilao — хот-пот с легендарным сервисом",
+   706→      "Пляж Дамейша — атмосфера французского курорта",
+   707→    ],
+   708→    hongkong: [
+   709→      "Пик Виктория — поднимайтесь на историческом трамвайчике",
+   710→      "Симфония огней в 20:00 на набережной Чимсачёй",
+   711→      "Ozone — самый высокий бар мира (118 этаж Ritz-Carlton)",
+   712→      "Lan Kwai Fong — центр ночной жизни Гонконга",
+   713→    ],
+   714→    macau: [
+   715→      "Lord Stow's Bakery — легендарные португальские яичные тарты",
+   716→      "Казино можно просто осматривать — это бесплатно!",
+   717→      "Бесплатные шаттлы от казино до паромных терминалов",
+   718→      "Rua do Cunha — пешеходная улица с деликатесами",
+   719→    ],
+   720→  };
+   721→
+   722→  const tips = cityTips[currentDay.cityKey] ?? [];
+   723→  if (tips.length === 0) return null;
+   724→
+   725→  // Выбираем совет по номеру дня (детерминированно)
+   726→  const tipIndex = (trip.currentDayNumber - 1) % tips.length;
+   727→  const tip = tips[tipIndex];
+   728→
+   729→  return (
+   730→    <motion.div
+   731→      initial={{ opacity: 0, y: 8 }}
+   732→      animate={{ opacity: 1, y: 0 }}
+   733→      className="rounded-2xl bg-gradient-to-br from-violet-500/10 to-fuchsia-500/10 border border-violet-500/30 p-4 relative overflow-hidden"
+   734→    >
+   735→      <div className="absolute -top-3 -right-3 size-16 rounded-full bg-violet-500/10 blur-xl" />
+   736→      <div className="relative flex items-start gap-3">
+   737→        <div className="size-10 rounded-xl bg-violet-500/20 grid place-items-center text-xl shrink-0">
+   738→          💡
+   739→        </div>
+   740→        <div className="min-w-0 flex-1">
+   741→          <div className="text-[10px] font-semibold uppercase tracking-wide text-violet-600 dark:text-violet-400 mb-0.5">
+   742→            Совет дня · {currentDay.city}
+   743→          </div>
+   744→          <p className="text-sm leading-relaxed">{tip}</p>
+   745→        </div>
+   746→      </div>
+   747→    </motion.div>
+   748→  );
+   749→}
+   750→

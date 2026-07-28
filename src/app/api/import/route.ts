@@ -1,152 +1,209 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 
-// POST /api/import — импорт данных из JSON (полная замена)
+// POST /api/import — импорт данных поездки из JSON
 export async function POST(req: NextRequest) {
   try {
-    const data = await req.json();
-    if (!data || data.app !== "TripTrek China") {
-      return NextResponse.json({ error: "Неверный формат файла" }, { status: 400 });
-    }
+    const body = await req.json();
+    const tripId = body.trip?.id || body.tripId;
+    if (!tripId) return NextResponse.json({ error: "tripId required" }, { status: 400 });
 
-    // Очистка всех таблиц
-    await Promise.all([
-      db.photo.deleteMany(),
-      db.expense.deleteMany(),
-      db.journalEntry.deleteMany(),
-      db.place.deleteMany(),
-      db.day.deleteMany(),
-      db.participant.deleteMany(),
-      db.checklistItem.deleteMany(),
-      db.infoItem.deleteMany(),
-      db.phrase.deleteMany(),
-      db.foodItem.deleteMany(),
-    ]);
-
-    // Импорт участников
-    if (data.participants) {
-      for (const p of data.participants) {
-        await db.participant.create({ data: { id: p.id, name: p.name, color: p.color, emoji: p.emoji, role: p.role, budget: p.budget } });
-      }
-    }
-
-    // Импорт настроек
-    if (data.settings) {
-      await db.tripSettings.upsert({
-        where: { id: "default" },
+    // Upsert trip
+    if (body.trip) {
+      await db.trip.upsert({
+        where: { id: tripId },
         create: {
-          id: "default",
-          title: data.settings.title,
-          startDate: new Date(data.settings.startDate),
-          endDate: data.settings.endDate ? new Date(data.settings.endDate) : null,
-          totalDays: data.settings.totalDays,
-          totalBudget: data.settings.totalBudget,
-          currency: data.settings.currency,
-          currentUserId: data.settings.currentUserId,
+          id: tripId,
+          title: body.trip.title || "Imported Trip",
+          destination: body.trip.destination || "China",
+          startDate: new Date(body.trip.startDate || Date.now()),
+          endDate: body.trip.endDate ? new Date(body.trip.endDate) : null,
+          totalDays: body.trip.totalDays || 12,
+          totalBudget: body.trip.totalBudget || 1100,
         },
         update: {
-          title: data.settings.title,
-          startDate: new Date(data.settings.startDate),
-          endDate: data.settings.endDate ? new Date(data.settings.endDate) : null,
-          totalDays: data.settings.totalDays,
-          totalBudget: data.settings.totalBudget,
-          currentUserId: data.settings.currentUserId,
+          title: body.trip.title,
+          destination: body.trip.destination,
+          totalDays: body.trip.totalDays,
+          totalBudget: body.trip.totalBudget,
         },
       });
     }
 
-    // Импорт дней
-    if (data.days) {
-      for (const d of data.days) {
-        await db.day.create({
-          data: {
-            id: d.id, dayNumber: d.dayNumber, date: new Date(d.date),
-            city: d.city, cityKey: d.cityKey, title: d.title,
-            summary: d.summary, accentColor: d.accentColor,
+    // Import days
+    if (body.days) {
+      for (const d of body.days) {
+        await db.day.upsert({
+          where: { id: d.id },
+          create: {
+            id: d.id,
+            tripId,
+            dayNumber: d.dayNumber,
+            date: new Date(d.date),
+            city: d.city,
+            cityKey: d.cityKey,
+            title: d.title,
+            summary: d.summary || null,
+            accentColor: d.accentColor || null,
           },
+          update: {},
         });
       }
     }
 
-    // Импорт мест
-    if (data.places) {
-      for (const p of data.places) {
-        await db.place.create({
-          data: {
-            id: p.id, name: p.name, description: p.description, category: p.category,
-            lat: p.lat, lng: p.lng, dayId: p.dayId, timeOfDay: p.timeOfDay,
-            status: p.status, budget: p.budget, address: p.address, notes: p.notes,
-            rating: p.rating, visitedAt: p.visitedAt ? new Date(p.visitedAt) : null, order: p.order,
+    // Import places
+    if (body.places) {
+      for (const p of body.places) {
+        if (!p.id) continue;
+        await db.place.upsert({
+          where: { id: p.id },
+          create: {
+            id: p.id,
+            tripId,
+            name: p.name,
+            description: p.description || null,
+            category: p.category || "other",
+            lat: p.lat || 0,
+            lng: p.lng || 0,
+            dayId: p.dayId,
+            timeOfDay: p.timeOfDay || null,
+            status: p.status || "planned",
+            budget: p.budget || null,
+            address: p.address || null,
+            notes: p.notes || null,
+            order: p.order || 0,
           },
+          update: {},
         });
       }
     }
 
-    // Импорт трат
-    if (data.expenses) {
-      for (const e of data.expenses) {
-        await db.expense.create({
-          data: {
-            amount: e.amount, category: e.category, description: e.description,
-            paidById: e.paidById, dayId: e.dayId,
+    // Import expenses
+    if (body.expenses) {
+      for (const e of body.expenses) {
+        if (!e.id) continue;
+        await db.expense.upsert({
+          where: { id: e.id },
+          create: {
+            id: e.id,
+            tripId,
+            amount: e.amount,
+            category: e.category || "other",
+            description: e.description || "",
+            paidById: e.paidById || "",
+            dayId: e.dayId || null,
           },
+          update: {},
         });
       }
     }
 
-    // Импорт записей дневника
-    if (data.journals) {
-      for (const j of data.journals) {
-        await db.journalEntry.create({
-          data: {
-            dayId: j.dayId, participantId: j.participantId, mood: j.mood, content: j.content,
+    // Import checklist
+    if (body.checklist) {
+      for (const c of body.checklist) {
+        if (!c.id) continue;
+        await db.checklistItem.upsert({
+          where: { id: c.id },
+          create: {
+            id: c.id,
+            tripId,
+            text: c.text,
+            category: c.category || "preparation",
+            done: c.done || false,
+            order: c.order || 0,
           },
+          update: {},
         });
       }
     }
 
-    // Импорт чек-листа
-    if (data.checklist) {
-      for (const c of data.checklist) {
-        await db.checklistItem.create({
-          data: { text: c.text, category: c.category, done: c.done, order: c.order },
-        });
-      }
-    }
-
-    // Импорт справки
-    if (data.info) {
-      for (const i of data.info) {
-        await db.infoItem.create({
-          data: { type: i.type, title: i.title, content: i.content, icon: i.icon, order: i.order },
-        });
-      }
-    }
-
-    // Импорт фраз
-    if (data.phrases) {
-      for (const p of data.phrases) {
-        await db.phrase.create({
-          data: { category: p.category, ru: p.ru, cn: p.cn, pinyin: p.pinyin, favorite: p.favorite, order: p.order },
-        });
-      }
-    }
-
-    // Импорт блюд
-    if (data.foods) {
-      for (const f of data.foods) {
-        await db.foodItem.create({
-          data: {
-            name: f.name, nameCn: f.nameCn, description: f.description, city: f.city,
-            place: f.place, price: f.price, emoji: f.emoji, tried: f.tried, rating: f.rating, order: f.order,
+    // Import info items
+    if (body.info) {
+      for (const i of body.info) {
+        if (!i.id) continue;
+        await db.infoItem.upsert({
+          where: { id: i.id },
+          create: {
+            id: i.id,
+            tripId,
+            type: i.type,
+            title: i.title,
+            content: i.content,
+            icon: i.icon || null,
+            order: i.order || 0,
           },
+          update: {},
         });
       }
     }
 
-    return NextResponse.json({ success: true, message: "Данные импортированы" });
+    // Import phrases
+    if (body.phrases) {
+      for (const p of body.phrases) {
+        if (!p.id) continue;
+        await db.phrase.upsert({
+          where: { id: p.id },
+          create: {
+            id: p.id,
+            tripId,
+            category: p.category,
+            ru: p.ru,
+            cn: p.cn,
+            pinyin: p.pinyin,
+            favorite: p.favorite || false,
+            order: p.order || 0,
+          },
+          update: {},
+        });
+      }
+    }
+
+    // Import foods
+    if (body.foods) {
+      for (const f of body.foods) {
+        if (!f.id) continue;
+        await db.foodItem.upsert({
+          where: { id: f.id },
+          create: {
+            id: f.id,
+            tripId,
+            name: f.name,
+            nameCn: f.nameCn || null,
+            description: f.description || "",
+            city: f.city || "",
+            place: f.place || null,
+            price: f.price || null,
+            emoji: f.emoji || null,
+            imageUrl: f.imageUrl || null,
+            tried: f.tried || false,
+            rating: f.rating || null,
+            order: f.order || 0,
+          },
+          update: {},
+        });
+      }
+    }
+
+    // Import budget plans
+    if (body.budgetPlans) {
+      for (const bp of body.budgetPlans) {
+        if (!bp.id) continue;
+        await db.budgetPlan.upsert({
+          where: { id: bp.id },
+          create: {
+            id: bp.id,
+            tripId,
+            category: bp.category,
+            amount: bp.amount,
+          },
+          update: {},
+        });
+      }
+    }
+
+    return NextResponse.json({ success: true, tripId });
   } catch (e) {
     console.error("Import error:", e);
-    return NextResponse.json({ error: (e as Error).message }, { status: 500 });
+    return NextResponse.json({ error: "Import failed" }, { status: 500 });
   }
 }

@@ -29,15 +29,17 @@ import {
   ChevronRight,
   UserPlus,
   Share2,
+  Crown,
 } from "lucide-react";
 import { useState, useEffect, useRef, type ReactNode } from "react";
 import { useTheme } from "next-themes";
-import { useSession, signOut } from "next-auth/react";
+import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { useWebSocket } from "@/hooks/use-websocket";
 import { QuickAddSheet } from "./quick-add";
 import { GlobalSearch } from "./global-search";
 import { TripSwitcher } from "./trip-switcher";
+import { PremiumModal } from "./premium-modal";
 import { InviteFriends } from "./invite-friends";
 import { ShareCard } from "./share-card";
 
@@ -65,6 +67,9 @@ export function AppShell({ children }: { children: ReactNode }) {
   const [searchOpen, setSearchOpen] = useState(false);
   const [inviteOpen, setInviteOpen] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
+  const [premiumOpen, setPremiumOpen] = useState(false);
+  const { data: session } = useSession();
+  const isPremium = (session?.user as { plan?: string } | undefined)?.plan === "premium";
   const { activeTab, setActiveTab } = useTripStore();
   const { data: trip } = useTrip();
   const tabScrollRef = useRef<HTMLDivElement>(null);
@@ -128,6 +133,21 @@ export function AppShell({ children }: { children: ReactNode }) {
 
           {/* Переключатель поездок */}
           <TripSwitcher />
+
+          {/* Premium кнопка */}
+          <button
+            onClick={() => setPremiumOpen(true)}
+            className={cn(
+              "size-8 rounded-full grid place-items-center transition-colors shrink-0 border",
+              isPremium
+                ? "bg-gradient-to-br from-amber-500 to-orange-500 text-white border-amber-400/30 shadow-lg shadow-amber-500/20"
+                : "bg-secondary border-border hover:bg-accent"
+            )}
+            title={isPremium ? "Premium активен 👑" : "Получить Premium"}
+            aria-label="Premium"
+          >
+            <Crown className="size-4" />
+          </button>
 
           {/* Кнопка пригласить */}
           <button
@@ -272,6 +292,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       <GlobalSearch open={searchOpen} onOpenChange={setSearchOpen} />
       <InviteFriends open={inviteOpen} onOpenChange={setInviteOpen} />
       <ShareCard open={shareOpen} onOpenChange={setShareOpen} />
+      <PremiumModal open={premiumOpen} onOpenChange={setPremiumOpen} />
     </div>
   );
 }
@@ -283,7 +304,7 @@ function ParticipantAvatars() {
   const router = useRouter();
   if (!trip) return null;
 
-  // Если авторизован — показываем только текущего пользователя + выход
+  // Если авторизован — показываем только текущего пользователя (клик = профиль)
   const authedUser = session?.user;
   if (authedUser) {
     const current = trip.participants.find((p) => p.id === (authedUser as { id?: string }).id);
@@ -291,8 +312,8 @@ function ParticipantAvatars() {
       <div className="flex items-center gap-1.5">
         {current && (
           <button
-            onClick={() => signOut({ callbackUrl: "/login" })}
-            title={`${current.name} — нажми для выхода`}
+            onClick={() => router.push("/profile")}
+            title={`${current.name} — профиль`}
             className="size-8 rounded-full grid place-items-center text-sm border-2 border-background ring-2 ring-primary transition-transform hover:scale-110"
             style={{ background: current.color }}
           >

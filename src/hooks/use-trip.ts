@@ -263,7 +263,7 @@ export function useUpdateTripDates() {
       const r = await fetch("/api/trip/dates", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ startDate, endDate }),
+        body: JSON.stringify({ tripId: getTripId(), startDate, endDate }),
       });
       if (!r.ok) throw new Error("update dates failed");
       return r.json();
@@ -282,7 +282,7 @@ export function useUpdateTripBudget() {
       const r = await fetch("/api/trip/budget", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ totalBudget }),
+        body: JSON.stringify({ tripId: getTripId(), totalBudget }),
       });
       if (!r.ok) throw new Error("update budget failed");
       return r.json();

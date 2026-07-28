@@ -7,9 +7,9 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   const body = await req.json();
   const data: Record<string, unknown> = {};
   if (typeof body.budget === "number" || body.budget === null) data.budget = body.budget;
-  if (typeof body.name === "string") data.name = body.name;
+  if (typeof body.name === "string") data.displayName = body.name;
   if (typeof body.role === "string" || body.role === null) data.role = body.role;
 
-  const participant = await db.participant.update({ where: { id }, data });
-  return NextResponse.json(participant);
+  const member = await db.tripMember.update({ where: { id }, data });
+  return NextResponse.json(member);
 }

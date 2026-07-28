@@ -49,7 +49,7 @@ export async function GET(req: NextRequest) {
     const wmo = WMO_CODES[code] || { label: "—", emoji: "🌡️" };
 
     // Недельный прогноз
-    const forecast = [];
+    }[] = [];
     if (days > 1 && data.daily?.time) {
       for (let i = 0; i < data.daily.time.length; i++) {
         const dCode = data.daily.weather_code?.[i] ?? 0;
