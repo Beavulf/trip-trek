@@ -4,8 +4,11 @@ import { useState } from "react";
 import { signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
-import { Loader2, Plane, UserPlus, LogIn } from "lucide-react";
+import { Loader2, Plane, UserPlus, LogIn, Globe } from "lucide-react";
 import { toast } from "sonner";
+
+const EMOJIS = ["🦊", "🐻", "🐼", "🦁", "🐯", "🐨", "🐸", "🐵", "🦉", "🐧", "🦄", "🐲"];
+const COLORS = ["#f97316", "#06b6d4", "#8b5cf6", "#ec4899", "#10b981", "#f59e0b", "#ef4444", "#3b82f6"];
 
 export default function LoginPage() {
   const router = useRouter();
@@ -13,6 +16,8 @@ export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [name, setName] = useState("");
+  const [emoji, setEmoji] = useState("🦊");
+  const [color, setColor] = useState("#f97316");
   const [loading, setLoading] = useState(false);
 
   const submit = async () => {
@@ -33,17 +38,10 @@ export default function LoginPage() {
         if (!res.ok) throw new Error(data.error);
       }
 
-      const result = await signIn("credentials", {
-        email,
-        password,
-        redirect: false,
-      });
+      const result = await signIn("credentials", { email, password, redirect: false });
+      if (result?.error) throw new Error("Неверный email или пароль");
 
-      if (result?.error) {
-        throw new Error("Неверный email или пароль");
-      }
-
-      toast.success(mode === "register" ? "Регистрация успешна! 🎉" : "С возвращением! 👋");
+      toast.success(mode === "register" ? "Добро пожаловать! 🎉" : "С возвращением! 👋");
       router.push("/");
       router.refresh();
     } catch (e) {
@@ -54,19 +52,29 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4 bg-gradient-to-br from-orange-500 via-rose-500 to-violet-600">
+    <div className="min-h-screen flex items-center justify-center p-4 bg-gradient-to-br from-orange-500 via-rose-500 to-violet-600 relative overflow-hidden">
+      {/* Декоративные круги */}
+      <div className="absolute top-10 left-10 size-32 rounded-full bg-white/5 blur-2xl" />
+      <div className="absolute bottom-20 right-10 size-40 rounded-full bg-white/5 blur-3xl" />
+
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="w-full max-w-sm"
+        className="w-full max-w-sm relative z-10"
       >
         {/* Лого */}
         <div className="text-center mb-6">
-          <div className="size-16 rounded-2xl bg-white/20 backdrop-blur grid place-items-center text-white mx-auto mb-3 shadow-lg">
+          <motion.div
+            initial={{ scale: 0.8, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            className="size-16 rounded-2xl bg-white/20 backdrop-blur grid place-items-center text-white mx-auto mb-3 shadow-lg"
+          >
             <Plane className="size-8" />
-          </div>
-          <h1 className="text-2xl font-bold text-white">TripTrek China</h1>
-          <p className="text-white/70 text-sm mt-1">Войдите чтобы продолжить</p>
+          </motion.div>
+          <h1 className="text-2xl font-bold text-white">TripTrek</h1>
+          <p className="text-white/70 text-sm mt-1">
+            {mode === "login" ? "Войдите чтобы продолжить" : "Создайте аккаунт"}
+          </p>
         </div>
 
         {/* Карточка формы */}
@@ -90,6 +98,45 @@ export default function LoginPage() {
               <UserPlus className="size-4" /> Регистрация
             </button>
           </div>
+
+          {/* Аватар (только регистрация) */}
+          {mode === "register" && (
+            <div className="mb-4">
+              <div className="flex items-center justify-center mb-2">
+                <div
+                  className="size-14 rounded-2xl grid place-items-center text-2xl shadow-md transition-all"
+                  style={{ background: color }}
+                >
+                  {emoji}
+                </div>
+              </div>
+              <div className="flex gap-1 flex-wrap justify-center mb-2">
+                {EMOJIS.map((e) => (
+                  <button
+                    key={e}
+                    onClick={() => setEmoji(e)}
+                    className={`size-7 rounded-lg text-sm grid place-items-center transition-all ${
+                      emoji === e ? "bg-primary/20 ring-2 ring-primary scale-110" : "bg-muted hover:bg-accent"
+                    }`}
+                  >
+                    {e}
+                  </button>
+                ))}
+              </div>
+              <div className="flex gap-1 justify-center">
+                {COLORS.map((c) => (
+                  <button
+                    key={c}
+                    onClick={() => setColor(c)}
+                    className={`size-6 rounded-full transition-all ${
+                      color === c ? "ring-2 ring-offset-1 ring-foreground scale-110" : "opacity-60 hover:opacity-100"
+                    }`}
+                    style={{ background: c }}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Форма */}
           <div className="space-y-3">
@@ -144,10 +191,33 @@ export default function LoginPage() {
           </div>
 
           <p className="text-[11px] text-muted-foreground text-center mt-4">
-            {mode === "login" 
-              ? "Нет аккаунта? Нажми «Регистрация»" 
+            {mode === "login"
+              ? "Нет аккаунта? Нажми «Регистрация»"
               : "Уже есть аккаунт? Нажми «Вход»"}
           </p>
+
+          {/* Демо-аккаунты */}
+          <div className="mt-3 pt-3 border-t border-border">
+            <p className="text-[10px] text-muted-foreground text-center mb-2">Демо-аккаунты:</p>
+            <div className="grid grid-cols-3 gap-1.5">
+              {[
+                { name: "Ты", email: "you@triptrek.com", emoji: "🦊", color: "#f97316" },
+                { name: "Лёха", email: "leha@triptrek.com", emoji: "🐻", color: "#06b6d4" },
+                { name: "Дэн", email: "den@triptrek.com", emoji: "🐼", color: "#8b5cf6" },
+              ].map((acc) => (
+                <button
+                  key={acc.email}
+                  onClick={() => { setEmail(acc.email); setPassword("1234"); setMode("login"); }}
+                  className="flex flex-col items-center gap-1 p-2 rounded-lg hover:bg-accent transition-colors"
+                >
+                  <div className="size-8 rounded-full grid place-items-center text-sm" style={{ background: acc.color }}>
+                    {acc.emoji}
+                  </div>
+                  <span className="text-[10px] font-medium">{acc.name}</span>
+                </button>
+              ))}
+            </div>
+          </div>
         </div>
       </motion.div>
     </div>
