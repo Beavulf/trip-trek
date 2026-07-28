@@ -28,6 +28,7 @@ import {
   ChevronLeft,
   ChevronRight,
   UserPlus,
+  Share2,
 } from "lucide-react";
 import { useState, useEffect, useRef, type ReactNode } from "react";
 import { useTheme } from "next-themes";
@@ -38,6 +39,7 @@ import { QuickAddSheet } from "./quick-add";
 import { GlobalSearch } from "./global-search";
 import { TripSwitcher } from "./trip-switcher";
 import { InviteFriends } from "./invite-friends";
+import { ShareCard } from "./share-card";
 
 const TABS = [
   { key: "dashboard", label: "Обзор", icon: LayoutDashboard },
@@ -62,6 +64,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   const [quickOpen, setQuickOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [inviteOpen, setInviteOpen] = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);
   const { activeTab, setActiveTab } = useTripStore();
   const { data: trip } = useTrip();
   const tabScrollRef = useRef<HTMLDivElement>(null);
@@ -134,6 +137,16 @@ export function AppShell({ children }: { children: ReactNode }) {
             aria-label="Пригласить друзей"
           >
             <UserPlus className="size-4" />
+          </button>
+
+          {/* Кнопка шеринг-карточка */}
+          <button
+            onClick={() => setShareOpen(true)}
+            className="size-8 rounded-full grid place-items-center bg-secondary border border-border hover:bg-accent transition-colors shrink-0"
+            title="Карточка поездки"
+            aria-label="Карточка поездки"
+          >
+            <Share2 className="size-4" />
           </button>
 
           {/* Кнопка поиска */}
@@ -258,6 +271,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       <QuickAddSheet open={quickOpen} onOpenChange={setQuickOpen} />
       <GlobalSearch open={searchOpen} onOpenChange={setSearchOpen} />
       <InviteFriends open={inviteOpen} onOpenChange={setInviteOpen} />
+      <ShareCard open={shareOpen} onOpenChange={setShareOpen} />
     </div>
   );
 }
