@@ -46,8 +46,8 @@ export interface Photo {
   caption: string | null;
   placeId: string | null;
   dayId: string;
-  participantId: string | null;
-  participant: Participant | null;
+  userId: string | null;
+  user: { id: string; name: string; emoji: string; color: string } | null;
   place: Place | null;
   day: { dayNumber: number; city: string; cityKey: string } | null;
   lat: number | null;
@@ -71,8 +71,8 @@ export interface Expense {
 export interface JournalEntry {
   id: string;
   dayId: string;
-  participantId: string | null;
-  participant: Participant | null;
+  userId: string | null;
+  user: { id: string; name: string; emoji: string; color: string } | null;
   day: { dayNumber: number; city: string } | null;
   mood: string | null;
   content: string;

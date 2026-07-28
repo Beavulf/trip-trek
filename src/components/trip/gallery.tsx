@@ -94,7 +94,7 @@ export function Gallery() {
       ) : (
         <div className="masonry-grid">
           {filtered.map((photo, i) => {
-            const participant = trip?.participants.find((p) => p.id === photo.participantId);
+            const uploader = photo.user;
             return (
               <motion.button
                 key={photo.id}
@@ -111,12 +111,12 @@ export function Gallery() {
                   </div>
                   {photo.caption && <div className="text-white text-xs mt-0.5 line-clamp-1">{photo.caption}</div>}
                 </div>
-                {participant && (
+                {uploader && (
                   <div
                     className="absolute top-1.5 right-1.5 size-5 rounded-full grid place-items-center text-[10px] border border-white/50"
-                    style={{ background: participant.color }}
+                    style={{ background: uploader.color }}
                   >
-                    {participant.emoji}
+                    {uploader.emoji}
                   </div>
                 )}
               </motion.button>
@@ -174,8 +174,8 @@ export function Gallery() {
                   <div className="flex items-center gap-3 text-xs text-white/70 flex-wrap">
                     <span className="flex items-center gap-1"><Calendar className="size-3" /> День {filtered[lightbox].day?.dayNumber}</span>
                     <span className="flex items-center gap-1"><MapPin className="size-3" /> {filtered[lightbox].day?.city}</span>
-                    {filtered[lightbox].participant && (
-                      <span className="flex items-center gap-1"><User className="size-3" /> {filtered[lightbox].participant.name}</span>
+                    {filtered[lightbox].user && (
+                      <span className="flex items-center gap-1"><User className="size-3" /> {filtered[lightbox].user?.name}</span>
                     )}
                   </div>
                   {filtered[lightbox].address && (

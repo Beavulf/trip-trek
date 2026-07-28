@@ -4,22 +4,24 @@ import { useBoard, useAddBoardMessage, useTogglePinBoard, useDeleteBoardMessage,
 import { motion, AnimatePresence } from "framer-motion";
 import { MessageSquare, Send, Pin, Trash2, Loader2, MessagesSquare } from "lucide-react";
 import { useState, useRef, useEffect } from "react";
+import { useSession } from "next-auth/react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
 export function Board() {
   const { data: messages, isLoading } = useBoard();
   const { data: trip } = useTrip();
+  const { data: session } = useSession();
   const add = useAddBoardMessage();
   const [content, setContent] = useState("");
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
 
-  const currentUserId = trip?.settings.currentUserId ?? trip?.participants[0]?.id;
+  const currentUserId = (session?.user as { id?: string } | undefined)?.id || trip?.settings.currentUserId || "";
 
   const submit = () => {
     if (!content.trim()) return;
-    add.mutate({ content: content.trim(), participantId: currentUserId });
+    add.mutate({ content: content.trim(), userId: currentUserId });
     setContent("");
     toast.success("Сообщение отправлено 💬");
   };
@@ -102,7 +104,7 @@ export function Board() {
 function MessageCard({ message, currentUserId }: { message: BoardMessage; currentUserId?: string }) {
   const togglePin = useTogglePinBoard();
   const del = useDeleteBoardMessage();
-  const isOwn = message.participantId === currentUserId;
+  const isOwn = message.userId === currentUserId;
 
   const formatTime = (date: string) => {
     const d = new Date(date);
@@ -134,12 +136,12 @@ function MessageCard({ message, currentUserId }: { message: BoardMessage; curren
       )}
       <div className="flex items-start gap-2.5">
         {/* Аватар */}
-        {message.participant ? (
+        {message.user ? (
           <div
             className="size-8 rounded-full grid place-items-center text-sm shrink-0 mt-0.5"
-            style={{ background: message.participant.color }}
+            style={{ background: message.user.color }}
           >
-            {message.participant.emoji}
+            {message.user.emoji}
           </div>
         ) : (
           <div className="size-8 rounded-full bg-muted grid place-items-center text-sm shrink-0 mt-0.5">
@@ -150,8 +152,8 @@ function MessageCard({ message, currentUserId }: { message: BoardMessage; curren
         <div className="min-w-0 flex-1">
           {/* Имя + время */}
           <div className="flex items-baseline gap-2 flex-wrap">
-            <span className="font-semibold text-sm" style={{ color: message.participant?.color }}>
-              {message.participant?.name ?? "Аноним"}
+            <span className="font-semibold text-sm" style={{ color: message.user?.color }}>
+              {message.user?.name ?? "Аноним"}
             </span>
             <span className="text-[10px] text-muted-foreground">{formatTime(message.createdAt)}</span>
             {isOwn && (

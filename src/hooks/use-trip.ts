@@ -201,11 +201,11 @@ export function useJournal(dayId?: string) {
 export function useAddJournal() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (data: { dayId: string; content: string; mood?: string; participantId?: string }) => {
+    mutationFn: async (data: { dayId: string; content: string; mood?: string; userId?: string }) => {
       const r = await fetch("/api/journal", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
+        body: JSON.stringify({ ...data, tripId: getTripId() }),
       });
       return r.json();
     },
@@ -522,8 +522,8 @@ export function useUpdateBudgetPlan() {
 export interface BoardMessage {
   id: string;
   content: string;
-  participantId: string | null;
-  participant: { id: string; name: string; color: string; emoji: string } | null;
+  userId: string | null;
+  user: { id: string; name: string; color: string; emoji: string } | null;
   pinned: boolean;
   createdAt: string;
 }
@@ -541,11 +541,11 @@ export function useBoard() {
 export function useAddBoardMessage() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ content, participantId }: { content: string; participantId?: string }) => {
+    mutationFn: async ({ content, userId }: { content: string; userId?: string }) => {
       const r = await fetch("/api/board", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ content, participantId }),
+        body: JSON.stringify({ content, userId, tripId: getTripId() }),
       });
       return r.json();
     },

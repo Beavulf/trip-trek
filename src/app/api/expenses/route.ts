@@ -26,6 +26,7 @@ export async function POST(req: NextRequest) {
     data: { amount: parseFloat(amount), category, description, paidById, tripId, dayId: dayId || null },
     include: { paidBy: true, day: true },
   });
+  emitWS("expense:added", tripId, { amount: parseFloat(amount), description, userName: expense.paidBy?.name || "Кто-то" });
   return NextResponse.json(expense);
 }
 
@@ -33,6 +34,7 @@ export async function DELETE(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const id = searchParams.get("id");
   if (!id) return NextResponse.json({ error: "id required" }, { status: 400 });
-  await db.expense.delete({ where: { id } });
+  const expense = await db.expense.delete({ where: { id } });
+  emitWS("expense:deleted", expense.tripId, { expenseId: id });
   return NextResponse.json({ ok: true });
 }

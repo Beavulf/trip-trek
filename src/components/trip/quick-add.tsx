@@ -12,6 +12,7 @@ import { useTripStore } from "@/lib/trip-store";
 import { EXPENSE_CATEGORIES, type Day } from "@/lib/types";
 import { Camera, Wallet, BookOpen, Loader2, Check, X, Images, MapPin } from "lucide-react";
 import { useRef, useState } from "react";
+import { useSession } from "next-auth/react";
 import { toast } from "sonner";
 import { motion } from "framer-motion";
 import exifr from "exifr";
@@ -22,6 +23,8 @@ type Mode = "photo" | "expense" | "journal";
 export function QuickAddSheet({ open, onOpenChange }: { open: boolean; onOpenChange: (v: boolean) => void }) {
   const [mode, setMode] = useState<Mode>("photo");
   const { data: trip } = useTrip();
+  const { data: session } = useSession();
+  const userId = (session?.user as { id?: string } | undefined)?.id || trip?.settings.currentUserId || "";
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -206,7 +209,7 @@ function PhotoForm({ onDone }: { onDone: () => void }) {
     const fd = new FormData();
     fd.append("file", file);
     fd.append("dayId", dayId);
-    fd.append("participantId", trip?.settings.currentUserId ?? "");
+    fd.append("userId", userId);
     if (caption) fd.append("caption", caption);
     if (coords) {
       fd.append("lat", String(coords.lat));
@@ -345,7 +348,7 @@ function ExpenseForm({ onDone }: { onDone: () => void }) {
       amount: amt,
       category,
       description,
-      paidById: trip!.settings.currentUserId!,
+      paidById: userId,
       dayId,
     });
     toast.success("Трата добавлена 💸");
@@ -424,7 +427,7 @@ function JournalForm({ onDone }: { onDone: () => void }) {
       dayId,
       content,
       mood,
-      participantId: trip!.settings.currentUserId ?? undefined,
+      userId,
     });
     toast.success("Запись добавлена в дневник 📔");
     setContent("");

@@ -888,3 +888,43 @@ Stage Summary:
 - /emit endpoint для эмиссии из API
 - 14 API эмитят события + 6 типов toast-уведомлений
 - dev: "bun server.ts" — единый запуск
+
+---
+Task ID: phase2-userid
+Agent: main (Z.ai Code)
+Task: Фаза 2 — userId (кто что добавил)
+
+Work Log:
+- Quick Add (quick-add.tsx):
+  - Добавлен useSession() — берёт session.user.id
+  - Фото: fd.append("userId", userId) вместо participantId
+  - Траты: paidById: userId вместо trip.settings.currentUserId
+  - Дневник: userId вместо participantId
+- Types (types.ts):
+  - Photo: participantId → userId, participant → user {id,name,emoji,color}
+  - JournalEntry: participantId → userId, participant → user
+- Hooks (use-trip.ts):
+  - useAddJournal: participantId → userId, добавлен tripId
+  - useAddBoardMessage: participantId → userId, добавлен tripId
+  - BoardMessage type: participantId → userId, participant → user
+- Gallery (gallery.tsx):
+  - const uploader = photo.user (вместо participant)
+  - Аватар загрузчика: emoji + color
+  - Lightbox: имя автора
+- Journal (journal.tsx):
+  - const author = e.user
+  - Аватар автора: emoji + color + name
+  - userId в mutate
+- Board (board.tsx):
+  - useSession() для currentUserId
+  - message.userId (вместо participantId)
+  - message.user (вместо participant)
+  - Аватар + имя + "вы" индикатор
+- API expenses POST: emitWS с userName из expense.paidBy.name
+- Проверка: lint чист, приложение работает, ошибок нет
+
+Stage Summary:
+- userId полностью заменён на session.user.id
+- Все компоненты используют user (вместо participant)
+- Аватары "кто добавил" работают на фото, тратах, заметках, сообщениях
+- WS-уведомления включают имя пользователя

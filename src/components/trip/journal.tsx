@@ -33,7 +33,7 @@ export function Journal() {
       dayId: targetDay,
       content,
       mood,
-      participantId: trip.settings.currentUserId ?? undefined,
+      userId: trip.settings.currentUserId ?? undefined,
     });
     toast.success("Запись добавлена 📔");
     setContent("");
@@ -129,7 +129,7 @@ export function Journal() {
               <div className="space-y-2 pl-9">
                 <AnimatePresence>
                   {entries.map((e) => {
-                    const participant = trip.participants.find((p) => p.id === e.participantId);
+                    const author = e.user;
                     return (
                       <motion.div
                         key={e.id}
@@ -138,16 +138,16 @@ export function Journal() {
                         exit={{ opacity: 0, x: -20 }}
                         className="relative rounded-2xl bg-card border border-border p-3 group"
                       >
-                        <div className="absolute -left-7 top-3 size-3 rounded-full border-2 border-background" style={{ background: participant?.color ?? "#94a3b8" }} />
+                        <div className="absolute -left-7 top-3 size-3 rounded-full border-2 border-background" style={{ background: author?.color ?? "#94a3b8" }} />
                         <div className="flex items-start gap-2">
                           {e.mood && <span className="text-2xl">{e.mood}</span>}
                           <div className="flex-1 min-w-0">
                             <p className="text-sm leading-relaxed whitespace-pre-wrap">{e.content}</p>
                             <div className="flex items-center gap-2 mt-1.5 text-[11px] text-muted-foreground">
-                              {participant && (
+                              {author && (
                                 <span className="flex items-center gap-1">
-                                  <span className="size-3 rounded-full grid place-items-center text-[8px]" style={{ background: participant.color }}>{participant.emoji}</span>
-                                  {participant.name}
+                                  <span className="size-3 rounded-full grid place-items-center text-[8px]" style={{ background: author.color }}>{author.emoji}</span>
+                                  {author.name}
                                 </span>
                               )}
                               <span>· {new Date(e.createdAt).toLocaleString("ru-RU", { hour: "2-digit", minute: "2-digit", day: "numeric", month: "short" })}</span>
