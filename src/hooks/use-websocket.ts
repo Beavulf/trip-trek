@@ -19,7 +19,8 @@ export function useWebSocket(tripId: string) {
 
     const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
     const host = window.location.hostname;
-    const wsPort = process.env.NEXT_PUBLIC_WS_PORT || "3001";
+    // server.ts запускает HTTP + WS на одном порту (3000)
+    const wsPort = process.env.NEXT_PUBLIC_WS_PORT || window.location.port || "3000";
     const wsUrl = `${protocol}//${host}:${wsPort}`;
 
     socket = io(wsUrl, {

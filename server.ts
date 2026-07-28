@@ -13,8 +13,42 @@ const handle = app.getRequestHandler();
 const tripRooms = new Map<string, Set<string>>();
 
 app.prepare().then(() => {
-  // HTTP server (Next.js)
+  // HTTP server (Next.js) + /emit endpoint для WS-эмиттеров из API
   const server = createServer((req, res) => {
+    // Внутренний endpoint для эмиссии WS событий из API routes
+    const parsedUrl = new URL(req.url || "/", `http://${req.headers.host}`);
+    if (req.method === "POST" && parsedUrl.pathname === "/emit") {
+      let body = "";
+      req.on("data", (chunk) => { body += chunk; });
+      req.on("end", () => {
+        try {
+          const { event, tripId, ...data } = JSON.parse(body);
+          if (event && tripId) {
+            io.to(`trip:${tripId}`).emit(event, { tripId, ...data });
+            // Также отправляем notification для toast
+            const notifMap: Record<string, { emoji: string; msg: (d: Record<string, unknown>) => string }> = {
+              "place:visited": { emoji: "📍", msg: (d) => `${d.userName} отметил(а): ${d.placeName}` },
+              "place:created": { emoji: "📍", msg: (d) => `${d.userName} добавил(а) место: ${d.placeName}` },
+              "photo:added": { emoji: "📸", msg: (d) => `${d.userName} добавил(а) фото` },
+              "expense:added": { emoji: "💸", msg: (d) => `${d.userName} добавил(а) трату: $${d.amount} — ${d.description}` },
+              "journal:added": { emoji: "📔", msg: (d) => `${d.userName} написал(а) в дневник ${d.mood || ""}` },
+              "board:added": { emoji: "💬", msg: (d) => `${d.userName}: ${String(d.content || "").slice(0, 50)}` },
+            };
+            const notif = notifMap[event];
+            if (notif) {
+              io.to(`trip:${tripId}`).emit("notification", {
+                type: event.split(":")[0],
+                message: notif.msg(data),
+                emoji: notif.emoji,
+              });
+            }
+          }
+        } catch {}
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ ok: true }));
+      });
+      return;
+    }
     handle(req, res);
   });
 

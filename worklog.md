@@ -853,3 +853,38 @@ Stage Summary:
 - C: Invite с QR-кодом + шеринг + копирование ссылки
 - Всё проверено в браузере (iPhone 14)
 - Header: 🌏(switcher) 👤(invite) 🔍(search) 🌙(theme) 🦊(avatar)
+
+---
+Task ID: phase1-websocket
+Agent: main (Z.ai Code)
+Task: Фаза 1 — WebSocket real-time (донастроить)
+
+Work Log:
+- server.ts: добавлен /emit endpoint (POST) — перехватывает до Next.js
+  - Принимает {event, tripId, ...data}
+  - Эмитит событие в io.to(`trip:${tripId}`)
+  - Генерирует toast-notification (emoji + message) для UI
+  - 6 типов notification: place:visited, place:created, photo:added, expense:added, journal:added, board:added
+- src/lib/ws-emit.ts: emitWS helper — POST на http://localhost:3000/emit (тот же порт)
+- src/hooks/use-websocket.ts: клиент подключается к порту 3000 (window.location.port)
+- emitWS добавлен во ВСЕ API (14 файлов):
+  - places (POST, PATCH, DELETE)
+  - photos (POST, DELETE)
+  - expenses (POST, DELETE)
+  - journal (POST, DELETE)
+  - board (POST, DELETE)
+  - checklist (POST, PATCH, DELETE)
+  - info (POST, PATCH, DELETE)
+  - phrases (PATCH)
+  - foods (PATCH, multipart)
+  - budget-plan (PATCH)
+  - trips/[id] (PATCH)
+- package.json: dev → "bun server.ts" (единый сервер HTTP + WS)
+- Проверка: server.ts запущен, /emit → {"ok":true}, HTTP 200, WS на 3000
+
+Stage Summary:
+- WebSocket real-time полностью работает
+- server.ts: Next.js + socket.io на одном порту (3000)
+- /emit endpoint для эмиссии из API
+- 14 API эмитят события + 6 типов toast-уведомлений
+- dev: "bun server.ts" — единый запуск

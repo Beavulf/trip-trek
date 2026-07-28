@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { emitWS } from "@/lib/ws-emit";
 
 // GET /api/checklist?tripId=...
 export async function GET(req: NextRequest) {
@@ -18,6 +19,7 @@ export async function POST(req: NextRequest) {
   if (!text || !tripId) return NextResponse.json({ error: "text, tripId required" }, { status: 400 });
   const order = await db.checklistItem.count({ where: { tripId, category: category || "preparation" } });
   const item = await db.checklistItem.create({ data: { text, category: category || "preparation", tripId, order } });
+  emitWS("checklist:updated", tripId, {});
   return NextResponse.json(item);
 }
 
@@ -29,6 +31,7 @@ export async function PATCH(req: NextRequest) {
   if (typeof text === "string") data.text = text;
   if (typeof category === "string") data.category = category;
   const item = await db.checklistItem.update({ where: { id }, data });
+  emitWS("checklist:updated", item.tripId, { itemId: id, done });
   return NextResponse.json(item);
 }
 
@@ -36,6 +39,7 @@ export async function DELETE(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const id = searchParams.get("id");
   if (!id) return NextResponse.json({ error: "id required" }, { status: 400 });
-  await db.checklistItem.delete({ where: { id } });
+  const item = await db.checklistItem.delete({ where: { id } });
+  emitWS("checklist:updated", item.tripId, {});
   return NextResponse.json({ ok: true });
 }

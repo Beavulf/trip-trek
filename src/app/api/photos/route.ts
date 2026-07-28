@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { emitWS } from "@/lib/ws-emit";
 
 // GET /api/photos?tripId=...&dayId=...&placeId=...
 export async function GET(req: NextRequest) {
@@ -55,6 +56,7 @@ export async function POST(req: NextRequest) {
     data: { url, thumbUrl: url, caption, dayId, tripId, placeId, userId, lat, lng, address, takenAt: new Date() },
     include: { place: true, user: true, day: true },
   });
+  emitWS("photo:added", tripId, { userName: photo.user?.name || "Кто-то" });
   return NextResponse.json(photo);
 }
 
@@ -63,7 +65,8 @@ export async function DELETE(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const id = searchParams.get("id");
   if (!id) return NextResponse.json({ error: "id required" }, { status: 400 });
-  await db.photo.delete({ where: { id } });
+  const photo = await db.photo.delete({ where: { id } });
+  emitWS("photo:added", photo.tripId, {});
   return NextResponse.json({ ok: true });
 }
 

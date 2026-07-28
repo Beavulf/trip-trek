@@ -1,7 +1,7 @@
 // Helper для эмиссии WS событий из API routes
-// Работает через HTTP POST на внутренний WS-сервис
+// Работает через HTTP POST на тот же порт что и Next.js (server.ts перехватывает /emit)
 
-const WS_INTERNAL_URL = process.env.WS_INTERNAL_URL || "http://localhost:3001";
+const WS_INTERNAL_URL = process.env.WS_INTERNAL_URL || "http://localhost:3000";
 
 type WSEvent =
   | "place:visited"

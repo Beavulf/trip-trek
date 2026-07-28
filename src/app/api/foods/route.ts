@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { emitWS } from "@/lib/ws-emit";
 
 // GET /api/foods?tripId=...&city=...
 export async function GET(req: NextRequest) {
@@ -33,6 +34,7 @@ export async function PATCH(req: NextRequest) {
     await writeFile(path.join(uploadDir, fileName), Buffer.from(await file.arrayBuffer()));
     const url = `/uploads/${fileName}`;
     const food = await db.foodItem.update({ where: { id }, data: { imageUrl: url } });
+    emitWS("food:updated", food.tripId, {});
     return NextResponse.json(food);
   }
 
@@ -43,6 +45,7 @@ export async function PATCH(req: NextRequest) {
   if (typeof rating === "number" || rating === null) data.rating = rating;
   if (typeof imageUrl === "string" || imageUrl === null) data.imageUrl = imageUrl;
   const food = await db.foodItem.update({ where: { id }, data });
+  emitWS("food:updated", food.tripId, {});
   return NextResponse.json(food);
 }
 

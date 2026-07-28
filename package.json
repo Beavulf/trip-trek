@@ -3,9 +3,9 @@
   "version": "0.2.1",
   "private": true,
   "scripts": {
-    "dev": "next dev -p 3000 2>&1 | tee dev.log",
+    "dev": "bun server.ts",
+    "dev:next": "next dev -p 3000",
     "dev:ws": "bun server.ts",
-    "dev:all": "concurrently \"next dev -p 3000\" \"bun server.ts\"",
     "build": "next build && cp -r .next/static .next/standalone/.next/ && cp -r public .next/standalone/",
     "start": "NODE_ENV=production bun server.ts 2>&1 | tee server.log",
     "lint": "eslint .",

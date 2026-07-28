@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { emitWS } from "@/lib/ws-emit";
 
 // GET /api/trips/[id] — детали поездки
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -31,6 +32,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     }
   }
   const trip = await db.trip.update({ where: { id }, data });
+  emitWS("trip:updated", id, {});
   return NextResponse.json(trip);
 }
 

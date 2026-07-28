@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { emitWS } from "@/lib/ws-emit";
 
 // GET /api/board?tripId=...
 export async function GET(req: NextRequest) {
@@ -22,6 +23,7 @@ export async function POST(req: NextRequest) {
     data: { content: content.trim(), userId: userId || null, tripId },
     include: { user: true },
   });
+  emitWS("board:added", tripId, { userName: msg.user?.name || "Кто-то", content: content.trim() });
   return NextResponse.json(msg);
 }
 
@@ -36,6 +38,7 @@ export async function DELETE(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const id = searchParams.get("id");
   if (!id) return NextResponse.json({ error: "id required" }, { status: 400 });
-  await db.boardMessage.delete({ where: { id } });
+  const msg = await db.boardMessage.delete({ where: { id } });
+  emitWS("board:deleted", msg.tripId, { messageId: id });
   return NextResponse.json({ ok: true });
 }

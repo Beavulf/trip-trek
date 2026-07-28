@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { emitWS } from "@/lib/ws-emit";
 
 // GET /api/info?tripId=...&type=...
 export async function GET(req: NextRequest) {
@@ -25,6 +26,7 @@ export async function POST(req: NextRequest) {
   }
   const order = await db.infoItem.count({ where: { tripId, type } });
   const item = await db.infoItem.create({ data: { type, title, content, icon: icon || null, tripId, order } });
+  emitWS("info:updated", tripId, {});
   return NextResponse.json(item);
 }
 
@@ -37,6 +39,7 @@ export async function PATCH(req: NextRequest) {
   if (icon !== undefined) data.icon = icon;
   if (typeof type === "string") data.type = type;
   const item = await db.infoItem.update({ where: { id }, data });
+  emitWS("info:updated", item.tripId, {});
   return NextResponse.json(item);
 }
 
@@ -44,6 +47,7 @@ export async function DELETE(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const id = searchParams.get("id");
   if (!id) return NextResponse.json({ error: "id required" }, { status: 400 });
-  await db.infoItem.delete({ where: { id } });
+  const item = await db.infoItem.delete({ where: { id } });
+  emitWS("info:updated", item.tripId, {});
   return NextResponse.json({ ok: true });
 }

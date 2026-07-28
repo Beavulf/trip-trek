@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { emitWS } from "@/lib/ws-emit";
 
 // GET /api/budget-plan?tripId=...
 export async function GET(req: NextRequest) {
@@ -21,5 +22,6 @@ export async function PATCH(req: NextRequest) {
     create: { tripId, category, amount },
     update: { amount },
   });
+  emitWS("budget:updated", tripId, {});
   return NextResponse.json(plan);
 }
