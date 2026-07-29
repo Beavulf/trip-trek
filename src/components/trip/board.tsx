@@ -4,7 +4,7 @@ import { useBoard, useAddBoardMessage, useTogglePinBoard, useDeleteBoardMessage,
 import { motion, AnimatePresence } from "framer-motion";
 import { MessageSquare, Send, Pin, Trash2, Loader2, MessagesSquare } from "lucide-react";
 import { useState, useRef, useEffect } from "react";
-import { useSession } from "next-auth/react";
+import { useAuth as useSession } from "@/hooks/use-auth";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 

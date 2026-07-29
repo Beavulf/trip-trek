@@ -31,31 +31,22 @@ export default function LoginPage() {
         const res = await fetch("/api/auth/register", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email, password, name }),
+          body: JSON.stringify({ email, password, name, emoji, color }),
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error);
       }
 
-      // Прямой логин через NextAuth API (без signIn из next-auth/react)
-      const csrfRes = await fetch("/api/auth/csrf");
-      const csrfData = await csrfRes.json();
-
-      const formData = new URLSearchParams();
-      formData.set("email", email);
-      formData.set("password", password);
-      formData.set("csrfToken", csrfData.csrfToken);
-      formData.set("json", "true");
-
-      const authRes = await fetch("/api/auth/callback/credentials", {
+      // Кастомный логин (обходит баг NextAuth v4 + Turbopack)
+      const authRes = await fetch("/api/auth/custom-login", {
         method: "POST",
-        headers: { "Content-Type": "application/x-www-form-urlencoded" },
-        body: formData.toString(),
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password }),
       });
       const authData = await authRes.json();
 
-      if (authData.url && authData.url.includes("signin?csrf")) {
-        throw new Error("Неверный email или пароль");
+      if (!authRes.ok) {
+        throw new Error(authData.error || "Неверный email или пароль");
       }
 
       toast.success(mode === "register" ? "Добро пожаловать! 🎉" : "С возвращением! 👋");

@@ -12,7 +12,7 @@ import { useTripStore } from "@/lib/trip-store";
 import { EXPENSE_CATEGORIES, type Day } from "@/lib/types";
 import { Camera, Wallet, BookOpen, Loader2, Check, X, Images, MapPin } from "lucide-react";
 import { useRef, useState } from "react";
-import { useSession } from "next-auth/react";
+import { useAuth as useSession } from "@/hooks/use-auth";
 import { toast } from "sonner";
 import { motion } from "framer-motion";
 import exifr from "exifr";

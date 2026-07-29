@@ -63,9 +63,18 @@ export async function POST(req: NextRequest) {
     }
 
     // Используем z-ai-web-dev-sdk
-    let ZAI: { default: { chat: { completions: { create: (opts: unknown) => Promise<{ choices: { message: { content: string } }[] }> } } } };
     try {
-      ZAI = require("z-ai-web-dev-sdk");
+      const ZAIModule = await import("z-ai-web-dev-sdk");
+      const ZAI = ZAIModule.default;
+      const zai = await ZAI.create();
+      const completion = await zai.chat.completions.create({
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: userPrompt },
+        ],
+      });
+      const content = (completion as { choices?: { message?: { content?: string } }[] })?.choices?.[0]?.message?.content || "Не удалось сгенерировать итог.";
+      return NextResponse.json({ content, type });
     } catch {
       // SDK недоступен — fallback
       return NextResponse.json({
@@ -77,19 +86,6 @@ export async function POST(req: NextRequest) {
         type,
       });
     }
-
-    const zai = ZAI.default;
-    const completion = await zai.chat.completions.create({
-      messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: userPrompt },
-      ],
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } as any);
-
-    const content = completion.choices?.[0]?.message?.content || "Не удалось сгенерировать итог.";
-
-    return NextResponse.json({ content, type });
   } catch (e) {
     console.error("AI summary error:", e);
     return NextResponse.json({ error: "AI request failed" }, { status: 500 });

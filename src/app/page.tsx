@@ -37,7 +37,7 @@ export default function Home() {
 
   // Проверка сессии через API
   useEffect(() => {
-    fetch("/api/auth/session")
+    fetch("/api/auth/custom-session")
       .then((r) => {
         if (!r.ok) throw new Error("session fetch failed");
         return r.json();
@@ -52,7 +52,6 @@ export default function Home() {
       })
       .catch(() => {
         // На ошибке сети НЕ редиректим — возможно временный сбой
-        // Показываем приложение, next-auth сам покажет логин при необходимости
         setAuthenticated(true);
         setAuthChecked(true);
       });

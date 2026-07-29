@@ -1,27 +1,14 @@
 import type { NextAuthOptions } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
 import { db } from "@/lib/db";
-import crypto from "crypto";
+import bcrypt from "bcryptjs";
 
-// Простой hash проверка без bcrypt (надёжнее в Turbopack)
+// Проверка пароля через bcrypt
 function verifyPassword(password: string, hash: string): boolean {
   try {
-    // Если хеш от bcrypt — пробуем bcrypt
-    if (hash.startsWith("$2a$") || hash.startsWith("$2b$")) {
-      // Динамический импорт bcryptjs
-      return bcryptCompareSync(password, hash);
+    if (!hash || !(hash.startsWith("$2a$") || hash.startsWith("$2b$") || hash.startsWith("$2y$"))) {
+      return false;
     }
-    return false;
-  } catch {
-    return false;
-  }
-}
-
-// Динамический импорт bcryptjs
-function bcryptCompareSync(password: string, hash: string): boolean {
-  try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const bcrypt = require("bcryptjs");
     return bcrypt.compareSync(password, hash);
   } catch {
     return false;
@@ -37,7 +24,9 @@ export const authOptions: NextAuthOptions = {
         password: { label: "Пароль", type: "password" },
       },
       async authorize(credentials) {
+        process.stderr.write("[AUTH] authorize called\n");
         if (!credentials?.email || !credentials?.password) {
+          process.stderr.write("[AUTH] no credentials\n");
           return null;
         }
 
@@ -45,11 +34,14 @@ export const authOptions: NextAuthOptions = {
           where: { email: credentials.email },
         });
 
+        console.log("[AUTH] user found:", !!user, user?.email);
         if (!user || !user.password) {
+          console.log("[AUTH] no user or password");
           return null;
         }
 
         const isValid = verifyPassword(credentials.password, user.password);
+        console.log("[AUTH] password valid:", isValid);
         if (!isValid) {
           return null;
         }

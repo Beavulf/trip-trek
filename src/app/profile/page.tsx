@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useSession } from "next-auth/react";
+import { useAuth as useSession } from "@/hooks/use-auth";
 import { useTheme } from "next-themes";
 import { toast } from "sonner";
 import {
@@ -108,12 +108,17 @@ export default function ProfilePage() {
     }
   }, [profile]);
 
-  // Проверка авторизации
+  // Проверка авторизации через custom-session
   useEffect(() => {
-    if (status === "unauthenticated") {
-      router.push("/login");
-    }
-  }, [status, router]);
+    fetch("/api/auth/custom-session")
+      .then((r) => r.json())
+      .then((data) => {
+        if (!data?.user) {
+          router.push("/login");
+        }
+      })
+      .catch(() => {});
+  }, [router]);
 
   const saveProfile = async () => {
     setSaving(true);
@@ -138,18 +143,9 @@ export default function ProfilePage() {
   const handleSignOut = async () => {
     setSigningOut(true);
     try {
-      // CSRF token
-      const csrfRes = await fetch("/api/auth/csrf");
-      const { csrfToken } = await csrfRes.json();
-      // Sign out
-      await fetch("/api/auth/signout", {
-        method: "POST",
-        headers: { "Content-Type": "application/x-www-form-urlencoded" },
-        body: `csrfToken=${csrfToken}`,
-      });
+      await fetch("/api/auth/custom-signout", { method: "POST" });
       window.location.assign("/login");
     } catch {
-      // Fallback — просто редирект
       window.location.assign("/login");
     } finally {
       setSigningOut(false);

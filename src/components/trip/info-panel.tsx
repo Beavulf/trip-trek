@@ -395,7 +395,7 @@ function InfoCard({ item, color, defaultIcon }: { item: InfoItem; color: string;
           className="size-10 rounded-xl grid place-items-center text-xl shrink-0"
           style={{ background: `${color}22` }}
         >
-          {item.icon ? <span>{item.icon}</span> : defaultIcon ? <defaultIcon className="size-5" style={{ color }} /> : <span>📌</span>}
+          {item.icon ? <span>{item.icon}</span> : defaultIcon ? (() => { const Icon = defaultIcon; return <Icon className="size-5" style={{ color }} />; })() : <span>📌</span>}
         </div>
         <div className="min-w-0 flex-1">
           <h3 className="font-semibold text-sm leading-tight">{item.title}</h3>

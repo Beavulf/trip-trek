@@ -6,7 +6,7 @@ import { motion } from "framer-motion";
 import { Loader2, Plane, Users, Calendar, Check, X } from "lucide-react";
 import { toast } from "sonner";
 import { setTripId } from "@/hooks/use-trip";
-import { useSession } from "next-auth/react";
+import { useAuth as useSession } from "@/hooks/use-auth";
 
 export default function JoinPage({ params }: { params: Promise<{ code: string }> }) {
   const router = useRouter();

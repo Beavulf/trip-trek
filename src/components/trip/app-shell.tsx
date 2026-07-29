@@ -33,7 +33,7 @@ import {
 } from "lucide-react";
 import { useState, useEffect, useRef, type ReactNode } from "react";
 import { useTheme } from "next-themes";
-import { useSession } from "next-auth/react";
+import { useAuth as useSession } from "@/hooks/use-auth";
 import { useRouter } from "next/navigation";
 import { useWebSocket } from "@/hooks/use-websocket";
 import { QuickAddSheet } from "./quick-add";

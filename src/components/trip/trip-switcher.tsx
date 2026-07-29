@@ -4,7 +4,7 @@ import { useState, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Plane, Plus, ChevronRight, X, Loader2, Globe, Users, Calendar, ArrowRight, Crown } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useSession } from "next-auth/react";
+import { useAuth as useSession } from "@/hooks/use-auth";
 import { toast } from "sonner";
 import { setTripId, getTripId } from "@/hooks/use-trip";
 import { useRouter } from "next/navigation";
@@ -140,8 +140,8 @@ export function TripSwitcher() {
               <div className="p-4">
                 {showCreate ? (
                   <CreateTripForm
-                    userId={userId}
-                    userName={session?.user?.name || "Я" as string}
+                    userId={userId || ""}
+                    userName={session?.user?.name || "Я"}
                     onSubmit={(data) => createTrip.mutate(data)}
                     onCancel={() => setShowCreate(false)}
                     loading={createTrip.isPending}

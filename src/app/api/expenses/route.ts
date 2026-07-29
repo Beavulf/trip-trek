@@ -23,15 +23,22 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   const body = await req.json();
   const { amount, category, description, paidById, dayId, tripId } = body;
-  if (!amount || !category || !description || !paidById || !tripId) {
-    return NextResponse.json({ error: "amount, category, description, paidById, tripId required" }, { status: 400 });
+  if (!category || !description || !paidById || !tripId) {
+    return NextResponse.json({ error: "category, description, paidById, tripId required" }, { status: 400 });
+  }
+  const parsedAmount = typeof amount === "number" ? amount : parseFloat(amount);
+  if (isNaN(parsedAmount) || parsedAmount <= 0 || parsedAmount > 1000000) {
+    return NextResponse.json({ error: "amount must be positive (max 1000000)" }, { status: 400 });
+  }
+  if (typeof description !== "string" || !description.trim() || description.length > 500) {
+    return NextResponse.json({ error: "description required (max 500 chars)" }, { status: 400 });
   }
 
   const expense = await db.expense.create({
     data: {
-      amount: parseFloat(amount),
+      amount: parsedAmount,
       category,
-      description,
+      description: description.trim().slice(0, 500),
       paidById,
       dayId: dayId || null,
       tripId,
