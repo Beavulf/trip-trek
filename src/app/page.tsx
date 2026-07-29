@@ -20,8 +20,8 @@ import { Achievements } from "@/components/trip/achievements";
 import { Board } from "@/components/trip/board";
 import { AnimatePresence, motion } from "framer-motion";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
 import { Loader2 } from "lucide-react";
+import { useAuth } from "@/hooks/use-auth";
 
 // Leaflet работает только в браузере
 const TripMap = dynamic(() => import("@/components/trip/trip-map"), {
@@ -32,37 +32,31 @@ const TripMap = dynamic(() => import("@/components/trip/trip-map"), {
 export default function Home() {
   const { activeTab } = useTripStore();
   const router = useRouter();
-  const [authChecked, setAuthChecked] = useState(false);
-  const [authenticated, setAuthenticated] = useState(false);
+  const { data: session, status } = useAuth();
 
-  // Проверка сессии через API
-  useEffect(() => {
-    fetch("/api/auth/custom-session")
-      .then((r) => {
-        if (!r.ok) throw new Error("session fetch failed");
-        return r.json();
-      })
-      .then((data) => {
-        if (data?.user) {
-          setAuthenticated(true);
-        } else {
-          router.push("/login");
-        }
-        setAuthChecked(true);
-      })
-      .catch(() => {
-        // На ошибке сети НЕ редиректим — возможно временный сбой
-        setAuthenticated(true);
-        setAuthChecked(true);
-      });
-  }, [router]);
+  // Редирект только когда ТОЧНО не авторизован
+  if (status === "unauthenticated") {
+    router.push("/login");
+  }
 
-  if (!authChecked || !authenticated) {
+  // Пока грузится или авторизован — показываем контент
+  if (status === "loading") {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="flex flex-col items-center gap-3">
           <Loader2 className="size-8 animate-spin text-primary" />
           <p className="text-sm text-muted-foreground">Загрузка…</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (status === "unauthenticated" || !session?.user) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="flex flex-col items-center gap-3">
+          <Loader2 className="size-8 animate-spin text-primary" />
+          <p className="text-sm text-muted-foreground">Перенаправление…</p>
         </div>
       </div>
     );
