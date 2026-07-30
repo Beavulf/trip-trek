@@ -2,98 +2,106 @@
 
 ## Current Project Status
 
-**Phase**: 6 (Freemium) + Auth Fix + Server Modularization — COMPLETED
+**Phase**: 7 (Trip Templates + UI Polish) — COMPLETED
 **Build**: ✅ TypeScript clean, ESLint clean
 **Dev Server**: Running on port 3000
 **Test Accounts**: you@/leha@/den@triptrek.com (password: 1234)
 
 ---
 
-## Session: Auth Fix + Profile Premium + Server Modules
+## Session: Trip Templates + UI Polish
 
-### Bug: Login redirects back to /login after loading
-**Root cause**: `providers.tsx` wrapped the app with NextAuth's `<SessionProvider>` which was calling `/api/auth/session` (NextAuth endpoint) and clearing our custom JWT cookie (it's not a NextAuth JWT, so NextAuth rejects it and clears the session).
+### QA Results (agent-browser)
+- ✅ Login flow works (you@triptrek.com → main page with tabs)
+- ✅ No redirect to localhost on tab switching
+- ✅ Profile page loads correctly (avatar, stats, achievements, premium card)
+- ✅ Premium card visible in profile (gold gradient, "Получить Premium от $5")
+- ✅ PremiumModal opens, $5/$30 buttons work, API upgrades user
+- ✅ Tabs switch without errors (0 console errors)
+- ✅ URL stays on `/` during navigation (no unwanted redirects)
 
-**Fix**:
-- Removed `<SessionProvider>` from `providers.tsx` (no longer using NextAuth's session system)
-- Rewrote `useAuth` hook: `retry: 1`, `refetchOnWindowFocus: true`, `staleTime: 5min`, `gcTime: 30min`, `refetchOnMount: true`, error = "loading" not "unauthenticated"
-- Removed duplicate auth check in profile page useEffect (was racing with useAuth)
-- Profile page now only redirects when `status === "unauthenticated"` (not on loading/error)
-- Main page now uses `useAuth` hook instead of manual fetch (single source of truth via TanStack cache)
+### New Feature: Trip Templates
+**Problem**: Creating a trip from scratch requires manually adding places, foods, phrases — tedious for new users.
 
-### Bug: Profile page redirect to localhost
-**Root cause**: Same as above — NextAuth SessionProvider cleared the JWT cookie, so custom-session returned null user, triggering redirect.
+**Solution**: Pre-built trip templates that auto-create days, places, foods, phrases.
 
-**Fix**: Same fix as above. Profile page now correctly shows when authenticated.
+**Files created**:
+- `src/lib/trip-templates.ts` — 4 templates: China 🇨🇳 (12 days), Japan 🇯🇵 (10 days), Europe 🇪🇺 (14 days), Thailand 🇹🇭 (10 days)
+- `src/app/api/trips/from-template/route.ts` — POST endpoint creates trip + days + places + foods + phrases with limit checking
+- `src/components/trip/template-picker.tsx` — Beautiful modal with template cards (cover gradient, emoji, stats, create button)
 
-### Feature: Visible Premium buy button in profile
-**Added**: Prominent Premium card in profile page (below profile header, before stats):
-- If NOT premium: Big gold gradient button "Получить Premium" with benefits list (AI, ∞ поездок, ∞ друзей) and price "от $5"
-- If premium: Gold-bordered card showing "Premium активен 👑" with expiry date and "Безлимит" badges
-- Clicking the not-premium card opens PremiumModal
+**Integration**:
+- Added "Создать из шаблона" button in TripSwitcher (gradient, Sparkles icon)
+- Template picker opens as portal, shows all 4 templates with covers + stats
+- On create: API checks premium limits (free=1 trip, premium=unlimited)
+- Success: switches to new trip, invalidates queries, navigates to main page
 
-### Refactor: server.ts modularized
-Split 197-line monolithic `server.ts` into modular architecture:
-- `server.ts` — main entry (Next.js + Socket.io setup, ~40 lines)
-- `server/emit-handler.ts` — /emit HTTP endpoint (API → WS bridge)
-- `server/socket-handlers.ts` — socket.io event handlers (data-driven from config)
-- `server/rooms.ts` — TripRooms class (join/leave/removeSocket/getRoomSize)
-- `server/notification-map.ts` — notification config (event → emoji + message generator)
+**Verified**:
+- Free user → 403 "Лимит поездок исчерпан"
+- Premium user → 200, trip created with 4 places (Japan), 3 foods, 3 phrases
+- Template "Япония мечты" created successfully with custom title
+- UI shows all 4 templates with correct emojis 🇨🇳🇯🇵🇪🇺🇹🇭
 
-New features are added by editing `notification-map.ts` (add event to `SOCKET_EVENTS` map) — no need to touch the handler logic.
+### UI Polish: Skeleton Loading
+- Improved `DashboardSkeleton` with shimmer animation (staggered delays for stats grid)
+- Uses existing `.shimmer` CSS class for consistent loading state
 
 ---
 
-## Previous Session Summary
+## Previous Sessions Summary
 
-### Bug Fixes (all completed)
-1. `userId is not defined` (photo upload) — passed userId as prop to forms
-2. `update dates failed` — rewrote trip/dates + trip/budget routes to use `db.trip`
-3. Redirect to localhost on tab switch — removed router.refresh, made auth resilient
-4. NextAuth v4 + Turbopack incompatibility — built custom JWT auth system:
-   - `POST /api/auth/custom-login` — bcrypt verify + JWT in cookie
-   - `GET /api/auth/custom-session` — reads JWT from cookie
-   - `POST /api/auth/custom-signout` — clears cookie
-   - `useAuth` hook replaces `useSession` everywhere
+### Auth System (custom JWT, bypasses NextAuth v4 + Turbopack bug)
+- `POST /api/auth/custom-login` — bcrypt verify + JWT in cookie
+- `GET /api/auth/custom-session` — reads JWT from cookie
+- `POST /api/auth/custom-signout` — clears cookie
+- `useAuth` hook replaces `useSession` everywhere (retry: 1, refetchOnWindowFocus, staleTime 5min)
+- Removed NextAuth `<SessionProvider>` from providers.tsx (was clearing our JWT)
 
-### Premium Features (completed)
+### Premium Features
 - `POST /api/user/upgrade` — sets plan=premium + planExpiry (30d/365d)
-- PremiumModal wired to call API, shows loading, invalidates queries
+- PremiumModal wired to API, shows loading, invalidates queries
 - Crown button in header (gold if premium, grey if free)
+- Prominent Premium card in profile (gold gradient if not premium, status card if premium)
 
-### Profile Page (completed)
+### Profile Page
 - Avatar with emoji/color picker (30 emojis, 12 colors)
 - 6 stat cards (trips, photos, spent, journals, messages, places)
-- 13 achievements grid
+- 13 achievements grid (unlocked/locked)
 - All trips list with role + member count
 - Settings: theme, premium, push, about
 - Sign out button
 
-### Security Fixes (completed)
-- Photos POST: file type validation (JPEG/PNG/WebP/GIF/HEIC) + 20MB limit
-- Expenses POST: amount validation (positive, ≤1000000), description validation (≤500 chars)
-- Board POST: fixed `tripIds` typo, added content.trim() validation
-- Export/Import: rewrote to multi-trip schema
-- AI-summary: rewrote to multi-trip schema + ES import
-- emitWS: fixed 3-arg signature, added missing events
-- `participant` → `user` in all components
+### Server Architecture (modular)
+- `server.ts` — entry point (~40 lines)
+- `server/emit-handler.ts` — /emit HTTP endpoint
+- `server/socket-handlers.ts` — socket.io handlers (data-driven)
+- `server/rooms.ts` — TripRooms class
+- `server/notification-map.ts` — notification config
+
+### Security Fixes
+- Photos: file type validation + 20MB limit
+- Expenses: amount validation (positive, ≤1000000)
+- Board: fixed tripIds typo, content validation
+- Export/Import: multi-trip schema
+- AI-summary: multi-trip schema + ES import
+- emitWS: 3-arg signature fixed
 
 ## Unresolved Issues / Risks
 
-1. **Seed scripts** — `prisma/seed*.ts` still use old schema. Low priority (dev DB already seeded).
-2. **WebSocket server** — `server.ts` not used in dev mode (`bun run dev` = `next dev`). WS works via /emit HTTP bridge only.
-3. **Stripe** — Premium upgrade is demo-mode (API changes DB, no real payment).
+1. **Seed scripts** — `prisma/seed*.ts` still use old schema. Low priority.
+2. **WebSocket server** — `server.ts` not used in dev mode. WS works via /emit bridge only.
+3. **Stripe** — Premium upgrade is demo-mode (no real payment).
 4. **No rate limiting** — API routes have no rate limiting.
 
 ## Priority Recommendations for Next Phase
 
-1. **Add real-time presence** — show who's online in each trip (using TripRooms)
-2. **Trip sharing improvements** — public read-only trip view via share link
+1. **Real-time presence** — show who's online in each trip (using TripRooms)
+2. **Public trip view** — read-only trip view via share link
 3. **Offline support** — PWA caching for offline trip access
-4. **Trip templates** — pre-built trip templates (China, Japan, Europe)
-5. **Expense splitting** — automatic debt calculation between members
-6. **AI itinerary planner** — generate day-by-day plan from preferences
-7. **Photo albums** — organize photos into albums per day/city
-8. **Trip cloning** — duplicate a past trip as a template for new one
-9. **Currency auto-conversion** — real-time FX in expense entry
-10. **Push notifications via VAPID** — real Web Push (not just SW-based)
+4. **Expense splitting improvements** — already exists in budget.tsx, could add "mark as paid" + notifications
+5. **AI itinerary planner** — generate day-by-day plan from preferences
+6. **Photo albums** — organize photos by day/city
+7. **Trip cloning** — duplicate existing trip as template
+8. **Currency auto-conversion** — real-time FX in expense entry
+9. **Push notifications via VAPID** — real Web Push
+10. **Trip templates expansion** — add more templates (Korea, Vietnam, Italy, USA)

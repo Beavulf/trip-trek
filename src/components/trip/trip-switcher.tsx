@@ -2,19 +2,21 @@
 
 import { useState, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Plane, Plus, ChevronRight, X, Loader2, Globe, Users, Calendar, ArrowRight, Crown } from "lucide-react";
+import { Plane, Plus, ChevronRight, X, Loader2, Globe, Users, Calendar, ArrowRight, Crown, Sparkles } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth as useSession } from "@/hooks/use-auth";
 import { toast } from "sonner";
 import { setTripId, getTripId } from "@/hooks/use-trip";
 import { useRouter } from "next/navigation";
 import { PremiumModal } from "./premium-modal";
+import { TemplatePicker } from "./template-picker";
 import { createPortal } from "react-dom";
 import { cn } from "@/lib/utils";
 
 export function TripSwitcher() {
   const [open, setOpen] = useState(false);
   const [showCreate, setShowCreate] = useState(false);
+  const [templateOpen, setTemplateOpen] = useState(false);
   const [premiumOpen, setPremiumOpen] = useState(false);
   const { data: session, status } = useSession();
   const router = useRouter();
@@ -203,13 +205,22 @@ export function TripSwitcher() {
                       </div>
                     )}
 
+                    {/* Кнопка создать из шаблона */}
+                    <button
+                      onClick={() => { setOpen(false); setTemplateOpen(true); }}
+                      className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl bg-gradient-to-r from-primary/10 to-rose-500/10 border-2 border-primary/20 hover:border-primary/40 hover:bg-primary/15 transition-colors mt-3"
+                    >
+                      <Sparkles className="size-5 text-primary" />
+                      <span className="text-sm font-medium">Создать из шаблона</span>
+                    </button>
+
                     {/* Кнопка создать */}
                     <button
                       onClick={() => setShowCreate(true)}
-                      className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl border-2 border-dashed border-border hover:border-primary hover:text-primary transition-colors mt-3"
+                      className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl border-2 border-dashed border-border hover:border-primary hover:text-primary transition-colors mt-2"
                     >
                       <Plus className="size-5" />
-                      <span className="text-sm font-medium">Создать поездку</span>
+                      <span className="text-sm font-medium">Создать с нуля</span>
                     </button>
 
                     {/* Кнопка присоединиться */}
@@ -239,6 +250,7 @@ export function TripSwitcher() {
       )}
 
       <PremiumModal open={premiumOpen} onOpenChange={setPremiumOpen} />
+      <TemplatePicker open={templateOpen} onOpenChange={setTemplateOpen} userId={userId || ""} />
     </>
   );
 }
