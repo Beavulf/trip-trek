@@ -1,6 +1,6 @@
 "use client";
 
-import { useDays, useUpdatePlace } from "@/hooks/use-trip";
+import { useDays, useUpdatePlace, getTripId } from "@/hooks/use-trip";
 import { useTripStore } from "@/lib/trip-store";
 import { CATEGORY_META, CITIES, type Place, type Day, type Photo } from "@/lib/types";
 import { MapContainer, TileLayer, Marker, Popup, useMap, useMapEvents } from "react-leaflet";
@@ -57,11 +57,11 @@ export default function TripMap() {
   const [fullscreenPhoto, setFullscreenPhoto] = useState<Photo | null>(null);
   const { resolvedTheme } = useTheme();
 
-  // Фото с геолокацией для карты
+  // Фото с геолокацией для карты (только текущая поездка)
   const { data: geoPhotos } = useQuery<Photo[]>({
-    queryKey: ["photos-geo"],
+    queryKey: ["photos-geo", getTripId()],
     queryFn: async () => {
-      const r = await fetch("/api/photos/geo");
+      const r = await fetch(`/api/photos/geo?tripId=${getTripId()}`);
       return r.json();
     },
   });

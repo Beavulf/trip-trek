@@ -294,13 +294,19 @@ function AddExpenseForm({ onDone }: { onDone: () => void }) {
   const [amount, setAmount] = useState("");
   const [category, setCategory] = useState("food");
   const [description, setDescription] = useState("");
-  const [paidById, setPaidById] = useState(trip?.settings.currentUserId ?? "");
+  const [paidById, setPaidById] = useState(trip?.participants[0]?.id ?? "");
   const [dayId, setDayId] = useState("");
+  const [splitWith, setSplitWith] = useState<Set<string>>(new Set());
+  const [showSplit, setShowSplit] = useState(false);
 
   const submit = async () => {
     const amt = parseFloat(amount);
     if (!amt || !description) {
       toast.error("Заполните сумму и описание");
+      return;
+    }
+    if (!paidById) {
+      toast.error("Выберите кто заплатил");
       return;
     }
     await add.mutateAsync({
@@ -311,9 +317,22 @@ function AddExpenseForm({ onDone }: { onDone: () => void }) {
       dayId: dayId || undefined,
     });
     toast.success("Трата добавлена 💸");
-    setAmount(""); setDescription("");
+    setAmount(""); setDescription(""); setSplitWith(new Set()); setShowSplit(false);
     onDone();
   };
+
+  const toggleSplit = (id: string) => {
+    setSplitWith(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  // Расчёт доли если выбрано "за кого"
+  const splitCount = splitWith.size > 0 ? splitWith.size + 1 : 1; // +1 за себя
+  const perPerson = amount ? (parseFloat(amount) / splitCount).toFixed(2) : "0";
 
   return (
     <motion.div
@@ -345,6 +364,7 @@ function AddExpenseForm({ onDone }: { onDone: () => void }) {
         />
         <div className="grid grid-cols-2 gap-2">
           <select value={paidById} onChange={(e) => setPaidById(e.target.value)} className="rounded-lg border border-input bg-background px-3 py-2 text-sm">
+            <option value="">Кто заплатил?</option>
             {trip?.participants.map((p) => (
               <option key={p.id} value={p.id}>{p.emoji} {p.name}</option>
             ))}
@@ -356,6 +376,75 @@ function AddExpenseForm({ onDone }: { onDone: () => void }) {
             ))}
           </select>
         </div>
+
+        {/* Заплатил за других */}
+        <div>
+          <button
+            onClick={() => setShowSplit(v => !v)}
+            className={cn(
+              "w-full rounded-lg py-2 px-3 text-sm font-medium flex items-center justify-between transition-colors",
+              showSplit ? "bg-primary/10 text-primary border border-primary/30" : "bg-background border border-input"
+            )}
+          >
+            <span className="flex items-center gap-1.5">
+              <Users className="size-3.5" />
+              Заплатил за других
+            </span>
+            <span className="text-xs">
+              {splitWith.size > 0 ? `${splitWith.size + 1} чел · $${perPerson}/каждый` : "не выбрано"}
+            </span>
+          </button>
+          <AnimatePresence>
+            {showSplit && (
+              <motion.div
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: "auto", opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }}
+                className="overflow-hidden"
+              >
+                <div className="mt-1.5 bg-background rounded-lg border border-input p-2 space-y-1">
+                  <p className="text-[10px] text-muted-foreground px-1">
+                    Отметь за кого ты заплатил — долг разделится поровну:
+                  </p>
+                  {trip?.participants.map((p) => {
+                    const checked = splitWith.has(p.id) || p.id === paidById;
+                    const isPayer = p.id === paidById;
+                    return (
+                      <button
+                        key={p.id}
+                        onClick={() => !isPayer && toggleSplit(p.id)}
+                        disabled={isPayer}
+                        className={cn(
+                          "w-full flex items-center gap-2 p-1.5 rounded-lg text-sm transition-colors",
+                          isPayer ? "opacity-50 cursor-not-allowed" : "hover:bg-accent",
+                          checked && !isPayer && "bg-primary/10"
+                        )}
+                      >
+                        <div className={cn(
+                          "size-4 rounded border-2 grid place-items-center shrink-0",
+                          checked ? "bg-primary border-primary" : "border-input"
+                        )}>
+                          {checked && <Check className="size-3 text-primary-foreground" />}
+                        </div>
+                        <div className="size-6 rounded-full grid place-items-center text-[10px]" style={{ background: p.color }}>
+                          {p.emoji}
+                        </div>
+                        <span className="flex-1 text-left">{p.name}</span>
+                        {isPayer && <span className="text-[10px] text-muted-foreground">(заплатил)</span>}
+                      </button>
+                    );
+                  })}
+                  {splitWith.size > 0 && (
+                    <div className="text-[11px] text-muted-foreground px-1 pt-1 border-t border-border mt-1">
+                      💡 Каждый должен по <b>${perPerson}</b> плательщику
+                    </div>
+                  )}
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+
         <button
           onClick={submit}
           disabled={add.isPending}

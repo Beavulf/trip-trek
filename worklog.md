@@ -2,10 +2,44 @@
 
 ## Current Project Status
 
-**Phase**: 10 (UI Polish + Day Management + Settlements + Bug Fixes) — COMPLETED
+**Phase**: 11 (Trip Scoping Fixes + Split Expenses + Button-in-button) — COMPLETED
 **Build**: ✅ TypeScript clean, ESLint clean
 **Dev Server**: Running on port 3000
 **Test Accounts**: you@/leha@/den@triptrek.com (password: 1234)
+
+---
+
+## Session: Trip Scoping Fixes + Split Expenses + Button-in-button
+
+### Bug: Button-in-button hydration error in Itinerary
+**Problem**: `DeleteDayButton` (a `<button>`) was rendered inside DayCard's outer `<button>` — HTML doesn't allow nested buttons, causes hydration error.
+**Fix**: Replaced outer `<button>` with `<div role="button" tabIndex={0}>` + keyboard handler (Enter/Space). Keeps accessibility without HTML violation.
+
+### Bug: Gallery showed photos from ALL trips (China photos in Tokyo trip)
+**Root cause**: `usePhotos()` hook didn't pass `tripId` to API or queryKey. Same for `photos/geo` endpoint — no tripId filter at all.
+**Fix**:
+- `usePhotos()`: Added `params.set("tripId", getTripId())` + `getTripId()` in queryKey
+- `photos/geo` API: Added `tripId` query param support
+- `trip-map.tsx`: Fetches `/api/photos/geo?tripId=${getTripId()}` + tripId in queryKey
+
+### Bug: Expenses not appearing / list inconsistent
+**Root cause**: `useExpenses` queryKey was `["expenses"]` without tripId. When switching trips, stale cache showed old data.
+**Fix**: queryKey now `["expenses", getTripId()]`. Same fix applied to ALL trip-scoped hooks:
+- useJournal, useBoard, useChecklist, useInfo, usePhrases, useBudgetPlan
+All now include `getTripId()` in queryKey AND pass tripId to API.
+
+### Bug: Food list disappeared after creating new trip
+**Root cause**: `useFoods()` didn't pass tripId — showed ALL foods from DB. New trip had no foods, but old foods from China trip were shown... or not shown depending on cache.
+**Fix**: `useFoods()` now passes `tripId` and includes it in queryKey.
+
+### Feature: "Заплатил за других" (Split Expense) in Budget
+**Problem**: Settlement feature was confusing — hard to understand who owes whom.
+**Solution**: Added split expense UI directly in AddExpenseForm:
+- "Заплатил за других" toggle button (with Users icon)
+- Opens checkbox list of participants (payer is auto-included, disabled)
+- Shows live calculation: "3 чел · $16.67/каждый"
+- Hint: "💡 Каждый должен по $16.67 плательщику"
+- Settlement section below now shows calculated debts with "Оплачен" button
 
 ---
 

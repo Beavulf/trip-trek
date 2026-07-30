@@ -124,9 +124,12 @@ function DayCard({ day, onOpenPlace }: { day: Day; onOpenPlace: (p: Place) => vo
 
   return (
     <div className="rounded-2xl bg-card border border-border overflow-hidden card-hover">
-      <button
+      <div
+        role="button"
+        tabIndex={0}
         onClick={() => setExpanded((v) => !v)}
-        className="w-full flex items-center gap-3 p-4 hover:bg-accent/40 transition-colors text-left active:bg-accent/60"
+        onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setExpanded((v) => !v); } }}
+        className="w-full flex items-center gap-3 p-4 hover:bg-accent/40 transition-colors text-left active:bg-accent/60 cursor-pointer"
       >
         <div
           className="size-11 rounded-xl grid place-items-center text-white font-bold shrink-0 shadow-lg"
@@ -158,7 +161,7 @@ function DayCard({ day, onOpenPlace }: { day: Day; onOpenPlace: (p: Place) => vo
             <ChevronDown className="size-4 text-muted-foreground" />
           </motion.div>
         </div>
-      </button>
+      </div>
 
       <AnimatePresence initial={false}>
         {expanded && (

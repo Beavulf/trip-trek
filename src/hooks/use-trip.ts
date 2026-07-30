@@ -165,10 +165,11 @@ export function useGeocode() {
 
 export function usePhotos(dayId?: string, placeId?: string) {
   const params = new URLSearchParams();
+  params.set("tripId", getTripId()); // ВСЕГДА фильтруем по текущей поездке
   if (dayId) params.set("dayId", dayId);
   if (placeId) params.set("placeId", placeId);
   return useQuery<Photo[]>({
-    queryKey: ["photos", dayId, placeId],
+    queryKey: ["photos", getTripId(), dayId, placeId],
     queryFn: async () => {
       const r = await fetch(`/api/photos?${params}`);
       return r.json();
@@ -209,7 +210,7 @@ export function useDeletePhoto() {
 
 export function useExpenses() {
   return useQuery<Expense[]>({
-    queryKey: ["expenses"],
+    queryKey: ["expenses", getTripId()],
     queryFn: async () => {
       const r = await fetch(`/api/expenses?tripId=${getTripId()}`);
       return r.json();
@@ -244,9 +245,10 @@ export function useDeleteExpense() {
 
 export function useJournal(dayId?: string) {
   const params = new URLSearchParams();
+  params.set("tripId", getTripId());
   if (dayId) params.set("dayId", dayId);
   return useQuery<JournalEntry[]>({
-    queryKey: ["journal", dayId],
+    queryKey: ["journal", getTripId(), dayId],
     queryFn: async () => {
       const r = await fetch(`/api/journal?${params}`);
       return r.json();
@@ -377,7 +379,7 @@ export interface ChecklistItem {
 
 export function useChecklist() {
   return useQuery<ChecklistItem[]>({
-    queryKey: ["checklist"],
+    queryKey: ["checklist", getTripId()],
     queryFn: async () => {
       const r = await fetch(`/api/checklist?tripId=${getTripId()}`);
       return r.json();
@@ -437,9 +439,10 @@ export interface InfoItem {
 
 export function useInfo(type?: string) {
   const params = new URLSearchParams();
+  params.set("tripId", getTripId());
   if (type) params.set("type", type);
   return useQuery<InfoItem[]>({
-    queryKey: ["info", type],
+    queryKey: ["info", getTripId(), type],
     queryFn: async () => {
       const r = await fetch(`/api/info?${params}`);
       return r.json();
@@ -519,10 +522,11 @@ export interface Phrase {
 
 export function usePhrases(category?: string, favoriteOnly?: boolean) {
   const params = new URLSearchParams();
+  params.set("tripId", getTripId());
   if (category && category !== "all") params.set("category", category);
   if (favoriteOnly) params.set("favorite", "true");
   return useQuery<Phrase[]>({
-    queryKey: ["phrases", category, favoriteOnly],
+    queryKey: ["phrases", getTripId(), category, favoriteOnly],
     queryFn: async () => {
       const r = await fetch(`/api/phrases?${params}`);
       return r.json();
@@ -554,7 +558,7 @@ export interface BudgetPlan {
 
 export function useBudgetPlan() {
   return useQuery<BudgetPlan[]>({
-    queryKey: ["budget-plan"],
+    queryKey: ["budget-plan", getTripId()],
     queryFn: async () => {
       const r = await fetch(`/api/budget-plan?tripId=${getTripId()}`);
       return r.json();
@@ -589,7 +593,7 @@ export interface BoardMessage {
 
 export function useBoard() {
   return useQuery<BoardMessage[]>({
-    queryKey: ["board"],
+    queryKey: ["board", getTripId()],
     queryFn: async () => {
       const r = await fetch(`/api/board?tripId=${getTripId()}`);
       return r.json();
@@ -655,9 +659,10 @@ export interface FoodItem {
 
 export function useFoods(city?: string) {
   const params = new URLSearchParams();
+  params.set("tripId", getTripId()); // ВСЕГДА фильтруем по поездке
   if (city && city !== "all") params.set("city", city);
   return useQuery<FoodItem[]>({
-    queryKey: ["foods", city],
+    queryKey: ["foods", getTripId(), city],
     queryFn: async () => {
       const r = await fetch(`/api/foods?${params}`);
       return r.json();
