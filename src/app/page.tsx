@@ -20,6 +20,7 @@ import { Achievements } from "@/components/trip/achievements";
 import { Board } from "@/components/trip/board";
 import { AnimatePresence, motion } from "framer-motion";
 import { useRouter } from "next/navigation";
+import { useEffect } from "react";
 import { Loader2 } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 
@@ -34,12 +35,14 @@ export default function Home() {
   const router = useRouter();
   const { data: session, status } = useAuth();
 
-  // Редирект только когда ТОЧНО не авторизован
-  if (status === "unauthenticated") {
-    router.push("/login");
-  }
+  // Редирект только в useEffect (не во время рендера!)
+  useEffect(() => {
+    if (status === "unauthenticated") {
+      router.push("/login");
+    }
+  }, [status, router]);
 
-  // Пока грузится или авторизован — показываем контент
+  // Пока грузится — показываем спиннер
   if (status === "loading") {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
@@ -51,6 +54,7 @@ export default function Home() {
     );
   }
 
+  // Не авторизован — показываем спиннер (useEffect выше сделает редирект)
   if (status === "unauthenticated" || !session?.user) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">

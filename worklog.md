@@ -2,10 +2,61 @@
 
 ## Current Project Status
 
-**Phase**: 8 (Freemium Limits Clarity + Member Limit Enforcement) — COMPLETED
+**Phase**: 9 (Mobile Photo Crash Fix + Turbopack Warning Fix) — COMPLETED
 **Build**: ✅ TypeScript clean, ESLint clean
 **Dev Server**: Running on port 3000
 **Test Accounts**: you@/leha@/den@triptrek.com (password: 1234)
+
+---
+
+## Session: Mobile Photo Crash Fix + Turbopack Warning Fix
+
+### Bug: Turbopack warning "Cannot update a component (Router) while rendering a different component (Home)"
+**Root cause**: In `src/app/page.tsx`, `router.push("/login")` was called **during render** (line 38-40), which is a React anti-pattern that triggers the warning.
+
+**Fix**: Moved `router.push` to `useEffect`:
+```tsx
+// Было (WRONG):
+if (status === "unauthenticated") {
+  router.push("/login");  // ← setState during render!
+}
+
+// Стало (CORRECT):
+useEffect(() => {
+  if (status === "unauthenticated") {
+    router.push("/login");
+  }
+}, [status, router]);
+```
+
+### Bug: Mobile browser crashes when taking/uploading photo
+**Root causes**:
+1. **Large photos (5-10MB)** — `exifr.parse(f)` reads full file into memory → crash
+2. **No compression** — original 4000x3000 photo uploaded as-is
+3. **Object URL leak** — `URL.createObjectURL(f)` never revoked → memory grows
+4. **Preview at full resolution** — `<img>` renders 8MB image
+5. **No processing indicator** — user doesn't know what's happening
+
+**Fix** (in `src/components/trip/quick-add.tsx`):
+1. **Image compression via Canvas**: Resize to max 1920px, JPEG quality 0.8. Reduces 8MB → ~500KB
+2. **EXIF optimization**: `exifr.parse(f, { gps: true })` — only parses GPS segment (much faster, less memory)
+3. **Object URL cleanup**: `previewUrlRef` tracks URL, `URL.revokeObjectURL()` on cleanup/remove/unmount
+4. **Processing state**: `processing` state with loading overlay on preview + disabled buttons
+5. **Size validation**: Max 25MB before processing starts
+6. **Error handling**: try-catch on all async ops, fallback to original if compression fails
+
+### EXIF geolocation from gallery photos — confirmed working
+The code already reads EXIF GPS from gallery photos. Verified:
+- `exifr.parse(f, { gps: true })` reads GPS from any photo file (camera or gallery)
+- If GPS found → toast "📍 Координаты из фото" + reverse geocode
+- If no GPS → falls back to current geolocation request
+- Works for: photos taken with phone camera, photos saved to gallery with location, photos shared from other apps
+
+**Note**: Some phones strip EXIF when:
+- Photo edited in gallery app
+- Photo shared via WhatsApp/Telegram (metadata stripped)
+- Photo taken with location services disabled
+In these cases, the app correctly falls back to requesting current geolocation.
 
 ---
 

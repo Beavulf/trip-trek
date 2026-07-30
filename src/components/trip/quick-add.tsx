@@ -11,7 +11,7 @@ import { useTrip, useUploadPhoto, useAddExpense, useAddJournal } from "@/hooks/u
 import { useTripStore } from "@/lib/trip-store";
 import { EXPENSE_CATEGORIES, type Day } from "@/lib/types";
 import { Camera, Wallet, BookOpen, Loader2, Check, X, Images, MapPin } from "lucide-react";
-import { useRef, useState } from "react";
+import { useRef, useState, useEffect } from "react";
 import { useAuth as useSession } from "@/hooks/use-auth";
 import { toast } from "sonner";
 import { motion } from "framer-motion";
@@ -118,6 +118,7 @@ function PhotoForm({ userId, onDone }: { userId: string; onDone: () => void }) {
   const upload = useUploadPhoto();
   const cameraRef = useRef<HTMLInputElement>(null);
   const galleryRef = useRef<HTMLInputElement>(null);
+  const previewUrlRef = useRef<string | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
   const [file, setFile] = useState<File | null>(null);
   const [caption, setCaption] = useState("");
@@ -125,6 +126,7 @@ function PhotoForm({ userId, onDone }: { userId: string; onDone: () => void }) {
   const [geoStatus, setGeoStatus] = useState<"idle" | "requesting" | "granted" | "denied">("idle");
   const [geoCoords, setGeoCoords] = useState<{ lat: number; lng: number } | null>(null);
   const [geoAddress, setGeoAddress] = useState<string | null>(null);
+  const [processing, setProcessing] = useState(false);
 
   const requestGeo = async (): Promise<{ lat: number; lng: number } | null> => {
     if (typeof navigator === "undefined" || !navigator.geolocation) {
@@ -148,27 +150,116 @@ function PhotoForm({ userId, onDone }: { userId: string; onDone: () => void }) {
     });
   };
 
-  const onFile = async (f: File) => {
-    setFile(f);
-    setPreview(URL.createObjectURL(f));
+  // Сжатие фото через Canvas (мобильные фото могут быть 5-10MB)
+  const compressImage = (originalFile: File, maxWidth = 1920, quality = 0.8): Promise<File> => {
+    return new Promise((resolve) => {
+      const img = new Image();
+      const url = URL.createObjectURL(originalFile);
+      img.onload = () => {
+        URL.revokeObjectURL(url);
+        const canvas = document.createElement("canvas");
+        let { width, height } = img;
+        // Пропорционально уменьшаем
+        if (width > maxWidth) {
+          height = (height * maxWidth) / width;
+          width = maxWidth;
+        }
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) {
+          resolve(originalFile);
+          return;
+        }
+        ctx.drawImage(img, 0, 0, width, height);
+        canvas.toBlob(
+          (blob) => {
+            if (blob) {
+              const compressed = new File([blob], originalFile.name.replace(/\.[^.]+$/, ".jpg"), {
+                type: "image/jpeg",
+                lastModified: Date.now(),
+              });
+              resolve(compressed);
+            } else {
+              resolve(originalFile);
+            }
+          },
+          "image/jpeg",
+          quality
+        );
+      };
+      img.onerror = () => {
+        URL.revokeObjectURL(url);
+        resolve(originalFile); // Fallback на оригинал
+      };
+      img.src = url;
+    });
+  };
 
-    // 1. Пытаемся прочитать EXIF (GPS + дата) из самого фото
-    let exifCoords: { lat: number; lng: number } | null = null;
+  const onFile = async (f: File) => {
+    setProcessing(true);
     try {
-      // Полный парсинг — gps, exif, tiff
-      const exif = await exifr.parse(f);
-      if (exif) {
-        // Проверяем разные варианты полей GPS
-        const lat = exif.latitude ?? exif.GPSLatitude;
-        const lng = exif.longitude ?? exif.GPSLongitude;
-        if (lat != null && lng != null) {
-          exifCoords = { lat, lng };
-          setGeoCoords(exifCoords);
-          setGeoStatus("granted");
-          toast.success("📍 Координаты из фото", { description: "GPS найден в EXIF" });
-          // Reverse geocode
+      // 0. Проверка размера (макс 25MB)
+      if (f.size > 25 * 1024 * 1024) {
+        toast.error("Фото слишком большое (макс 25MB)");
+        setProcessing(false);
+        return;
+      }
+
+      // 1. Читаем EXIF из ОРИГИНАЛЬНОГО файла (до сжатия)
+      // Используем gps: true для быстрого парсинга только GPS (меньше памяти)
+      let exifCoords: { lat: number; lng: number } | null = null;
+      let takenAt: Date | null = null;
+      try {
+        const exif = await exifr.parse(f, { gps: true });
+        if (exif) {
+          const lat = exif.latitude ?? exif.GPSLatitude;
+          const lng = exif.longitude ?? exif.GPSLongitude;
+          if (lat != null && lng != null && !isNaN(lat) && !isNaN(lng)) {
+            exifCoords = { lat, lng };
+            setGeoCoords(exifCoords);
+            setGeoStatus("granted");
+            toast.success("📍 Координаты из фото", { description: "GPS найден в EXIF" });
+            // Reverse geocode
+            try {
+              const r = await fetch(`/api/geocode?lat=${lat}&lng=${lng}`);
+              const data = await r.json();
+              if (data.address) setGeoAddress(data.address);
+            } catch {
+              // ignore
+            }
+          }
+          // Дата съёмки
+          if (exif.DateTimeOriginal) {
+            takenAt = new Date(exif.DateTimeOriginal);
+          }
+        }
+      } catch {
+        // EXIF нет или не читается — не критично
+      }
+
+      // 2. Сжимаем фото (мобильные камеры дают 4000x3000+ = 8MB+)
+      const compressed = await compressImage(f);
+
+      // 3. Создаём preview (из сжатого файла — меньше памяти)
+      if (previewUrlRef.current) {
+        URL.revokeObjectURL(previewUrlRef.current);
+      }
+      const previewUrl = URL.createObjectURL(compressed);
+      previewUrlRef.current = previewUrl;
+      setPreview(previewUrl);
+      setFile(compressed);
+
+      // 4. Если EXIF GPS нет — запрашиваем текущую геолокацию
+      if (!exifCoords) {
+        toast.info("📍 В фото нет GPS, запрашиваем текущую геолокацию…", {
+          description: "Разрешите доступ к геолокации",
+          duration: 3000,
+        });
+        const coords = await requestGeo();
+        if (coords) {
           try {
-            const r = await fetch(`/api/geocode?lat=${lat}&lng=${lng}`);
+            const r = await fetch(`/api/geocode?lat=${coords.lat}&lng=${coords.lng}`);
             const data = await r.json();
             if (data.address) setGeoAddress(data.address);
           } catch {
@@ -176,31 +267,26 @@ function PhotoForm({ userId, onDone }: { userId: string; onDone: () => void }) {
           }
         }
       }
-    } catch {
-      // EXIF нет или не читается
-    }
-
-    // 2. Если EXIF GPS нет — ВСЕГДА запрашиваем текущую геолокацию
-    if (!exifCoords) {
-      toast.info("📍 В фото нет GPS, запрашиваем текущую геолокацию…", {
-        description: "Разрешите доступ к геолокации",
-        duration: 3000,
-      });
-      const coords = await requestGeo();
-      if (coords) {
-        try {
-          const r = await fetch(`/api/geocode?lat=${coords.lat}&lng=${coords.lng}`);
-          const data = await r.json();
-          if (data.address) setGeoAddress(data.address);
-        } catch {
-          // ignore
-        }
-      }
+    } catch (e) {
+      console.error("Photo processing error:", e);
+      toast.error("Не удалось обработать фото");
+    } finally {
+      setProcessing(false);
     }
   };
 
+  // Cleanup object URL on unmount
+  useEffect(() => {
+    return () => {
+      if (previewUrlRef.current) {
+        URL.revokeObjectURL(previewUrlRef.current);
+      }
+    };
+  }, []);
+
   const submit = async () => {
     if (!file || !dayId) return;
+    setProcessing(true);
     // Если геолокация ещё не запрашивалась — запросим
     let coords = geoCoords;
     if (!coords && geoStatus === "idle") {
@@ -219,12 +305,20 @@ function PhotoForm({ userId, onDone }: { userId: string; onDone: () => void }) {
     try {
       await upload.mutateAsync(fd);
       toast.success("Фото добавлено 📸" + (coords ? " с геолокацией" : ""));
+      // Cleanup
+      if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current);
+      previewUrlRef.current = null;
       setFile(null);
       setPreview(null);
       setCaption("");
+      setGeoCoords(null);
+      setGeoAddress(null);
+      setGeoStatus("idle");
       onDone();
     } catch {
       toast.error("Не удалось загрузить фото");
+    } finally {
+      setProcessing(false);
     }
   };
 
@@ -255,9 +349,25 @@ function PhotoForm({ userId, onDone }: { userId: string; onDone: () => void }) {
       {preview ? (
         <div className="relative rounded-xl overflow-hidden border border-border">
           <img src={preview} alt="preview" className="w-full max-h-60 object-cover" />
+          {processing && (
+            <div className="absolute inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center">
+              <div className="flex flex-col items-center gap-2 text-white">
+                <Loader2 className="size-8 animate-spin" />
+                <span className="text-xs">Обработка фото…</span>
+              </div>
+            </div>
+          )}
           <button
-            onClick={() => { setFile(null); setPreview(null); setGeoCoords(null); setGeoAddress(null); }}
-            className="absolute top-2 right-2 size-7 rounded-full bg-black/60 text-white grid place-items-center"
+            onClick={() => {
+              if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current);
+              previewUrlRef.current = null;
+              setFile(null);
+              setPreview(null);
+              setGeoCoords(null);
+              setGeoAddress(null);
+              setGeoStatus("idle");
+            }}
+            className="absolute top-2 right-2 size-7 rounded-full bg-black/60 text-white grid place-items-center z-10"
           >
             <X className="size-4" />
           </button>
@@ -277,6 +387,17 @@ function PhotoForm({ userId, onDone }: { userId: string; onDone: () => void }) {
               📍 Геолокация отключена — фото без метки на карте
             </div>
           )}
+        </div>
+      ) : processing ? (
+        <div className="grid grid-cols-2 gap-2">
+          <div className="border-2 border-dashed border-primary/30 rounded-2xl py-8 flex flex-col items-center gap-2 text-primary bg-primary/5">
+            <Loader2 className="size-8 animate-spin" />
+            <span className="text-xs font-medium">Обработка…</span>
+          </div>
+          <div className="border-2 border-dashed border-primary/30 rounded-2xl py-8 flex flex-col items-center gap-2 text-primary bg-primary/5">
+            <Loader2 className="size-8 animate-spin" />
+            <span className="text-xs font-medium">Обработка…</span>
+          </div>
         </div>
       ) : (
         <div className="grid grid-cols-2 gap-2">
@@ -320,11 +441,11 @@ function PhotoForm({ userId, onDone }: { userId: string; onDone: () => void }) {
 
       <button
         onClick={submit}
-        disabled={!file || upload.isPending}
+        disabled={!file || upload.isPending || processing}
         className="w-full rounded-xl bg-primary text-primary-foreground py-3.5 text-base font-medium flex items-center justify-center gap-2 disabled:opacity-50"
       >
-        {upload.isPending ? <Loader2 className="size-4 animate-spin" /> : <Check className="size-4" />}
-        {upload.isPending ? "Загрузка…" : "Добавить фото"}
+        {upload.isPending || processing ? <Loader2 className="size-4 animate-spin" /> : <Check className="size-4" />}
+        {upload.isPending ? "Загрузка…" : processing ? "Обработка…" : "Добавить фото"}
       </button>
     </div>
   );
