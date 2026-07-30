@@ -3,7 +3,8 @@
 import { useExpenses, useAddExpense, useDeleteExpense, useTrip, useUpdateMember, useUpdateTripBudget, getTripId } from "@/hooks/use-trip";
 import { EXPENSE_CATEGORIES, CITIES, type Expense, type Participant } from "@/lib/types";
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, BarChart, Bar, XAxis, YAxis, CartesianGrid } from "recharts";
-import { Wallet, Plus, Trash2, TrendingDown, ArrowRight, Loader2, Scale, UserCircle, Pencil, BarChart3, Check, X, Users } from "lucide-react";
+import { Wallet, Plus, Trash2, TrendingDown, ArrowRight, Loader2, Scale, UserCircle, Pencil, BarChart3, Check, X, Users, Clock } from "lucide-react";
+import { useAuth } from "@/hooks/use-auth";
 import { useState, useEffect } from "react";
 import { toast } from "sonner";
 import { motion, AnimatePresence } from "framer-motion";
@@ -210,7 +211,7 @@ export function Budget() {
                 </div>
                 <span className="font-medium">{s.to.name}</span>
                 <span className="ml-auto font-bold text-primary">${s.amount.toFixed(0)}</span>
-                <MarkSettledButton fromId={s.from.id} toId={s.to.id} amount={s.amount} />
+                <MarkSettledButton from={s.from} to={s.to} amount={s.amount} />
               </div>
             ))}
           </div>
@@ -618,38 +619,62 @@ function BudgetHero({ totalSpent, totalBudget, budgetPct, remaining }: {
 }
 
 // Кнопка "Отметить перевод" — записывает перевод как специальную трату
-function MarkSettledButton({ fromId, toId, amount }: { fromId: string; toId: string; amount: number }) {
+function MarkSettledButton({ from, to, amount }: { from: Participant; to: Participant; amount: number }) {
   const addExpense = useAddExpense();
+  const { data: session } = useAuth();
+  const currentUserId = (session?.user as { id?: string } | undefined)?.id || "";
   const [done, setDone] = useState(false);
 
+  const isDebtor = currentUserId === from.id; // Я должен → мне нажимать
+  const isCreditor = currentUserId === to.id; // Мне должны → я жду
+
   const handleSettle = async () => {
-    // Создаём трату с category="settlement" — от пользователя from
+    // Создаём трату с category="settlement" — от пользователя from (должника)
     // Это увеличит from.paid, его баланс станет ~0
     await addExpense.mutateAsync({
       amount: Math.round(amount * 100) / 100,
       category: "settlement",
-      description: `Перевод → участнику`,
-      paidById: fromId,
+      description: `Перевод → ${to.name}`,
+      paidById: from.id,
     });
-    toast.success("Перевод отмечен ✅", { description: `$${amount.toFixed(2)}` });
+    toast.success("Перевод отмечен ✅", { description: `$${amount.toFixed(2)} → ${to.name}` });
     setDone(true);
   };
 
   if (done) {
-    return <Check className="size-4 text-green-600 shrink-0" />;
+    return (
+      <span className="shrink-0 text-[10px] text-green-600 font-medium flex items-center gap-1 px-2 py-1">
+        <Check className="size-3" /> Переведено
+      </span>
+    );
   }
 
-  return (
-    <button
-      onClick={handleSettle}
-      disabled={addExpense.isPending}
-      className="shrink-0 text-[10px] bg-green-600/10 text-green-600 hover:bg-green-600/20 px-2 py-1 rounded-lg font-medium flex items-center gap-1 transition-colors"
-      title="Отметить как переведённое"
-    >
-      {addExpense.isPending ? <Loader2 className="size-3 animate-spin" /> : <Check className="size-3" />}
-      Оплачен
-    </button>
-  );
+  // Если я должник — могу нажать "Я перевёл"
+  if (isDebtor) {
+    return (
+      <button
+        onClick={handleSettle}
+        disabled={addExpense.isPending}
+        className="shrink-0 text-[10px] bg-green-600/10 text-green-600 hover:bg-green-600/20 px-2 py-1 rounded-lg font-medium flex items-center gap-1 transition-colors"
+        title={`Подтвердить перевод $${amount.toFixed(2)} → ${to.name}`}
+      >
+        {addExpense.isPending ? <Loader2 className="size-3 animate-spin" /> : <Check className="size-3" />}
+        Я перевёл
+      </button>
+    );
+  }
+
+  // Если я кредитор — жду перевод
+  if (isCreditor) {
+    return (
+      <span className="shrink-0 text-[10px] text-muted-foreground flex items-center gap-1 px-2 py-1">
+        <Clock className="size-3" /> Ждём перевод
+      </span>
+    );
+  }
+
+  // Если я ни при чём — ничего не показываем
+  return null;
 }
 
 function settleDebts(balances: { participant: Participant; paid: number; balance: number }[]) {

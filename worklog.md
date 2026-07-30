@@ -2,10 +2,53 @@
 
 ## Current Project Status
 
-**Phase**: 11 (Trip Scoping Fixes + Split Expenses + Button-in-button) — COMPLETED
+**Phase**: 12 (City Autocomplete + Settlement Logic + App Icons) — COMPLETED
 **Build**: ✅ TypeScript clean, ESLint clean
 **Dev Server**: Running on port 3000
 **Test Accounts**: you@/leha@/den@triptrek.com (password: 1234)
+
+---
+
+## Session: City Autocomplete + Settlement Logic + App Icons
+
+### Feature: City Autocomplete API
+**Created**: `GET /api/city-search?q=...` using Open-Meteo Geocoding API (free, no key)
+- Searches cities worldwide in Russian
+- Returns: name, country, region, lat/lng, timezone, language, flag emoji
+- Language auto-detected from country code (zh, ja, ko, th, fr, de, en, etc.)
+- 35+ country-to-language mappings
+
+### Feature: CityAutocomplete component
+**Created**: `src/components/trip/city-autocomplete.tsx`
+- Debounced search (350ms)
+- Dropdown with flag, city name, region, country, language badge
+- On select: shows confirmation card with city + language
+- Ready to integrate into trip creation and "add day" forms
+
+### Feature: Auto-generate phrases by language
+**Created**: `POST /api/phrases/generate` with phrase database for 8 languages:
+- zh (Chinese): 30 phrases — basics, food, transport, shopping, emergency
+- ja (Japanese): 13 phrases
+- ko (Korean): 9 phrases
+- th (Thai): 9 phrases
+- fr (French): 10 phrases
+- en (English): 10 phrases
+- vi, es, de: basic phrases
+- Skips if phrases already exist for trip
+
+### Fix: Settlement button logic
+**Problem**: Anyone could click "Оплачен" — confusing, no accountability.
+**Fix**: Now role-based using current user session:
+- **Debtor** (owes money): sees "Я перевёл" button → marks payment sent
+- **Creditor** (owed money): sees "Ждём перевод" status → knows to expect payment
+- **Other participants**: see nothing (not their transaction)
+- After marking: shows "✅ Переведено" confirmation
+
+### Asset: App icons generated
+- `public/icon-1024.png` — master icon (orange-rose gradient, paper airplane)
+- `public/icon-512.png` — PWA icon (compass/map pin)
+- `public/icon-192.png` — existing small icon
+- Manifest updated with correct icon references
 
 ---
 
