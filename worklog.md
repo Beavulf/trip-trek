@@ -2,10 +2,41 @@
 
 ## Current Project Status
 
-**Phase**: 7 (Trip Templates + UI Polish) — COMPLETED
+**Phase**: 8 (Freemium Limits Clarity + Member Limit Enforcement) — COMPLETED
 **Build**: ✅ TypeScript clean, ESLint clean
 **Dev Server**: Running on port 3000
 **Test Accounts**: you@/leha@/den@triptrek.com (password: 1234)
+
+---
+
+## Session: Freemium Limits Clarity + Member Limit Enforcement
+
+### Question from user: How do limits work when premium user invites free user to 10 trips?
+
+**Clarified logic:**
+- Free user limit "1 trip" counts ONLY trips where they are `owner` (creator)
+- Joining trips as `member` has NO limit for free users
+- This means: premium user can invite free user to unlimited trips, free user can participate in all
+
+**Bug found**: `/api/trips/join` endpoint did NOT check `maxMembers` limit — anyone could join any trip regardless of member count.
+
+**Fix applied**:
+- `/api/trips/join` POST now checks member limit based on TRIP OWNER's plan (not joining user's plan)
+- If owner is free → max 5 members; if premium → unlimited
+- Returns 403 with "upgrade: true" when limit reached
+- Verified: 6th member gets 403 "Лимит участников (5) исчерпан"
+
+### New: Limits visibility in Profile
+
+**Added to `/api/user` response**: `limits` object with `maxOwnedTrips`, `maxMembersPerTrip`, `canCreateTrip`; `stats.ownedTrips` count.
+
+**Added "Твой Free план" card in profile** (shown only for free users):
+- Создание поездок: прогресс-бар 1/1
+- Участников в поездке: 5 макс
+- Участие в чужих поездках: Безлимит ✅
+- Tooltip explaining the freemium model
+
+**Trip count in header**: "создано 1/1 · всего 1" (owned vs total)
 
 ---
 

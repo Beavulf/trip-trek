@@ -47,11 +47,17 @@ interface UserProfile {
   isPremium: boolean;
   stats: {
     trips: number;
+    ownedTrips: number;
     photos: number;
     totalSpent: number;
     journals: number;
     messages: number;
     visitedPlaces: number;
+  };
+  limits: {
+    maxOwnedTrips: number | null;
+    maxMembersPerTrip: number | null;
+    canCreateTrip: boolean;
   };
   trips: TripInfo[];
   achievements: { emoji: string; label: string; req: string; unlocked: boolean }[];
@@ -435,6 +441,53 @@ export default function ProfilePage() {
               </motion.button>
             )}
 
+            {/* Лимиты freemium (показываем только для free) */}
+            {!profile.isPremium && profile.limits && (
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.04 }}
+                className="rounded-2xl bg-muted/50 border border-border p-4"
+              >
+                <div className="flex items-center gap-2 mb-3">
+                  <Info className="size-4 text-muted-foreground" />
+                  <h3 className="font-semibold text-sm">Твой Free план</h3>
+                </div>
+                <div className="space-y-2.5">
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-muted-foreground">Создание поездок</span>
+                    <div className="flex items-center gap-2">
+                      <div className="flex gap-0.5">
+                        {Array.from({ length: 1 }).map((_, i) => (
+                          <div key={i} className={cn(
+                            "h-1.5 w-6 rounded-full",
+                            i < profile.stats.ownedTrips ? "bg-primary" : "bg-muted-foreground/20"
+                          )} />
+                        ))}
+                      </div>
+                      <span className="font-medium tabular-nums">
+                        {profile.stats.ownedTrips} / {profile.limits.maxOwnedTrips}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-muted-foreground">Участников в поездке</span>
+                    <span className="font-medium">{profile.limits.maxMembersPerTrip} макс</span>
+                  </div>
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-muted-foreground">Участие в чужих поездках</span>
+                    <span className="font-medium text-green-600">Безлимит ✅</span>
+                  </div>
+                </div>
+                <div className="mt-3 pt-3 border-t border-border">
+                  <p className="text-[11px] text-muted-foreground leading-relaxed">
+                    💡 Ты можешь быть приглашён в любое количество поездок друзей без лимита.
+                    Лимит 1 поездка действует только на поездки, которые ты <b>создаёшь сам</b>.
+                  </p>
+                </div>
+              </motion.div>
+            )}
+
             {/* Статистика */}
             <motion.div
               initial={{ opacity: 0, y: 10 }}
@@ -507,7 +560,11 @@ export default function ProfilePage() {
               <div className="px-4 py-3 border-b border-border flex items-center gap-2">
                 <Plane className="size-4 text-primary" />
                 <h3 className="font-semibold text-sm">Мои поездки</h3>
-                <span className="ml-auto text-xs text-muted-foreground">{profile.trips.length}</span>
+                <span className="ml-auto text-xs text-muted-foreground">
+                  {profile.limits?.maxOwnedTrips === null
+                    ? `${profile.trips.length} всего`
+                    : `создано ${profile.stats.ownedTrips}/${profile.limits?.maxOwnedTrips} · всего ${profile.trips.length}`}
+                </span>
               </div>
               <div className="divide-y divide-border">
                 {profile.trips.length === 0 ? (

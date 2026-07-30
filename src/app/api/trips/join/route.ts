@@ -18,9 +18,12 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "userId required" }, { status: 400 });
   }
 
-  // Найти поездку по invite-коду
+  // Найти поездку по invite-коду с владельцем
   const trip = await db.trip.findUnique({
     where: { inviteCode: code.toUpperCase() },
+    include: {
+      members: { select: { userId: true, role: true } },
+    },
   });
 
   if (!trip) {
@@ -28,12 +31,26 @@ export async function POST(req: NextRequest) {
   }
 
   // Проверить не участник ли уже
-  const existing = await db.tripMember.findUnique({
-    where: { tripId_userId: { tripId: trip.id, userId } },
-  });
-
+  const existing = trip.members.find((m) => m.userId === userId);
   if (existing) {
     return NextResponse.json({ tripId: trip.id, alreadyMember: true });
+  }
+
+  // Проверить лимит участников по плану ВЛАДЕЛЬЦА поездки
+  const owner = trip.members.find((m) => m.role === "owner");
+  if (owner) {
+    const ownerUser = await db.user.findUnique({ where: { id: owner.userId } });
+    const isOwnerPremium = ownerUser?.plan === "premium" && (!ownerUser?.planExpiry || ownerUser.planExpiry > new Date());
+    const maxMembers = isOwnerPremium ? Infinity : 5;
+
+    if (trip.members.length >= maxMembers) {
+      return NextResponse.json({
+        error: `Лимит участников (${maxMembers}) исчерпан. Владелец поездки может перейти на Premium.`,
+        upgrade: true,
+        current: trip.members.length,
+        max: maxMembers === Infinity ? null : maxMembers,
+      }, { status: 403 });
+    }
   }
 
   // Добавить участника

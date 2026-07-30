@@ -120,16 +120,27 @@ export async function GET(req: NextRequest) {
 
   const isPremium = user.plan === "premium" && (!user.planExpiry || user.planExpiry > new Date());
 
+  // Лимиты freemium
+  const ownedTrips = trips.filter((t) => t.role === "owner").length;
+  const maxOwnedTrips = isPremium ? null : 1;
+  const maxMembersPerTrip = isPremium ? null : 5;
+
   return NextResponse.json({
     ...user,
     isPremium,
     stats: {
       trips: trips.length,
+      ownedTrips,
       photos,
       totalSpent: Math.round(totalSpent * 100) / 100,
       journals,
       messages,
       visitedPlaces,
+    },
+    limits: {
+      maxOwnedTrips,
+      maxMembersPerTrip,
+      canCreateTrip: isPremium || ownedTrips < 1,
     },
     trips,
     achievements: allAchievements.map((a) => ({
