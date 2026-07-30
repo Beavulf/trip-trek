@@ -1,7 +1,6 @@
 "use client";
 
 import { useFoods, useUpdateFood, useUploadFoodPhoto, type FoodItem } from "@/hooks/use-trip";
-import { CITIES } from "@/lib/types";
 import { motion, AnimatePresence } from "framer-motion";
 import { UtensilsCrossed, Star, MapPin, DollarSign, CheckCircle2, Circle, Loader2, Camera, X } from "lucide-react";
 import { useState, useMemo, useRef } from "react";
@@ -12,14 +11,30 @@ import { cn } from "@/lib/utils";
 export function FoodGuide() {
   const [cityFilter, setCityFilter] = useState<string>("all");
   const [showTried, setShowTried] = useState<"all" | "tried" | "todo">("all");
-  const { data: foods, isLoading } = useFoods(cityFilter);
+  const { data: foods, isLoading } = useFoods();
+
+  // Динамический список городов из еды (не захардкоженный)
+  const foodCities = useMemo(() => {
+    if (!foods) return [];
+    const cities = new Map<string, { name: string; color: string }>();
+    foods.forEach((f) => {
+      if (!cities.has(f.city)) {
+        cities.set(f.city, { name: f.city, color: "#f97316" });
+      }
+    });
+    return Array.from(cities.entries()).map(([key, val]) => ({ key, name: val.name, color: val.color }));
+  }, [foods]);
 
   const filtered = useMemo(() => {
     if (!foods) return [];
-    if (showTried === "tried") return foods.filter((f) => f.tried);
-    if (showTried === "todo") return foods.filter((f) => !f.tried);
-    return foods;
-  }, [foods, showTried]);
+    let result = foods;
+    if (cityFilter !== "all") {
+      result = result.filter((f) => f.city === cityFilter);
+    }
+    if (showTried === "tried") return result.filter((f) => f.tried);
+    if (showTried === "todo") return result.filter((f) => !f.tried);
+    return result;
+  }, [foods, showTried, cityFilter]);
 
   const triedCount = foods?.filter((f) => f.tried).length ?? 0;
   const totalCount = foods?.length ?? 0;
@@ -66,7 +81,7 @@ export function FoodGuide() {
 
       {/* Фильтры */}
       <div className="space-y-2">
-        {/* Города */}
+        {/* Города — динамически из еды */}
         <div className="flex gap-1.5 overflow-x-auto no-scrollbar">
           <button
             onClick={() => setCityFilter("all")}
@@ -77,7 +92,7 @@ export function FoodGuide() {
           >
             Все города
           </button>
-          {CITIES.map((c) => (
+          {foodCities.map((c) => (
             <button
               key={c.key}
               onClick={() => setCityFilter(c.key)}
@@ -126,7 +141,7 @@ export function FoodGuide() {
       ) : (
         <div className="space-y-5">
           {grouped.map(([cityKey, items]) => {
-            const city = CITIES.find((c) => c.key === cityKey);
+            const city = foodCities.find((c) => c.key === cityKey);
             return (
               <div key={cityKey}>
                 {/* Заголовок города */}
@@ -135,9 +150,9 @@ export function FoodGuide() {
                     className="size-7 rounded-lg grid place-items-center text-white text-xs font-bold"
                     style={{ background: city?.color ?? "#f97316" }}
                   >
-                    {city?.name[0]}
+                    {cityKey[0]}
                   </div>
-                  <div className="text-sm font-semibold">{city?.name}</div>
+                  <div className="text-sm font-semibold">{cityKey}</div>
                   <div className="text-xs text-muted-foreground">{items.length} блюд</div>
                 </div>
 

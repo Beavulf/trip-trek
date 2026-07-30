@@ -15,6 +15,7 @@ export async function GET(req: NextRequest) {
       name: true,
       emoji: true,
       color: true,
+      avatarUrl: true,
       plan: true,
       planExpiry: true,
       createdAt: true,
@@ -150,16 +151,17 @@ export async function GET(req: NextRequest) {
   });
 }
 
-// PATCH /api/user — обновить профиль (имя, эмодзи, цвет)
+// PATCH /api/user — обновить профиль (имя, эмодзи, цвет, avatarUrl)
 export async function PATCH(req: NextRequest) {
   const body = await req.json();
-  const { userId, name, emoji, color } = body;
+  const { userId, name, emoji, color, avatarUrl } = body;
   if (!userId) return NextResponse.json({ error: "userId required" }, { status: 400 });
 
   const data: Record<string, unknown> = {};
   if (typeof name === "string" && name.trim()) data.name = name.trim();
   if (typeof emoji === "string") data.emoji = emoji;
   if (typeof color === "string" && color.match(/^#[0-9a-fA-F]{6}$/)) data.color = color;
+  if (typeof avatarUrl === "string") data.avatarUrl = avatarUrl;
 
   if (Object.keys(data).length === 0) {
     return NextResponse.json({ error: "no fields to update" }, { status: 400 });
@@ -168,7 +170,7 @@ export async function PATCH(req: NextRequest) {
   const user = await db.user.update({
     where: { id: userId },
     data,
-    select: { id: true, name: true, emoji: true, color: true },
+    select: { id: true, name: true, emoji: true, color: true, avatarUrl: true },
   });
 
   // Обновим также displayName/emoji/color во всех TripMember

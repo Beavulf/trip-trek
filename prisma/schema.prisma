@@ -18,6 +18,7 @@ model User {
   password   String   // bcrypt hash
   emoji      String   @default("👤")
   color      String   @default("#94a3b8")
+  avatarUrl  String?  // фото пользователя (загруженное)
   plan       String   @default("free") // free / premium
   planExpiry DateTime? // для премиума
   createdAt  DateTime @default(now())
@@ -27,6 +28,19 @@ model User {
   expenses    Expense[]
   journals    JournalEntry[]
   messages    BoardMessage[]
+  pushSubs    PushSubscription[]
+}
+
+// === Push подписка (Web Push для уведомлений) ===
+model PushSubscription {
+  id        String   @id @default(cuid())
+  userId    String
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
+  createdAt DateTime @default(now())
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 // === Поездка ===

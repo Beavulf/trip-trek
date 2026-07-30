@@ -3,7 +3,7 @@
 import { useDays, useUpdatePlace, getTripId } from "@/hooks/use-trip";
 import { useTripStore } from "@/lib/trip-store";
 import { CATEGORY_META, CITIES, type Place, type Day, type Photo } from "@/lib/types";
-import { MapContainer, TileLayer, Marker, Popup, useMap, useMapEvents } from "react-leaflet";
+import { MapContainer, TileLayer, Marker, Popup, useMap, useMapEvents, ZoomControl } from "react-leaflet";
 import L from "leaflet";
 import { useEffect, useMemo, useState } from "react";
 import { CheckCircle2, Circle, MapPin, Star, Coffee, Filter, Navigation, Plus, Hand, Moon, Sun, Camera, X } from "lucide-react";
@@ -239,6 +239,8 @@ export default function TripMap() {
           center={[center.lat, center.lng]}
           zoom={mapCityFilter ? 12 : 8}
           scrollWheelZoom={false}
+          preferCanvas={true}
+          zoomControl={false}
           className="w-full h-full"
           key={mapCityFilter || "all"}
         >
@@ -247,6 +249,7 @@ export default function TripMap() {
             attribution={TILE_LAYERS[tileLayer].attr}
             url={TILE_LAYERS[tileLayer].url}
           />
+          <ZoomControl position="bottomright" />
           <FlyTo center={center} />
           {addMode && <MapClickHandler onClick={handleMapClick} />}
           {/* Места — скрываются в режиме "Только фото" */}

@@ -2,10 +2,70 @@
 
 ## Current Project Status
 
-**Phase**: 14 (QuickAdd Expense UX + WebSocket Fix + PWA Updates + Mobile Delete) — COMPLETED
-**Build**: ✅ TypeScript clean, ESLint clean
-**Dev Server**: Running via `bun server.ts` (Next.js + WebSocket on port 3000)
+**Phase**: 15 (Web Push VAPID + Avatar Upload + Achievement Details + Food City Fix + Map Perf) — COMPLETED
+**Build**: ✅ TypeScript clean, ESLint clean (1 minor warning)
+**Dev Server**: Running via `bun server.ts` (Next.js + WebSocket + Push on port 3000)
 **Test Accounts**: you@/leha@/den@triptrek.com (password: 1234)
+
+---
+
+## Session: Web Push VAPID + Avatar Upload + Achievement Details + Food City Fix + Map Perf
+
+### Feature: Web Push notifications (VAPID) — works on locked phone!
+**Problem**: Push toggle said "не поддерживаются" because it used basic `Notification` API (only works when site is open). No way to notify locked phone.
+
+**Solution**: Full Web Push implementation with VAPID:
+1. **Generated VAPID keys** (public + private) — stored in `.env`
+2. **New Prisma model**: `PushSubscription` (userId, endpoint, p256dh, auth)
+3. **API endpoints**:
+   - `GET /api/push/vapid-public-key` — returns public key
+   - `POST /api/push/subscribe` — saves subscription to DB
+   - `DELETE /api/push/subscribe?endpoint=` — removes subscription
+4. **`src/lib/push-send.ts`**: `sendPushToTripMembers(tripId, notification)` — sends push to ALL trip members (even offline)
+5. **`server/emit-handler.ts`**: When WS event has notification → also sends Web Push (for offline users)
+6. **PushToggle rewritten**: Uses `pushManager.subscribe()` with VAPID key, saves to server
+7. **SW updated**: Handles push events with `data.body`, `vibrate`, `actions`
+
+**How it works now:**
+- User A adds expense → API → `/emit` → server.ts
+  - WebSocket broadcast to online users (instant toast)
+  - Web Push to offline users (notification on locked phone!)
+- User B's phone shows notification even if app closed
+
+### Feature: Achievement details on tap (mobile)
+**Problem**: On mobile, achievement labels were truncated, no way to see description.
+**Fix**: Click achievement → expands description card below grid:
+- Shows emoji, label, status badge ("✓ Получено" or "🔒 Заблокировано")
+- Description: "Как получить: 10 фото" or "Достижение разблокировано!"
+- Lock icon 🔒 on locked achievements
+- Ring highlight on selected
+- X button to close
+
+### Feature: Avatar photo upload
+**Problem**: Only emoji avatars, no photo upload.
+**Solution**:
+1. **Schema**: Added `avatarUrl` field to User model
+2. **API**: `POST /api/user/avatar` — saves file to `/uploads/avatars/`, updates user
+3. **Profile UI**: Camera button on avatar (in edit mode) → file picker → upload → instant preview
+4. **Display**: If `avatarUrl` exists → show `<img>`, otherwise show emoji
+
+### Fix: Food guide showing hardcoded China cities
+**Problem**: Food guide used `CITIES` constant (4 China cities) for filter buttons. New trip to Tokyo showed China cities.
+**Fix**: `foodCities` now built dynamically from `foods` data (unique cities from food items). Filter buttons show only cities that have food in current trip.
+
+### Fix: "excludeSelf" (paid for others only) added to budget
+**Problem**: Budget AddExpenseForm didn't have "paid only for others" option (only in QuickAdd).
+**Fix**: Added `excludeSelf` checkbox to budget form:
+- "Заплатил только за них (на себя не тратил)"
+- When checked: payer NOT included in split, debt = amount / selected count
+- Live hint: "💡 Каждый должен по $5.00 плательщику (ты не участвуешь)"
+
+### Fix: Map performance on mobile
+**Problem**: Map lagged when dragging/zooming on mobile.
+**Fix**:
+- `preferCanvas={true}` — renders markers on canvas (faster than SVG)
+- `zoomControl={false}` + manual `<ZoomControl position="bottomright" />` — prevents accidental zoom on drag
+- Removed default zoom control that overlapped with map interactions
 
 ---
 

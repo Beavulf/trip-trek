@@ -327,6 +327,8 @@ function AddExpenseForm({ onDone }: { onDone: () => void }) {
   const [paidById, setPaidById] = useState(currentUserId || trip?.participants[0]?.id || "");
   const [dayId, setDayId] = useState("");
   const [splitWith, setSplitWith] = useState<Set<string>>(new Set());
+  // excludeSelf — заплатил ТОЛЬКО за других (на себя не тратил)
+  const [excludeSelf, setExcludeSelf] = useState(false);
 
   const submit = async () => {
     const amt = parseFloat(amount);
@@ -347,16 +349,23 @@ function AddExpenseForm({ onDone }: { onDone: () => void }) {
     });
     // Подсказка о долге если splitWith выбран
     if (splitWith.size > 0) {
-      const perPerson = (amt / (splitWith.size + 1)).toFixed(2);
+      const splitCount = excludeSelf ? splitWith.size : splitWith.size + 1;
+      const perPerson = (amt / splitCount).toFixed(2);
       const payer = trip?.participants.find(p => p.id === paidById);
+      const names = trip?.participants
+        .filter(p => splitWith.has(p.id))
+        .map(p => p.name)
+        .join(", ");
       toast.success("Трата добавлена 💸", {
-        description: `Долг: каждый должен $${perPerson} → ${payer?.name || "плательщику"}`,
+        description: excludeSelf
+          ? `Долг: ${names} должны по $${perPerson} → ${payer?.name || "тебе"}`
+          : `Долг: каждый должен $${perPerson} (включая ${payer?.name || "плательщика"})`,
         duration: 5000,
       });
     } else {
       toast.success("Трата добавлена 💸");
     }
-    setAmount(""); setDescription(""); setSplitWith(new Set());
+    setAmount(""); setDescription(""); setSplitWith(new Set()); setExcludeSelf(false);
     onDone();
   };
 
@@ -369,8 +378,10 @@ function AddExpenseForm({ onDone }: { onDone: () => void }) {
     });
   };
 
-  // Расчёт доли если выбрано "за кого"
-  const splitCount = splitWith.size > 0 ? splitWith.size + 1 : 1; // +1 за плательщика
+  // Расчёт доли
+  const splitCount = splitWith.size > 0
+    ? (excludeSelf ? splitWith.size : splitWith.size + 1)
+    : 1;
   const perPerson = amount ? (parseFloat(amount) / splitCount).toFixed(2) : "0";
 
   return (
@@ -440,9 +451,26 @@ function AddExpenseForm({ onDone }: { onDone: () => void }) {
             <Users className="size-3" /> За кого заплатил? (необязательно)
           </label>
           <div className="bg-background rounded-lg border border-input p-2 space-y-1">
+            {/* Чекбокс "только за других" */}
+            <button
+              onClick={() => setExcludeSelf(v => !v)}
+              className={cn(
+                "w-full flex items-center gap-2 p-1.5 rounded-lg text-xs transition-colors",
+                excludeSelf ? "bg-amber-500/10 text-amber-600" : "hover:bg-accent"
+              )}
+            >
+              <div className={cn(
+                "size-4 rounded border-2 grid place-items-center shrink-0",
+                excludeSelf ? "bg-amber-500 border-amber-500" : "border-input"
+              )}>
+                {excludeSelf && <Check className="size-3 text-white" />}
+              </div>
+              <span className="flex-1 text-left font-medium">Заплатил только за них (на себя не тратил)</span>
+            </button>
+
             {trip?.participants.map((p) => {
               const isPayer = p.id === paidById;
-              const checked = splitWith.has(p.id) || isPayer;
+              const checked = splitWith.has(p.id) || (isPayer && !excludeSelf);
               return (
                 <button
                   key={p.id}
@@ -470,7 +498,10 @@ function AddExpenseForm({ onDone }: { onDone: () => void }) {
             })}
             {splitWith.size > 0 && (
               <div className="text-[11px] text-primary bg-primary/5 rounded-lg px-2 py-1.5 mt-1 border border-primary/20">
-                💡 Каждый должен по <b>${perPerson}</b> плательщику
+                {excludeSelf
+                  ? <>💡 Каждый должен по <b>${perPerson}</b> плательщику (ты не участвуешь)</>
+                  : <>💡 Каждый должен по <b>${perPerson}</b> (включая плательщика)</>
+                }
               </div>
             )}
           </div>

@@ -17,21 +17,35 @@ export function handleEmitRequest(
   req.on("data", (chunk: Buffer) => {
     body += chunk;
   });
-  req.on("end", () => {
+  req.on("end", async () => {
     try {
       const { event, tripId, ...data } = JSON.parse(body);
       if (event && tripId) {
-        // Broadcast to trip room
+        // Broadcast to trip room (online users — instant)
         io.to(`trip:${tripId}`).emit(event, { tripId, ...data });
 
         // Also send notification for toast
         const notif = NOTIFICATION_MAP[event];
         if (notif) {
+          const message = notif.message(data);
           io.to(`trip:${tripId}`).emit("notification", {
             type: event.split(":")[0],
-            message: notif.message(data),
+            message,
             emoji: notif.emoji,
           });
+
+          // Send Web Push to offline users (locked phone)
+          // Dynamic import to avoid loading web-push if not needed
+          try {
+            const { sendPushToTripMembers } = await import("../src/lib/push-send");
+            sendPushToTripMembers(tripId, {
+              title: "TripTrek",
+              body: `${notif.emoji} ${message}`,
+              tag: event,
+            });
+          } catch {
+            // Push not available — silent
+          }
         }
       }
     } catch {

@@ -28,23 +28,25 @@ self.addEventListener("message", (event) => {
   }
 });
 
-// Push-уведомления
+// Push-уведомления (Web Push с VAPID)
 self.addEventListener("push", (event) => {
   let data = {};
   try {
     data = event.data ? event.data.json() : {};
   } catch {
-    data = { message: event.data?.text() || "Новое уведомление" };
+    data = { body: event.data?.text() || "Новое уведомление" };
   }
 
   const title = data.title || "TripTrek";
   const options = {
-    body: data.message || "Новое событие в поездке",
+    body: data.body || data.message || "Новое событие в поездке",
     icon: "/icon-192.png",
     badge: "/icon-192.png",
     tag: data.tag || "triptrek",
     data: { url: data.url || "/" },
     vibrate: [100, 50, 100],
+    requireInteraction: false,
+    actions: data.url ? [{ action: "open", title: "Открыть" }] : undefined,
   };
 
   event.waitUntil(self.registration.showNotification(title, options));

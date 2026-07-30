@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -41,6 +41,7 @@ interface UserProfile {
   name: string;
   emoji: string;
   color: string;
+  avatarUrl?: string | null;
   plan: string;
   planExpiry: string | null;
   createdAt: string;
@@ -94,6 +95,31 @@ export default function ProfilePage() {
   const [color, setColor] = useState("#94a3b8");
   const [saving, setSaving] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
+  const [selectedAchievement, setSelectedAchievement] = useState<string | null>(null);
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const avatarInputRef = useRef<HTMLInputElement>(null);
+
+  const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !userId) return;
+
+    setUploadingAvatar(true);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      fd.append("userId", userId);
+      const r = await fetch("/api/user/avatar", { method: "POST", body: fd });
+      if (!r.ok) throw new Error("upload failed");
+      const data = await r.json();
+      toast.success("Фото обновлено 📸");
+      qc.invalidateQueries({ queryKey: ["user-profile"] });
+      qc.invalidateQueries({ queryKey: ["trip"] });
+    } catch {
+      toast.error("Не удалось загрузить фото");
+    } finally {
+      setUploadingAvatar(false);
+    }
+  };
 
   const userId = (session?.user as { id?: string } | undefined)?.id || "";
 
@@ -188,6 +214,8 @@ export default function ProfilePage() {
     );
   }
 
+  const selectedAchievementData = profile?.achievements.find(a => a.label === selectedAchievement);
+
   const EMOJIS = ["👤", "🧑", "👨", "👩", "🧔", "👱", "👲", "👳", "🧑‍🦰", "👨‍🦳", "👩‍🦰", "🧑‍🎨", "😎", "🤓", "🥳", "🐱", "🐶", "🦊", "🐻", "🐼", "🐨", "🦁", "🐯", "🐸", "🐙", "🦄", "🌟", "🔥", "💎", "🌈"];
   const COLORS = ["#f97316", "#06b6d4", "#8b5cf6", "#ec4899", "#10b981", "#f59e0b", "#ef4444", "#3b82f6", "#94a3b8", "#6366f1", "#14b8a6", "#e11d48"];
 
@@ -255,20 +283,42 @@ export default function ProfilePage() {
               {/* Аватар */}
               <div className="px-4 pb-4 -mt-12 relative">
                 <div className="flex items-end gap-3">
-                  <div
-                    className="size-24 rounded-3xl grid place-items-center text-5xl shadow-xl border-4 border-background shrink-0 transition-transform"
-                    style={{ background: profile.color }}
-                  >
-                    {editing ? (
+                  <div className="relative shrink-0">
+                    <div
+                      className="size-24 rounded-3xl overflow-hidden grid place-items-center text-5xl shadow-xl border-4 border-background transition-transform"
+                      style={{ background: profile.color }}
+                    >
+                      {profile.avatarUrl ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={profile.avatarUrl} alt={profile.name} className="w-full h-full object-cover" />
+                      ) : editing ? (
+                        <button
+                          onClick={() => setEmoji(emoji === profile.emoji ? emoji : emoji)}
+                          className="text-5xl"
+                        >
+                          {emoji}
+                        </button>
+                      ) : (
+                        <span>{profile.emoji}</span>
+                      )}
+                    </div>
+                    {/* Кнопка загрузки фото */}
+                    {editing && (
                       <button
-                        onClick={() => setEmoji(emoji === profile.emoji ? emoji : emoji)}
-                        className="text-5xl"
+                        onClick={() => avatarInputRef.current?.click()}
+                        className="absolute -bottom-1 -right-1 size-8 rounded-full bg-primary text-primary-foreground grid place-items-center shadow-lg border-2 border-background"
+                        title="Загрузить фото"
                       >
-                        {emoji}
+                        <Camera className="size-4" />
                       </button>
-                    ) : (
-                      <span>{profile.emoji}</span>
                     )}
+                    <input
+                      ref={avatarInputRef}
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={handleAvatarUpload}
+                    />
                   </div>
                   <div className="flex-1 min-w-0 pb-1">
                     {editing ? (
@@ -528,26 +578,71 @@ export default function ProfilePage() {
               </div>
               <div className="p-3 grid grid-cols-3 sm:grid-cols-5 gap-2">
                 {profile.achievements.map((a, i) => (
-                  <motion.div
+                  <motion.button
                     key={a.label}
                     initial={{ scale: 0.8, opacity: 0 }}
                     animate={{ scale: 1, opacity: 1 }}
                     transition={{ delay: 0.15 + i * 0.02 }}
+                    onClick={() => setSelectedAchievement(selectedAchievement === a.label ? null : a.label)}
                     className={cn(
-                      "rounded-xl p-2 flex flex-col items-center gap-1 text-center transition-all group cursor-help",
+                      "rounded-xl p-2 flex flex-col items-center gap-1 text-center transition-all group",
                       a.unlocked
                         ? "bg-gradient-to-br from-amber-500/20 to-orange-500/10 border border-amber-500/30"
-                        : "bg-muted/50 border border-border opacity-40 grayscale"
+                        : "bg-muted/50 border border-border opacity-40 grayscale",
+                      selectedAchievement === a.label && "ring-2 ring-primary scale-105"
                     )}
-                    title={`${a.label} — ${a.req}`}
                   >
                     <div className="text-2xl leading-none">{a.emoji}</div>
                     <div className="text-[9px] font-medium leading-tight line-clamp-2 break-words w-full">
                       {a.label}
                     </div>
-                  </motion.div>
+                    {!a.unlocked && (
+                      <div className="text-[8px] text-muted-foreground">🔒</div>
+                    )}
+                  </motion.button>
                 ))}
               </div>
+
+              {/* Описание выбранного достижения */}
+              {selectedAchievementData && (
+                <motion.div
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: "auto" }}
+                  exit={{ opacity: 0, height: 0 }}
+                  className="px-4 pb-3"
+                >
+                  <div className={cn(
+                    "rounded-xl p-3 flex items-start gap-3 border",
+                    selectedAchievementData.unlocked
+                      ? "bg-amber-500/10 border-amber-500/30"
+                      : "bg-muted/50 border-border"
+                  )}>
+                    <div className="text-3xl shrink-0">{selectedAchievementData.emoji}</div>
+                    <div className="flex-1 min-w-0">
+                      <div className="font-semibold text-sm flex items-center gap-2">
+                        {selectedAchievementData.label}
+                        {selectedAchievementData.unlocked ? (
+                          <span className="text-[10px] bg-amber-500 text-white px-1.5 py-0.5 rounded-full">✓ Получено</span>
+                        ) : (
+                          <span className="text-[10px] bg-muted-foreground/20 text-muted-foreground px-1.5 py-0.5 rounded-full">🔒 Заблокировано</span>
+                        )}
+                      </div>
+                      <div className="text-xs text-muted-foreground mt-0.5">
+                        {selectedAchievementData.unlocked
+                          ? "Достижение разблокировано!"
+                          : "Как получить:"
+                        } {selectedAchievementData.req}
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => setSelectedAchievement(null)}
+                      className="size-6 rounded-full hover:bg-accent grid place-items-center text-muted-foreground shrink-0"
+                    >
+                      <X className="size-3.5" />
+                    </button>
+                  </div>
+                </motion.div>
+              )}
             </motion.div>
 
             {/* Мои поездки */}
@@ -725,33 +820,121 @@ export default function ProfilePage() {
 function PushToggle() {
   const [enabled, setEnabled] = useState(false);
   const [loading, setLoading] = useState(false);
+  const { data: session } = useSession();
+  const userId = (session?.user as { id?: string } | undefined)?.id || "";
 
   useEffect(() => {
-    if (typeof navigator !== "undefined" && "Notification" in navigator) {
-      setEnabled(Notification.permission === "granted");
-    }
+    checkStatus();
   }, []);
 
-  const toggle = async () => {
+  const checkStatus = async () => {
+    if (typeof navigator === "undefined") return;
+
+    // Проверяем поддержку
     if (!("Notification" in navigator)) {
-      toast.error("Уведомления не поддерживаются");
       return;
     }
+    if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
+      return;
+    }
+
+    // Проверяем permission
+    if (Notification.permission !== "granted") {
+      setEnabled(false);
+      return;
+    }
+
+    // Проверяем есть ли активная подписка
+    try {
+      const reg = await navigator.serviceWorker.ready;
+      const sub = await reg.pushManager.getSubscription();
+      setEnabled(!!sub);
+    } catch {
+      setEnabled(false);
+    }
+  };
+
+  const toggle = async () => {
+    if (typeof navigator === "undefined") return;
+
+    // Проверяем поддержку
+    if (!("Notification" in navigator)) {
+      toast.error("Уведомления не поддерживаются", {
+        description: "Используйте Chrome на Android или Safari на iOS 16.4+",
+      });
+      return;
+    }
+    if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
+      toast.error("Push-уведомления не поддерживаются", {
+        description: "Нужен Chrome 50+ / Firefox 44+ / Safari 16.4+",
+      });
+      return;
+    }
+
     setLoading(true);
     try {
-      if (Notification.permission === "granted") {
-        // Can't easily revoke, just toggle UI
+      if (enabled) {
+        // Отписываемся
+        const reg = await navigator.serviceWorker.ready;
+        const sub = await reg.pushManager.getSubscription();
+        if (sub) {
+          await sub.unsubscribe();
+          // Удаляем с сервера
+          await fetch(`/api/push/subscribe?endpoint=${encodeURIComponent(sub.endpoint)}`, {
+            method: "DELETE",
+          });
+        }
         setEnabled(false);
         toast.info("Уведомления отключены");
       } else {
+        // Запрашиваем permission
         const perm = await Notification.requestPermission();
-        if (perm === "granted") {
-          setEnabled(true);
-          toast.success("Уведомления включены 🔔");
-        } else {
-          toast.error("Разрешение отклонено");
+        if (perm !== "granted") {
+          toast.error("Разрешение отклонено", {
+            description: "Разрешите уведомления в настройках браузера",
+          });
+          return;
         }
+
+        // Получаем VAPID публичный ключ
+        const vapidRes = await fetch("/api/push/vapid-public-key");
+        const { publicKey } = await vapidRes.json();
+        if (!publicKey) {
+          toast.error("Push не настроен на сервере");
+          return;
+        }
+
+        // Конвертируем ключ
+        const convertedKey = urlBase64ToUint8Array(publicKey);
+
+        // Подписываемся
+        const reg = await navigator.serviceWorker.ready;
+        const subscription = await reg.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: convertedKey as BufferSource,
+        });
+
+        // Отправляем подписку на сервер
+        await fetch("/api/push/subscribe", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            userId,
+            subscription: subscription.toJSON(),
+          }),
+        });
+
+        setEnabled(true);
+        toast.success("Push-уведомления включены 🔔", {
+          description: "Теперь ты получишь уведомления даже при закрытом приложении",
+          duration: 5000,
+        });
       }
+    } catch (e) {
+      console.error("Push toggle error:", e);
+      toast.error("Не удалось настроить уведомления", {
+        description: "Попробуй позже или проверь настройки браузера",
+      });
     } finally {
       setLoading(false);
     }
@@ -772,4 +955,16 @@ function PushToggle() {
       )} />
     </button>
   );
+}
+
+// Конвертация VAPID ключа
+function urlBase64ToUint8Array(base64String: string): Uint8Array {
+  const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
+  const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
+  const rawData = atob(base64);
+  const outputArray = new Uint8Array(rawData.length);
+  for (let i = 0; i < rawData.length; ++i) {
+    outputArray[i] = rawData.charCodeAt(i);
+  }
+  return outputArray;
 }
