@@ -17,6 +17,7 @@ import { useState } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
+import { useBodyScrollLock } from "@/hooks/use-body-scroll-lock";
 
 export interface AddPlaceData {
   lat: number;
@@ -37,6 +38,7 @@ export function AddPlaceSheet({
   initial: AddPlaceData | null;
   onCreated?: () => void;
 }) {
+  useBodyScrollLock(open);
   if (!open || typeof document === "undefined") return null;
 
   return createPortal(

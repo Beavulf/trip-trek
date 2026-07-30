@@ -11,6 +11,7 @@ import { createPortal } from "react-dom";
 import { cn } from "@/lib/utils";
 import { CurrencyConverter } from "./currency-converter";
 import { BudgetPlanWidget } from "./budget-plan-widget";
+import { useBodyScrollLock } from "@/hooks/use-body-scroll-lock";
 
 export function Budget() {
   const { data: expenses, isLoading } = useExpenses();
@@ -22,17 +23,20 @@ export function Budget() {
     return <div className="py-20 text-center text-muted-foreground flex items-center justify-center gap-2"><Loader2 className="size-4 animate-spin" /> Загрузка бюджета…</div>;
   }
 
-  const totalSpent = expenses.reduce((s, e) => s + e.amount, 0);
+  // Исключаем переводы (settlement) из общей статистики
+  const realExpenses = expenses.filter((e) => e.category !== "settlement");
+  const totalSpent = realExpenses.reduce((s, e) => s + e.amount, 0);
   const remaining = trip.settings.totalBudget - totalSpent;
   const budgetPct = (totalSpent / trip.settings.totalBudget) * 100;
 
-  // По категориям
+  // По категориям (без переводов)
   const byCategory = Object.keys(EXPENSE_CATEGORIES).map((key) => {
-    const sum = expenses.filter((e) => e.category === key).reduce((s, e) => s + e.amount, 0);
+    const sum = realExpenses.filter((e) => e.category === key).reduce((s, e) => s + e.amount, 0);
     return { key, label: EXPENSE_CATEGORIES[key].label, emoji: EXPENSE_CATEGORIES[key].emoji, color: EXPENSE_CATEGORIES[key].color, value: sum };
   }).filter((x) => x.value > 0);
 
-  // Расчёт долгов: каждый должен = totalSpent / N. Кто заплатил больше — ему должны.
+  // Расчёт долгов: все расходы (включая переводы) считаются для "paid"
+  // settlement = перевод от одного участника другому (не трата на поездку)
   const perPerson = totalSpent / trip.participants.length;
   const balances = trip.participants.map((p) => {
     const paid = expenses.filter((e) => e.paidById === p.id).reduce((s, e) => s + e.amount, 0);
@@ -92,7 +96,7 @@ export function Budget() {
       {/* График тренда по дням */}
       {(() => {
         const dailyData = trip.days.map((d) => {
-          const dayExpenses = expenses.filter((e) => e.dayId === d.id);
+          const dayExpenses = realExpenses.filter((e) => e.dayId === d.id);
           const sum = dayExpenses.reduce((s, e) => s + e.amount, 0);
           return {
             day: `Д${d.dayNumber}`,
@@ -127,6 +131,8 @@ export function Budget() {
                   <Tooltip
                     formatter={(v: number) => [`$${v}`, "Потрачено"]}
                     contentStyle={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: 8, fontSize: 12, color: "var(--foreground)" }}
+                    labelStyle={{ color: "var(--foreground)" }}
+                    itemStyle={{ color: "var(--foreground)" }}
                     cursor={{ fill: "var(--accent)" }}
                   />
                   <Bar dataKey="amount" radius={[6, 6, 0, 0]} maxBarSize={40}>
@@ -204,6 +210,7 @@ export function Budget() {
                 </div>
                 <span className="font-medium">{s.to.name}</span>
                 <span className="ml-auto font-bold text-primary">${s.amount.toFixed(0)}</span>
+                <MarkSettledButton fromId={s.from.id} toId={s.to.id} amount={s.amount} />
               </div>
             ))}
           </div>
@@ -218,9 +225,15 @@ export function Budget() {
           <h2 className="font-semibold text-sm">История трат ({expenses.length})</h2>
           <button
             onClick={() => setShowAdd((v) => !v)}
-            className="text-xs bg-primary text-primary-foreground px-2.5 py-1 rounded-lg flex items-center gap-1"
+            className={cn(
+              "text-xs px-2.5 py-1 rounded-lg flex items-center gap-1 transition-colors",
+              showAdd
+                ? "bg-secondary text-foreground border border-border"
+                : "bg-primary text-primary-foreground"
+            )}
           >
-            <Plus className="size-3" /> Добавить
+            {showAdd ? <X className="size-3" /> : <Plus className="size-3" />}
+            {showAdd ? "Скрыть" : "Добавить"}
           </button>
         </div>
 
@@ -243,17 +256,18 @@ export function Budget() {
 
 function ExpenseRow({ expense, participants }: { expense: Expense; participants: Participant[] }) {
   const del = useDeleteExpense();
+  const isSettlement = expense.category === "settlement";
   const cat = EXPENSE_CATEGORIES[expense.category];
   const paidBy = participants.find((p) => p.id === expense.paidById);
   return (
     <div className="flex items-center gap-2.5 p-2 rounded-lg hover:bg-accent group">
-      <div className="size-8 rounded-lg grid place-items-center text-base shrink-0" style={{ background: `${cat?.color}22` }}>
-        {cat?.emoji}
+      <div className={cn("size-8 rounded-lg grid place-items-center text-base shrink-0", isSettlement ? "bg-green-600/15" : "")} style={{ background: isSettlement ? undefined : `${cat?.color}22` }}>
+        {isSettlement ? "💸" : cat?.emoji}
       </div>
       <div className="min-w-0 flex-1">
         <div className="text-sm font-medium truncate">{expense.description}</div>
         <div className="text-[11px] text-muted-foreground flex items-center gap-1.5">
-          <span>{cat?.label}</span>
+          <span>{isSettlement ? "Перевод" : cat?.label}</span>
           {expense.day && <span>· День {expense.day.dayNumber}</span>}
           {paidBy && (
             <span className="flex items-center gap-0.5">
@@ -514,6 +528,41 @@ function BudgetHero({ totalSpent, totalBudget, budgetPct, remaining }: {
   );
 }
 
+// Кнопка "Отметить перевод" — записывает перевод как специальную трату
+function MarkSettledButton({ fromId, toId, amount }: { fromId: string; toId: string; amount: number }) {
+  const addExpense = useAddExpense();
+  const [done, setDone] = useState(false);
+
+  const handleSettle = async () => {
+    // Создаём трату с category="settlement" — от пользователя from
+    // Это увеличит from.paid, его баланс станет ~0
+    await addExpense.mutateAsync({
+      amount: Math.round(amount * 100) / 100,
+      category: "settlement",
+      description: `Перевод → участнику`,
+      paidById: fromId,
+    });
+    toast.success("Перевод отмечен ✅", { description: `$${amount.toFixed(2)}` });
+    setDone(true);
+  };
+
+  if (done) {
+    return <Check className="size-4 text-green-600 shrink-0" />;
+  }
+
+  return (
+    <button
+      onClick={handleSettle}
+      disabled={addExpense.isPending}
+      className="shrink-0 text-[10px] bg-green-600/10 text-green-600 hover:bg-green-600/20 px-2 py-1 rounded-lg font-medium flex items-center gap-1 transition-colors"
+      title="Отметить как переведённое"
+    >
+      {addExpense.isPending ? <Loader2 className="size-3 animate-spin" /> : <Check className="size-3" />}
+      Оплачен
+    </button>
+  );
+}
+
 function settleDebts(balances: { participant: Participant; paid: number; balance: number }[]) {
   const creditors = balances.filter((b) => b.balance > 0.01).sort((a, b) => b.balance - a.balance);
   const debtors = balances.filter((b) => b.balance < -0.01).sort((a, b) => a.balance - b.balance);
@@ -534,6 +583,7 @@ function settleDebts(balances: { participant: Participant; paid: number; balance
 
 // Модалка настройки бюджетов участников
 function BudgetEditModal({ open, onOpenChange }: { open: boolean; onOpenChange: (v: boolean) => void }) {
+  useBodyScrollLock(open);
   const { data: trip } = useTrip();
   const update = useUpdateMember();
   const tripId = getTripId();

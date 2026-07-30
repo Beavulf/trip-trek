@@ -1,6 +1,6 @@
 "use client";
 
-import { useDays, useUpdatePlace, useUploadPhoto, useDeletePlace } from "@/hooks/use-trip";
+import { useDays, useUpdatePlace, useUploadPhoto, useDeletePlace, useAddDay, useDeleteDay } from "@/hooks/use-trip";
 import { useTripStore } from "@/lib/trip-store";
 import { CATEGORY_META, type Place, type Day } from "@/lib/types";
 import { motion, AnimatePresence } from "framer-motion";
@@ -19,12 +19,14 @@ import {
   Plus,
   Trash2,
   Navigation,
+  CalendarPlus,
 } from "lucide-react";
 import { useState, useRef } from "react";
 import { createPortal } from "react-dom";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { AddPlaceSheet, type AddPlaceData } from "./add-place-sheet";
+import { useBodyScrollLock } from "@/hooks/use-body-scroll-lock";
 
 export function Itinerary() {
   const { data: days, isLoading } = useDays();
@@ -47,8 +49,12 @@ export function Itinerary() {
       shenzhen: { lat: 22.5431, lng: 114.0579 },
       hongkong: { lat: 22.3193, lng: 114.1694 },
       macau: { lat: 22.1987, lng: 113.5439 },
+      tokyo: { lat: 35.6762, lng: 139.6503 },
+      paris: { lat: 48.8566, lng: 2.3522 },
+      bangkok: { lat: 13.7563, lng: 100.5018 },
+      phuket: { lat: 7.8804, lng: 98.3923 },
     };
-    const c = currentDay ? cityCoords[currentDay.cityKey] : cityCoords.guangzhou;
+    const c = (currentDay && cityCoords[currentDay.cityKey]) || cityCoords.guangzhou;
     setAddData({ lat: c.lat, lng: c.lng, dayId: currentDay?.id });
     setAddOpen(true);
   };
@@ -102,6 +108,9 @@ export function Itinerary() {
         <DayCard key={day.id} day={day} onOpenPlace={setOpenPlace} />
       ))}
 
+      {/* Кнопка добавить день */}
+      <AddDayButton />
+
       <PlaceDialog place={openPlace} onClose={() => setOpenPlace(null)} />
       <AddPlaceSheet open={addOpen} onOpenChange={setAddOpen} initial={addData} />
     </div>
@@ -141,7 +150,10 @@ function DayCard({ day, onOpenPlace }: { day: Day; onOpenPlace: (p: Place) => vo
           </div>
         </div>
         <div className="text-right shrink-0 flex flex-col items-end gap-1">
-          <div className="text-xs font-medium tabular-nums">{visited}/{day.places.length}</div>
+          <div className="flex items-center gap-1.5">
+            <DeleteDayButton dayId={day.id} dayNumber={day.dayNumber} />
+            <div className="text-xs font-medium tabular-nums">{visited}/{day.places.length}</div>
+          </div>
           <motion.div animate={{ rotate: expanded ? 180 : 0 }} transition={{ duration: 0.2 }}>
             <ChevronDown className="size-4 text-muted-foreground" />
           </motion.div>
@@ -255,6 +267,7 @@ function PlaceRow({ place, accentColor, onOpen }: { place: Place; accentColor: s
 }
 
 function PlaceDialog({ place, onClose }: { place: Place | null; onClose: () => void }) {
+  useBodyScrollLock(!!place);
   const update = useUpdatePlace();
   const upload = useUploadPhoto();
   const inputRef = useRef<HTMLInputElement>(null);
@@ -509,6 +522,164 @@ function ItinerarySkeleton() {
           </div>
         </div>
       ))}
+    </div>
+  );
+}
+
+// Кнопка добавления нового дня
+function AddDayButton() {
+  const addDay = useAddDay();
+  const [open, setOpen] = useState(false);
+  const [city, setCity] = useState("");
+  const [title, setTitle] = useState("");
+  const [color, setColor] = useState("#f97316");
+
+  useBodyScrollLock(open);
+
+  const COLORS = ["#f97316", "#06b6d4", "#8b5cf6", "#ec4899", "#10b981", "#f59e0b", "#ef4444", "#3b82f6"];
+
+  const submit = async () => {
+    await addDay.mutateAsync({
+      city: city.trim() || "Новый город",
+      cityKey: "custom",
+      title: title.trim() || undefined,
+      accentColor: color,
+    });
+    toast.success("День добавлен! 📅");
+    setCity("");
+    setTitle("");
+    setOpen(false);
+  };
+
+  if (!open) {
+    return (
+      <button
+        onClick={() => setOpen(true)}
+        className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl border-2 border-dashed border-border hover:border-primary hover:text-primary transition-colors"
+      >
+        <CalendarPlus className="size-5" />
+        <span className="text-sm font-medium">Добавить день</span>
+      </button>
+    );
+  }
+
+  return createPortal(
+    <AnimatePresence>
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        onClick={() => setOpen(false)}
+        className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex items-end sm:items-center justify-center sm:p-4"
+      >
+        <motion.div
+          initial={{ y: "100%", opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
+          exit={{ y: "100%", opacity: 0 }}
+          transition={{ type: "spring", stiffness: 320, damping: 32 }}
+          onClick={(e) => e.stopPropagation()}
+          className="bg-card w-full sm:max-w-md rounded-t-3xl sm:rounded-3xl overflow-y-auto max-h-[90vh]"
+        >
+          <div className="sm:hidden flex justify-center pt-2.5 pb-1">
+            <div className="w-10 h-1 rounded-full bg-muted-foreground/30" />
+          </div>
+          <div className="sticky top-0 bg-card/95 backdrop-blur px-4 py-3 border-b border-border flex items-center justify-between">
+            <h2 className="font-bold text-base flex items-center gap-2">
+              <CalendarPlus className="size-5 text-primary" /> Новый день
+            </h2>
+            <button onClick={() => setOpen(false)} className="size-8 rounded-full hover:bg-accent grid place-items-center">
+              <X className="size-4" />
+            </button>
+          </div>
+          <div className="p-4 space-y-3">
+            <div>
+              <label className="text-xs text-muted-foreground mb-1 block">Город</label>
+              <input
+                value={city}
+                onChange={(e) => setCity(e.target.value)}
+                placeholder="Например, Шанхай"
+                autoFocus
+                className="w-full rounded-xl border border-input bg-background px-3 py-2.5 text-sm"
+              />
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground mb-1 block">Название дня (необязательно)</label>
+              <input
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                placeholder="Например, Переезд в Шанхай"
+                className="w-full rounded-xl border border-input bg-background px-3 py-2.5 text-sm"
+              />
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground mb-1.5 block">Цвет дня</label>
+              <div className="flex gap-2 flex-wrap">
+                {COLORS.map((c) => (
+                  <button
+                    key={c}
+                    onClick={() => setColor(c)}
+                    className={cn(
+                      "size-9 rounded-full transition-all",
+                      color === c ? "ring-2 ring-offset-2 ring-foreground scale-110" : "opacity-60 hover:opacity-100"
+                    )}
+                    style={{ background: c }}
+                  />
+                ))}
+              </div>
+            </div>
+            <button
+              onClick={submit}
+              disabled={addDay.isPending}
+              className="w-full rounded-xl bg-primary text-primary-foreground py-3 font-medium flex items-center justify-center gap-2 disabled:opacity-50"
+            >
+              {addDay.isPending ? <Loader2 className="size-4 animate-spin" /> : <CalendarPlus className="size-4" />}
+              {addDay.isPending ? "Создание…" : "Добавить день"}
+            </button>
+          </div>
+        </motion.div>
+      </motion.div>
+    </AnimatePresence>,
+    document.body
+  );
+}
+
+// Кнопка удаления дня (внутри DayCard)
+function DeleteDayButton({ dayId, dayNumber }: { dayId: string; dayNumber: number }) {
+  const deleteDay = useDeleteDay();
+  const [confirming, setConfirming] = useState(false);
+
+  if (!confirming) {
+    return (
+      <button
+        onClick={(e) => { e.stopPropagation(); setConfirming(true); }}
+        className="size-7 rounded-lg hover:bg-destructive/10 hover:text-destructive grid place-items-center transition-colors text-muted-foreground"
+        title="Удалить день"
+      >
+        <Trash2 className="size-3.5" />
+      </button>
+    );
+  }
+
+  return (
+    <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+      <button
+        onClick={() => {
+          deleteDay.mutate(dayId, {
+            onSuccess: () => toast.success(`День ${dayNumber} удалён`),
+            onError: (e) => toast.error(e.message),
+          });
+        }}
+        disabled={deleteDay.isPending}
+        className="text-[10px] bg-destructive text-destructive-foreground px-2 py-1 rounded-lg font-medium"
+      >
+        {deleteDay.isPending ? "…" : "Удалить?"}
+      </button>
+      <button
+        onClick={() => setConfirming(false)}
+        className="text-[10px] bg-secondary px-2 py-1 rounded-lg"
+      >
+        Отмена
+      </button>
     </div>
   );
 }

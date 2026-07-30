@@ -8,8 +8,10 @@ import { X, Copy, Check, Share2, Users, Link as LinkIcon } from "lucide-react";
 import { useTrip } from "@/hooks/use-trip";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { useBodyScrollLock } from "@/hooks/use-body-scroll-lock";
 
 export function InviteFriends({ open, onOpenChange }: { open: boolean; onOpenChange: (v: boolean) => void }) {
+  useBodyScrollLock(open);
   const { data: trip } = useTrip();
   const [copied, setCopied] = useState(false);
 

@@ -10,6 +10,7 @@ import { useRouter } from "next/navigation";
 import { setTripId } from "@/hooks/use-trip";
 import { TRIP_TEMPLATES } from "@/lib/trip-templates";
 import { cn } from "@/lib/utils";
+import { useBodyScrollLock } from "@/hooks/use-body-scroll-lock";
 
 interface TemplatePickerProps {
   open: boolean;
@@ -18,6 +19,7 @@ interface TemplatePickerProps {
 }
 
 export function TemplatePicker({ open, onOpenChange, userId }: TemplatePickerProps) {
+  useBodyScrollLock(open);
   const router = useRouter();
   const qc = useQueryClient();
   const [selectedTemplate, setSelectedTemplate] = useState<string | null>(null);

@@ -2,10 +2,73 @@
 
 ## Current Project Status
 
-**Phase**: 9 (Mobile Photo Crash Fix + Turbopack Warning Fix) — COMPLETED
+**Phase**: 10 (UI Polish + Day Management + Settlements + Bug Fixes) — COMPLETED
 **Build**: ✅ TypeScript clean, ESLint clean
 **Dev Server**: Running on port 3000
 **Test Accounts**: you@/leha@/den@triptrek.com (password: 1234)
+
+---
+
+## Session: UI Polish + Day Management + Settlements + Bug Fixes
+
+### Bug: "Cannot read properties of undefined (reading 'lat')" on Add Place
+**Root cause**: `itinerary.tsx` had hardcoded `cityCoords` with only 4 China cities. If trip used a different cityKey (e.g. "tokyo" from Japan template), `cityCoords[currentDay.cityKey]` returned undefined → crash on `.lat`.
+
+**Fix**: Added more cities (tokyo, paris, bangkok, phuket) + fallback to guangzhou: `const c = (currentDay && cityCoords[currentDay.cityKey]) || cityCoords.guangzhou;`
+
+### Bug: Turbopack warning "Cannot update a component (Router) while rendering"
+**Fix**: Moved `router.push("/login")` from render body to `useEffect` in `page.tsx`.
+
+### Bug: Mobile browser crash on photo upload
+**Fix**: Added Canvas image compression (max 1920px, JPEG 0.8), EXIF optimization (`{ gps: true }`), Object URL cleanup, processing state with loading overlay.
+
+### Feature: Body scroll lock when bottom sheet is open
+**Problem**: On mobile, when a bottom sheet (AddPlaceSheet, ShareCard, InviteFriends, etc.) opened, the background page could still scroll, causing the sheet to "drift".
+
+**Fix**: Created `useBodyScrollLock(active)` hook that sets `body.overflow = hidden` with scrollbar-width padding compensation. Applied to all 8 portal/modal components:
+- AddPlaceSheet, ShareCard, TemplatePicker, InviteFriends, BudgetEditModal, PremiumModal, GlobalSearch, PlaceDialog
+- (QuickAddSheet uses Radix Sheet which already has scroll lock built-in)
+
+### Feature: Day management (add/delete) in Itinerary
+**Problem**: No way to add or delete trip days.
+
+**Fix**:
+- `/api/days` POST — create new day (auto-increments dayNumber, updates trip.totalDays)
+- `/api/days` DELETE — delete day (renumbers remaining days, prevents deleting last day)
+- `/api/days` PATCH — update day (city, title, accentColor)
+- `useAddDay`, `useDeleteDay`, `useUpdateDay` hooks
+- "Добавить день" button at bottom of itinerary (opens modal with city/title/color picker)
+- DeleteDayButton in each DayCard header (with confirmation)
+
+### Feature: Settlement/Transfer recording in Budget
+**Problem**: "Расчёт между друзьями" showed who owes whom, but no way to record payments.
+
+**Fix**:
+- Added "Оплачен" button on each settlement
+- Creates expense with `category: "settlement"` (excluded from totalSpent, charts, category breakdown)
+- Settlement expenses show in history with "💸" icon and "Перевод" label
+- After marking as paid, settlement disappears (balance recalculated)
+- `realExpenses = expenses.filter(e => e.category !== "settlement")` used for all calculations
+
+### UI: Budget "Добавить" button rename
+**Problem**: When add expense form was expanded, the toggle button still said "Добавить" — confusing.
+
+**Fix**: Button now shows "Скрыть" with X icon when form is open, "Добавить" with Plus icon when closed. Style also changes (secondary when open, primary when closed).
+
+### UI: Chart tooltip text color
+**Problem**: Bar chart tooltip "Потрачено: $60" text was black on dark background.
+
+**Fix**: Added `labelStyle={{ color: "var(--foreground)" }}` and `itemStyle={{ color: "var(--foreground)" }}` to the BarChart Tooltip (was missing, only PieChart had it).
+
+### UI: Achievements labels overflow in Profile
+**Problem**: Achievement labels were positioned absolutely at bottom of `aspect-square` cards, overflowing on long names.
+
+**Fix**: Changed to flex column layout (`p-2 flex flex-col items-center gap-1`), removed `aspect-square`, used `line-clamp-2` for labels, grid changed from 4/6 cols to 3/5 cols.
+
+### UI: QuickAddSheet animation optimization
+**Problem**: Opening the + sheet felt laggy on mobile.
+
+**Fix**: Replaced `motion.button` (framer-motion whileTap) with regular `button` + CSS `active:scale-95` transition. Framer-motion inside Radix Sheet caused unnecessary re-renders during open animation.
 
 ---
 

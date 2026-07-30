@@ -48,12 +48,11 @@ export function QuickAddSheet({ open, onOpenChange }: { open: boolean; onOpenCha
             const Icon = m.icon;
             const active = mode === m.key;
             return (
-              <motion.button
+              <button
                 key={m.key}
                 onClick={() => setMode(m.key)}
-                whileTap={{ scale: 0.94 }}
                 className={cn(
-                  "relative flex flex-col items-center gap-2 py-4 rounded-2xl border-2 transition-all overflow-hidden",
+                  "relative flex flex-col items-center gap-2 py-4 rounded-2xl border-2 transition-all overflow-hidden active:scale-95",
                   active
                     ? "border-primary bg-primary/10 text-primary shadow-md shadow-primary/10"
                     : "border-border text-muted-foreground hover:bg-accent hover:border-primary/20"
@@ -75,7 +74,7 @@ export function QuickAddSheet({ open, onOpenChange }: { open: boolean; onOpenCha
                   <Icon className="size-6" strokeWidth={2} style={{ color: active ? m.color : undefined }} />
                 </div>
                 <span className="relative text-sm font-medium">{m.label}</span>
-              </motion.button>
+              </button>
             );
           })}
         </div>

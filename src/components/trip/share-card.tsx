@@ -7,8 +7,10 @@ import { Share2, Download, X, Loader2, Image as ImageIcon, Copy, Check } from "l
 import { useTrip } from "@/hooks/use-trip";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { useBodyScrollLock } from "@/hooks/use-body-scroll-lock";
 
 export function ShareCard({ open, onOpenChange }: { open: boolean; onOpenChange: (v: boolean) => void }) {
+  useBodyScrollLock(open);
   const { data: trip } = useTrip();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [generating, setGenerating] = useState(false);

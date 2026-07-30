@@ -526,7 +526,7 @@ export default function ProfilePage() {
                   {profile.achievements.filter((a) => a.unlocked).length} / {profile.achievements.length}
                 </span>
               </div>
-              <div className="p-3 grid grid-cols-4 sm:grid-cols-6 gap-2">
+              <div className="p-3 grid grid-cols-3 sm:grid-cols-5 gap-2">
                 {profile.achievements.map((a, i) => (
                   <motion.div
                     key={a.label}
@@ -534,15 +534,15 @@ export default function ProfilePage() {
                     animate={{ scale: 1, opacity: 1 }}
                     transition={{ delay: 0.15 + i * 0.02 }}
                     className={cn(
-                      "aspect-square rounded-xl grid place-items-center text-center transition-all relative group",
+                      "rounded-xl p-2 flex flex-col items-center gap-1 text-center transition-all group cursor-help",
                       a.unlocked
                         ? "bg-gradient-to-br from-amber-500/20 to-orange-500/10 border border-amber-500/30"
                         : "bg-muted/50 border border-border opacity-40 grayscale"
                     )}
                     title={`${a.label} — ${a.req}`}
                   >
-                    <div className="text-2xl">{a.emoji}</div>
-                    <div className="absolute -bottom-0.5 inset-x-0 text-[8px] text-muted-foreground truncate px-0.5">
+                    <div className="text-2xl leading-none">{a.emoji}</div>
+                    <div className="text-[9px] font-medium leading-tight line-clamp-2 break-words w-full">
                       {a.label}
                     </div>
                   </motion.div>

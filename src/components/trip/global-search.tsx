@@ -8,6 +8,7 @@ import { useState, useEffect, useMemo, useRef } from "react";
 import { useTripStore } from "@/lib/trip-store";
 import { CITIES } from "@/lib/types";
 import { cn } from "@/lib/utils";
+import { useBodyScrollLock } from "@/hooks/use-body-scroll-lock";
 
 interface SearchResult {
   id: string;
@@ -35,6 +36,7 @@ const TYPE_COLORS: Record<string, string> = {
 };
 
 export function GlobalSearch({ open, onOpenChange }: { open: boolean; onOpenChange: (v: boolean) => void }) {
+  useBodyScrollLock(open);
   const [query, setQuery] = useState("");
   const [selectedIdx, setSelectedIdx] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);

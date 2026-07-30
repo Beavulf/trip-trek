@@ -8,8 +8,10 @@ import { toast } from "sonner";
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth as useSession } from "@/hooks/use-auth";
+import { useBodyScrollLock } from "@/hooks/use-body-scroll-lock";
 
 export function PremiumModal({ open, onOpenChange }: { open: boolean; onOpenChange: (v: boolean) => void }) {
+  useBodyScrollLock(open);
   const { data: session } = useSession();
   const userId = (session?.user as { id?: string } | undefined)?.id || "";
   const qc = useQueryClient();
