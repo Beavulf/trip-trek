@@ -2,10 +2,72 @@
 
 ## Current Project Status
 
-**Phase**: 13 (City Autocomplete Integration + Weather Anywhere + Expense UX + WebSocket) — COMPLETED
+**Phase**: 14 (QuickAdd Expense UX + WebSocket Fix + PWA Updates + Mobile Delete) — COMPLETED
 **Build**: ✅ TypeScript clean, ESLint clean
 **Dev Server**: Running via `bun server.ts` (Next.js + WebSocket on port 3000)
 **Test Accounts**: you@/leha@/den@triptrek.com (password: 1234)
+
+---
+
+## Session: QuickAdd Expense UX + WebSocket Fix + PWA Updates + Mobile Delete
+
+### Fix: WebSocket not updating for other users
+**Root cause**: `use-websocket.ts` formed URL as `ws://hostname:3000` with explicit port. Through Caddy gateway (sandbox preview), client sees HTTPS without port → `window.location.port` empty → fallback to `3000` → `wss://hostname:3000` fails (Caddy doesn't expose 3000 directly).
+
+**Fix**: Changed to `window.location.origin` — WebSocket connects to same origin as page. Caddy proxies `/socket.io/` path correctly to localhost:3000.
+
+```ts
+// Было: ws://hostname:3000 (не работает через Caddy)
+const wsUrl = `${protocol}//${host}:${wsPort}`;
+
+// Стало: window.location.origin (работает через Caddy/HTTPS)
+const wsUrl = window.location.origin;
+```
+
+Also added `polling` as fallback transport (in case WebSocket blocked) and explicit `path: "/socket.io/"`.
+
+### Feature: QuickAddSheet ExpenseForm — full split functionality
+**Problem**: QuickAdd "+" sheet had basic expense form without split/debt features. Budget page had full features.
+
+**Fix**: Rewrote ExpenseForm in quick-add.tsx to match budget page:
+1. **Hint banner**: "Кто платит — ты. Отметь за кого, чтобы посчитать долги."
+2. **"За кого заплатил?"** — checkbox list (excluding self as payer)
+3. **"Заплатил только за них"** — special checkbox for "paid only for others, not for myself"
+   - When checked: debt split only among selected people (not payer)
+   - Example: I bought coffee for Лёха ($5), excludeSelf → Лёха owes me $5 (not $2.50)
+4. **Live calculation**: "💡 Каждый должен по $5.00 тебе" or "включая тебя"
+5. **On submit**: toast shows debt info with names
+
+### Fix: QuickAddSheet UI/UX — padding too close to edges
+- SheetContent: added `px-5 pb-6 pt-2` padding
+- SheetHeader: `px-0` (inherits from parent padding)
+- SheetTitle: `text-base` for better hierarchy
+- Plus icon: proper `PlusIcon` from lucide-react (was dummy function returning null)
+
+### Fix: Delete expense icon missing on mobile
+**Root cause**: Button had `opacity-0 group-hover:opacity-100` — mobile devices don't have hover, so button was invisible.
+
+**Fix**: Removed hover dependency. Now:
+- Delete button always visible (muted color)
+- On click → confirmation "Да"/"Нет" inline buttons
+- After delete → toast "Удалено"
+
+### Feature: PWA update notification
+**Created**: `src/components/trip/pwa-update.tsx`
+- Checks for SW updates every 30 seconds
+- When new SW waiting → shows animated toast "Доступна новая версия"
+- Button "Обновить" → sends `SKIP_WAITING` message to SW → page reloads
+- Button "X" → dismiss (will show again next check)
+
+**SW updates** (`public/sw.js`):
+- Cache version bumped to `triptrek-v2`
+- Removed auto `skipWaiting()` on install (now controlled by user)
+- Added `message` event handler for `SKIP_WAITING`
+- Added `icon-1024.png` to static assets
+
+**SW registration** (`providers.tsx`):
+- Added `navigator.serviceWorker.register("/sw.js")` on window load
+- Was missing — SW was never registered!
 
 ---
 

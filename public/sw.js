@@ -1,13 +1,14 @@
-// Service Worker для TripTrek — push-уведомления + кэширование
-const CACHE_NAME = "triptrek-v1";
-const STATIC_ASSETS = ["/", "/login", "/manifest.webmanifest", "/icon-192.png", "/icon-512.png"];
+// Service Worker для TripTrek — push-уведомления + кэширование + обновления
+const CACHE_NAME = "triptrek-v2";
+const STATIC_ASSETS = ["/", "/login", "/manifest.webmanifest", "/icon-192.png", "/icon-512.png", "/icon-1024.png"];
 
 // Установка — кэшируем базовые страницы
 self.addEventListener("install", (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => cache.addAll(STATIC_ASSETS).catch(() => {}))
   );
-  self.skipWaiting();
+  // НЕ skipWaiting — ждём пока пользователь нажмёт "Обновить"
+  // self.skipWaiting(); — убрано, управляется из PWAUpdateNotification
 });
 
 // Активация
@@ -18,6 +19,13 @@ self.addEventListener("activate", (event) => {
     )
   );
   self.clients.claim();
+});
+
+// Обработка сообщения от клиента — активировать новый SW
+self.addEventListener("message", (event) => {
+  if (event.data && event.data.type === "SKIP_WAITING") {
+    self.skipWaiting();
+  }
 });
 
 // Push-уведомления

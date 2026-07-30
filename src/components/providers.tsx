@@ -2,7 +2,7 @@
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ThemeProvider } from "next-themes";
-import { useState, ReactNode } from "react";
+import { useState, useEffect, ReactNode } from "react";
 
 export function Providers({ children }: { children: ReactNode }) {
   const [client] = useState(
@@ -18,10 +18,23 @@ export function Providers({ children }: { children: ReactNode }) {
         },
       })
   );
+
+  // Регистрация Service Worker для PWA
+  useEffect(() => {
+    if (typeof window !== "undefined" && "serviceWorker" in navigator) {
+      window.addEventListener("load", () => {
+        navigator.serviceWorker.register("/sw.js").catch((err) => {
+          console.warn("SW registration failed:", err);
+        });
+      });
+    }
+  }, []);
+
   return (
     <ThemeProvider attribute="class" defaultTheme="dark" enableSystem disableTransitionOnChange>
       <QueryClientProvider client={client}>{children}</QueryClientProvider>
     </ThemeProvider>
   );
 }
+
 

@@ -10,7 +10,7 @@ import {
 import { useTrip, useUploadPhoto, useAddExpense, useAddJournal } from "@/hooks/use-trip";
 import { useTripStore } from "@/lib/trip-store";
 import { EXPENSE_CATEGORIES, type Day } from "@/lib/types";
-import { Camera, Wallet, BookOpen, Loader2, Check, X, Images, MapPin } from "lucide-react";
+import { Camera, Wallet, BookOpen, Loader2, Check, X, Images, MapPin, Users, Plus as PlusIcon } from "lucide-react";
 import { useRef, useState, useEffect } from "react";
 import { useAuth as useSession } from "@/hooks/use-auth";
 import { toast } from "sonner";
@@ -28,10 +28,10 @@ export function QuickAddSheet({ open, onOpenChange }: { open: boolean; onOpenCha
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="bottom" className="rounded-t-3xl max-h-[90vh] overflow-y-auto">
-        <SheetHeader>
-          <SheetTitle className="flex items-center gap-2">
-            <Plus /> Быстрое добавление
+      <SheetContent side="bottom" className="rounded-t-3xl max-h-[90vh] overflow-y-auto px-5 pb-6 pt-2">
+        <SheetHeader className="px-0">
+          <SheetTitle className="flex items-center gap-2 text-base">
+            <PlusIcon className="size-4" /> Быстрое добавление
           </SheetTitle>
           <SheetDescription>
             {trip ? `День ${trip.currentDayNumber} · ${trip.days.find(d => d.dayNumber === trip.currentDayNumber)?.city ?? ""}` : ""}
@@ -87,10 +87,6 @@ export function QuickAddSheet({ open, onOpenChange }: { open: boolean; onOpenCha
       </SheetContent>
     </Sheet>
   );
-}
-
-function Plus() {
-  return null;
 }
 
 function DayPicker({ value, onChange }: { value: string; onChange: (id: string) => void }) {
@@ -457,6 +453,9 @@ function ExpenseForm({ userId, onDone }: { userId: string; onDone: () => void })
   const [category, setCategory] = useState("food");
   const [description, setDescription] = useState("");
   const [dayId, setDayId] = useState(trip?.days.find((d) => d.dayNumber === trip.currentDayNumber)?.id ?? "");
+  const [splitWith, setSplitWith] = useState<Set<string>>(new Set());
+  // excludeSelf — заплатил ТОЛЬКО за других (на себя не тратил)
+  const [excludeSelf, setExcludeSelf] = useState(false);
 
   const submit = async () => {
     const amt = parseFloat(amount);
@@ -471,14 +470,53 @@ function ExpenseForm({ userId, onDone }: { userId: string; onDone: () => void })
       paidById: userId,
       dayId,
     });
-    toast.success("Трата добавлена 💸");
+    // Подсказка о долге
+    if (splitWith.size > 0) {
+      const splitCount = excludeSelf ? splitWith.size : splitWith.size + 1;
+      const perPerson = (amt / splitCount).toFixed(2);
+      const names = trip?.participants
+        .filter(p => splitWith.has(p.id))
+        .map(p => p.name)
+        .join(", ");
+      toast.success("Трата добавлена 💸", {
+        description: excludeSelf
+          ? `Долг: ${names} должны по $${perPerson} → тебе`
+          : `Долг: каждый должен $${perPerson} (включая тебя)`,
+        duration: 5000,
+      });
+    } else {
+      toast.success("Трата добавлена 💸");
+    }
     setAmount("");
     setDescription("");
+    setSplitWith(new Set());
+    setExcludeSelf(false);
     onDone();
   };
 
+  const toggleSplit = (id: string) => {
+    setSplitWith(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  // Расчёт доли
+  const splitCount = splitWith.size > 0
+    ? (excludeSelf ? splitWith.size : splitWith.size + 1)
+    : 1;
+  const perPerson = amount ? (parseFloat(amount) / splitCount).toFixed(2) : "0";
+
   return (
     <div className="space-y-3">
+      {/* Подсказка */}
+      <div className="text-[10px] text-muted-foreground bg-muted/50 rounded-lg px-3 py-2 flex items-center gap-1.5">
+        <Users className="size-3 shrink-0" />
+        <span>Кто платит — ты. Отметь за кого, чтобы посчитать долги.</span>
+      </div>
+
       <div>
         <label className="text-xs text-muted-foreground mb-1 block">День</label>
         <DayPicker value={dayId} onChange={setDayId} />
@@ -516,6 +554,67 @@ function ExpenseForm({ userId, onDone }: { userId: string; onDone: () => void })
         placeholder="Описание (например, Ужин в SoHo)"
         className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm"
       />
+
+      {/* За кого заплатил */}
+      <div>
+        <label className="text-xs text-muted-foreground mb-1 block flex items-center gap-1">
+          <Users className="size-3" /> За кого заплатил? (необязательно)
+        </label>
+        <div className="bg-background rounded-lg border border-input p-2 space-y-1">
+          {/* Чекбокс "только за других" */}
+          <button
+            onClick={() => setExcludeSelf(v => !v)}
+            className={cn(
+              "w-full flex items-center gap-2 p-1.5 rounded-lg text-xs transition-colors",
+              excludeSelf ? "bg-amber-500/10 text-amber-600" : "hover:bg-accent"
+            )}
+          >
+            <div className={cn(
+              "size-4 rounded border-2 grid place-items-center shrink-0",
+              excludeSelf ? "bg-amber-500 border-amber-500" : "border-input"
+            )}>
+              {excludeSelf && <Check className="size-3 text-white" />}
+            </div>
+            <span className="flex-1 text-left font-medium">Заплатил только за них (на себя не тратил)</span>
+          </button>
+
+          {trip?.participants
+            .filter(p => p.id !== userId) // excluding self — плательщик
+            .map((p) => {
+              const checked = splitWith.has(p.id);
+              return (
+                <button
+                  key={p.id}
+                  onClick={() => toggleSplit(p.id)}
+                  className={cn(
+                    "w-full flex items-center gap-2 p-1.5 rounded-lg text-sm transition-colors",
+                    "hover:bg-accent",
+                    checked && "bg-primary/10"
+                  )}
+                >
+                  <div className={cn(
+                    "size-4 rounded border-2 grid place-items-center shrink-0",
+                    checked ? "bg-primary border-primary" : "border-input"
+                  )}>
+                    {checked && <Check className="size-3 text-primary-foreground" />}
+                  </div>
+                  <div className="size-6 rounded-full grid place-items-center text-[10px]" style={{ background: p.color }}>
+                    {p.emoji}
+                  </div>
+                  <span className="flex-1 text-left">{p.name}</span>
+                </button>
+              );
+            })}
+          {splitWith.size > 0 && (
+            <div className="text-[11px] text-primary bg-primary/5 rounded-lg px-2 py-1.5 mt-1 border border-primary/20">
+              {excludeSelf
+                ? <>💡 Каждый должен по <b>${perPerson}</b> тебе</>
+                : <>💡 Каждый должен по <b>${perPerson}</b> (включая тебя)</>
+              }
+            </div>
+          )}
+        </div>
+      </div>
 
       <button
         onClick={submit}

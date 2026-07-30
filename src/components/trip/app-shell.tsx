@@ -40,6 +40,7 @@ import { QuickAddSheet } from "./quick-add";
 import { GlobalSearch } from "./global-search";
 import { TripSwitcher } from "./trip-switcher";
 import { PremiumModal } from "./premium-modal";
+import { PWAUpdateNotification } from "./pwa-update";
 import { InviteFriends } from "./invite-friends";
 import { ShareCard } from "./share-card";
 
@@ -293,6 +294,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       <InviteFriends open={inviteOpen} onOpenChange={setInviteOpen} />
       <ShareCard open={shareOpen} onOpenChange={setShareOpen} />
       <PremiumModal open={premiumOpen} onOpenChange={setPremiumOpen} />
+      <PWAUpdateNotification />
     </div>
   );
 }

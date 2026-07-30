@@ -262,6 +262,7 @@ export function Budget() {
 
 function ExpenseRow({ expense, participants }: { expense: Expense; participants: Participant[] }) {
   const del = useDeleteExpense();
+  const [confirming, setConfirming] = useState(false);
   const isSettlement = expense.category === "settlement";
   const cat = EXPENSE_CATEGORIES[expense.category];
   const paidBy = participants.find((p) => p.id === expense.paidById);
@@ -283,13 +284,32 @@ function ExpenseRow({ expense, participants }: { expense: Expense; participants:
           )}
         </div>
       </div>
-      <span className="font-semibold text-sm">${expense.amount.toFixed(0)}</span>
-      <button
-        onClick={() => { del.mutate(expense.id); toast.success("Удалено"); }}
-        className="size-7 rounded-lg opacity-0 group-hover:opacity-100 hover:bg-red-500/10 hover:text-red-500 grid place-items-center transition-opacity"
-      >
-        <Trash2 className="size-3.5" />
-      </button>
+      <span className="font-semibold text-sm shrink-0">${expense.amount.toFixed(0)}</span>
+      {confirming ? (
+        <div className="flex items-center gap-1 shrink-0">
+          <button
+            onClick={() => { del.mutate(expense.id); toast.success("Удалено"); setConfirming(false); }}
+            disabled={del.isPending}
+            className="text-[10px] bg-red-500 text-white px-2 py-1 rounded-lg font-medium"
+          >
+            {del.isPending ? "…" : "Да"}
+          </button>
+          <button
+            onClick={() => setConfirming(false)}
+            className="text-[10px] bg-secondary px-2 py-1 rounded-lg"
+          >
+            Нет
+          </button>
+        </div>
+      ) : (
+        <button
+          onClick={() => setConfirming(true)}
+          className="size-7 rounded-lg hover:bg-red-500/10 hover:text-red-500 grid place-items-center transition-colors text-muted-foreground"
+          title="Удалить"
+        >
+          <Trash2 className="size-3.5" />
+        </button>
+      )}
     </div>
   );
 }

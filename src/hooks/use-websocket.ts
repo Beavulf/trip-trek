@@ -17,14 +17,13 @@ export function useWebSocket(tripId: string) {
   useEffect(() => {
     if (!tripId || connectedRef.current) return;
 
-    const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-    const host = window.location.hostname;
-    // server.ts запускает HTTP + WS на одном порту (3000)
-    const wsPort = process.env.NEXT_PUBLIC_WS_PORT || window.location.port || "3000";
-    const wsUrl = `${protocol}//${host}:${wsPort}`;
+    // WebSocket подключается к тому же origin что и страница
+    // (server.ts: HTTP + WS на одном порту, Caddy проксирует оба)
+    const wsUrl = window.location.origin;
 
     socket = io(wsUrl, {
-      transports: ["websocket"],
+      transports: ["websocket", "polling"],
+      path: "/socket.io/",
       reconnection: true,
       reconnectionAttempts: 10,
       reconnectionDelay: 2000,
