@@ -181,16 +181,21 @@ export function Budget() {
 
       {/* Расчёт между друзьями */}
       <div className="rounded-2xl bg-card border border-border p-4">
-        <h2 className="font-semibold text-sm mb-3 flex items-center gap-2"><Scale className="size-4" /> Расчёт между друзьями</h2>
+        <h2 className="font-semibold text-sm mb-1 flex items-center gap-2"><Scale className="size-4" /> Расчёт между друзьями</h2>
+        <p className="text-[10px] text-muted-foreground mb-3">
+          Все траты делятся поровну. <b>Внёс</b> — сколько реально заплатил. <b className="text-green-600">+</b> ему должны, <b className="text-red-500">−</b> он должен.
+        </p>
         <div className="space-y-2 mb-3">
           {balances.map((b) => (
             <div key={b.participant.id} className="flex items-center gap-2 text-sm">
               <div className="size-7 rounded-full grid place-items-center text-xs" style={{ background: b.participant.color }}>
                 {b.participant.emoji}
               </div>
-              <span className="flex-1">{b.participant.name}</span>
-              <span className="text-xs text-muted-foreground">внёс ${b.paid.toFixed(0)}</span>
-              <span className={cn("font-semibold w-20 text-right", b.balance > 0 ? "text-green-600" : b.balance < 0 ? "text-red-500" : "text-muted-foreground")}>
+              <div className="flex-1 min-w-0">
+                <div className="font-medium truncate">{b.participant.name}</div>
+                <div className="text-[10px] text-muted-foreground">внёс ${b.paid.toFixed(0)}</div>
+              </div>
+              <span className={cn("font-semibold text-right text-sm", b.balance > 0 ? "text-green-600" : b.balance < 0 ? "text-red-500" : "text-muted-foreground")}>
                 {b.balance > 0 ? `+$${b.balance.toFixed(0)}` : b.balance < 0 ? `−$${Math.abs(b.balance).toFixed(0)}` : "ровно"}
               </span>
             </div>
@@ -200,17 +205,17 @@ export function Budget() {
           <div className="space-y-1.5 pt-2 border-t border-border">
             <div className="text-xs text-muted-foreground mb-1">Кто кому переводит:</div>
             {settlements.map((s, i) => (
-              <div key={i} className="flex items-center gap-2 text-sm bg-muted/50 rounded-lg px-2 py-1.5">
+              <div key={i} className="flex items-center gap-1.5 text-sm bg-muted/50 rounded-lg px-2 py-1.5">
                 <div className="size-6 rounded-full grid place-items-center text-[10px]" style={{ background: s.from.color }}>
                   {s.from.emoji}
                 </div>
-                <span className="font-medium">{s.from.name}</span>
-                <ArrowRight className="size-3.5 text-muted-foreground" />
+                <span className="font-medium text-xs">{s.from.name}</span>
+                <ArrowRight className="size-3 text-muted-foreground" />
                 <div className="size-6 rounded-full grid place-items-center text-[10px]" style={{ background: s.to.color }}>
                   {s.to.emoji}
                 </div>
-                <span className="font-medium">{s.to.name}</span>
-                <span className="ml-auto font-bold text-primary">${s.amount.toFixed(0)}</span>
+                <span className="font-medium text-xs">{s.to.name}</span>
+                <span className="ml-auto font-bold text-primary text-sm">${s.amount.toFixed(0)}</span>
                 <MarkSettledButton from={s.from} to={s.to} amount={s.amount} />
               </div>
             ))}
@@ -292,13 +297,16 @@ function ExpenseRow({ expense, participants }: { expense: Expense; participants:
 function AddExpenseForm({ onDone }: { onDone: () => void }) {
   const { data: trip } = useTrip();
   const add = useAddExpense();
+  const { data: session } = useAuth();
+  const currentUserId = (session?.user as { id?: string } | undefined)?.id || "";
+
   const [amount, setAmount] = useState("");
   const [category, setCategory] = useState("food");
   const [description, setDescription] = useState("");
-  const [paidById, setPaidById] = useState(trip?.participants[0]?.id ?? "");
+  // По умолчанию — текущий пользователь (тот кто добавляет = тот кто платит)
+  const [paidById, setPaidById] = useState(currentUserId || trip?.participants[0]?.id || "");
   const [dayId, setDayId] = useState("");
   const [splitWith, setSplitWith] = useState<Set<string>>(new Set());
-  const [showSplit, setShowSplit] = useState(false);
 
   const submit = async () => {
     const amt = parseFloat(amount);
@@ -317,8 +325,18 @@ function AddExpenseForm({ onDone }: { onDone: () => void }) {
       paidById,
       dayId: dayId || undefined,
     });
-    toast.success("Трата добавлена 💸");
-    setAmount(""); setDescription(""); setSplitWith(new Set()); setShowSplit(false);
+    // Подсказка о долге если splitWith выбран
+    if (splitWith.size > 0) {
+      const perPerson = (amt / (splitWith.size + 1)).toFixed(2);
+      const payer = trip?.participants.find(p => p.id === paidById);
+      toast.success("Трата добавлена 💸", {
+        description: `Долг: каждый должен $${perPerson} → ${payer?.name || "плательщику"}`,
+        duration: 5000,
+      });
+    } else {
+      toast.success("Трата добавлена 💸");
+    }
+    setAmount(""); setDescription(""); setSplitWith(new Set());
     onDone();
   };
 
@@ -332,7 +350,7 @@ function AddExpenseForm({ onDone }: { onDone: () => void }) {
   };
 
   // Расчёт доли если выбрано "за кого"
-  const splitCount = splitWith.size > 0 ? splitWith.size + 1 : 1; // +1 за себя
+  const splitCount = splitWith.size > 0 ? splitWith.size + 1 : 1; // +1 за плательщика
   const perPerson = amount ? (parseFloat(amount) / splitCount).toFixed(2) : "0";
 
   return (
@@ -342,7 +360,13 @@ function AddExpenseForm({ onDone }: { onDone: () => void }) {
       exit={{ height: 0, opacity: 0 }}
       className="overflow-hidden"
     >
-      <div className="bg-muted/40 rounded-xl p-3 space-y-2 mb-2">
+      <div className="bg-muted/40 rounded-xl p-3 space-y-2.5 mb-2">
+        {/* Подсказка */}
+        <div className="text-[10px] text-muted-foreground bg-background/80 rounded-lg px-2.5 py-1.5 flex items-center gap-1.5">
+          <Users className="size-3 shrink-0" />
+          <span>Кто платит — тот кто достал карту. Отметь за кого, чтобы посчитать долги.</span>
+        </div>
+
         <div className="grid grid-cols-2 gap-2">
           <input
             type="number"
@@ -360,99 +384,92 @@ function AddExpenseForm({ onDone }: { onDone: () => void }) {
         <input
           value={description}
           onChange={(e) => setDescription(e.target.value)}
-          placeholder="Описание"
+          placeholder="Описание (например, Ужин в SoHo)"
           className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm"
         />
-        <div className="grid grid-cols-2 gap-2">
-          <select value={paidById} onChange={(e) => setPaidById(e.target.value)} className="rounded-lg border border-input bg-background px-3 py-2 text-sm">
-            <option value="">Кто заплатил?</option>
+
+        {/* Кто заплатил */}
+        <div>
+          <label className="text-[10px] text-muted-foreground mb-1 block flex items-center gap-1">
+            <Wallet className="size-3" /> Кто заплатил?
+          </label>
+          <div className="flex gap-1.5 flex-wrap">
             {trip?.participants.map((p) => (
-              <option key={p.id} value={p.id}>{p.emoji} {p.name}</option>
+              <button
+                key={p.id}
+                onClick={() => setPaidById(p.id)}
+                className={cn(
+                  "flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all",
+                  paidById === p.id
+                    ? "bg-primary text-primary-foreground shadow-sm"
+                    : "bg-background border border-input hover:bg-accent"
+                )}
+              >
+                <div className="size-5 rounded-full grid place-items-center text-[10px]" style={{ background: p.color }}>
+                  {p.emoji}
+                </div>
+                {p.name}
+              </button>
             ))}
-          </select>
-          <select value={dayId} onChange={(e) => setDayId(e.target.value)} className="rounded-lg border border-input bg-background px-3 py-2 text-sm">
-            <option value="">Без дня</option>
-            {trip?.days.map((d) => (
-              <option key={d.id} value={d.id}>День {d.dayNumber} · {d.city}</option>
-            ))}
-          </select>
+          </div>
         </div>
 
-        {/* Заплатил за других */}
+        {/* За кого заплатил (split) */}
         <div>
-          <button
-            onClick={() => setShowSplit(v => !v)}
-            className={cn(
-              "w-full rounded-lg py-2 px-3 text-sm font-medium flex items-center justify-between transition-colors",
-              showSplit ? "bg-primary/10 text-primary border border-primary/30" : "bg-background border border-input"
-            )}
-          >
-            <span className="flex items-center gap-1.5">
-              <Users className="size-3.5" />
-              Заплатил за других
-            </span>
-            <span className="text-xs">
-              {splitWith.size > 0 ? `${splitWith.size + 1} чел · $${perPerson}/каждый` : "не выбрано"}
-            </span>
-          </button>
-          <AnimatePresence>
-            {showSplit && (
-              <motion.div
-                initial={{ height: 0, opacity: 0 }}
-                animate={{ height: "auto", opacity: 1 }}
-                exit={{ height: 0, opacity: 0 }}
-                className="overflow-hidden"
-              >
-                <div className="mt-1.5 bg-background rounded-lg border border-input p-2 space-y-1">
-                  <p className="text-[10px] text-muted-foreground px-1">
-                    Отметь за кого ты заплатил — долг разделится поровну:
-                  </p>
-                  {trip?.participants.map((p) => {
-                    const checked = splitWith.has(p.id) || p.id === paidById;
-                    const isPayer = p.id === paidById;
-                    return (
-                      <button
-                        key={p.id}
-                        onClick={() => !isPayer && toggleSplit(p.id)}
-                        disabled={isPayer}
-                        className={cn(
-                          "w-full flex items-center gap-2 p-1.5 rounded-lg text-sm transition-colors",
-                          isPayer ? "opacity-50 cursor-not-allowed" : "hover:bg-accent",
-                          checked && !isPayer && "bg-primary/10"
-                        )}
-                      >
-                        <div className={cn(
-                          "size-4 rounded border-2 grid place-items-center shrink-0",
-                          checked ? "bg-primary border-primary" : "border-input"
-                        )}>
-                          {checked && <Check className="size-3 text-primary-foreground" />}
-                        </div>
-                        <div className="size-6 rounded-full grid place-items-center text-[10px]" style={{ background: p.color }}>
-                          {p.emoji}
-                        </div>
-                        <span className="flex-1 text-left">{p.name}</span>
-                        {isPayer && <span className="text-[10px] text-muted-foreground">(заплатил)</span>}
-                      </button>
-                    );
-                  })}
-                  {splitWith.size > 0 && (
-                    <div className="text-[11px] text-muted-foreground px-1 pt-1 border-t border-border mt-1">
-                      💡 Каждый должен по <b>${perPerson}</b> плательщику
-                    </div>
+          <label className="text-[10px] text-muted-foreground mb-1 block flex items-center gap-1">
+            <Users className="size-3" /> За кого заплатил? (необязательно)
+          </label>
+          <div className="bg-background rounded-lg border border-input p-2 space-y-1">
+            {trip?.participants.map((p) => {
+              const isPayer = p.id === paidById;
+              const checked = splitWith.has(p.id) || isPayer;
+              return (
+                <button
+                  key={p.id}
+                  onClick={() => !isPayer && toggleSplit(p.id)}
+                  disabled={isPayer}
+                  className={cn(
+                    "w-full flex items-center gap-2 p-1.5 rounded-lg text-sm transition-colors",
+                    isPayer ? "opacity-50 cursor-not-allowed" : "hover:bg-accent",
+                    checked && !isPayer && "bg-primary/10"
                   )}
-                </div>
-              </motion.div>
+                >
+                  <div className={cn(
+                    "size-4 rounded border-2 grid place-items-center shrink-0",
+                    checked ? "bg-primary border-primary" : "border-input"
+                  )}>
+                    {checked && <Check className="size-3 text-primary-foreground" />}
+                  </div>
+                  <div className="size-6 rounded-full grid place-items-center text-[10px]" style={{ background: p.color }}>
+                    {p.emoji}
+                  </div>
+                  <span className="flex-1 text-left">{p.name}</span>
+                  {isPayer && <span className="text-[10px] text-muted-foreground">(заплатил)</span>}
+                </button>
+              );
+            })}
+            {splitWith.size > 0 && (
+              <div className="text-[11px] text-primary bg-primary/5 rounded-lg px-2 py-1.5 mt-1 border border-primary/20">
+                💡 Каждый должен по <b>${perPerson}</b> плательщику
+              </div>
             )}
-          </AnimatePresence>
+          </div>
         </div>
+
+        <select value={dayId} onChange={(e) => setDayId(e.target.value)} className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm">
+          <option value="">Без дня</option>
+          {trip?.days.map((d) => (
+            <option key={d.id} value={d.id}>День {d.dayNumber} · {d.city}</option>
+          ))}
+        </select>
 
         <button
           onClick={submit}
           disabled={add.isPending}
-          className="w-full rounded-lg bg-primary text-primary-foreground py-2 text-sm font-medium flex items-center justify-center gap-2"
+          className="w-full rounded-lg bg-primary text-primary-foreground py-2.5 text-sm font-medium flex items-center justify-center gap-2"
         >
           {add.isPending ? <Loader2 className="size-4 animate-spin" /> : <Plus className="size-4" />}
-          Добавить
+          Добавить трату
         </button>
       </div>
     </motion.div>

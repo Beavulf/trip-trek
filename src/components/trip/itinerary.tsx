@@ -27,6 +27,7 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { AddPlaceSheet, type AddPlaceData } from "./add-place-sheet";
 import { useBodyScrollLock } from "@/hooks/use-body-scroll-lock";
+import { CityAutocomplete } from "./city-autocomplete";
 
 export function Itinerary() {
   const { data: days, isLoading } = useDays();
@@ -534,6 +535,7 @@ function AddDayButton() {
   const addDay = useAddDay();
   const [open, setOpen] = useState(false);
   const [city, setCity] = useState("");
+  const [selectedCity, setSelectedCity] = useState<{ name: string; lat: number; lng: number; timezone?: string; language?: string } | null>(null);
   const [title, setTitle] = useState("");
   const [color, setColor] = useState("#f97316");
 
@@ -542,14 +544,16 @@ function AddDayButton() {
   const COLORS = ["#f97316", "#06b6d4", "#8b5cf6", "#ec4899", "#10b981", "#f59e0b", "#ef4444", "#3b82f6"];
 
   const submit = async () => {
+    const cityName = selectedCity?.name || city.trim() || "Новый город";
     await addDay.mutateAsync({
-      city: city.trim() || "Новый город",
-      cityKey: "custom",
+      city: cityName,
+      cityKey: selectedCity ? `custom-${selectedCity.lat}-${selectedCity.lng}` : "custom",
       title: title.trim() || undefined,
       accentColor: color,
     });
     toast.success("День добавлен! 📅");
     setCity("");
+    setSelectedCity(null);
     setTitle("");
     setOpen(false);
   };
@@ -597,12 +601,11 @@ function AddDayButton() {
           <div className="p-4 space-y-3">
             <div>
               <label className="text-xs text-muted-foreground mb-1 block">Город</label>
-              <input
+              <CityAutocomplete
                 value={city}
-                onChange={(e) => setCity(e.target.value)}
-                placeholder="Например, Шанхай"
-                autoFocus
-                className="w-full rounded-xl border border-input bg-background px-3 py-2.5 text-sm"
+                onChange={setCity}
+                onSelect={(c) => setSelectedCity({ name: c.name, lat: c.lat, lng: c.lng, timezone: c.timezone, language: c.language })}
+                placeholder="Начни вводить город…"
               />
             </div>
             <div>
@@ -630,6 +633,11 @@ function AddDayButton() {
                 ))}
               </div>
             </div>
+            {selectedCity?.language && (
+              <div className="text-[11px] text-muted-foreground bg-muted/50 rounded-lg px-3 py-2">
+                💡 После создания дня автоматически добавятся фразы на языке <b className="uppercase">{selectedCity.language}</b> и погода для города.
+              </div>
+            )}
             <button
               onClick={submit}
               disabled={addDay.isPending}

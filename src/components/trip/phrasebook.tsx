@@ -167,11 +167,61 @@ function PhraseCard({ phrase, categoryMeta }: { phrase: Phrase; categoryMeta?: {
   const doSpeak = (voices: SpeechSynthesisVoice[]) => {
     const synth = window.speechSynthesis;
 
-    // Проверяем есть ли китайский голос
-    const zhVoice = voices.find((v) => v.lang.startsWith("zh"));
-    if (!zhVoice) {
-      toast.error("Нет китайского голоса", {
-        description: "Установите китайский (zh-CN) в настройках TTS телефона, или используйте Google Translate для прослушивания",
+    // Определяем язык фразы по пиньиню/содержимому
+    // Если есть китайские иероглифы — zh, японские — ja, корейские — ko, и т.д.
+    const text = phrase.cn;
+    let langCode = "zh-CN"; // по умолчанию
+    let langPrefix = "zh";
+    if (/[\u3040-\u30ff\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]/.test(text)) {
+      // Проверяем японские символы (хирагана/катакана)
+      if (/[\u3040-\u30ff]/.test(text)) {
+        langCode = "ja-JP";
+        langPrefix = "ja";
+      } else {
+        langCode = "zh-CN";
+        langPrefix = "zh";
+      }
+    } else if (/[\uac00-\ud7af]/.test(text)) {
+      langCode = "ko-KR";
+      langPrefix = "ko";
+    } else if (/[\u0e00-\u0e7f]/.test(text)) {
+      langCode = "th-TH";
+      langPrefix = "th";
+    } else if (/[\u0600-\u06ff]/.test(text)) {
+      langCode = "ar-SA";
+      langPrefix = "ar";
+    } else if (/[\u0400-\u04ff]/.test(text)) {
+      langCode = "ru-RU";
+      langPrefix = "ru";
+    } else if (/[àâäçéèêëîïôûùü]/i.test(text)) {
+      langCode = "fr-FR";
+      langPrefix = "fr";
+    } else if (/[äöüß]/i.test(text)) {
+      langCode = "de-DE";
+      langPrefix = "de";
+    } else if (/[ñ¿¡]/i.test(text)) {
+      langCode = "es-ES";
+      langPrefix = "es";
+    }
+
+    // Ищем голос для определённого языка
+    const langVoice = voices.find((v) => v.lang.toLowerCase().startsWith(langPrefix));
+    if (!langVoice) {
+      const langNames: Record<string, string> = {
+        zh: "китайский",
+        ja: "японский",
+        ko: "корейский",
+        th: "тайский",
+        ar: "арабский",
+        ru: "русский",
+        fr: "французский",
+        de: "немецкий",
+        es: "испанский",
+        en: "английский",
+      };
+      const langName = langNames[langPrefix] || "язык страны";
+      toast.error(`Не установлен ${langName} голос`, {
+        description: `Установите ${langName} (${langCode}) голос в настройках TTS телефона, или используйте Google Translate для прослушивания`,
         duration: 6000,
       });
       return;
@@ -179,8 +229,8 @@ function PhraseCard({ phrase, categoryMeta }: { phrase: Phrase; categoryMeta?: {
 
     synth.cancel();
     const utter = new SpeechSynthesisUtterance(phrase.cn);
-    utter.lang = "zh-CN";
-    utter.voice = zhVoice;
+    utter.lang = langCode;
+    utter.voice = langVoice;
     utter.rate = 0.8;
     utter.pitch = 1;
 

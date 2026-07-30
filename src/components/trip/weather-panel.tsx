@@ -1,17 +1,85 @@
 "use client";
 
-import { useWeather } from "@/hooks/use-trip";
+import { useWeather, useWeatherByCoords, useDays } from "@/hooks/use-trip";
 import { CITIES } from "@/lib/types";
 import { motion } from "framer-motion";
 import { Sun, Wind, Droplets, CloudRain, Thermometer, Loader2, MapPin } from "lucide-react";
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { cn } from "@/lib/utils";
 
 const WEEKDAYS = ["Вс", "Пн", "Вт", "Ср", "Чт", "Пт", "Сб"];
 
+interface WeatherCity {
+  key: string;
+  name: string;
+  color: string;
+  lat?: number;
+  lng?: number;
+  timezone?: string;
+}
+
 export function WeatherPanel() {
-  const [cityKey, setCityKey] = useState("guangzhou");
-  const { data: weather, isLoading } = useWeather(cityKey, 7);
+  const { data: days } = useDays();
+  const [selectedKey, setSelectedKey] = useState<string>("");
+
+  // Строим список городов из дней поездки + legacy города
+  const cities: WeatherCity[] = useMemo(() => {
+    const fromDays: WeatherCity[] = (days || []).map((d) => {
+      // Если cityKey — legacy (guangzhou, shenzhen, etc), берём координаты оттуда
+      const legacy = CITIES.find((c) => c.key === d.cityKey);
+      if (legacy) {
+        return { key: d.cityKey, name: d.city, color: d.accentColor || legacy.color, lat: legacy.lat, lng: legacy.lng };
+      }
+      // Иначе пытаемся извлечь координаты из cityKey формата "custom-lat-lng"
+      if (d.cityKey?.startsWith("custom-")) {
+        const parts = d.cityKey.split("-");
+        const lat = parseFloat(parts[1]);
+        const lng = parseFloat(parts[2]);
+        if (!isNaN(lat) && !isNaN(lng)) {
+          return { key: d.cityKey, name: d.city, color: d.accentColor || "#f97316", lat, lng };
+        }
+      }
+      // Fallback — без координат, используем legacy
+      return { key: d.cityKey || "custom", name: d.city, color: d.accentColor || "#f97316" };
+    });
+
+    // Уникальные по key
+    const seen = new Set<string>();
+    const unique = fromDays.filter((c) => {
+      if (seen.has(c.key)) return false;
+      seen.add(c.key);
+      return true;
+    });
+
+    return unique;
+  }, [days]);
+
+  // Выбранный город
+  const currentCity = cities.find((c) => c.key === selectedKey) || cities[0];
+
+  // Погода: по координатам если есть, иначе legacy
+  const hasCoords = currentCity?.lat != null && currentCity?.lng != null;
+  const { data: weatherCoords, isLoading: loadingCoords } = useWeatherByCoords(
+    currentCity?.lat || 0,
+    currentCity?.lng || 0,
+    currentCity?.name || "",
+    currentCity?.timezone,
+    7
+  );
+  const { data: weatherLegacy, isLoading: loadingLegacy } = useWeather(currentCity?.key || "guangzhou", 7);
+
+  const weather = hasCoords ? weatherCoords : weatherLegacy;
+  const isLoading = hasCoords ? loadingCoords : loadingLegacy;
+
+  // Если городов нет
+  if (cities.length === 0) {
+    return (
+      <div className="py-20 text-center text-muted-foreground">
+        <CloudRain className="size-10 mx-auto mb-2 opacity-50" />
+        <p className="text-sm">Добавьте дни в маршрут, чтобы увидеть погоду</p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-4 animate-fade-up pb-20">
@@ -21,7 +89,7 @@ export function WeatherPanel() {
         animate={{ opacity: 1, y: 0 }}
         className="relative overflow-hidden rounded-3xl p-5 sm:p-6 text-white shadow-xl"
         style={{
-          background: "linear-gradient(135deg, #0ea5e9 0%, #6366f1 100%)",
+          background: `linear-gradient(135deg, ${currentCity?.color || "#0ea5e9"} 0%, #6366f1 100%)`,
         }}
       >
         <div className="absolute -top-4 -right-2 text-[120px] opacity-15 select-none leading-none">
@@ -62,17 +130,17 @@ export function WeatherPanel() {
         </div>
       </motion.div>
 
-      {/* Выбор города */}
+      {/* Выбор города — из дней поездки */}
       <div className="flex gap-1.5 overflow-x-auto no-scrollbar pb-1">
-        {CITIES.map((c) => (
+        {cities.map((c) => (
           <button
             key={c.key}
-            onClick={() => setCityKey(c.key)}
+            onClick={() => setSelectedKey(c.key)}
             className={cn(
               "flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-all",
-              cityKey === c.key ? "text-white shadow-md" : "bg-card border border-border hover:bg-accent"
+              (currentCity?.key === c.key) ? "text-white shadow-md" : "bg-card border border-border hover:bg-accent"
             )}
-            style={cityKey === c.key ? { background: c.color } : undefined}
+            style={currentCity?.key === c.key ? { background: c.color } : undefined}
           >
             <span className="size-1.5 rounded-full" style={{ background: c.color }} />
             {c.name}

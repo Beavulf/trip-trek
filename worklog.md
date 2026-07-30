@@ -2,10 +2,67 @@
 
 ## Current Project Status
 
-**Phase**: 12 (City Autocomplete + Settlement Logic + App Icons) — COMPLETED
+**Phase**: 13 (City Autocomplete Integration + Weather Anywhere + Expense UX + WebSocket) — COMPLETED
 **Build**: ✅ TypeScript clean, ESLint clean
-**Dev Server**: Running on port 3000
+**Dev Server**: Running via `bun server.ts` (Next.js + WebSocket on port 3000)
 **Test Accounts**: you@/leha@/den@triptrek.com (password: 1234)
+
+---
+
+## Session: City Autocomplete Integration + Weather Anywhere + Expense UX + WebSocket
+
+### Feature: CityAutocomplete integrated into AddDayButton
+- Replaced plain text input with `CityAutocomplete` component
+- On city select: shows confirmation card with flag + language
+- Hint: "После создания дня автоматически добавятся фразы на языке [lang] и погода"
+- Stores cityKey as `custom-{lat}-{lng}` for weather lookup
+
+### Feature: Weather works for ANY city worldwide
+- `/api/weather` rewritten to accept `lat`, `lng`, `name`, `timezone` params
+- Legacy city keys (guangzhou, tokyo, etc.) still work via LEGACY_CITIES map
+- New `useWeatherByCoords(lat, lng, name, timezone, forecast)` hook
+- WeatherPanel rewritten: dynamically builds city list from trip days (useDays)
+  - Extracts lat/lng from cityKey format `custom-{lat}-{lng}`
+  - Falls back to legacy cities if cityKey matches
+  - Shows unique cities only (deduped)
+  - Empty state: "Добавьте дни в маршрут, чтобы увидеть погоду"
+
+### Feature: Expense UX redesign — clear split/debt pattern
+**Problem**: Adding expenses was confusing — unclear who to select, what "внёс" means, how debts work.
+
+**Fix**: Complete redesign of AddExpenseForm:
+1. **Hint banner**: "Кто платит — тот кто достал карту. Отметь за кого, чтобы посчитать долги."
+2. **"Кто заплатил?"** — button chips with avatars (not dropdown), defaults to current user
+3. **"За кого заплатил?"** — always visible checkbox list (not hidden in toggle)
+   - Payer auto-checked + disabled "(заплатил)"
+   - Live calculation: "💡 Каждый должен по $16.67 плательщику"
+4. **On submit**: if split selected → toast shows "Долг: каждый должен $16.67 → Лёха"
+5. **"Расчёт между друзьями"** section: added explanation "Внёс — сколько реально заплатил. + ему должны, − он должен"
+
+### Fix: Settlement button — role-based (debtor only)
+- **Debtor** (owes): sees "Я перевёл" button
+- **Creditor** (owed): sees "🕐 Ждём перевод" (no button)
+- **Others**: see nothing
+- After marking: "✅ Переведено"
+
+### Fix: Phrase pronunciation — universal language detection
+**Problem**: Always said "китайский голос не установлен" even for Japanese phrases.
+**Fix**: Auto-detects language from phrase characters:
+- Hiragana/Katakana → Japanese (ja)
+- Hanzi → Chinese (zh)
+- Hangul → Korean (ko)
+- Thai script → Thai (th)
+- Arabic script → Arabic (ar)
+- Cyrillic → Russian (ru)
+- French/German/Spanish diacritics → respective languages
+- Toast: "Не установлен [язык] голос" with correct language name
+
+### WebSocket server running in sandbox!
+- Started via `bun server.ts` (not `next dev`)
+- Next.js + Socket.io on same port 3000
+- `/socket.io/` endpoint: 200 OK
+- `/emit` endpoint: 200 OK (API → WS bridge works)
+- Real-time updates now work between participants
 
 ---
 

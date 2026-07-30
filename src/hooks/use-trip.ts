@@ -299,6 +299,24 @@ export function useWeather(city: string, forecast?: number) {
   });
 }
 
+// Погода по координатам (для любых городов)
+export function useWeatherByCoords(lat: number, lng: number, name: string, timezone?: string, forecast?: number) {
+  const params = new URLSearchParams();
+  params.set("lat", String(lat));
+  params.set("lng", String(lng));
+  params.set("name", name);
+  if (timezone) params.set("timezone", timezone);
+  if (forecast) params.set("forecast", String(forecast));
+  return useQuery<Weather>({
+    queryKey: ["weather-coords", lat, lng, name, timezone, forecast],
+    queryFn: async () => {
+      const r = await fetch(`/api/weather?${params}`);
+      return r.json();
+    },
+    staleTime: 10 * 60 * 1000,
+  });
+}
+
 export function useSetCurrentUser() {
   const qc = useQueryClient();
   return useMutation({
