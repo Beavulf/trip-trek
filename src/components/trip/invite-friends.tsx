@@ -19,8 +19,8 @@ export function InviteFriends({ open, onOpenChange }: { open: boolean; onOpenCha
 
   const inviteCode = trip?.settings.inviteCode || trip?.trip?.inviteCode || "";
   const inviteUrl = typeof window !== "undefined"
-    ? `${window.location.origin}/join/${inviteCode}`
-    : `/join/${inviteCode}`;
+    ? `${window.location.origin}/join?code=${inviteCode}`
+    : `/join?code=${inviteCode}`;
 
   const copyLink = () => {
     navigator.clipboard.writeText(inviteUrl);

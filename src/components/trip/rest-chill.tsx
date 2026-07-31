@@ -156,8 +156,11 @@ type GeoState =
   | { status: "ready"; lat: number; lng: number }
   | { status: "denied"; message: string };
 
+// Кэш геолокации между переключениями вкладок
+let cachedGeo: GeoState = { status: "idle" };
+
 function NearbyView({ category, onCategoryChange }: { category: string; onCategoryChange: (c: string) => void }) {
-  const [geo, setGeo] = useState<GeoState>({ status: "idle" });
+  const [geo, setGeo] = useState<GeoState>(cachedGeo);
 
   const enabled = geo.status === "ready";
   const { data, isLoading, error } = useNearby(
@@ -167,22 +170,27 @@ function NearbyView({ category, onCategoryChange }: { category: string; onCatego
     enabled
   );
 
+  const updateGeo = (state: GeoState) => {
+    cachedGeo = state;
+    setGeo(state);
+  };
+
   const requestGeo = () => {
     if (typeof window === "undefined" || !("geolocation" in navigator)) {
-      setGeo({ status: "denied", message: "Включите геолокацию для поиска мест рядом" });
+      updateGeo({ status: "denied", message: "Включите геолокацию для поиска мест рядом" });
       return;
     }
-    setGeo({ status: "loading" });
+    updateGeo({ status: "loading" });
     navigator.geolocation.getCurrentPosition(
       (pos) => {
-        setGeo({ status: "ready", lat: pos.coords.latitude, lng: pos.coords.longitude });
+        updateGeo({ status: "ready", lat: pos.coords.latitude, lng: pos.coords.longitude });
       },
       (err) => {
         const message =
           err.code === err.PERMISSION_DENIED
             ? "Включите геолокацию для поиска мест рядом"
             : "Не удалось определить местоположение. Попробуйте ещё раз.";
-        setGeo({ status: "denied", message });
+        updateGeo({ status: "denied", message });
         toast.error(message);
       },
       { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
@@ -297,6 +305,7 @@ function NearbyCard({ place }: { place: NearbyPlace }) {
       address: place.address || undefined,
       note: place.cuisine || undefined,
       visited: false,
+      rating: null,
     };
     items = [newItem, ...items];
     localStorage.setItem("triptrek-wishlist", JSON.stringify(items));
@@ -406,13 +415,14 @@ function ChillCard({ place, day }: { place: Place; day: Day }) {
                 <Clock className="size-2.5" /> {timeLabel(place.timeOfDay)}
               </span>
             )}
-            <div className="flex items-center gap-0.5">
+            <div className="flex items-center gap-1">
               {[1, 2, 3, 4, 5].map((s) => (
                 <button
                   key={s}
                   onClick={() => update.mutate({ id: place.id, rating: s === place.rating ? null : s })}
+                  className="p-1 -m-1 active:scale-90 transition-transform"
                 >
-                  <Star className={cn("size-3.5", (place.rating ?? 0) >= s ? "fill-amber-400 text-amber-400" : "text-muted-foreground/40")} />
+                  <Star className={cn("size-6", (place.rating ?? 0) >= s ? "fill-amber-400 text-amber-400" : "text-muted-foreground/40")} />
                 </button>
               ))}
             </div>
@@ -440,6 +450,7 @@ interface WishlistItem {
   address?: string;
   note?: string;
   visited: boolean;
+  rating?: number | null;
 }
 
 function WishlistView() {
@@ -489,6 +500,10 @@ function WishlistView() {
 
   const toggleVisited = (id: string) => {
     save(items.map(i => i.id === id ? { ...i, visited: !i.visited } : i));
+  };
+
+  const setRating = (id: string, rating: number) => {
+    save(items.map(i => i.id === id ? { ...i, rating: i.rating === rating ? null : rating } : i));
   };
 
   const deleteItem = (id: string) => {
@@ -603,6 +618,28 @@ function WishlistView() {
                   )}
                   {item.note && (
                     <div className="text-[11px] text-muted-foreground mt-0.5">{item.note}</div>
+                  )}
+                  {/* Звёзды оценки */}
+                  {item.visited && (
+                    <div className="flex items-center gap-1 mt-1.5">
+                      {[1, 2, 3, 4, 5].map((s) => (
+                        <button
+                          key={s}
+                          onClick={() => setRating(item.id, s)}
+                          className="p-1 -m-1 active:scale-90 transition-transform"
+                        >
+                          <Star
+                            className={cn(
+                              "size-6 transition-transform",
+                              (item.rating ?? 0) >= s ? "fill-amber-400 text-amber-400" : "text-muted-foreground/40"
+                            )}
+                          />
+                        </button>
+                      ))}
+                      {item.rating && (
+                        <span className="text-xs text-muted-foreground ml-1.5 font-medium">{item.rating}/5</span>
+                      )}
+                    </div>
                   )}
                 </div>
                 <button

@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useState, useEffect } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
 import { ArrowRight, Loader2, Plane, MapPin } from "lucide-react";
 import { toast } from "sonner";
@@ -11,6 +11,7 @@ import { useQueryClient } from "@tanstack/react-query";
 
 export default function JoinPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const qc = useQueryClient();
   const { data: session } = useAuth();
   const [code, setCode] = useState("");
@@ -19,6 +20,14 @@ export default function JoinPage() {
 
   const userId = (session?.user as { id?: string } | undefined)?.id || "";
 
+  // Автоподстановка кода из URL (?code=XXX)
+  useEffect(() => {
+    const urlCode = searchParams.get("code");
+    if (urlCode) {
+      setCode(urlCode);
+    }
+  }, [searchParams]);
+
   const lookupTrip = async () => {
     if (code.trim().length < 3) {
       toast.error("Введите код поездки");
@@ -26,7 +35,7 @@ export default function JoinPage() {
     }
     setLoading(true);
     try {
-      const r = await fetch(`/api/trips/join?code=${code.trim().toUpperCase()}`);
+      const r = await fetch(`/api/trips/join?code=${encodeURIComponent(code.trim())}`);
       const data = await r.json();
       if (data.error) {
         toast.error(data.error);
@@ -49,7 +58,7 @@ export default function JoinPage() {
     }
     setLoading(true);
     try {
-      const res = await fetch(`/api/trips/join?code=${code.trim().toUpperCase()}`, {
+      const res = await fetch(`/api/trips/join?code=${encodeURIComponent(code.trim())}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -103,7 +112,7 @@ export default function JoinPage() {
               <input
                 type="text"
                 value={code}
-                onChange={(e) => { setCode(e.target.value.toUpperCase()); setPreview(null); }}
+                onChange={(e) => { setCode(e.target.value); setPreview(null); }}
                 onKeyDown={(e) => e.key === "Enter" && lookupTrip()}
                 placeholder="Например, CHINA2024"
                 autoFocus

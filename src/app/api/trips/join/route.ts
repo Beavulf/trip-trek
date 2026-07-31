@@ -18,8 +18,13 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "userId required" }, { status: 400 });
   }
 
-  // Найти поездку по invite-коду с владельцем
+  // Найти поездку по invite-коду (пробуем как есть и в верхнем регистре)
   const trip = await db.trip.findUnique({
+    where: { inviteCode: code },
+    include: {
+      members: { select: { userId: true, role: true } },
+    },
+  }) || await db.trip.findUnique({
     where: { inviteCode: code.toUpperCase() },
     include: {
       members: { select: { userId: true, role: true } },
@@ -78,6 +83,20 @@ export async function GET(req: NextRequest) {
   }
 
   const trip = await db.trip.findUnique({
+    where: { inviteCode: code },
+    select: {
+      id: true,
+      title: true,
+      destination: true,
+      coverColor: true,
+      coverEmoji: true,
+      startDate: true,
+      totalDays: true,
+      members: {
+        select: { displayName: true, emoji: true, color: true },
+      },
+    },
+  }) || await db.trip.findUnique({
     where: { inviteCode: code.toUpperCase() },
     select: {
       id: true,

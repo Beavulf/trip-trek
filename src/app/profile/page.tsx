@@ -859,15 +859,21 @@ function PushToggle() {
     setLoading(true);
     try {
       if (enabled) {
-        // ВЫКЛЮЧАЕМ
-        const reg = await navigator.serviceWorker.ready;
-        const sub = await reg.pushManager.getSubscription();
-        if (sub) {
-          await sub.unsubscribe();
-          await fetch(`/api/push/subscribe?endpoint=${encodeURIComponent(sub.endpoint)}`, {
-            method: "DELETE",
-          });
+        // ВЫКЛЮЧАЕМ — удаляем все подписки
+        try {
+          const reg = await navigator.serviceWorker.ready;
+          const sub = await reg.pushManager.getSubscription();
+          if (sub) {
+            await sub.unsubscribe();
+            await fetch(`/api/push/subscribe?endpoint=${encodeURIComponent(sub.endpoint)}`, {
+              method: "DELETE",
+            });
+          }
+        } catch (e) {
+          console.warn("SW unsubscribe error:", e);
         }
+        // Также удаляем все подписки пользователя с сервера
+        await fetch(`/api/push/subscribe?userId=${userId}`, { method: "DELETE" }).catch(() => {});
         setEnabled(false);
         toast.success("Уведомления отключены");
       } else {

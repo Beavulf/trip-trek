@@ -47,9 +47,20 @@ export async function POST(req: NextRequest) {
 export async function DELETE(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const endpoint = searchParams.get("endpoint");
+  const userId = searchParams.get("userId");
+
+  // Удаление по userId — удаляем ВСЕ подписки пользователя
+  if (userId) {
+    try {
+      await db.pushSubscription.deleteMany({ where: { userId } });
+      return NextResponse.json({ ok: true });
+    } catch {
+      return NextResponse.json({ ok: true });
+    }
+  }
 
   if (!endpoint) {
-    return NextResponse.json({ error: "endpoint required" }, { status: 400 });
+    return NextResponse.json({ error: "endpoint or userId required" }, { status: 400 });
   }
 
   try {
