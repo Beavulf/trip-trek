@@ -1,0 +1,34 @@
+# TripTrek — Production Docker Configuration
+# Запуск: docker-compose up -d --build
+# Остановка: docker-compose down
+# Логи: docker-compose logs -f
+
+services:
+  triptrek:
+    build:
+      context: ..
+      dockerfile: docker-deploy/Dockerfile
+    container_name: triptrek-app
+    ports:
+      - "3000:3000"
+    environment:
+      - DATABASE_URL=file:/app/data/triptrek.db
+      - NEXTAUTH_SECRET=${NEXTAUTH_SECRET:-change-this-secret-in-production}
+      - NEXTAUTH_URL=${NEXTAUTH_URL:-http://localhost:3000}
+      - VAPID_PUBLIC_KEY=${VAPID_PUBLIC_KEY}
+      - VAPID_PRIVATE_KEY=${VAPID_PRIVATE_KEY}
+      - NODE_ENV=production
+    volumes:
+      - triptrek-db:/app/data
+      - triptrek-uploads:/app/public/uploads
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+volumes:
+  triptrek-db:
+  triptrek-uploads:

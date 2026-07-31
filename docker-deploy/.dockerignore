@@ -1,0 +1,11 @@
+# Файлы которые НЕ нужно копировать в Docker образ
+node_modules
+.next
+.git
+.env
+.env.local
+*.log
+db/
+tmp/
+docker-deploy/
+skills/
