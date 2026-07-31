@@ -1,6 +1,6 @@
 "use client";
 
-import { useExpenses, useAddExpense, useDeleteExpense, useTrip, useUpdateMember, useUpdateTripBudget, getTripId } from "@/hooks/use-trip";
+import { useExpenses, useAddExpense, useDeleteExpense, useTrip, useUpdateMember, useUpdateTripBudget, useCurrency, getTripId } from "@/hooks/use-trip";
 import { EXPENSE_CATEGORIES, CITIES, type Expense, type Participant } from "@/lib/types";
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, BarChart, Bar, XAxis, YAxis, CartesianGrid } from "recharts";
 import { Wallet, Plus, Trash2, TrendingDown, ArrowRight, Loader2, Scale, UserCircle, Pencil, BarChart3, Check, X, Users, Clock, Info, ChevronDown } from "lucide-react";
@@ -467,50 +467,96 @@ function ExpenseRow({ expense, participants }: { expense: Expense; participants:
   const isSettlement = expense.category === "settlement";
   const cat = EXPENSE_CATEGORIES[expense.category];
   const paidBy = participants.find((p) => p.id === expense.paidById);
+
+  // Split info
+  const splitIds = expense.splitWith ? expense.splitWith.split(",").filter(Boolean) : [];
+  const splitUsers = participants.filter(p => splitIds.includes(p.id));
+  const hasSplit = splitIds.length > 0;
+  const excludeSelf = expense.excludeSelf;
+
+  // Время
+  const timeStr = new Date(expense.createdAt).toLocaleString("ru-RU", {
+    day: "numeric", month: "short", hour: "2-digit", minute: "2-digit"
+  });
+
   return (
-    <div className="flex items-center gap-2.5 p-2 rounded-lg hover:bg-accent group">
-      <div className={cn("size-8 rounded-lg grid place-items-center text-base shrink-0", isSettlement ? "bg-green-600/15" : "")} style={{ background: isSettlement ? undefined : `${cat?.color}22` }}>
+    <div className="flex items-start gap-2.5 p-2.5 rounded-xl hover:bg-accent/50 transition-colors">
+      {/* Иконка категории */}
+      <div
+        className={cn("size-9 rounded-xl grid place-items-center text-base shrink-0 mt-0.5", isSettlement ? "bg-green-600/15" : "")}
+        style={{ background: isSettlement ? undefined : `${cat?.color}22` }}
+      >
         {isSettlement ? "💸" : cat?.emoji}
       </div>
+
+      {/* Контент */}
       <div className="min-w-0 flex-1">
-        <div className="text-sm font-medium truncate">{expense.description}</div>
-        <div className="text-[11px] text-muted-foreground flex items-center gap-1.5">
-          <span>{isSettlement ? "Перевод" : cat?.label}</span>
-          {expense.day && <span>· День {expense.day.dayNumber}</span>}
+        {/* Описание + сумма */}
+        <div className="flex items-center justify-between gap-2">
+          <span className="text-sm font-medium truncate">{expense.description}</span>
+          <span className="font-semibold text-sm shrink-0">${expense.amount.toFixed(2)}</span>
+        </div>
+
+        {/* Мета: кто заплатил + категория + день */}
+        <div className="text-[11px] text-muted-foreground flex items-center gap-1.5 mt-0.5 flex-wrap">
           {paidBy && (
             <span className="flex items-center gap-0.5">
-              · <span className="size-3 rounded-full grid place-items-center text-[8px]" style={{ background: paidBy.color }}>{paidBy.emoji}</span>
-              {paidBy.name}
+              <span className="size-3.5 rounded-full grid place-items-center text-[7px]" style={{ background: paidBy.color }}>{paidBy.emoji}</span>
+              <span className="font-medium">{paidBy.name}</span>
             </span>
           )}
+          <span className="opacity-50">·</span>
+          <span>{isSettlement ? "Перевод" : cat?.label}</span>
+          {expense.day && (
+            <>
+              <span className="opacity-50">·</span>
+              <span>День {expense.day.dayNumber}</span>
+            </>
+          )}
         </div>
+
+        {/* Split badge */}
+        {hasSplit && !isSettlement && (
+          <div className="mt-1.5 inline-flex items-center gap-1 bg-primary/8 rounded-md px-1.5 py-0.5 text-[10px]">
+            <Users className="size-2.5 text-primary" />
+            <span className="text-primary font-medium">
+              {excludeSelf
+                ? `За ${splitUsers.map(u => u.name).join(", ")}`
+                : `За всех (${splitIds.length + 1} чел)`
+              }
+            </span>
+          </div>
+        )}
+
+        {/* Время добавления */}
+        <div className="text-[9px] text-muted-foreground/60 mt-1">{timeStr}</div>
       </div>
-      <span className="font-semibold text-sm shrink-0">${expense.amount.toFixed(0)}</span>
-      {confirming ? (
-        <div className="flex items-center gap-1 shrink-0">
+
+      {/* Удаление */}
+      <div className="shrink-0">
+        {confirming ? (
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => { del.mutate(expense.id); toast.success("Удалено"); setConfirming(false); }}
+              disabled={del.isPending}
+              className="text-[10px] bg-red-500 text-white px-2 py-1 rounded-lg font-medium"
+            >
+              {del.isPending ? "…" : "Да"}
+            </button>
+            <button onClick={() => setConfirming(false)} className="text-[10px] bg-secondary px-2 py-1 rounded-lg">
+              Нет
+            </button>
+          </div>
+        ) : (
           <button
-            onClick={() => { del.mutate(expense.id); toast.success("Удалено"); setConfirming(false); }}
-            disabled={del.isPending}
-            className="text-[10px] bg-red-500 text-white px-2 py-1 rounded-lg font-medium"
+            onClick={() => setConfirming(true)}
+            className="size-7 rounded-lg hover:bg-red-500/10 hover:text-red-500 grid place-items-center transition-colors text-muted-foreground"
+            title="Удалить"
           >
-            {del.isPending ? "…" : "Да"}
+            <Trash2 className="size-3.5" />
           </button>
-          <button
-            onClick={() => setConfirming(false)}
-            className="text-[10px] bg-secondary px-2 py-1 rounded-lg"
-          >
-            Нет
-          </button>
-        </div>
-      ) : (
-        <button
-          onClick={() => setConfirming(true)}
-          className="size-7 rounded-lg hover:bg-red-500/10 hover:text-red-500 grid place-items-center transition-colors text-muted-foreground"
-          title="Удалить"
-        >
-          <Trash2 className="size-3.5" />
-        </button>
-      )}
+        )}
+      </div>
     </div>
   );
 }
@@ -518,22 +564,54 @@ function ExpenseRow({ expense, participants }: { expense: Expense; participants:
 function AddExpenseForm({ onDone }: { onDone: () => void }) {
   const { data: trip } = useTrip();
   const add = useAddExpense();
+  const { data: currency } = useCurrency();
   const { data: session } = useAuth();
   const currentUserId = (session?.user as { id?: string } | undefined)?.id || "";
 
   const [amount, setAmount] = useState("");
+  const [currencyCode, setCurrencyCode] = useState(() => {
+    if (typeof window === "undefined") return "USD";
+    return localStorage.getItem("triptrek-currency") || "USD";
+  });
+  const [rememberCurrency, setRememberCurrency] = useState(() => {
+    if (typeof window === "undefined") return false;
+    return !!localStorage.getItem("triptrek-currency");
+  });
   const [category, setCategory] = useState("food");
   const [description, setDescription] = useState("");
-  // По умолчанию — текущий пользователь (тот кто добавляет = тот кто платит)
   const [paidById, setPaidById] = useState(currentUserId || trip?.participants[0]?.id || "");
   const [dayId, setDayId] = useState("");
-  const [splitWith, setSplitWith] = useState<Set<string>>(new Set());
-  // excludeSelf — заплатил ТОЛЬКО за других (на себя не тратил)
-  const [excludeSelf, setExcludeSelf] = useState(false);
+  // splitUsers — кто участвует в трате (включая плательщика). По умолчанию = только плательщик
+  const [splitUsers, setSplitUsers] = useState<Set<string>>(new Set());
+
+  // При смене плательщика — сбрасываем split на "только он"
+  const [prevPayer, setPrevPayer] = useState(paidById);
+  if (paidById !== prevPayer) {
+    setPrevPayer(paidById);
+    setSplitUsers(new Set([paidById]));
+  }
+
+  const toggleUser = (id: string) => {
+    setSplitUsers(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        // Нельзя снять с плательщика
+        if (id === paidById) return prev;
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  };
+
+  // Конвертация в USD
+  const usdRate = currency?.rates?.[currencyCode] || 1;
+  const amountNum = parseFloat(amount) || 0;
+  const amountUSD = currencyCode === "USD" ? amountNum : amountNum / usdRate;
 
   const submit = async () => {
-    const amt = parseFloat(amount);
-    if (!amt || !description) {
+    if (!amountNum || !description.trim()) {
       toast.error("Заполните сумму и описание");
       return;
     }
@@ -541,51 +619,67 @@ function AddExpenseForm({ onDone }: { onDone: () => void }) {
       toast.error("Выберите кто заплатил");
       return;
     }
+
+    // Сохраняем валюту если выбрана галочка
+    if (rememberCurrency) {
+      localStorage.setItem("triptrek-currency", currencyCode);
+    }
+
+    // splitWith = все участники КРОМЕ плательщика
+    const splitWithArr = Array.from(splitUsers).filter(id => id !== paidById);
+    // excludeSelf = плательщик НЕ в splitUsers (купил только для других)
+    const excludeSelf = !splitUsers.has(paidById);
+
     await add.mutateAsync({
-      amount: amt,
+      amount: Math.round(amountUSD * 100) / 100,
       category,
-      description,
+      description: description.trim(),
       paidById,
       dayId: dayId || undefined,
-      splitWith: Array.from(splitWith),
+      splitWith: splitWithArr,
       excludeSelf,
     });
-    // Подсказка о долге если splitWith выбран
-    if (splitWith.size > 0) {
-      const splitCount = excludeSelf ? splitWith.size : splitWith.size + 1;
-      const perPerson = (amt / splitCount).toFixed(2);
+
+    // Подсказка
+    if (splitWithArr.length > 0) {
+      const splitCount = excludeSelf ? splitWithArr.length : splitWithArr.length + 1;
+      const perPerson = (amountUSD / splitCount).toFixed(2);
       const payer = trip?.participants.find(p => p.id === paidById);
       const names = trip?.participants
-        .filter(p => splitWith.has(p.id))
+        .filter(p => splitWithArr.includes(p.id))
         .map(p => p.name)
         .join(", ");
       toast.success("Трата добавлена 💸", {
         description: excludeSelf
-          ? `Долг: ${names} должны по $${perPerson} → ${payer?.name || "тебе"}`
-          : `Долг: каждый должен $${perPerson} (включая ${payer?.name || "плательщика"})`,
+          ? `${names} должны по $${perPerson} → ${payer?.name || "тебе"}`
+          : `Каждый должен $${perPerson} (включая ${payer?.name || "плательщика"})`,
         duration: 5000,
       });
     } else {
-      toast.success("Трата добавлена 💸");
+      const usdText = currencyCode !== "USD" ? ` (${amountNum} ${currencyCode} → $${amountUSD.toFixed(2)})` : "";
+      toast.success("Трата добавлена 💸", { description: `$${amountUSD.toFixed(2)}${usdText}` });
     }
-    setAmount(""); setDescription(""); setSplitWith(new Set()); setExcludeSelf(false);
+    setAmount(""); setDescription("");
+    setSplitUsers(new Set([paidById]));
     onDone();
   };
 
-  const toggleSplit = (id: string) => {
-    setSplitWith(prev => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  };
-
   // Расчёт доли
-  const splitCount = splitWith.size > 0
-    ? (excludeSelf ? splitWith.size : splitWith.size + 1)
-    : 1;
-  const perPerson = amount ? (parseFloat(amount) / splitCount).toFixed(2) : "0";
+  const isSplit = splitUsers.size > 1 || (splitUsers.size === 1 && !splitUsers.has(paidById));
+  const splitCount = splitUsers.size > 0 ? splitUsers.size : 1;
+  const perPersonUSD = amountUSD > 0 ? (amountUSD / splitCount).toFixed(2) : "0";
+
+  const CURRENCIES = [
+    { code: "USD", flag: "🇺🇸", name: "USD" },
+    { code: "EUR", flag: "🇪🇺", name: "EUR" },
+    { code: "CNY", flag: "🇨🇳", name: "CNY" },
+    { code: "JPY", flag: "🇯🇵", name: "JPY" },
+    { code: "KRW", flag: "🇰🇷", name: "KRW" },
+    { code: "HKD", flag: "🇭🇰", name: "HKD" },
+    { code: "THB", flag: "🇹🇭", name: "THB" },
+    { code: "RUB", flag: "🇷🇺", name: "RUB" },
+    { code: "GBP", flag: "🇬🇧", name: "GBP" },
+  ];
 
   return (
     <motion.div
@@ -595,26 +689,61 @@ function AddExpenseForm({ onDone }: { onDone: () => void }) {
       className="overflow-hidden"
     >
       <div className="bg-muted/40 rounded-xl p-3 space-y-2.5 mb-2">
-        {/* Подсказка */}
-        <div className="text-[10px] text-muted-foreground bg-background/80 rounded-lg px-2.5 py-1.5 flex items-center gap-1.5">
-          <Users className="size-3 shrink-0" />
-          <span>Кто платит — тот кто достал карту. Отметь за кого, чтобы посчитать долги.</span>
-        </div>
-
-        <div className="grid grid-cols-2 gap-2">
+        {/* Сумма + валюта */}
+        <div className="grid grid-cols-[1fr_auto] gap-2">
           <input
             type="number"
+            inputMode="decimal"
             value={amount}
             onChange={(e) => setAmount(e.target.value)}
-            placeholder="Сумма $"
-            className="rounded-lg border border-input bg-background px-3 py-2 text-sm"
+            placeholder="Сумма"
+            className="rounded-lg border border-input bg-background px-3 py-2.5 text-sm"
           />
-          <select value={category} onChange={(e) => setCategory(e.target.value)} className="rounded-lg border border-input bg-background px-3 py-2 text-sm">
-            {Object.entries(EXPENSE_CATEGORIES).map(([k, v]) => (
-              <option key={k} value={k}>{v.emoji} {v.label}</option>
+          <select
+            value={currencyCode}
+            onChange={(e) => setCurrencyCode(e.target.value)}
+            className="rounded-lg border border-input bg-background px-2 py-2.5 text-sm font-medium"
+          >
+            {CURRENCIES.map((c) => (
+              <option key={c.code} value={c.code}>{c.flag} {c.code}</option>
             ))}
           </select>
         </div>
+
+        {/* Конвертация + галочка запомнить */}
+        {currencyCode !== "USD" && amountNum > 0 && (
+          <div className="flex items-center justify-between text-[11px]">
+            <span className="text-muted-foreground">
+              ≈ <b className="text-foreground">${amountUSD.toFixed(2)}</b> по курсу {usdRate.toFixed(2)}
+            </span>
+            <label className="flex items-center gap-1 cursor-pointer active:scale-95 transition-transform">
+              <input
+                type="checkbox"
+                checked={rememberCurrency}
+                onChange={(e) => setRememberCurrency(e.target.checked)}
+                className="size-3.5 accent-primary"
+              />
+              <span className="text-muted-foreground">Запомнить</span>
+            </label>
+          </div>
+        )}
+        {currencyCode === "USD" && (
+          <label className="flex items-center gap-1 cursor-pointer text-[11px] active:scale-95 transition-transform">
+            <input
+              type="checkbox"
+              checked={rememberCurrency}
+              onChange={(e) => setRememberCurrency(e.target.checked)}
+              className="size-3.5 accent-primary"
+            />
+            <span className="text-muted-foreground">Запомнить валюту</span>
+          </label>
+        )}
+
+        <select value={category} onChange={(e) => setCategory(e.target.value)} className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm">
+          {Object.entries(EXPENSE_CATEGORIES).map(([k, v]) => (
+            <option key={k} value={k}>{v.emoji} {v.label}</option>
+          ))}
+        </select>
         <input
           value={description}
           onChange={(e) => setDescription(e.target.value)}
@@ -633,7 +762,7 @@ function AddExpenseForm({ onDone }: { onDone: () => void }) {
                 key={p.id}
                 onClick={() => setPaidById(p.id)}
                 className={cn(
-                  "flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all",
+                  "flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all active:scale-95",
                   paidById === p.id
                     ? "bg-primary text-primary-foreground shadow-sm"
                     : "bg-background border border-input hover:bg-accent"
@@ -648,45 +777,28 @@ function AddExpenseForm({ onDone }: { onDone: () => void }) {
           </div>
         </div>
 
-        {/* За кого заплатил (split) */}
+        {/* За кого (единый список с тогглами) */}
         <div>
           <label className="text-[10px] text-muted-foreground mb-1 block flex items-center gap-1">
-            <Users className="size-3" /> За кого заплатил? (необязательно)
+            <Users className="size-3" /> Участники траты
           </label>
           <div className="bg-background rounded-lg border border-input p-2 space-y-1">
-            {/* Чекбокс "только за других" */}
-            <button
-              onClick={() => setExcludeSelf(v => !v)}
-              className={cn(
-                "w-full flex items-center gap-2 p-1.5 rounded-lg text-xs transition-colors",
-                excludeSelf ? "bg-amber-500/10 text-amber-600" : "hover:bg-accent"
-              )}
-            >
-              <div className={cn(
-                "size-4 rounded border-2 grid place-items-center shrink-0",
-                excludeSelf ? "bg-amber-500 border-amber-500" : "border-input"
-              )}>
-                {excludeSelf && <Check className="size-3 text-white" />}
-              </div>
-              <span className="flex-1 text-left font-medium">Заплатил только за них (на себя не тратил)</span>
-            </button>
-
             {trip?.participants.map((p) => {
+              const checked = splitUsers.has(p.id);
               const isPayer = p.id === paidById;
-              const checked = splitWith.has(p.id) || (isPayer && !excludeSelf);
               return (
                 <button
                   key={p.id}
-                  onClick={() => !isPayer && toggleSplit(p.id)}
+                  onClick={() => toggleUser(p.id)}
                   disabled={isPayer}
                   className={cn(
-                    "w-full flex items-center gap-2 p-1.5 rounded-lg text-sm transition-colors",
-                    isPayer ? "opacity-50 cursor-not-allowed" : "hover:bg-accent",
-                    checked && !isPayer && "bg-primary/10"
+                    "w-full flex items-center gap-2 p-1.5 rounded-lg text-sm transition-colors active:scale-98",
+                    isPayer ? "cursor-not-allowed" : "hover:bg-accent active:bg-accent",
+                    checked && "bg-primary/10"
                   )}
                 >
                   <div className={cn(
-                    "size-4 rounded border-2 grid place-items-center shrink-0",
+                    "size-5 rounded-md border-2 grid place-items-center shrink-0 transition-colors",
                     checked ? "bg-primary border-primary" : "border-input"
                   )}>
                     {checked && <Check className="size-3 text-primary-foreground" />}
@@ -695,15 +807,15 @@ function AddExpenseForm({ onDone }: { onDone: () => void }) {
                     {p.emoji}
                   </div>
                   <span className="flex-1 text-left">{p.name}</span>
-                  {isPayer && <span className="text-[10px] text-muted-foreground">(заплатил)</span>}
+                  {isPayer && <span className="text-[9px] text-muted-foreground bg-muted px-1.5 py-0.5 rounded">плательщик</span>}
                 </button>
               );
             })}
-            {splitWith.size > 0 && (
+            {isSplit && (
               <div className="text-[11px] text-primary bg-primary/5 rounded-lg px-2 py-1.5 mt-1 border border-primary/20">
-                {excludeSelf
-                  ? <>💡 Каждый должен по <b>${perPerson}</b> плательщику (ты не участвуешь)</>
-                  : <>💡 Каждый должен по <b>${perPerson}</b> (включая плательщика)</>
+                {splitUsers.has(paidById)
+                  ? <>💡 Доля каждого: <b>${perPersonUSD}</b> ({splitCount} чел.)</>
+                  : <>💡 Каждый должен по <b>${perPersonUSD}</b> плательщику ({splitCount} чел., без плательщика)</>
                 }
               </div>
             )}
@@ -720,7 +832,7 @@ function AddExpenseForm({ onDone }: { onDone: () => void }) {
         <button
           onClick={submit}
           disabled={add.isPending}
-          className="w-full rounded-lg bg-primary text-primary-foreground py-2.5 text-sm font-medium flex items-center justify-center gap-2"
+          className="w-full rounded-lg bg-primary text-primary-foreground py-2.5 text-sm font-medium flex items-center justify-center gap-2 active:scale-98 transition-transform"
         >
           {add.isPending ? <Loader2 className="size-4 animate-spin" /> : <Plus className="size-4" />}
           Добавить трату
