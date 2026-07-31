@@ -276,6 +276,34 @@ function NearbyView({ category, onCategoryChange }: { category: string; onCatego
 }
 
 function NearbyCard({ place }: { place: NearbyPlace }) {
+  const [added, setAdded] = useState(false);
+
+  const addToWishlist = () => {
+    const saved = localStorage.getItem("triptrek-wishlist");
+    let items: WishlistItem[] = [];
+    try { items = saved ? JSON.parse(saved) : []; } catch {}
+
+    // Проверяем не добавлено ли уже
+    if (items.some(i => i.name === place.name)) {
+      toast.info("Уже в списке");
+      setAdded(true);
+      return;
+    }
+
+    const newItem: WishlistItem = {
+      id: crypto.randomUUID(),
+      name: place.name,
+      category: place.category === "restaurant" ? "restaurant" : place.category === "cafe" ? "cafe" : place.category === "bar" ? "bar" : "other",
+      address: place.address || undefined,
+      note: place.cuisine || undefined,
+      visited: false,
+    };
+    items = [newItem, ...items];
+    localStorage.setItem("triptrek-wishlist", JSON.stringify(items));
+    setAdded(true);
+    toast.success("Добавлено в «Хочу посетить» ⭐");
+  };
+
   return (
     <motion.div
       layout
@@ -298,7 +326,7 @@ function NearbyCard({ place }: { place: NearbyPlace }) {
               <span className="line-clamp-1">{place.address}</span>
             </div>
           )}
-          <div className="flex items-center gap-2 mt-1">
+          <div className="flex items-center gap-2 mt-1.5">
             <span className="text-[10px] text-primary font-medium flex items-center gap-0.5">
               <Navigation className="size-2.5" /> {place.distance < 1000 ? `${place.distance} м` : `${(place.distance / 1000).toFixed(1)} км`}
             </span>
@@ -311,6 +339,23 @@ function NearbyCard({ place }: { place: NearbyPlace }) {
               Как добраться
             </a>
           </div>
+          {/* Кнопка добавить в "Хочу посетить" */}
+          <button
+            onClick={addToWishlist}
+            disabled={added}
+            className={cn(
+              "mt-2 w-full rounded-lg py-1.5 text-xs font-medium flex items-center justify-center gap-1 transition-colors",
+              added
+                ? "bg-green-500/10 text-green-600"
+                : "bg-amber-500/10 text-amber-600 hover:bg-amber-500/20 active:scale-95"
+            )}
+          >
+            {added ? (
+              <><CheckCircle2 className="size-3.5" /> В списке</>
+            ) : (
+              <><Star className="size-3.5" /> Хочу посетить</>
+            )}
+          </button>
         </div>
       </div>
     </motion.div>

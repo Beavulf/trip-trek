@@ -820,32 +820,26 @@ export default function ProfilePage() {
 function PushToggle() {
   const [enabled, setEnabled] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [supported] = useState(() => {
+    if (typeof window === "undefined") return false;
+    return "Notification" in window && "serviceWorker" in navigator && "PushManager" in window;
+  });
   const { data: session } = useSession();
   const userId = (session?.user as { id?: string } | undefined)?.id || "";
 
   useEffect(() => {
+    if (!supported) return;
     checkStatus();
-  }, []);
+  }, [supported]);
 
   const checkStatus = async () => {
-    if (typeof navigator === "undefined") return;
-
-    // Проверяем поддержку
-    if (!("Notification" in navigator)) {
-      return;
-    }
-    if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
-      return;
-    }
-
-    // Проверяем permission
-    if (Notification.permission !== "granted") {
-      setEnabled(false);
-      return;
-    }
-
-    // Проверяем есть ли активная подписка
     try {
+      // Permission должен быть granted
+      if (Notification.permission !== "granted") {
+        setEnabled(false);
+        return;
+      }
+      // Проверяем подписку
       const reg = await navigator.serviceWorker.ready;
       const sub = await reg.pushManager.getSubscription();
       setEnabled(!!sub);
@@ -855,18 +849,9 @@ function PushToggle() {
   };
 
   const toggle = async () => {
-    if (typeof navigator === "undefined") return;
-
-    // Проверяем поддержку
-    if (!("Notification" in navigator)) {
-      toast.error("Уведомления не поддерживаются", {
-        description: "Используйте Chrome на Android или Safari на iOS 16.4+",
-      });
-      return;
-    }
-    if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
-      toast.error("Push-уведомления не поддерживаются", {
-        description: "Нужен Chrome 50+ / Firefox 44+ / Safari 16.4+",
+    if (!supported) {
+      toast.error("Push не поддерживается", {
+        description: "Открой через Chrome/Safari, не через встроенный браузер",
       });
       return;
     }
@@ -874,29 +859,33 @@ function PushToggle() {
     setLoading(true);
     try {
       if (enabled) {
-        // Отписываемся
+        // ВЫКЛЮЧАЕМ
         const reg = await navigator.serviceWorker.ready;
         const sub = await reg.pushManager.getSubscription();
         if (sub) {
           await sub.unsubscribe();
-          // Удаляем с сервера
           await fetch(`/api/push/subscribe?endpoint=${encodeURIComponent(sub.endpoint)}`, {
             method: "DELETE",
           });
         }
         setEnabled(false);
-        toast.info("Уведомления отключены");
+        toast.success("Уведомления отключены");
       } else {
+        // ВКЛЮЧАЕМ
+        // Сначала регистрируем SW если ещё не зарегистрирован
+        await navigator.serviceWorker.register("/sw.js");
+        await navigator.serviceWorker.ready;
+
         // Запрашиваем permission
         const perm = await Notification.requestPermission();
         if (perm !== "granted") {
-          toast.error("Разрешение отклонено", {
-            description: "Разрешите уведомления в настройках браузера",
+          toast.error("Разрешение не дано", {
+            description: "Разреши уведомления в настройках браузера",
           });
           return;
         }
 
-        // Получаем VAPID публичный ключ
+        // Получаем VAPID ключ
         const vapidRes = await fetch("/api/push/vapid-public-key");
         const { publicKey } = await vapidRes.json();
         if (!publicKey) {
@@ -904,17 +893,13 @@ function PushToggle() {
           return;
         }
 
-        // Конвертируем ключ
-        const convertedKey = urlBase64ToUint8Array(publicKey);
-
         // Подписываемся
         const reg = await navigator.serviceWorker.ready;
         const subscription = await reg.pushManager.subscribe({
           userVisibleOnly: true,
-          applicationServerKey: convertedKey as BufferSource,
+          applicationServerKey: urlBase64ToUint8Array(publicKey) as BufferSource,
         });
 
-        // Отправляем подписку на сервер
         await fetch("/api/push/subscribe", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -925,15 +910,14 @@ function PushToggle() {
         });
 
         setEnabled(true);
-        toast.success("Push-уведомления включены 🔔", {
-          description: "Теперь ты получишь уведомления даже при закрытом приложении",
-          duration: 5000,
+        toast.success("Уведомления включены 🔔", {
+          description: "Будешь получать push даже при закрытом приложении",
         });
       }
     } catch (e) {
-      console.error("Push toggle error:", e);
-      toast.error("Не удалось настроить уведомления", {
-        description: "Попробуй позже или проверь настройки браузера",
+      console.error("Push error:", e);
+      toast.error("Ошибка", {
+        description: "Попробуй перезагрузить страницу и снова",
       });
     } finally {
       setLoading(false);
@@ -957,7 +941,6 @@ function PushToggle() {
   );
 }
 
-// Конвертация VAPID ключа
 function urlBase64ToUint8Array(base64String: string): Uint8Array {
   const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
   const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");

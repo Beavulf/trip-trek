@@ -288,22 +288,23 @@ function FoodCard({ food, cityColor }: { food: FoodItem; cityColor: string }) {
 
           {/* Рейтинг (показываем если пробовали) */}
           {food.tried && (
-            <div className="flex items-center gap-0.5 mt-2">
+            <div className="flex items-center gap-1 mt-2">
               {[1, 2, 3, 4, 5].map((s) => (
                 <button
                   key={s}
                   onClick={() => update.mutate({ id: food.id, rating: s === food.rating ? null : s })}
+                  className="p-1 -m-1 active:scale-90 transition-transform"
                 >
                   <Star
                     className={cn(
-                      "size-4 transition-transform hover:scale-110",
+                      "size-7 sm:size-6 transition-transform",
                       (food.rating ?? 0) >= s ? "fill-amber-400 text-amber-400" : "text-muted-foreground/40"
                     )}
                   />
                 </button>
               ))}
               {food.rating && (
-                <span className="text-[10px] text-muted-foreground ml-1">{food.rating}/5</span>
+                <span className="text-xs text-muted-foreground ml-1.5 font-medium">{food.rating}/5</span>
               )}
             </div>
           )}

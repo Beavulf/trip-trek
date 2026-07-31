@@ -60,7 +60,20 @@ export default function RootLayout({
         className={`${geistSans.variable} ${geistMono.variable} antialiased bg-background text-foreground`}
       >
         <Providers>{children}</Providers>
-        <Toaster richColors position="top-center" closeButton toastOptions={{ duration: 5000 }} />
+        <Toaster
+          position="top-center"
+          toastOptions={{
+            duration: 5000,
+            classNames: {
+              toast: "!rounded-xl !border !border-border !bg-card !text-card-foreground !pr-0",
+              description: "!text-muted-foreground",
+              actionButton: "!bg-primary !text-primary-foreground",
+              cancelButton: "!bg-muted !text-muted-foreground",
+              closeButton: "!bg-red-500/10 !text-red-500 hover:!bg-red-500/20 !w-full !h-8 !rounded-b-xl !rounded-t-none !static !mt-2 !border-0 !border-t !border-border/50",
+            },
+          }}
+          closeButton
+        />
       </body>
     </html>
   );

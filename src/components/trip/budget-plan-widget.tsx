@@ -3,7 +3,7 @@
 import { useBudgetPlan, useUpdateBudgetPlan, useExpenses } from "@/hooks/use-trip";
 import { EXPENSE_CATEGORIES } from "@/lib/types";
 import { motion } from "framer-motion";
-import { Target, Pencil, Check, Loader2 } from "lucide-react";
+import { Target, Pencil, Check, Loader2, X } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -86,7 +86,7 @@ export function BudgetPlanWidget() {
                         if (e.key === "Escape") setEditingCat(null);
                       }}
                       autoFocus
-                      className="w-20 min-h-[36px] text-xs rounded border border-input bg-background px-2 py-1 text-right"
+                      className="w-16 min-h-[36px] text-xs rounded border border-input bg-background px-2 py-1 text-right"
                     />
                     <button
                       onClick={() => saveEdit(cat)}
@@ -95,6 +95,14 @@ export function BudgetPlanWidget() {
                       aria-label="Сохранить"
                     >
                       <Check className="size-4" />
+                    </button>
+                    <button
+                      onClick={() => setEditingCat(null)}
+                      className="size-9 rounded bg-secondary border border-border grid place-items-center shrink-0 active:scale-95 transition-transform"
+                      title="Отменить"
+                      aria-label="Отменить"
+                    >
+                      <X className="size-4" />
                     </button>
                   </div>
                 ) : (
