@@ -453,9 +453,8 @@ function ExpenseForm({ userId, onDone }: { userId: string; onDone: () => void })
   const [category, setCategory] = useState("food");
   const [description, setDescription] = useState("");
   const [dayId, setDayId] = useState(trip?.days.find((d) => d.dayNumber === trip.currentDayNumber)?.id ?? "");
-  const [splitWith, setSplitWith] = useState<Set<string>>(new Set());
-  // excludeSelf — заплатил ТОЛЬКО за других (на себя не тратил)
-  const [excludeSelf, setExcludeSelf] = useState(false);
+  // splitUsers — кто участвует. По умолчанию НИКТО не выбран
+  const [splitUsers, setSplitUsers] = useState<Set<string>>(new Set());
 
   const submit = async () => {
     const amt = parseFloat(amount);
@@ -463,27 +462,36 @@ function ExpenseForm({ userId, onDone }: { userId: string; onDone: () => void })
       toast.error("Укажите сумму и описание");
       return;
     }
+    if (splitUsers.size === 0) {
+      toast.error("Выберите хотя бы одного участника");
+      return;
+    }
+
+    // splitWith = все КРОМЕ плательщика. excludeSelf = плательщик не выбран
+    const splitWithArr = Array.from(splitUsers).filter(id => id !== userId);
+    const excludeSelf = !splitUsers.has(userId);
+
     await addExpense.mutateAsync({
       amount: amt,
       category,
       description,
       paidById: userId,
       dayId,
-      splitWith: Array.from(splitWith),
+      splitWith: splitWithArr,
       excludeSelf,
     });
-    // Подсказка о долге
-    if (splitWith.size > 0) {
-      const splitCount = excludeSelf ? splitWith.size : splitWith.size + 1;
+
+    if (splitWithArr.length > 0) {
+      const splitCount = excludeSelf ? splitWithArr.length : splitWithArr.length + 1;
       const perPerson = (amt / splitCount).toFixed(2);
       const names = trip?.participants
-        .filter(p => splitWith.has(p.id))
+        .filter(p => splitWithArr.includes(p.id))
         .map(p => p.name)
         .join(", ");
       toast.success("Трата добавлена 💸", {
         description: excludeSelf
-          ? `Долг: ${names} должны по $${perPerson} → тебе`
-          : `Долг: каждый должен $${perPerson} (включая тебя)`,
+          ? `${names} должны по $${perPerson} → тебе`
+          : `Каждый должен $${perPerson} (включая тебя)`,
         duration: 5000,
       });
     } else {
@@ -491,13 +499,12 @@ function ExpenseForm({ userId, onDone }: { userId: string; onDone: () => void })
     }
     setAmount("");
     setDescription("");
-    setSplitWith(new Set());
-    setExcludeSelf(false);
+    setSplitUsers(new Set());
     onDone();
   };
 
-  const toggleSplit = (id: string) => {
-    setSplitWith(prev => {
+  const toggleUser = (id: string) => {
+    setSplitUsers(prev => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
       else next.add(id);
@@ -505,20 +512,15 @@ function ExpenseForm({ userId, onDone }: { userId: string; onDone: () => void })
     });
   };
 
-  // Расчёт доли
-  const splitCount = splitWith.size > 0
-    ? (excludeSelf ? splitWith.size : splitWith.size + 1)
-    : 1;
+  const selectAll = () => {
+    setSplitUsers(new Set(trip?.participants.map(p => p.id) || []));
+  };
+
+  const splitCount = splitUsers.size > 0 ? splitUsers.size : 1;
   const perPerson = amount ? (parseFloat(amount) / splitCount).toFixed(2) : "0";
 
   return (
     <div className="space-y-3">
-      {/* Подсказка */}
-      <div className="text-[10px] text-muted-foreground bg-muted/50 rounded-lg px-3 py-2 flex items-center gap-1.5">
-        <Users className="size-3 shrink-0" />
-        <span>Кто платит — ты. Отметь за кого, чтобы посчитать долги.</span>
-      </div>
-
       <div>
         <label className="text-xs text-muted-foreground mb-1 block">День</label>
         <DayPicker value={dayId} onChange={setDayId} />
@@ -557,62 +559,60 @@ function ExpenseForm({ userId, onDone }: { userId: string; onDone: () => void })
         className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm"
       />
 
-      {/* За кого заплатил */}
+      {/* Участники траты */}
       <div>
-        <label className="text-xs text-muted-foreground mb-1 block flex items-center gap-1">
-          <Users className="size-3" /> За кого заплатил? (необязательно)
-        </label>
-        <div className="bg-background rounded-lg border border-input p-2 space-y-1">
-          {/* Чекбокс "только за других" */}
+        <div className="flex items-center justify-between mb-1">
+          <label className="text-xs text-muted-foreground flex items-center gap-1">
+            <Users className="size-3" /> За кого?
+          </label>
           <button
-            onClick={() => setExcludeSelf(v => !v)}
-            className={cn(
-              "w-full flex items-center gap-2 p-1.5 rounded-lg text-xs transition-colors",
-              excludeSelf ? "bg-amber-500/10 text-amber-600" : "hover:bg-accent"
-            )}
+            onClick={selectAll}
+            className="text-[10px] text-primary font-medium active:scale-95 transition-transform"
           >
-            <div className={cn(
-              "size-4 rounded border-2 grid place-items-center shrink-0",
-              excludeSelf ? "bg-amber-500 border-amber-500" : "border-input"
-            )}>
-              {excludeSelf && <Check className="size-3 text-white" />}
-            </div>
-            <span className="flex-1 text-left font-medium">Заплатил только за них (на себя не тратил)</span>
+            Выбрать всех
           </button>
-
-          {trip?.participants
-            .filter(p => p.id !== userId) // excluding self — плательщик
-            .map((p) => {
-              const checked = splitWith.has(p.id);
-              return (
-                <button
-                  key={p.id}
-                  onClick={() => toggleSplit(p.id)}
-                  className={cn(
-                    "w-full flex items-center gap-2 p-1.5 rounded-lg text-sm transition-colors",
-                    "hover:bg-accent",
-                    checked && "bg-primary/10"
-                  )}
-                >
-                  <div className={cn(
-                    "size-4 rounded border-2 grid place-items-center shrink-0",
-                    checked ? "bg-primary border-primary" : "border-input"
-                  )}>
-                    {checked && <Check className="size-3 text-primary-foreground" />}
-                  </div>
-                  <div className="size-6 rounded-full grid place-items-center text-[10px]" style={{ background: p.color }}>
-                    {p.emoji}
-                  </div>
-                  <span className="flex-1 text-left">{p.name}</span>
-                </button>
-              );
-            })}
-          {splitWith.size > 0 && (
+        </div>
+        <div className="bg-background rounded-lg border border-input p-2 space-y-1">
+          {trip?.participants.map((p) => {
+            const checked = splitUsers.has(p.id);
+            const isPayer = p.id === userId;
+            return (
+              <button
+                key={p.id}
+                onClick={() => toggleUser(p.id)}
+                className={cn(
+                  "w-full flex items-center gap-2 p-1.5 rounded-lg text-sm transition-colors active:scale-98",
+                  "hover:bg-accent active:bg-accent",
+                  checked && "bg-primary/10"
+                )}
+              >
+                <div className={cn(
+                  "size-5 rounded-md border-2 grid place-items-center shrink-0 transition-colors",
+                  checked ? "bg-primary border-primary" : "border-input"
+                )}>
+                  {checked && <Check className="size-3 text-primary-foreground" />}
+                </div>
+                <div className="size-6 rounded-full grid place-items-center text-[10px]" style={{ background: p.color }}>
+                  {p.emoji}
+                </div>
+                <span className="flex-1 text-left">{p.name}</span>
+                {isPayer && <span className="text-[9px] text-muted-foreground bg-muted px-1.5 py-0.5 rounded">ты</span>}
+              </button>
+            );
+          })}
+          {splitUsers.size > 0 && (
             <div className="text-[11px] text-primary bg-primary/5 rounded-lg px-2 py-1.5 mt-1 border border-primary/20">
-              {excludeSelf
-                ? <>💡 Каждый должен по <b>${perPerson}</b> тебе</>
-                : <>💡 Каждый должен по <b>${perPerson}</b> (включая тебя)</>
+              {splitUsers.has(userId)
+                ? splitUsers.size === 1
+                  ? <>💡 Личная трата (без долгов)</>
+                  : <>💡 Доля каждого: <b>${perPerson}</b> ({splitCount} чел.)</>
+                : <>💡 Каждый должен по <b>${perPerson}</b> тебе ({splitCount} чел.)</>
               }
+            </div>
+          )}
+          {splitUsers.size === 0 && (
+            <div className="text-[11px] text-amber-500 bg-amber-500/5 rounded-lg px-2 py-1.5 mt-1 border border-amber-500/20">
+              Выбери хотя бы одного участника
             </div>
           )}
         </div>
@@ -620,7 +620,7 @@ function ExpenseForm({ userId, onDone }: { userId: string; onDone: () => void })
 
       <button
         onClick={submit}
-        disabled={addExpense.isPending}
+        disabled={addExpense.isPending || splitUsers.size === 0}
         className="w-full rounded-xl bg-primary text-primary-foreground py-3.5 text-base font-medium flex items-center justify-center gap-2 disabled:opacity-50"
       >
         {addExpense.isPending ? <Loader2 className="size-4 animate-spin" /> : <Check className="size-4" />}

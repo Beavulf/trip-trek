@@ -581,28 +581,25 @@ function AddExpenseForm({ onDone }: { onDone: () => void }) {
   const [description, setDescription] = useState("");
   const [paidById, setPaidById] = useState(currentUserId || trip?.participants[0]?.id || "");
   const [dayId, setDayId] = useState("");
-  // splitUsers — кто участвует в трате (включая плательщика). По умолчанию = только плательщик
+  // splitUsers — кто участвует в трате. По умолчанию НИКТО не выбран
   const [splitUsers, setSplitUsers] = useState<Set<string>>(new Set());
-
-  // При смене плательщика — сбрасываем split на "только он"
-  const [prevPayer, setPrevPayer] = useState(paidById);
-  if (paidById !== prevPayer) {
-    setPrevPayer(paidById);
-    setSplitUsers(new Set([paidById]));
-  }
 
   const toggleUser = (id: string) => {
     setSplitUsers(prev => {
       const next = new Set(prev);
       if (next.has(id)) {
-        // Нельзя снять с плательщика
-        if (id === paidById) return prev;
         next.delete(id);
       } else {
         next.add(id);
       }
       return next;
     });
+  };
+
+  // "Выбрать всех"
+  const selectAll = () => {
+    const all = new Set(trip?.participants.map(p => p.id) || []);
+    setSplitUsers(all);
   };
 
   // Конвертация в USD
@@ -617,6 +614,10 @@ function AddExpenseForm({ onDone }: { onDone: () => void }) {
     }
     if (!paidById) {
       toast.error("Выберите кто заплатил");
+      return;
+    }
+    if (splitUsers.size === 0) {
+      toast.error("Выберите хотя бы одного участника траты");
       return;
     }
 
@@ -660,12 +661,11 @@ function AddExpenseForm({ onDone }: { onDone: () => void }) {
       toast.success("Трата добавлена 💸", { description: `$${amountUSD.toFixed(2)}${usdText}` });
     }
     setAmount(""); setDescription("");
-    setSplitUsers(new Set([paidById]));
+    setSplitUsers(new Set());
     onDone();
   };
 
   // Расчёт доли
-  const isSplit = splitUsers.size > 1 || (splitUsers.size === 1 && !splitUsers.has(paidById));
   const splitCount = splitUsers.size > 0 ? splitUsers.size : 1;
   const perPersonUSD = amountUSD > 0 ? (amountUSD / splitCount).toFixed(2) : "0";
 
@@ -711,33 +711,31 @@ function AddExpenseForm({ onDone }: { onDone: () => void }) {
         </div>
 
         {/* Конвертация + галочка запомнить */}
-        {currencyCode !== "USD" && amountNum > 0 && (
-          <div className="flex items-center justify-between text-[11px]">
+        <div className="flex items-center justify-between text-[11px]">
+          {currencyCode !== "USD" && amountNum > 0 ? (
             <span className="text-muted-foreground">
               ≈ <b className="text-foreground">${amountUSD.toFixed(2)}</b> по курсу {usdRate.toFixed(2)}
             </span>
-            <label className="flex items-center gap-1 cursor-pointer active:scale-95 transition-transform">
-              <input
-                type="checkbox"
-                checked={rememberCurrency}
-                onChange={(e) => setRememberCurrency(e.target.checked)}
-                className="size-3.5 accent-primary"
-              />
-              <span className="text-muted-foreground">Запомнить</span>
-            </label>
-          </div>
-        )}
-        {currencyCode === "USD" && (
-          <label className="flex items-center gap-1 cursor-pointer text-[11px] active:scale-95 transition-transform">
+          ) : (
+            <span />
+          )}
+          <label className="flex items-center gap-1 cursor-pointer active:scale-95 transition-transform shrink-0">
             <input
               type="checkbox"
               checked={rememberCurrency}
-              onChange={(e) => setRememberCurrency(e.target.checked)}
+              onChange={(e) => {
+                setRememberCurrency(e.target.checked);
+                if (e.target.checked) {
+                  localStorage.setItem("triptrek-currency", currencyCode);
+                } else {
+                  localStorage.removeItem("triptrek-currency");
+                }
+              }}
               className="size-3.5 accent-primary"
             />
-            <span className="text-muted-foreground">Запомнить валюту</span>
+            <span className="text-muted-foreground">Запомнить {currencyCode}</span>
           </label>
-        )}
+        </div>
 
         <select value={category} onChange={(e) => setCategory(e.target.value)} className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm">
           {Object.entries(EXPENSE_CATEGORIES).map(([k, v]) => (
@@ -777,11 +775,19 @@ function AddExpenseForm({ onDone }: { onDone: () => void }) {
           </div>
         </div>
 
-        {/* За кого (единый список с тогглами) */}
+        {/* Участники траты */}
         <div>
-          <label className="text-[10px] text-muted-foreground mb-1 block flex items-center gap-1">
-            <Users className="size-3" /> Участники траты
-          </label>
+          <div className="flex items-center justify-between mb-1">
+            <label className="text-[10px] text-muted-foreground flex items-center gap-1">
+              <Users className="size-3" /> За кого?
+            </label>
+            <button
+              onClick={selectAll}
+              className="text-[10px] text-primary font-medium active:scale-95 transition-transform"
+            >
+              Выбрать всех
+            </button>
+          </div>
           <div className="bg-background rounded-lg border border-input p-2 space-y-1">
             {trip?.participants.map((p) => {
               const checked = splitUsers.has(p.id);
@@ -790,10 +796,9 @@ function AddExpenseForm({ onDone }: { onDone: () => void }) {
                 <button
                   key={p.id}
                   onClick={() => toggleUser(p.id)}
-                  disabled={isPayer}
                   className={cn(
                     "w-full flex items-center gap-2 p-1.5 rounded-lg text-sm transition-colors active:scale-98",
-                    isPayer ? "cursor-not-allowed" : "hover:bg-accent active:bg-accent",
+                    "hover:bg-accent active:bg-accent",
                     checked && "bg-primary/10"
                   )}
                 >
@@ -811,12 +816,19 @@ function AddExpenseForm({ onDone }: { onDone: () => void }) {
                 </button>
               );
             })}
-            {isSplit && (
+            {splitUsers.size > 0 && (
               <div className="text-[11px] text-primary bg-primary/5 rounded-lg px-2 py-1.5 mt-1 border border-primary/20">
                 {splitUsers.has(paidById)
-                  ? <>💡 Доля каждого: <b>${perPersonUSD}</b> ({splitCount} чел.)</>
-                  : <>💡 Каждый должен по <b>${perPersonUSD}</b> плательщику ({splitCount} чел., без плательщика)</>
+                  ? splitUsers.size === 1
+                    ? <>💡 Личная трата (без долгов)</>
+                    : <>💡 Доля каждого: <b>${perPersonUSD}</b> ({splitCount} чел.)</>
+                  : <>💡 Каждый должен по <b>${perPersonUSD}</b> плательщику ({splitCount} чел.)</>
                 }
+              </div>
+            )}
+            {splitUsers.size === 0 && (
+              <div className="text-[11px] text-amber-500 bg-amber-500/5 rounded-lg px-2 py-1.5 mt-1 border border-amber-500/20">
+                Выбери хотя бы одного участника
               </div>
             )}
           </div>
