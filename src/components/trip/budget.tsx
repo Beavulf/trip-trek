@@ -39,16 +39,86 @@ export function Budget() {
     return { key, label: EXPENSE_CATEGORIES[key].label, emoji: EXPENSE_CATEGORIES[key].emoji, color: EXPENSE_CATEGORIES[key].color, value: sum };
   }).filter((x) => x.value > 0);
 
-  // Расчёт долгов: все расходы (включая переводы) считаются для "paid"
-  // settlement = перевод от одного участника другому (не трата на поездку)
-  const perPerson = totalSpent / trip.participants.length;
+  // === НОВАЯ ЛОГИКА ДОЛГОВ ===
+  // Личные траты (splitWith пустой) — НЕ создают долгов, просто учитываются в статистике
+  // Траты с splitWith — создают долги: каждый в splitWith должен плательщику свою долю
+  // excludeSelf = true → плательщик не участвует (купил только для других)
+  // excludeSelf = false → плательщик тоже участвует (купил для себя + других)
+
+  // Считаем paid (сколько каждый реально заплатил, без settlement)
+  // и долги (кто кому сколько должен)
   const balances = trip.participants.map((p) => {
-    const paid = expenses.filter((e) => e.paidById === p.id).reduce((s, e) => s + e.amount, 0);
-    return { participant: p, paid, balance: paid - perPerson }; // + значит ему должны, - он должен
+    // Сколько реально заплатил (все траты кроме settlement)
+    const paid = expenses
+      .filter((e) => e.paidById === p.id && e.category !== "settlement")
+      .reduce((s, e) => s + e.amount, 0);
+
+    // Сколько мне должны (я плательщик в split-тратах)
+    let owedToMe = 0;
+    expenses
+      .filter((e) => e.paidById === p.id && e.splitWith && e.splitWith?.length > 0)
+      .forEach((e) => {
+        const splitUsers: string[] = (e.splitWith || "").split(",").filter(Boolean);
+        if (splitUsers.length === 0) return;
+        const perPerson = e.excludeSelf
+          ? e.amount / splitUsers.length
+          : e.amount / (splitUsers.length + 1);
+        owedToMe += perPerson * splitUsers.length;
+      });
+
+    // Сколько я должен другим (я в splitWith чужих трат)
+    let owedToOthers = 0;
+    expenses
+      .filter((e) => e.paidById !== p.id && e.splitWith && e.splitWith?.length > 0)
+      .forEach((e) => {
+        const splitUsers: string[] = (e.splitWith || "").split(",").filter(Boolean);
+        if (!splitUsers.includes(p.id)) return;
+        const perPerson = e.excludeSelf
+          ? e.amount / splitUsers.length
+          : e.amount / (splitUsers.length + 1);
+        owedToOthers += perPerson;
+      });
+
+    // Баланс: + значит мне должны, - значит я должен
+    const balance = owedToMe - owedToOthers;
+    return { participant: p, paid, balance, owedToMe, owedToOthers };
   });
 
-  // Упрощённые расчёты: кто кому сколько
-  const settlements = settleDebts(balances);
+  // Расчёт кто кому конкретно должен (per-person debts)
+  const debtsMap: Record<string, Record<string, number>> = {};
+  expenses
+    .filter((e) => e.splitWith && e.splitWith?.length > 0)
+    .forEach((e) => {
+      const splitUsers: string[] = (e.splitWith || "").split(",").filter(Boolean);
+      if (splitUsers.length === 0) return;
+      const perPerson = e.excludeSelf
+        ? e.amount / splitUsers.length
+        : e.amount / (splitUsers.length + 1);
+      splitUsers.forEach((userId) => {
+        if (!debtsMap[userId]) debtsMap[userId] = {};
+        debtsMap[userId][e.paidById] = (debtsMap[userId][e.paidById] || 0) + perPerson;
+      });
+    });
+
+  // Упрощаем: если A должен B $X и B должен A $Y → net = X - Y
+  const settlements: { from: Participant; to: Participant; amount: number }[] = [];
+  const participants = trip.participants;
+  for (let i = 0; i < participants.length; i++) {
+    for (let j = i + 1; j < participants.length; j++) {
+      const a = participants[i].id;
+      const b = participants[j].id;
+      const aToB = debtsMap[a]?.[b] || 0; // A должен B
+      const bToA = debtsMap[b]?.[a] || 0; // B должен A
+      const net = aToB - bToA;
+      if (net > 0.01) {
+        settlements.push({ from: participants[i], to: participants[j], amount: Math.round(net * 100) / 100 });
+      } else if (net < -0.01) {
+        settlements.push({ from: participants[j], to: participants[i], amount: Math.round(-net * 100) / 100 });
+      }
+    }
+  }
+  // Сортируем по убыванию суммы
+  settlements.sort((a, b) => b.amount - a.amount);
 
   return (
     <div className="space-y-4 animate-fade-up">
@@ -208,23 +278,23 @@ export function Budget() {
               <div className="bg-muted/50 rounded-xl p-3 mb-3 space-y-1.5 text-[11px] text-muted-foreground">
                 <div className="flex items-start gap-1.5">
                   <span className="text-primary shrink-0">①</span>
-                  <span>Все траты складываются и делятся поровну между всеми участниками.</span>
+                  <span><b className="text-foreground">Личная трата</b> (только за себя) — просто учитывается в статистике, долги не создаёт.</span>
                 </div>
                 <div className="flex items-start gap-1.5">
                   <span className="text-primary shrink-0">②</span>
-                  <span><b className="text-foreground">Внёс</b> — сколько человек реально заплатил из своего кошелька.</span>
+                  <span><b className="text-foreground">Заплатил за других</b> — те, за кого заплатил, должны тебе деньги.</span>
                 </div>
                 <div className="flex items-start gap-1.5">
                   <span className="text-primary shrink-0">③</span>
-                  <span><b className="text-green-600">+</b> зелёная сумма — человеку должны деньги (он заплатил больше своей доли).</span>
+                  <span><b className="text-foreground">Внёс</b> — сколько всего человек заплатил из кошелька.</span>
                 </div>
                 <div className="flex items-start gap-1.5">
                   <span className="text-primary shrink-0">④</span>
-                  <span><b className="text-red-500">−</b> красная сумма — человек должен вернуть (заплатил меньше своей доли).</span>
+                  <span><b className="text-green-600">+</b> зелёная — человеку должны. <b className="text-red-500">−</b> красная — человек должен.</span>
                 </div>
                 <div className="flex items-start gap-1.5">
                   <span className="text-primary shrink-0">⑤</span>
-                  <span>Ниже — кто кому и сколько нужно перевести, чтобы все были в расчёте.</span>
+                  <span>Кнопка <b className="text-foreground">«Перевели»</b> — у того, кому должны. Нажми когда получил перевод.</span>
                 </div>
               </div>
             </motion.div>
@@ -272,16 +342,20 @@ export function Budget() {
               >
                 <div className="bg-muted/40 rounded-xl p-3 mb-3 space-y-1.5 text-[11px]">
                   <div className="flex items-center justify-between">
-                    <span className="text-muted-foreground">Доля каждого (всего ÷ {trip.participants.length})</span>
-                    <span className="font-medium">${share.toFixed(2)}</span>
+                    <span className="text-muted-foreground">{b.participant.name} заплатил всего</span>
+                    <span className="font-medium">${b.paid.toFixed(2)}</span>
                   </div>
                   <div className="flex items-center justify-between">
-                    <span className="text-muted-foreground">{b.participant.name} заплатил</span>
-                    <span className="font-medium">${b.paid.toFixed(2)}</span>
+                    <span className="text-muted-foreground">Ему должны</span>
+                    <span className="font-medium text-green-600">${b.owedToMe.toFixed(2)}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground">Он должен</span>
+                    <span className="font-medium text-red-500">${b.owedToOthers.toFixed(2)}</span>
                   </div>
                   <div className="border-t border-border pt-1.5 flex items-center justify-between">
                     <span className="text-muted-foreground">
-                      {b.balance > 0 ? "Ему должны (заплатил больше доли)" : b.balance < 0 ? "Он должен (заплатил меньше доли)" : "Всё поровну"}
+                      {b.balance > 0 ? "Итог: ему должны" : b.balance < 0 ? "Итог: он должен" : "Итог: всё поровну"}
                     </span>
                     <span className={cn("font-bold", b.balance > 0 ? "text-green-600" : b.balance < 0 ? "text-red-500" : "text-muted-foreground")}>
                       {b.balance > 0 ? `+$${b.balance.toFixed(2)}` : b.balance < 0 ? `−$${Math.abs(b.balance).toFixed(2)}` : "$0"}
@@ -473,6 +547,8 @@ function AddExpenseForm({ onDone }: { onDone: () => void }) {
       description,
       paidById,
       dayId: dayId || undefined,
+      splitWith: Array.from(splitWith),
+      excludeSelf,
     });
     // Подсказка о долге если splitWith выбран
     if (splitWith.size > 0) {
@@ -820,50 +896,54 @@ function MarkSettledButton({ from, to, amount }: { from: Participant; to: Partic
   const currentUserId = (session?.user as { id?: string } | undefined)?.id || "";
   const [done, setDone] = useState(false);
 
-  const isDebtor = currentUserId === from.id; // Я должен → мне нажимать
-  const isCreditor = currentUserId === to.id; // Мне должны → я жду
+  // from = должник, to = кредитор (ему должны)
+  const isCreditor = currentUserId === to.id; // Мне должны → я подтверждаю получение
+  const isDebtor = currentUserId === from.id; // Я должен → жду подтверждения
 
   const handleSettle = async () => {
-    // Создаём трату с category="settlement" — от пользователя from (должника)
-    // Это увеличит from.paid, его баланс станет ~0
+    // Создаём settlement-трату: должник (from) "заплатил" кредитору (to)
+    // splitWith = to, excludeSelf = true → создаёт обратный долг (to должен from)
+    // Этот обратный долг компенсирует исходный
     await addExpense.mutateAsync({
       amount: Math.round(amount * 100) / 100,
       category: "settlement",
-      description: `Перевод → ${to.name}`,
+      description: `Перевод: ${from.name} → ${to.name}`,
       paidById: from.id,
+      splitWith: [to.id],
+      excludeSelf: true,
     });
-    toast.success("Перевод отмечен ✅", { description: `$${amount.toFixed(2)} → ${to.name}` });
+    toast.success("Перевод подтверждён ✅", { description: `$${amount.toFixed(2)} от ${from.name}` });
     setDone(true);
   };
 
   if (done) {
     return (
       <span className="shrink-0 text-[10px] text-green-600 font-medium flex items-center gap-1 px-2 py-1">
-        <Check className="size-3" /> Переведено
+        <Check className="size-3" /> Получено
       </span>
     );
   }
 
-  // Если я должник — могу нажать "Я перевёл"
-  if (isDebtor) {
+  // Кредитор (ему должны) — может нажать "Перевели" чтобы подтвердить получение
+  if (isCreditor) {
     return (
       <button
         onClick={handleSettle}
         disabled={addExpense.isPending}
-        className="shrink-0 text-[10px] bg-green-600/10 text-green-600 hover:bg-green-600/20 px-2 py-1 rounded-lg font-medium flex items-center gap-1 transition-colors"
-        title={`Подтвердить перевод $${amount.toFixed(2)} → ${to.name}`}
+        className="shrink-0 text-[10px] bg-green-600/10 text-green-600 hover:bg-green-600/20 px-2.5 py-1.5 rounded-lg font-medium flex items-center gap-1 transition-colors active:scale-95"
+        title={`Подтвердить что ${from.name} перевёл $${amount.toFixed(2)}`}
       >
         {addExpense.isPending ? <Loader2 className="size-3 animate-spin" /> : <Check className="size-3" />}
-        Я перевёл
+        Перевели
       </button>
     );
   }
 
-  // Если я кредитор — жду перевод
-  if (isCreditor) {
+  // Должник — видит что ждут подтверждения
+  if (isDebtor) {
     return (
       <span className="shrink-0 text-[10px] text-muted-foreground flex items-center gap-1 px-2 py-1">
-        <Clock className="size-3" /> Ждём перевод
+        <Clock className="size-3" /> Ждём подтверждения
       </span>
     );
   }

@@ -170,6 +170,8 @@ model Expense {
   description String
   paidById    String   // userId кто заплатил
   dayId       String?
+  splitWith   String   @default("")  // comma-separated userIds (пусто = личная трата)
+  excludeSelf Boolean  @default(false) // true = плательщик не участвует в делении
   createdAt   DateTime @default(now())
 
   trip        Trip     @relation(fields: [tripId], references: [id], onDelete: Cascade)

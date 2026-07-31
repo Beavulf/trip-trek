@@ -469,6 +469,8 @@ function ExpenseForm({ userId, onDone }: { userId: string; onDone: () => void })
       description,
       paidById: userId,
       dayId,
+      splitWith: Array.from(splitWith),
+      excludeSelf,
     });
     // Подсказка о долге
     if (splitWith.size > 0) {

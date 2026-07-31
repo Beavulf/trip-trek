@@ -22,7 +22,7 @@ export async function GET(req: NextRequest) {
 // POST /api/expenses — добавить трату
 export async function POST(req: NextRequest) {
   const body = await req.json();
-  const { amount, category, description, paidById, dayId, tripId } = body;
+  const { amount, category, description, paidById, dayId, tripId, splitWith, excludeSelf } = body;
   if (!category || !description || !paidById || !tripId) {
     return NextResponse.json({ error: "category, description, paidById, tripId required" }, { status: 400 });
   }
@@ -42,6 +42,8 @@ export async function POST(req: NextRequest) {
       paidById,
       dayId: dayId || null,
       tripId,
+      splitWith: Array.isArray(splitWith) ? splitWith.join(",") : (splitWith || ""),
+      excludeSelf: !!excludeSelf,
     },
     include: {
       paidBy: { select: { id: true, name: true, emoji: true, color: true } },

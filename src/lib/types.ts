@@ -65,6 +65,8 @@ export interface Expense {
   paidBy: Participant;
   dayId: string | null;
   day: { dayNumber: number; city: string } | null;
+  splitWith?: string;
+  excludeSelf?: boolean;
   createdAt: string;
 }
 
