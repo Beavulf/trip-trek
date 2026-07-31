@@ -1,12 +1,14 @@
 "use client";
 
-import { useFoods, useUpdateFood, useUploadFoodPhoto, type FoodItem } from "@/hooks/use-trip";
+import { useFoods, useUpdateFood, useUploadFoodPhoto, useAddFood, useDeleteFood, type FoodItem } from "@/hooks/use-trip";
+import { useDays } from "@/hooks/use-trip";
 import { motion, AnimatePresence } from "framer-motion";
-import { UtensilsCrossed, Star, MapPin, DollarSign, CheckCircle2, Circle, Loader2, Camera, X } from "lucide-react";
+import { UtensilsCrossed, Star, MapPin, DollarSign, CheckCircle2, Circle, Loader2, Camera, X, Plus, Trash2 } from "lucide-react";
 import { useState, useMemo, useRef } from "react";
 import { createPortal } from "react-dom";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { useBodyScrollLock } from "@/hooks/use-body-scroll-lock";
 
 export function FoodGuide() {
   const [cityFilter, setCityFilter] = useState<string>("all");
@@ -128,6 +130,9 @@ export function FoodGuide() {
           ))}
         </div>
       </div>
+
+      {/* Кнопка добавить блюдо */}
+      <AddFoodButton />
 
       {/* Список блюд по городам */}
       {isLoading ? (
@@ -328,5 +333,180 @@ function FoodCard({ food, cityColor }: { food: FoodItem; cityColor: string }) {
         document.body
       )}
     </motion.div>
+  );
+}
+
+// Кнопка добавления нового блюда
+function AddFoodButton() {
+  const { data: days } = useDays();
+  const addFood = useAddFood();
+  const [open, setOpen] = useState(false);
+  const [name, setName] = useState("");
+  const [nameCn, setNameCn] = useState("");
+  const [description, setDescription] = useState("");
+  const [city, setCity] = useState("");
+  const [place, setPlace] = useState("");
+  const [price, setPrice] = useState("");
+  const [emoji, setEmoji] = useState("🍽️");
+
+  useBodyScrollLock(open);
+
+  const submit = async () => {
+    if (!name.trim() || !city.trim()) {
+      toast.error("Название и город обязательны");
+      return;
+    }
+    await addFood.mutateAsync({
+      name: name.trim(),
+      nameCn: nameCn.trim() || undefined,
+      description: description.trim() || undefined,
+      city: city.trim(),
+      place: place.trim() || undefined,
+      price: price.trim() || undefined,
+      emoji,
+    });
+    toast.success("Блюдо добавлено! 🍽️");
+    setName(""); setNameCn(""); setDescription(""); setCity(""); setPlace(""); setPrice(""); setEmoji("🍽️");
+    setOpen(false);
+  };
+
+  const EMOJIS = ["🍽️", "🍜", "🥟", "🍣", "🍕", "🍔", "🥘", "🍲", "🌮", "🥗", "🍖", "🦆", "🍤", "🥩", "🍛", "🧆", "🥙", "🍰", "🧋", "🍺"];
+
+  if (!open) {
+    return (
+      <button
+        onClick={() => setOpen(true)}
+        className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl border-2 border-dashed border-border hover:border-primary hover:text-primary transition-colors"
+      >
+        <Plus className="size-5" />
+        <span className="text-sm font-medium">Добавить блюдо</span>
+      </button>
+    );
+  }
+
+  return createPortal(
+    <AnimatePresence>
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        onClick={() => setOpen(false)}
+        className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex items-end sm:items-center justify-center sm:p-4"
+      >
+        <motion.div
+          initial={{ y: "100%", opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
+          exit={{ y: "100%", opacity: 0 }}
+          transition={{ type: "spring", stiffness: 320, damping: 32 }}
+          onClick={(e) => e.stopPropagation()}
+          className="bg-card w-full sm:max-w-md rounded-t-3xl sm:rounded-3xl overflow-y-auto max-h-[90vh]"
+        >
+          <div className="sm:hidden flex justify-center pt-2.5 pb-1">
+            <div className="w-10 h-1 rounded-full bg-muted-foreground/30" />
+          </div>
+          <div className="sticky top-0 bg-card/95 backdrop-blur px-4 py-3 border-b border-border flex items-center justify-between">
+            <h2 className="font-bold text-base flex items-center gap-2">
+              <UtensilsCrossed className="size-5 text-primary" /> Новое блюдо
+            </h2>
+            <button onClick={() => setOpen(false)} className="size-8 rounded-full hover:bg-accent grid place-items-center">
+              <X className="size-4" />
+            </button>
+          </div>
+          <div className="p-4 space-y-3">
+            {/* Эмодзи */}
+            <div>
+              <label className="text-xs text-muted-foreground mb-1.5 block">Иконка</label>
+              <div className="flex gap-1.5 flex-wrap">
+                {EMOJIS.map((e) => (
+                  <button
+                    key={e}
+                    onClick={() => setEmoji(e)}
+                    className={cn(
+                      "size-9 rounded-lg text-xl grid place-items-center transition-all",
+                      emoji === e ? "bg-primary/20 ring-2 ring-primary scale-110" : "bg-muted hover:bg-accent"
+                    )}
+                  >
+                    {e}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground mb-1 block">Название *</label>
+              <input
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="Например, Димсам"
+                autoFocus
+                className="w-full rounded-xl border border-input bg-background px-3 py-2.5 text-sm"
+              />
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground mb-1 block">Местное название</label>
+              <input
+                value={nameCn}
+                onChange={(e) => setNameCn(e.target.value)}
+                placeholder="Например, 点心"
+                className="w-full rounded-xl border border-input bg-background px-3 py-2.5 text-sm"
+              />
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground mb-1 block">Город *</label>
+              <input
+                value={city}
+                onChange={(e) => setCity(e.target.value)}
+                placeholder="Например, Токио"
+                list="food-cities"
+                className="w-full rounded-xl border border-input bg-background px-3 py-2.5 text-sm"
+              />
+              <datalist id="food-cities">
+                {days?.map((d) => (
+                  <option key={d.id} value={d.city} />
+                ))}
+              </datalist>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="text-xs text-muted-foreground mb-1 block">Где попробовать</label>
+                <input
+                  value={place}
+                  onChange={(e) => setPlace(e.target.value)}
+                  placeholder="Ресторан"
+                  className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-muted-foreground mb-1 block">Цена</label>
+                <input
+                  value={price}
+                  onChange={(e) => setPrice(e.target.value)}
+                  placeholder="$5-10"
+                  className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm"
+                />
+              </div>
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground mb-1 block">Описание</label>
+              <textarea
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                placeholder="Что это, вкус, стоит ли пробовать…"
+                rows={2}
+                className="w-full rounded-xl border border-input bg-background px-3 py-2.5 text-sm resize-none"
+              />
+            </div>
+            <button
+              onClick={submit}
+              disabled={addFood.isPending}
+              className="w-full rounded-xl bg-primary text-primary-foreground py-3 font-medium flex items-center justify-center gap-2 disabled:opacity-50"
+            >
+              {addFood.isPending ? <Loader2 className="size-4 animate-spin" /> : <Plus className="size-4" />}
+              {addFood.isPending ? "Добавление…" : "Добавить блюдо"}
+            </button>
+          </div>
+        </motion.div>
+      </motion.div>
+    </AnimatePresence>,
+    document.body
   );
 }

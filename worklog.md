@@ -2,10 +2,53 @@
 
 ## Current Project Status
 
-**Phase**: 15 (Web Push VAPID + Avatar Upload + Achievement Details + Food City Fix + Map Perf) — COMPLETED
+**Phase**: 16 (Login UX + Join Fix + Budget Plan Fix + AI Trip-Scoped + Currency + Food Add) — COMPLETED
 **Build**: ✅ TypeScript clean, ESLint clean (1 minor warning)
 **Dev Server**: Running via `bun server.ts` (Next.js + WebSocket + Push on port 3000)
 **Test Accounts**: you@/leha@/den@triptrek.com (password: 1234)
+
+---
+
+## Session: Login UX + Join Fix + Budget Plan Fix + AI Trip-Scoped + Currency + Food Add
+
+### Feature: Login — password confirmation + eye icon
+- Added "Подтвердите пароль" field (registration only)
+- Eye/EyeOff toggle on both password fields
+- Live validation: red border if mismatch, green if match
+- Hints: "Пароли не совпадают" / "✓ Пароли совпадают"
+- Min length check (4 chars)
+
+### Fix: Join by code → 404
+**Problem**: Button linked to `/join/` (trailing slash) but route was `/join/[code]`. No page for code input.
+**Fix**: Created `/join/page.tsx` — standalone code entry page:
+- Input field with uppercase + monospace
+- "Найти поездку" → preview trip (title, emoji, members)
+- "Присоединиться" → joins trip, switches, navigates to main
+- Fixed button: `/join/` → `/join`
+
+### Fix: Budget plan not saving on mobile
+**Root cause**: `useUpdateBudgetPlan` didn't send `tripId` in body → API returned 400. Also `onBlur` lost focus on mobile.
+**Fix**:
+- Hook now sends `tripId: getTripId()` in body
+- Removed `onBlur` (unreliable on mobile)
+- Added explicit ✓ checkmark button next to input
+- Better error handling with toast
+
+### Fix: AI summary hardcoded "China 2024"
+**Root cause**: `useAISummary` hook didn't pass `tripId` → API used `"default-trip"` → always China trip.
+**Fix**: Hook now sends `?tripId=${getTripId()}` in URL. AI generates summary for the CURRENT trip (title, destination, days, places).
+
+### Feature: Currency converter — 24 currencies
+Added EUR, GBP, JPY, KRW, THB, VND, SGD, UAH, KZT, TRY, AED, INR, IDR, MYR, PHP, AUD, CAD, CHF (was 6, now 24). All from open.er-api.com (free, no key).
+
+### Feature: Add/Delete food items
+- `POST /api/foods` — create food (name, nameCn, city, place, price, emoji, description)
+- `DELETE /api/foods?id=` — delete food
+- `useAddFood`, `useDeleteFood` hooks
+- "Добавить блюдо" button in food guide → modal with:
+  - 20 emoji icons
+  - Name, local name, city (datalist from trip days), place, price, description
+  - Auto-scroll lock, bottom sheet style
 
 ---
 

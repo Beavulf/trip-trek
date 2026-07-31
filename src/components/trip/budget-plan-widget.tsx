@@ -36,8 +36,15 @@ export function BudgetPlanWidget() {
   const saveEdit = (cat: string) => {
     const num = parseFloat(editVal);
     if (!isNaN(num) && num >= 0) {
-      update.mutate({ category: cat, amount: num });
-      toast.success("План обновлён");
+      update.mutate(
+        { category: cat, amount: num },
+        {
+          onSuccess: () => toast.success("План обновлён"),
+          onError: () => toast.error("Не удалось сохранить"),
+        }
+      );
+    } else {
+      toast.error("Введите корректную сумму");
     }
     setEditingCat(null);
   };
@@ -68,19 +75,27 @@ export function BudgetPlanWidget() {
                 <span className="text-base">{meta.emoji}</span>
                 <span className="text-xs font-medium flex-1">{meta.label}</span>
                 {isEditing ? (
-                  <input
-                    type="number"
-                    inputMode="decimal"
-                    value={editVal}
-                    onChange={(e) => setEditVal(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") saveEdit(cat);
-                      if (e.key === "Escape") setEditingCat(null);
-                    }}
-                    onBlur={() => saveEdit(cat)}
-                    autoFocus
-                    className="w-20 text-xs rounded border border-input bg-background px-2 py-0.5 text-right"
-                  />
+                  <div className="flex items-center gap-1">
+                    <input
+                      type="number"
+                      inputMode="decimal"
+                      value={editVal}
+                      onChange={(e) => setEditVal(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") saveEdit(cat);
+                        if (e.key === "Escape") setEditingCat(null);
+                      }}
+                      autoFocus
+                      className="w-20 text-xs rounded border border-input bg-background px-2 py-1 text-right"
+                    />
+                    <button
+                      onClick={() => saveEdit(cat)}
+                      className="size-6 rounded bg-primary text-primary-foreground grid place-items-center shrink-0"
+                      title="Сохранить"
+                    >
+                      <Check className="size-3" />
+                    </button>
+                  </div>
                 ) : (
                   <button
                     onClick={() => { setEditVal(String(plan)); setEditingCat(cat); }}

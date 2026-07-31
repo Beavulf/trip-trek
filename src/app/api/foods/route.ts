@@ -18,6 +18,54 @@ export async function GET(req: NextRequest) {
   return NextResponse.json(foods);
 }
 
+// POST /api/foods — добавить блюдо
+export async function POST(req: NextRequest) {
+  const body = await req.json();
+  const { tripId, name, nameCn, description, city, place, price, emoji } = body;
+
+  if (!tripId || !name || !city) {
+    return NextResponse.json({ error: "tripId, name, city required" }, { status: 400 });
+  }
+
+  // Максимальный order
+  const maxOrder = await db.foodItem.findFirst({
+    where: { tripId },
+    orderBy: { order: "desc" },
+    select: { order: true },
+  });
+
+  const food = await db.foodItem.create({
+    data: {
+      tripId,
+      name,
+      nameCn: nameCn || null,
+      description: description || "",
+      city,
+      place: place || null,
+      price: price || null,
+      emoji: emoji || "🍽️",
+      order: (maxOrder?.order ?? 0) + 1,
+    },
+  });
+
+  emitWS("food:updated", tripId, {});
+  return NextResponse.json(food);
+}
+
+// DELETE /api/foods?id=...
+export async function DELETE(req: NextRequest) {
+  const { searchParams } = new URL(req.url);
+  const id = searchParams.get("id");
+  if (!id) return NextResponse.json({ error: "id required" }, { status: 400 });
+
+  const food = await db.foodItem.findUnique({ where: { id }, select: { tripId: true } });
+  if (!food) return NextResponse.json({ error: "not found" }, { status: 404 });
+
+  await db.foodItem.delete({ where: { id } });
+  emitWS("food:updated", food.tripId, {});
+  return NextResponse.json({ ok: true });
+}
+
 // PATCH — multipart (photo upload) or JSON
 export async function PATCH(req: NextRequest) {
   const contentType = req.headers.get("content-type") || "";

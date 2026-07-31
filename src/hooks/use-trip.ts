@@ -591,8 +591,12 @@ export function useUpdateBudgetPlan() {
       const r = await fetch("/api/budget-plan", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ category, amount }),
+        body: JSON.stringify({ category, amount, tripId: getTripId() }),
       });
+      if (!r.ok) {
+        const err = await r.json().catch(() => ({}));
+        throw new Error(err.error || "update failed");
+      }
       return r.json();
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["budget-plan"] }),
@@ -703,6 +707,32 @@ export function useUpdateFood() {
   });
 }
 
+export function useAddFood() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (data: { name: string; nameCn?: string; description?: string; city: string; place?: string; price?: string; emoji?: string }) => {
+      const r = await fetch("/api/foods", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...data, tripId: getTripId() }),
+      });
+      if (!r.ok) throw new Error("add food failed");
+      return r.json();
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["foods"] }),
+  });
+}
+
+export function useDeleteFood() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      await fetch(`/api/foods?id=${id}`, { method: "DELETE" });
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["foods"] }),
+  });
+}
+
 export function useUploadFoodPhoto() {
   const qc = useQueryClient();
   return useMutation({
@@ -747,7 +777,7 @@ export function useAISummary() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ type }: { type: "summary" | "day" | "tips" }) => {
-      const r = await fetch("/api/ai-summary", {
+      const r = await fetch(`/api/ai-summary?tripId=${getTripId()}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ type }),

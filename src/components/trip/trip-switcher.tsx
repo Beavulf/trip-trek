@@ -225,7 +225,7 @@ export function TripSwitcher() {
 
                     {/* Кнопка присоединиться */}
                     <button
-                      onClick={() => router.push("/join/")}
+                      onClick={() => router.push("/join")}
                       className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl bg-secondary hover:bg-accent transition-colors mt-2"
                     >
                       <span className="text-sm font-medium">Присоединиться по коду</span>

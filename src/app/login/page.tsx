@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
-import { Loader2, Plane, UserPlus, LogIn, Globe } from "lucide-react";
+import { Loader2, Plane, UserPlus, LogIn, Globe, Eye, EyeOff } from "lucide-react";
 import { toast } from "sonner";
 
 const EMOJIS = ["🦊", "🐻", "🐼", "🦁", "🐯", "🐨", "🐸", "🐵", "🦉", "🐧", "🦄", "🐲"];
@@ -14,6 +14,9 @@ export default function LoginPage() {
   const [mode, setMode] = useState<"login" | "register">("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [passwordConfirm, setPasswordConfirm] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [showPasswordConfirm, setShowPasswordConfirm] = useState(false);
   const [name, setName] = useState("");
   const [emoji, setEmoji] = useState("🦊");
   const [color, setColor] = useState("#f97316");
@@ -23,6 +26,16 @@ export default function LoginPage() {
     if (!email || !password || (mode === "register" && !name)) {
       toast.error("Заполните все поля");
       return;
+    }
+    if (mode === "register") {
+      if (password.length < 4) {
+        toast.error("Пароль минимум 4 символа");
+        return;
+      }
+      if (password !== passwordConfirm) {
+        toast.error("Пароли не совпадают");
+        return;
+      }
     }
     setLoading(true);
 
@@ -171,15 +184,58 @@ export default function LoginPage() {
             </div>
             <div>
               <label className="text-xs text-muted-foreground mb-1 block">Пароль</label>
-              <input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && submit()}
-                placeholder="••••••"
-                className="w-full rounded-xl border border-input bg-background px-3 py-2.5 text-sm"
-              />
+              <div className="relative">
+                <input
+                  type={showPassword ? "text" : "password"}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && submit()}
+                  placeholder="••••••"
+                  className="w-full rounded-xl border border-input bg-background px-3 py-2.5 pr-10 text-sm"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(v => !v)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                >
+                  {showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+                </button>
+              </div>
             </div>
+            {mode === "register" && (
+              <div>
+                <label className="text-xs text-muted-foreground mb-1 block">Подтвердите пароль</label>
+                <div className="relative">
+                  <input
+                    type={showPasswordConfirm ? "text" : "password"}
+                    value={passwordConfirm}
+                    onChange={(e) => setPasswordConfirm(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && submit()}
+                    placeholder="••••••"
+                    className={`w-full rounded-xl border bg-background px-3 py-2.5 pr-10 text-sm ${
+                      passwordConfirm && passwordConfirm !== password
+                        ? "border-red-500"
+                        : passwordConfirm && passwordConfirm === password
+                        ? "border-green-500"
+                        : "border-input"
+                    }`}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPasswordConfirm(v => !v)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                  >
+                    {showPasswordConfirm ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+                  </button>
+                </div>
+                {passwordConfirm && passwordConfirm !== password && (
+                  <p className="text-[10px] text-red-500 mt-1">Пароли не совпадают</p>
+                )}
+                {passwordConfirm && passwordConfirm === password && (
+                  <p className="text-[10px] text-green-500 mt-1">✓ Пароли совпадают</p>
+                )}
+              </div>
+            )}
 
             <button
               onClick={submit}

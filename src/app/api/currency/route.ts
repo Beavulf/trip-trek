@@ -10,14 +10,32 @@ export async function GET() {
     if (!res.ok) throw new Error("currency fetch failed");
     const data = await res.json();
 
-    // Нужные нам валюты
+    // Нужные нам валюты (расширенный список)
     const rates: Record<string, number> = {
       USD: 1,
+      EUR: data.rates?.EUR ?? 0.92,
+      GBP: data.rates?.GBP ?? 0.79,
       CNY: data.rates?.CNY ?? 7.2,
+      JPY: data.rates?.JPY ?? 150,
+      KRW: data.rates?.KRW ?? 1350,
       HKD: data.rates?.HKD ?? 7.8,
       MOP: data.rates?.MOP ?? 8.0,
+      THB: data.rates?.THB ?? 36,
+      VND: data.rates?.VND ?? 25000,
+      SGD: data.rates?.SGD ?? 1.35,
       RUB: data.rates?.RUB ?? 92,
       BYN: data.rates?.BYN ?? 3.2,
+      UAH: data.rates?.UAH ?? 40,
+      KZT: data.rates?.KZT ?? 450,
+      TRY: data.rates?.TRY ?? 32,
+      AED: data.rates?.AED ?? 3.67,
+      INR: data.rates?.INR ?? 83,
+      IDR: data.rates?.IDR ?? 15800,
+      MYR: data.rates?.MYR ?? 4.7,
+      PHP: data.rates?.PHP ?? 56,
+      AUD: data.rates?.AUD ?? 1.52,
+      CAD: data.rates?.CAD ?? 1.36,
+      CHF: data.rates?.CHF ?? 0.88,
     };
 
     return NextResponse.json({
@@ -32,10 +50,17 @@ export async function GET() {
       base: "USD",
       rates: {
         USD: 1,
+        EUR: 0.92,
+        GBP: 0.79,
         CNY: 7.2,
+        JPY: 150,
+        KRW: 1350,
         HKD: 7.8,
         MOP: 8.0,
+        THB: 36,
         RUB: 92,
+        BYN: 3.2,
+        AED: 3.67,
       },
       updated: null,
       fallback: true,
