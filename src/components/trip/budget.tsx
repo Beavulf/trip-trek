@@ -3,7 +3,7 @@
 import { useExpenses, useAddExpense, useDeleteExpense, useTrip, useUpdateMember, useUpdateTripBudget, getTripId } from "@/hooks/use-trip";
 import { EXPENSE_CATEGORIES, CITIES, type Expense, type Participant } from "@/lib/types";
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, BarChart, Bar, XAxis, YAxis, CartesianGrid } from "recharts";
-import { Wallet, Plus, Trash2, TrendingDown, ArrowRight, Loader2, Scale, UserCircle, Pencil, BarChart3, Check, X, Users, Clock } from "lucide-react";
+import { Wallet, Plus, Trash2, TrendingDown, ArrowRight, Loader2, Scale, UserCircle, Pencil, BarChart3, Check, X, Users, Clock, Info, ChevronDown } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { useState, useEffect } from "react";
 import { toast } from "sonner";
@@ -19,6 +19,9 @@ export function Budget() {
   const { data: trip } = useTrip();
   const [showAdd, setShowAdd] = useState(false);
   const [showBudgetModal, setShowBudgetModal] = useState(false);
+  const [showBalanceHint, setShowBalanceHint] = useState(false);
+  const [showSettlementHint, setShowSettlementHint] = useState(false);
+  const [expandedBalance, setExpandedBalance] = useState<string | null>(null);
 
   if (isLoading || !expenses || !trip) {
     return <div className="py-20 text-center text-muted-foreground flex items-center justify-center gap-2"><Loader2 className="size-4 animate-spin" /> Загрузка бюджета…</div>;
@@ -181,42 +184,166 @@ export function Budget() {
 
       {/* Расчёт между друзьями */}
       <div className="rounded-2xl bg-card border border-border p-4">
-        <h2 className="font-semibold text-sm mb-1 flex items-center gap-2"><Scale className="size-4" /> Расчёт между друзьями</h2>
-        <p className="text-[10px] text-muted-foreground mb-3">
-          Все траты делятся поровну. <b>Внёс</b> — сколько реально заплатил. <b className="text-green-600">+</b> ему должны, <b className="text-red-500">−</b> он должен.
-        </p>
-        <div className="space-y-2 mb-3">
-          {balances.map((b) => (
-            <div key={b.participant.id} className="flex items-center gap-2 text-sm">
-              <div className="size-7 rounded-full grid place-items-center text-xs" style={{ background: b.participant.color }}>
-                {b.participant.emoji}
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="font-medium truncate">{b.participant.name}</div>
-                <div className="text-[10px] text-muted-foreground">внёс ${b.paid.toFixed(0)}</div>
-              </div>
-              <span className={cn("font-semibold text-right text-sm", b.balance > 0 ? "text-green-600" : b.balance < 0 ? "text-red-500" : "text-muted-foreground")}>
-                {b.balance > 0 ? `+$${b.balance.toFixed(0)}` : b.balance < 0 ? `−$${Math.abs(b.balance).toFixed(0)}` : "ровно"}
-              </span>
-            </div>
-          ))}
+        <div className="flex items-center gap-2 mb-2">
+          <Scale className="size-4" />
+          <h2 className="font-semibold text-sm">Расчёт между друзьями</h2>
+          <button
+            onClick={() => setShowBalanceHint(v => !v)}
+            className="ml-auto size-6 rounded-full bg-muted grid place-items-center text-muted-foreground shrink-0 active:scale-90 transition-transform"
+            title="Как это работает?"
+          >
+            <Info className="size-3.5" />
+          </button>
         </div>
+
+        {/* Разворачивающаяся подсказка (тап по ℹ️) */}
+        <AnimatePresence>
+          {showBalanceHint && (
+            <motion.div
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: "auto", opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              className="overflow-hidden"
+            >
+              <div className="bg-muted/50 rounded-xl p-3 mb-3 space-y-1.5 text-[11px] text-muted-foreground">
+                <div className="flex items-start gap-1.5">
+                  <span className="text-primary shrink-0">①</span>
+                  <span>Все траты складываются и делятся поровну между всеми участниками.</span>
+                </div>
+                <div className="flex items-start gap-1.5">
+                  <span className="text-primary shrink-0">②</span>
+                  <span><b className="text-foreground">Внёс</b> — сколько человек реально заплатил из своего кошелька.</span>
+                </div>
+                <div className="flex items-start gap-1.5">
+                  <span className="text-primary shrink-0">③</span>
+                  <span><b className="text-green-600">+</b> зелёная сумма — человеку должны деньги (он заплатил больше своей доли).</span>
+                </div>
+                <div className="flex items-start gap-1.5">
+                  <span className="text-primary shrink-0">④</span>
+                  <span><b className="text-red-500">−</b> красная сумма — человек должен вернуть (заплатил меньше своей доли).</span>
+                </div>
+                <div className="flex items-start gap-1.5">
+                  <span className="text-primary shrink-0">⑤</span>
+                  <span>Ниже — кто кому и сколько нужно перевести, чтобы все были в расчёте.</span>
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Балансы участников */}
+        <div className="space-y-2 mb-3">
+          {balances.map((b) => {
+            return (
+              <div key={b.participant.id} className="flex items-center gap-2.5 text-sm">
+                <div className="size-8 rounded-full grid place-items-center text-xs shrink-0" style={{ background: b.participant.color }}>
+                  {b.participant.emoji}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="font-medium truncate">{b.participant.name}</div>
+                  <button
+                    onClick={() => setExpandedBalance(expandedBalance === b.participant.id ? null : b.participant.id)}
+                    className="text-[10px] text-muted-foreground flex items-center gap-1 active:scale-95 transition-transform"
+                  >
+                    внёс ${b.paid.toFixed(0)}
+                    <ChevronDown className={cn("size-2.5 transition-transform", expandedBalance === b.participant.id && "rotate-180")} />
+                  </button>
+                </div>
+                <span className={cn("font-semibold text-right text-sm shrink-0", b.balance > 0 ? "text-green-600" : b.balance < 0 ? "text-red-500" : "text-muted-foreground")}>
+                  {b.balance > 0 ? `+$${b.balance.toFixed(0)}` : b.balance < 0 ? `−$${Math.abs(b.balance).toFixed(0)}` : "ровно"}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Расшифровка для выбранного участника */}
+        <AnimatePresence>
+          {expandedBalance && (() => {
+            const b = balances.find(x => x.participant.id === expandedBalance);
+            if (!b) return null;
+            const share = totalSpent / trip.participants.length;
+            return (
+              <motion.div
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: "auto", opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }}
+                className="overflow-hidden"
+              >
+                <div className="bg-muted/40 rounded-xl p-3 mb-3 space-y-1.5 text-[11px]">
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground">Доля каждого (всего ÷ {trip.participants.length})</span>
+                    <span className="font-medium">${share.toFixed(2)}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground">{b.participant.name} заплатил</span>
+                    <span className="font-medium">${b.paid.toFixed(2)}</span>
+                  </div>
+                  <div className="border-t border-border pt-1.5 flex items-center justify-between">
+                    <span className="text-muted-foreground">
+                      {b.balance > 0 ? "Ему должны (заплатил больше доли)" : b.balance < 0 ? "Он должен (заплатил меньше доли)" : "Всё поровну"}
+                    </span>
+                    <span className={cn("font-bold", b.balance > 0 ? "text-green-600" : b.balance < 0 ? "text-red-500" : "text-muted-foreground")}>
+                      {b.balance > 0 ? `+$${b.balance.toFixed(2)}` : b.balance < 0 ? `−$${Math.abs(b.balance).toFixed(2)}` : "$0"}
+                    </span>
+                  </div>
+                </div>
+              </motion.div>
+            );
+          })()}
+        </AnimatePresence>
+
+        {/* Кто кому переводит */}
         {settlements.length > 0 ? (
-          <div className="space-y-1.5 pt-2 border-t border-border">
-            <div className="text-xs text-muted-foreground mb-1">Кто кому переводит:</div>
+          <div className="space-y-2 pt-2 border-t border-border">
+            <div className="flex items-center gap-2 mb-1">
+              <span className="text-xs text-muted-foreground font-medium">Кому сколько перевести:</span>
+              <button
+                onClick={() => setShowSettlementHint(v => !v)}
+                className="size-5 rounded-full bg-muted grid place-items-center text-muted-foreground shrink-0 active:scale-90 transition-transform"
+              >
+                <Info className="size-3" />
+              </button>
+            </div>
+            <AnimatePresence>
+              {showSettlementHint && (
+                <motion.div
+                  initial={{ height: 0, opacity: 0 }}
+                  animate={{ height: "auto", opacity: 1 }}
+                  exit={{ height: 0, opacity: 0 }}
+                  className="overflow-hidden"
+                >
+                  <div className="bg-muted/50 rounded-lg p-2.5 mb-2 text-[11px] text-muted-foreground">
+                    💡 Чтобы все были в расчёте, достаточно сделать эти переводы. Сумма подобрана так, чтобы после переводов у каждого был ноль.
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
             {settlements.map((s, i) => (
-              <div key={i} className="flex items-center gap-1.5 text-sm bg-muted/50 rounded-lg px-2 py-1.5">
-                <div className="size-6 rounded-full grid place-items-center text-[10px]" style={{ background: s.from.color }}>
-                  {s.from.emoji}
+              <div key={i} className="bg-muted/40 rounded-xl px-3 py-2.5">
+                {/* Главная строка: от → кому + сумма */}
+                <div className="flex items-center gap-2">
+                  <div className="size-7 rounded-full grid place-items-center text-[10px] shrink-0" style={{ background: s.from.color }}>
+                    {s.from.emoji}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-xs font-medium truncate">{s.from.name}</div>
+                    <div className="text-[10px] text-red-500">должен</div>
+                  </div>
+                  <ArrowRight className="size-3.5 text-muted-foreground shrink-0" />
+                  <div className="size-7 rounded-full grid place-items-center text-[10px] shrink-0" style={{ background: s.to.color }}>
+                    {s.to.emoji}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-xs font-medium truncate">{s.to.name}</div>
+                    <div className="text-[10px] text-green-600">получит</div>
+                  </div>
+                  <span className="font-bold text-primary text-sm shrink-0">${s.amount.toFixed(0)}</span>
                 </div>
-                <span className="font-medium text-xs">{s.from.name}</span>
-                <ArrowRight className="size-3 text-muted-foreground" />
-                <div className="size-6 rounded-full grid place-items-center text-[10px]" style={{ background: s.to.color }}>
-                  {s.to.emoji}
+                {/* Кнопка отметки */}
+                <div className="mt-2 flex justify-end">
+                  <MarkSettledButton from={s.from} to={s.to} amount={s.amount} />
                 </div>
-                <span className="font-medium text-xs">{s.to.name}</span>
-                <span className="ml-auto font-bold text-primary text-sm">${s.amount.toFixed(0)}</span>
-                <MarkSettledButton from={s.from} to={s.to} amount={s.amount} />
               </div>
             ))}
           </div>

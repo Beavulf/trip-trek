@@ -72,14 +72,7 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4 relative overflow-hidden">
-      {/* Фоновое изображение */}
-      <div
-        className="absolute inset-0 bg-cover bg-center"
-        style={{ backgroundImage: "url(/login-bg.png)" }}
-      />
-      {/* Затемнение для читаемости */}
-      <div className="absolute inset-0 bg-gradient-to-br from-orange-900/60 via-rose-900/50 to-violet-900/60" />
+    <div className="min-h-screen flex items-center justify-center p-4 bg-gradient-to-br from-orange-500 via-rose-500 to-violet-600 relative overflow-hidden">
       {/* Декоративные круги */}
       <div className="absolute top-10 left-10 size-32 rounded-full bg-white/5 blur-2xl" />
       <div className="absolute bottom-20 right-10 size-40 rounded-full bg-white/5 blur-3xl" />
