@@ -5,12 +5,7 @@ import {
   useToggleChecklist,
   useAddChecklist,
   useDeleteChecklist,
-  useInfo,
-  useAddInfo,
-  useUpdateInfo,
-  useDeleteInfo,
   type ChecklistItem,
-  type InfoItem,
 } from "@/hooks/use-trip";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -18,17 +13,9 @@ import {
   Circle,
   Plus,
   Trash2,
-  Plane,
-  Phone,
-  Train,
-  Utensils,
-  Lightbulb,
   Loader2,
-  ClipboardList,
   ShieldCheck,
   Pencil,
-  Check,
-  X,
 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -44,16 +31,7 @@ const CHECKLIST_CATS: Record<string, { label: string; emoji: string; color: stri
   packing_back: { label: "Сборы обратно", emoji: "↩️", color: "#06b6d4" },
 };
 
-const INFO_TABS = [
-  { key: "tip", label: "Советы", icon: Lightbulb, color: "#f59e0b" },
-  { key: "contact", label: "Контакты", icon: Phone, color: "#ef4444" },
-  { key: "transport", label: "Транспорт", icon: Train, color: "#06b6d4" },
-  { key: "food", label: "Еда", icon: Utensils, color: "#f97316" },
-] as const;
-
 export function InfoPanel() {
-  const [tab, setTab] = useState<"checklist" | "info">("checklist");
-
   return (
     <div className="space-y-4 animate-fade-up pb-20">
       {/* Hero */}
@@ -64,33 +42,11 @@ export function InfoPanel() {
             <ShieldCheck className="size-4" /> Инфо и подготовка
           </div>
           <h1 className="text-2xl font-bold">Всё для спокойной поездки</h1>
-          <p className="text-white/80 text-sm mt-1">Чек-лист, контакты, транспорт и советы</p>
+          <p className="text-white/80 text-sm mt-1">Чек-лист и подготовка к путешествию</p>
         </div>
       </div>
 
-      {/* Toggle */}
-      <div className="grid grid-cols-2 gap-2 p-1 bg-card border border-border rounded-2xl">
-        <button
-          onClick={() => setTab("checklist")}
-          className={cn(
-            "rounded-xl py-2.5 text-sm font-medium flex items-center justify-center gap-2 transition-all",
-            tab === "checklist" ? "bg-primary text-primary-foreground shadow" : "text-muted-foreground hover:bg-accent"
-          )}
-        >
-          <ClipboardList className="size-4" /> Чек-лист
-        </button>
-        <button
-          onClick={() => setTab("info")}
-          className={cn(
-            "rounded-xl py-2.5 text-sm font-medium flex items-center justify-center gap-2 transition-all",
-            tab === "info" ? "bg-primary text-primary-foreground shadow" : "text-muted-foreground hover:bg-accent"
-          )}
-        >
-          <Plane className="size-4" /> Справка
-        </button>
-      </div>
-
-      {tab === "checklist" ? <ChecklistView /> : <InfoView />}
+      <ChecklistView />
 
       {/* Push-уведомления */}
       <PushSettings />
@@ -122,10 +78,15 @@ function ChecklistView() {
   const pct = total ? Math.round((done / total) * 100) : 0;
 
   const submit = async () => {
-    if (!newItem.trim()) return;
-    await add.mutateAsync({ text: newItem, category: newCat });
-    setNewItem("");
-    toast.success("Добавлено в чек-лист");
+    const text = newItem.trim();
+    if (!text) return;
+    try {
+      await add.mutateAsync({ text, category: newCat });
+      setNewItem("");
+      toast.success("Добавлено в чек-лист");
+    } catch {
+      toast.error("Не удалось добавить пункт");
+    }
   };
 
   return (
@@ -148,18 +109,18 @@ function ChecklistView() {
 
       {/* Добавить */}
       <div className="rounded-2xl bg-card border border-border p-3 space-y-2">
+        <input
+          value={newItem}
+          onChange={(e) => setNewItem(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && submit()}
+          placeholder="Новый пункт…"
+          className="w-full min-w-0 rounded-lg border border-input bg-background px-3 py-2.5 text-sm"
+        />
         <div className="flex gap-2">
-          <input
-            value={newItem}
-            onChange={(e) => setNewItem(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && submit()}
-            placeholder="Новый пункт…"
-            className="flex-1 rounded-lg border border-input bg-background px-3 py-2 text-sm"
-          />
           <select
             value={newCat}
             onChange={(e) => setNewCat(e.target.value)}
-            className="rounded-lg border border-input bg-background px-2 py-2 text-xs"
+            className="min-w-0 flex-1 rounded-lg border border-input bg-background px-2 py-2.5 text-xs"
           >
             {Object.entries(CHECKLIST_CATS).map(([k, v]) => (
               <option key={k} value={k}>{v.emoji} {v.label}</option>
@@ -168,9 +129,9 @@ function ChecklistView() {
           <button
             onClick={submit}
             disabled={add.isPending || !newItem.trim()}
-            className="rounded-lg bg-primary text-primary-foreground px-3 grid place-items-center disabled:opacity-50"
+            className="shrink-0 min-h-[44px] rounded-lg bg-primary text-primary-foreground px-4 grid place-items-center disabled:opacity-50 active:scale-95 transition-transform"
           >
-            <Plus className="size-4" />
+            {add.isPending ? <Loader2 className="size-4 animate-spin" /> : <Plus className="size-4" />}
           </button>
         </div>
       </div>
@@ -222,7 +183,7 @@ function ChecklistRow({ item, onToggle, onDelete }: { item: ChecklistItem; onTog
       exit={{ opacity: 0, x: 8 }}
       className="flex items-center gap-2.5 p-2 rounded-lg hover:bg-accent group"
     >
-      <button onClick={onToggle} className="shrink-0">
+      <button onClick={onToggle} className="shrink-0 size-8 grid place-items-center" aria-label="Отметить">
         {item.done ? (
           <CheckCircle2 className="size-5 text-green-500" />
         ) : (
@@ -239,11 +200,11 @@ function ChecklistRow({ item, onToggle, onDelete }: { item: ChecklistItem; onTog
           }}
           onBlur={save}
           autoFocus
-          className="flex-1 text-sm bg-background border border-input rounded px-2 py-1 outline-none focus:ring-1 ring-primary"
+          className="flex-1 min-w-0 text-sm bg-background border border-input rounded px-2 py-1 outline-none focus:ring-1 ring-primary"
         />
       ) : (
         <span
-          className={cn("text-sm flex-1 cursor-text", item.done && "line-through opacity-50")}
+          className={cn("text-sm flex-1 min-w-0 cursor-text", item.done && "line-through opacity-50")}
           onClick={() => setEditing(true)}
         >
           {item.text}
@@ -253,229 +214,20 @@ function ChecklistRow({ item, onToggle, onDelete }: { item: ChecklistItem; onTog
         <>
           <button
             onClick={() => { setText(item.text); setEditing(true); }}
-            className="size-6 rounded-md opacity-0 group-hover:opacity-100 hover:bg-accent grid place-items-center text-muted-foreground transition-opacity"
+            className="size-8 shrink-0 rounded-md hover:bg-accent grid place-items-center text-muted-foreground transition-opacity md:opacity-0 md:group-hover:opacity-100"
+            aria-label="Редактировать"
           >
             <Pencil className="size-3.5" />
           </button>
           <button
             onClick={onDelete}
-            className="size-6 rounded-md opacity-0 group-hover:opacity-100 hover:bg-red-500/10 hover:text-red-500 grid place-items-center transition-opacity"
+            className="size-8 shrink-0 rounded-md hover:bg-red-500/10 hover:text-red-500 grid place-items-center text-muted-foreground transition-opacity md:opacity-0 md:group-hover:opacity-100"
+            aria-label="Удалить"
           >
             <Trash2 className="size-3.5" />
           </button>
         </>
       )}
-    </motion.div>
-  );
-}
-
-function InfoView() {
-  const [activeType, setActiveType] = useState<string>("tip");
-  const { data: items, isLoading } = useInfo(activeType);
-  const [adding, setAdding] = useState(false);
-
-  return (
-    <div className="space-y-3">
-      {/* Подтабы */}
-      <div className="flex items-center gap-2">
-        <div className="flex gap-1.5 overflow-x-auto no-scrollbar flex-1">
-          {INFO_TABS.map((t) => {
-            const Icon = t.icon;
-            const active = activeType === t.key;
-            return (
-              <button
-                key={t.key}
-                onClick={() => setActiveType(t.key)}
-                className={cn(
-                  "flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-all",
-                  active ? "text-white shadow-md" : "bg-card border border-border hover:bg-accent"
-                )}
-                style={active ? { background: t.color } : undefined}
-              >
-                <Icon className="size-3.5" /> {t.label}
-              </button>
-            );
-          })}
-        </div>
-        <button
-          onClick={() => setAdding(true)}
-          className="shrink-0 size-9 rounded-full bg-primary text-primary-foreground grid place-items-center shadow-md active:scale-95 transition-transform"
-          title="Добавить"
-        >
-          <Plus className="size-4" />
-        </button>
-      </div>
-
-      {adding && (
-        <InfoEditForm
-          type={activeType}
-          onDone={() => setAdding(false)}
-        />
-      )}
-
-      {isLoading ? (
-        <Skeleton />
-      ) : items && items.length > 0 ? (
-        <div className="grid sm:grid-cols-2 gap-3">
-          {items.map((item) => {
-            const tabMeta = INFO_TABS.find((t) => t.key === item.type);
-            return (
-              <InfoCard key={item.id} item={item} color={tabMeta?.color ?? "#94a3b8"} defaultIcon={tabMeta?.icon} />
-            );
-          })}
-        </div>
-      ) : (
-        <div className="rounded-2xl border-2 border-dashed border-border py-12 text-center">
-          <p className="text-sm text-muted-foreground">Нет данных</p>
-          <p className="text-xs text-muted-foreground/70 mt-1">Нажмите + чтобы добавить</p>
-        </div>
-      )}
-    </div>
-  );
-}
-
-function InfoCard({ item, color, defaultIcon }: { item: InfoItem; color: string; defaultIcon?: typeof Plane }) {
-  const update = useUpdateInfo();
-  const del = useDeleteInfo();
-  const [editing, setEditing] = useState(false);
-  const [title, setTitle] = useState(item.title);
-  const [content, setContent] = useState(item.content);
-  const [icon, setIcon] = useState(item.icon || "");
-
-  if (editing) {
-    const save = () => {
-      update.mutate({ id: item.id, title: title.trim(), content: content.trim(), icon: icon.trim() || undefined });
-      toast.success("Обновлено");
-      setEditing(false);
-    };
-    return (
-      <motion.div layout className="rounded-2xl bg-card border-2 border-primary p-4 space-y-2">
-        <div className="flex gap-2">
-          <input
-            value={icon}
-            onChange={(e) => setIcon(e.target.value)}
-            placeholder="📌"
-            className="w-12 text-center text-xl rounded-lg border border-input bg-background px-1 py-1.5"
-          />
-          <input
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            placeholder="Заголовок"
-            className="flex-1 text-sm font-semibold rounded-lg border border-input bg-background px-2 py-1.5"
-          />
-        </div>
-        <textarea
-          value={content}
-          onChange={(e) => setContent(e.target.value)}
-          placeholder="Содержание"
-          rows={2}
-          className="w-full text-xs rounded-lg border border-input bg-background px-2 py-1.5 resize-none"
-        />
-        <div className="flex gap-2">
-          <button onClick={() => { setTitle(item.title); setContent(item.content); setIcon(item.icon || ""); setEditing(false); }} className="flex-1 rounded-lg bg-secondary py-1.5 text-xs font-medium">
-            Отмена
-          </button>
-          <button onClick={save} className="flex-1 rounded-lg bg-primary text-primary-foreground py-1.5 text-xs font-medium flex items-center justify-center gap-1">
-            <Check className="size-3.5" /> Сохранить
-          </button>
-        </div>
-      </motion.div>
-    );
-  }
-
-  return (
-    <motion.div
-      layout
-      initial={{ opacity: 0, y: 8 }}
-      animate={{ opacity: 1, y: 0 }}
-      className="rounded-2xl bg-card border border-border p-4 hover:shadow-md transition-shadow group relative"
-    >
-      <div className="flex items-start gap-3">
-        <div
-          className="size-10 rounded-xl grid place-items-center text-xl shrink-0"
-          style={{ background: `${color}22` }}
-        >
-          {item.icon ? <span>{item.icon}</span> : defaultIcon ? (() => { const Icon = defaultIcon; return <Icon className="size-5" style={{ color }} />; })() : <span>📌</span>}
-        </div>
-        <div className="min-w-0 flex-1">
-          <h3 className="font-semibold text-sm leading-tight">{item.title}</h3>
-          <p className="text-xs text-muted-foreground mt-1 leading-relaxed whitespace-pre-wrap">{item.content}</p>
-        </div>
-      </div>
-      <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-        <button
-          onClick={() => setEditing(true)}
-          className="size-7 rounded-md hover:bg-accent grid place-items-center text-muted-foreground"
-        >
-          <Pencil className="size-3.5" />
-        </button>
-        <button
-          onClick={() => { del.mutate(item.id); toast.success("Удалено"); }}
-          className="size-7 rounded-md hover:bg-red-500/10 hover:text-red-500 grid place-items-center text-muted-foreground"
-        >
-          <Trash2 className="size-3.5" />
-        </button>
-      </div>
-    </motion.div>
-  );
-}
-
-function InfoEditForm({ type, onDone }: { type: string; onDone: () => void }) {
-  const add = useAddInfo();
-  const [title, setTitle] = useState("");
-  const [content, setContent] = useState("");
-  const [icon, setIcon] = useState("");
-
-  const submit = async () => {
-    if (!title.trim() || !content.trim()) {
-      toast.error("Заполните заголовок и содержание");
-      return;
-    }
-    await add.mutateAsync({ type, title: title.trim(), content: content.trim(), icon: icon.trim() || undefined });
-    toast.success("Добавлено");
-    onDone();
-  };
-
-  return (
-    <motion.div
-      initial={{ opacity: 0, height: 0 }}
-      animate={{ opacity: 1, height: "auto" }}
-      className="rounded-2xl bg-card border-2 border-primary p-4 space-y-2 overflow-hidden"
-    >
-      <div className="flex gap-2">
-        <input
-          value={icon}
-          onChange={(e) => setIcon(e.target.value)}
-          placeholder="📌"
-          className="w-12 text-center text-xl rounded-lg border border-input bg-background px-1 py-1.5"
-        />
-        <input
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
-          placeholder="Заголовок"
-          autoFocus
-          className="flex-1 text-sm font-semibold rounded-lg border border-input bg-background px-2 py-1.5"
-        />
-      </div>
-      <textarea
-        value={content}
-        onChange={(e) => setContent(e.target.value)}
-        placeholder="Содержание"
-        rows={2}
-        className="w-full text-xs rounded-lg border border-input bg-background px-2 py-1.5 resize-none"
-      />
-      <div className="flex gap-2">
-        <button onClick={onDone} className="flex-1 rounded-lg bg-secondary py-1.5 text-xs font-medium">
-          Отмена
-        </button>
-        <button
-          onClick={submit}
-          disabled={add.isPending}
-          className="flex-1 rounded-lg bg-primary text-primary-foreground py-1.5 text-xs font-medium flex items-center justify-center gap-1"
-        >
-          <Plus className="size-3.5" /> Добавить
-        </button>
-      </div>
     </motion.div>
   );
 }

@@ -1,0 +1,697 @@
+     1→"use client";
+     2→
+     3→import { useDays, useUpdatePlace, useUploadPhoto, useDeletePlace, useAddDay, useDeleteDay } from "@/hooks/use-trip";
+     4→import { useTripStore } from "@/lib/trip-store";
+     5→import { CATEGORY_META, type Place, type Day } from "@/lib/types";
+     6→import { motion, AnimatePresence } from "framer-motion";
+     7→import {
+     8→  CheckCircle2,
+     9→  Circle,
+    10→  Clock,
+    11→  DollarSign,
+    12→  MapPin,
+    13→  Star,
+    14→  Camera,
+    15→  X,
+    16→  Loader2,
+    17→  ChevronDown,
+    18→  NotebookPen,
+    19→  Plus,
+    20→  Trash2,
+    21→  Navigation,
+    22→  CalendarPlus,
+    23→} from "lucide-react";
+    24→import { useState, useRef } from "react";
+    25→import { createPortal } from "react-dom";
+    26→import { toast } from "sonner";
+    27→import { cn } from "@/lib/utils";
+    28→import { AddPlaceSheet, type AddPlaceData } from "./add-place-sheet";
+    29→import { useBodyScrollLock } from "@/hooks/use-body-scroll-lock";
+    30→import { CityAutocomplete } from "./city-autocomplete";
+    31→
+    32→export function Itinerary() {
+    33→  const { data: days, isLoading } = useDays();
+    34→  const { selectedDay, setSelectedDay } = useTripStore();
+    35→  const [openPlace, setOpenPlace] = useState<Place | null>(null);
+    36→  const [addOpen, setAddOpen] = useState(false);
+    37→  const [addData, setAddData] = useState<AddPlaceData | null>(null);
+    38→
+    39→  if (isLoading || !days) return <ItinerarySkeleton />;
+    40→
+    41→  const filteredDays = selectedDay ? days.filter((d) => d.dayNumber === selectedDay) : days;
+    42→
+    43→  // координаты центра города выбранного дня (для добавления места)
+    44→  const currentDay = selectedDay ? days.find((d) => d.dayNumber === selectedDay) : days[0];
+    45→
+    46→  const openAdd = () => {
+    47→    // дефолтные координаты — центр города текущего дня
+    48→    const cityCoords: Record<string, { lat: number; lng: number }> = {
+    49→      guangzhou: { lat: 23.1291, lng: 113.2644 },
+    50→      shenzhen: { lat: 22.5431, lng: 114.0579 },
+    51→      hongkong: { lat: 22.3193, lng: 114.1694 },
+    52→      macau: { lat: 22.1987, lng: 113.5439 },
+    53→      tokyo: { lat: 35.6762, lng: 139.6503 },
+    54→      paris: { lat: 48.8566, lng: 2.3522 },
+    55→      bangkok: { lat: 13.7563, lng: 100.5018 },
+    56→      phuket: { lat: 7.8804, lng: 98.3923 },
+    57→    };
+    58→    const c = (currentDay && cityCoords[currentDay.cityKey]) || cityCoords.guangzhou;
+    59→    setAddData({ lat: c.lat, lng: c.lng, dayId: currentDay?.id });
+    60→    setAddOpen(true);
+    61→  };
+    62→
+    63→  return (
+    64→    <div className="space-y-3 animate-fade-up">
+    65→      {/* Кнопка добавления + фильтр по дню */}
+    66→      <div className="flex items-center gap-2">
+    67→        <div className="flex gap-1.5 overflow-x-auto no-scrollbar pb-1 flex-1">
+    68→        <button
+    69→          onClick={() => setSelectedDay(null)}
+    70→          className={cn(
+    71→            "px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-colors",
+    72→            !selectedDay ? "bg-primary text-primary-foreground" : "bg-card border border-border hover:bg-accent"
+    73→          )}
+    74→        >
+    75→          Все дни
+    76→        </button>
+    77→        {days.map((d) => {
+    78→          const visited = d.places.filter((p) => p.status === "visited").length;
+    79→          return (
+    80→            <button
+    81→              key={d.id}
+    82→              onClick={() => setSelectedDay(d.dayNumber)}
+    83→              className={cn(
+    84→                "flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-colors",
+    85→                selectedDay === d.dayNumber ? "bg-primary text-primary-foreground" : "bg-card border border-border hover:bg-accent"
+    86→              )}
+    87→            >
+    88→              <span
+    89→                className="size-2 rounded-full"
+    90→                style={{ background: d.accentColor ?? "#f97316" }}
+    91→              />
+    92→              День {d.dayNumber}
+    93→              <span className="opacity-70">{visited}/{d.places.length}</span>
+    94→            </button>
+    95→          );
+    96→        })}
+    97→        </div>
+    98→        <button
+    99→          onClick={openAdd}
+   100→          className="shrink-0 size-9 rounded-full bg-primary text-primary-foreground grid place-items-center shadow-md active:scale-95 transition-transform"
+   101→          title="Добавить место"
+   102→        >
+   103→          <Plus className="size-4" />
+   104→        </button>
+   105→      </div>
+   106→
+   107→      {/* Дни */}
+   108→      {filteredDays.map((day) => (
+   109→        <DayCard key={day.id} day={day} onOpenPlace={setOpenPlace} />
+   110→      ))}
+   111→
+   112→      {/* Кнопка добавить день */}
+   113→      <AddDayButton />
+   114→
+   115→      <PlaceDialog place={openPlace} onClose={() => setOpenPlace(null)} />
+   116→      <AddPlaceSheet open={addOpen} onOpenChange={setAddOpen} initial={addData} />
+   117→    </div>
+   118→  );
+   119→}
+   120→
+   121→function DayCard({ day, onOpenPlace }: { day: Day; onOpenPlace: (p: Place) => void }) {
+   122→  const [expanded, setExpanded] = useState(true);
+   123→  const visited = day.places.filter((p) => p.status === "visited").length;
+   124→  const progress = day.places.length ? (visited / day.places.length) * 100 : 0;
+   125→
+   126→  return (
+   127→    <div className="rounded-2xl bg-card border border-border overflow-hidden card-hover">
+   128→      <div
+   129→        role="button"
+   130→        tabIndex={0}
+   131→        onClick={() => setExpanded((v) => !v)}
+   132→        onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setExpanded((v) => !v); } }}
+   133→        className="w-full flex items-center gap-3 p-4 hover:bg-accent/40 transition-colors text-left active:bg-accent/60 cursor-pointer"
+   134→      >
+   135→        <div
+   136→          className="size-11 rounded-xl grid place-items-center text-white font-bold shrink-0 shadow-lg"
+   137→          style={{ background: day.accentColor ?? "#f97316", boxShadow: `0 4px 12px -2px ${day.accentColor ?? "#f97316"}40` }}
+   138→        >
+   139→          {day.dayNumber}
+   140→        </div>
+   141→        <div className="min-w-0 flex-1">
+   142→          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+   143→            <MapPin className="size-3" /> {day.city}
+   144→          </div>
+   145→          <div className="font-semibold text-sm truncate">{day.title}</div>
+   146→          <div className="mt-1.5 h-1.5 rounded-full bg-muted overflow-hidden">
+   147→            <motion.div
+   148→              initial={{ width: 0 }}
+   149→              animate={{ width: `${progress}%` }}
+   150→              transition={{ duration: 0.5, ease: "easeOut" }}
+   151→              className="h-full rounded-full"
+   152→              style={{ background: day.accentColor ?? "#f97316" }}
+   153→            />
+   154→          </div>
+   155→        </div>
+   156→        <div className="text-right shrink-0 flex flex-col items-end gap-1">
+   157→          <div className="flex items-center gap-1.5">
+   158→            <DeleteDayButton dayId={day.id} dayNumber={day.dayNumber} />
+   159→            <div className="text-xs font-medium tabular-nums">{visited}/{day.places.length}</div>
+   160→          </div>
+   161→          <motion.div animate={{ rotate: expanded ? 180 : 0 }} transition={{ duration: 0.2 }}>
+   162→            <ChevronDown className="size-4 text-muted-foreground" />
+   163→          </motion.div>
+   164→        </div>
+   165→      </div>
+   166→
+   167→      <AnimatePresence initial={false}>
+   168→        {expanded && (
+   169→          <motion.div
+   170→            initial={{ height: 0, opacity: 0 }}
+   171→            animate={{ height: "auto", opacity: 1 }}
+   172→            exit={{ height: 0, opacity: 0 }}
+   173→            transition={{ duration: 0.2 }}
+   174→            className="overflow-hidden"
+   175→          >
+   176→            <div className="px-4 pb-4 pt-1 space-y-1.5">
+   177→              {day.places.map((place) => (
+   178→                <PlaceRow key={place.id} place={place} accentColor={day.accentColor ?? "#f97316"} onOpen={() => onOpenPlace(place)} />
+   179→              ))}
+   180→            </div>
+   181→          </motion.div>
+   182→        )}
+   183→      </AnimatePresence>
+   184→    </div>
+   185→  );
+   186→}
+   187→
+   188→function PlaceRow({ place, accentColor, onOpen }: { place: Place; accentColor: string; onOpen: () => void }) {
+   189→  const update = useUpdatePlace();
+   190→  const meta = CATEGORY_META[place.category];
+   191→  const visited = place.status === "visited";
+   192→
+   193→  const toggle = (e: React.MouseEvent) => {
+   194→    e.stopPropagation();
+   195→    update.mutate({ id: place.id, status: visited ? "planned" : "visited" });
+   196→    toast(visited ? "Отмечено как запланировано" : "Посещено! 🎉", {
+   197→      description: place.name,
+   198→    });
+   199→  };
+   200→
+   201→  return (
+   202→    <motion.div
+   203→      layout
+   204→      onClick={onOpen}
+   205→      whileTap={{ scale: 0.99 }}
+   206→      className={cn(
+   207→        "flex items-center gap-3 p-2.5 rounded-xl cursor-pointer transition-colors group relative overflow-hidden",
+   208→        visited ? "bg-green-500/5" : "hover:bg-accent"
+   209→      )}
+   210→    >
+   211→      {/* Левая цветная полоска категории */}
+   212→      <div
+   213→        className="absolute left-0 top-0 bottom-0 w-1"
+   214→        style={{ background: visited ? "#22c55e" : meta?.color ?? accentColor }}
+   215→      />
+   216→      <button onClick={toggle} className="shrink-0 ml-1">
+   217→        {visited ? (
+   218→          <CheckCircle2 className="size-6 text-green-500" />
+   219→        ) : (
+   220→          <Circle className="size-6 text-muted-foreground group-hover:text-primary transition-colors" />
+   221→        )}
+   222→      </button>
+   223→      <div
+   224→        className="size-9 rounded-lg grid place-items-center text-lg shrink-0 transition-transform group-hover:scale-110"
+   225→        style={{ background: `${meta?.color}22` }}
+   226→      >
+   227→        {meta?.emoji}
+   228→      </div>
+   229→      <div className="min-w-0 flex-1">
+   230→        <div className={cn("text-sm font-medium leading-tight", visited && "line-through opacity-60")}>{place.name}</div>
+   231→        {/* Адрес */}
+   232→        {place.address && (
+   233→          <div className="flex items-start gap-1 text-[10px] text-muted-foreground mt-0.5">
+   234→            <MapPin className="size-2.5 mt-0.5 shrink-0" />
+   235→            <span className="line-clamp-1">{place.address}</span>
+   236→          </div>
+   237→        )}
+   238→        <div className="flex items-center gap-2 text-[11px] text-muted-foreground mt-0.5 flex-wrap">
+   239→          <span
+   240→            className="px-1.5 py-0.5 rounded text-[9px] font-medium uppercase tracking-wide"
+   241→            style={{ background: `${meta?.color}18`, color: meta?.color }}
+   242→          >
+   243→            {meta?.label}
+   244→          </span>
+   245→          {place.timeOfDay && (
+   246→            <span className="flex items-center gap-0.5"><Clock className="size-2.5" /> {timeLabel(place.timeOfDay)}</span>
+   247→          )}
+   248→          {place.budget ? (
+   249→            <span className="flex items-center gap-0.5"><DollarSign className="size-2.5" /> {place.budget}</span>
+   250→          ) : null}
+   251→          {place.rating ? <span className="flex items-center gap-0.5 text-amber-500"><Star className="size-2.5 fill-current" /> {place.rating}</span> : null}
+   252→        </div>
+   253→        {/* Кнопка "как добраться" */}
+   254→        <a
+   255→          href={`https://www.openstreetmap.org/directions?from=&to=${place.lat}%2C${place.lng}`}
+   256→          target="_blank"
+   257→          rel="noopener noreferrer"
+   258→          onClick={(e) => e.stopPropagation()}
+   259→          className="inline-flex items-center gap-1 text-[10px] text-primary hover:underline mt-1"
+   260→        >
+   261→          <Navigation className="size-2.5" /> Как добраться
+   262→        </a>
+   263→      </div>
+   264→      {visited && (
+   265→        <span className="shrink-0 text-[9px] font-bold uppercase tracking-wide text-green-600 bg-green-500/10 px-1.5 py-0.5 rounded">
+   266→          ✓
+   267→        </span>
+   268→      )}
+   269→    </motion.div>
+   270→  );
+   271→}
+   272→
+   273→function PlaceDialog({ place, onClose }: { place: Place | null; onClose: () => void }) {
+   274→  useBodyScrollLock(!!place);
+   275→  const update = useUpdatePlace();
+   276→  const upload = useUploadPhoto();
+   277→  const inputRef = useRef<HTMLInputElement>(null);
+   278→  const [notes, setNotes] = useState("");
+   279→  const { data: trip } = useDays();
+   280→
+   281→  const day = trip?.find((d) => d.id === place?.dayId);
+   282→  const photos = day?.photos.filter((p) => p.placeId === place?.id) ?? [];
+   283→
+   284→  // Рендерим через портал на document.body — избегаем stacking context от motion.div
+   285→  if (typeof document === "undefined") return null;
+   286→  if (!place) return null;
+   287→  const meta = CATEGORY_META[place.category];
+   288→  const visited = place.status === "visited";
+   289→
+   290→  const saveNotes = () => {
+   291→    update.mutate({ id: place.id, notes });
+   292→    toast.success("Заметка сохранена");
+   293→  };
+   294→
+   295→  const onFile = async (f: File) => {
+   296→    if (!place.dayId) return;
+   297→    const fd = new FormData();
+   298→    fd.append("file", f);
+   299→    fd.append("dayId", place.dayId);
+   300→    fd.append("placeId", place.id);
+   301→    await upload.mutateAsync(fd);
+   302→    toast.success("Фото добавлено к месту 📸");
+   303→  };
+   304→
+   305→  return createPortal(
+   306→    <AnimatePresence>
+   307→      <motion.div
+   308→        initial={{ opacity: 0 }}
+   309→        animate={{ opacity: 1 }}
+   310→        exit={{ opacity: 0 }}
+   311→        onClick={onClose}
+   312→        className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex items-end sm:items-center justify-center sm:p-4"
+   313→      >
+   314→        <motion.div
+   315→          initial={{ y: "100%", opacity: 0 }}
+   316→          animate={{ y: 0, opacity: 1 }}
+   317→          exit={{ y: "100%", opacity: 0 }}
+   318→          transition={{ type: "spring", stiffness: 320, damping: 32 }}
+   319→          onClick={(e) => e.stopPropagation()}
+   320→          className="bg-card w-full sm:max-w-lg max-h-[88vh] rounded-t-3xl sm:rounded-3xl overflow-y-auto flex flex-col"
+   321→        >
+   322→          {/* handle bar для мобильного */}
+   323→          <div className="sm:hidden flex justify-center pt-2.5 pb-1 shrink-0">
+   324→            <div className="w-10 h-1 rounded-full bg-muted-foreground/30" />
+   325→          </div>
+   326→
+   327→          {/* header */}
+   328→          <div className="sticky top-0 bg-card/95 backdrop-blur px-4 sm:px-5 py-3 border-b border-border flex items-start gap-3 shrink-0">
+   329→            <div className="size-11 sm:size-12 rounded-xl grid place-items-center text-xl sm:text-2xl shrink-0" style={{ background: `${meta?.color}22` }}>
+   330→              {meta?.emoji}
+   331→            </div>
+   332→            <div className="min-w-0 flex-1">
+   333→              <div className="text-xs text-muted-foreground flex items-center gap-1 flex-wrap">
+   334→                <MapPin className="size-3 shrink-0" />
+   335→                <span>День {day?.dayNumber} · {day?.city}</span>
+   336→                <span
+   337→                  className="px-1.5 py-0.5 rounded text-[9px] font-medium uppercase"
+   338→                  style={{ background: `${meta?.color}18`, color: meta?.color }}
+   339→                >
+   340→                  {meta?.label}
+   341→                </span>
+   342→              </div>
+   343→              <h2 className="font-bold text-base sm:text-lg leading-tight mt-0.5">{place.name}</h2>
+   344→              {place.address && (
+   345→                <div className="text-[11px] text-muted-foreground mt-0.5 flex items-start gap-1">
+   346→                  <MapPin className="size-2.5 mt-0.5 shrink-0" />
+   347→                  <span className="line-clamp-2">{place.address}</span>
+   348→                </div>
+   349→              )}
+   350→            </div>
+   351→            <button onClick={onClose} className="size-8 rounded-full hover:bg-accent grid place-items-center shrink-0" aria-label="Закрыть">
+   352→              <X className="size-4" />
+   353→            </button>
+   354→          </div>
+   355→
+   356→          <div className="p-4 sm:p-5 space-y-4 overflow-y-auto">
+   357→            {place.description && (
+   358→              <p className="text-sm text-muted-foreground leading-relaxed">{place.description}</p>
+   359→            )}
+   360→
+   361→            {/* quick actions */}
+   362→            <div className="grid grid-cols-2 gap-2">
+   363→              <button
+   364→                onClick={() => {
+   365→                  update.mutate({ id: place.id, status: visited ? "planned" : "visited" });
+   366→                  toast(visited ? "Снято" : "Отмечено посещённым 🎉");
+   367→                }}
+   368→                className={cn(
+   369→                  "rounded-xl py-2.5 text-sm font-medium flex items-center justify-center gap-2 transition-colors",
+   370→                  visited ? "bg-green-500/10 text-green-600 border border-green-500/30" : "bg-primary text-primary-foreground"
+   371→                )}
+   372→              >
+   373→                <CheckCircle2 className="size-4" />
+   374→                {visited ? "Посещено" : "Отметить"}
+   375→              </button>
+   376→              <button
+   377→                onClick={() => inputRef.current?.click()}
+   378→                className="rounded-xl py-2.5 text-sm font-medium bg-secondary text-secondary-foreground flex items-center justify-center gap-2 hover:bg-accent"
+   379→              >
+   380→                <Camera className="size-4" /> Фото
+   381→              </button>
+   382→              <input ref={inputRef} type="file" accept="image/*" className="hidden" onChange={(e) => e.target.files?.[0] && onFile(e.target.files[0])} />
+   383→            </div>
+   384→
+   385→            {/* рейтинг */}
+   386→            <div>
+   387→              <div className="text-xs text-muted-foreground mb-1.5">Оценка</div>
+   388→              <div className="flex gap-1">
+   389→                {[1, 2, 3, 4, 5].map((s) => (
+   390→                  <button
+   391→                    key={s}
+   392→                    onClick={() => {
+   393→                      update.mutate({ id: place.id, rating: s === place.rating ? null : s });
+   394→                    }}
+   395→                  >
+   396→                    <Star
+   397→                      className={cn(
+   398→                        "size-7 transition-transform hover:scale-110",
+   399→                        (place.rating ?? 0) >= s ? "fill-amber-400 text-amber-400" : "text-muted-foreground"
+   400→                      )}
+   401→                    />
+   402→                  </button>
+   403→                ))}
+   404→              </div>
+   405→            </div>
+   406→
+   407→            {/* заметки */}
+   408→            <div>
+   409→              <div className="text-xs text-muted-foreground mb-1.5 flex items-center gap-1"><NotebookPen className="size-3" /> Заметки</div>
+   410→              <textarea
+   411→                value={notes || place.notes || ""}
+   412→                onChange={(e) => setNotes(e.target.value)}
+   413→                placeholder="Впечатления, советы…"
+   414→                rows={3}
+   415→                className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm resize-none"
+   416→              />
+   417→              {notes && notes !== (place.notes || "") && (
+   418→                <button onClick={saveNotes} className="mt-1.5 text-xs text-primary hover:underline">
+   419→                  Сохранить заметку
+   420→                </button>
+   421→              )}
+   422→            </div>
+   423→
+   424→            {/* фото места */}
+   425→            <div>
+   426→              <div className="text-xs text-muted-foreground mb-1.5">Фото ({photos.length})</div>
+   427→              {photos.length === 0 ? (
+   428→                <div className="text-xs text-muted-foreground/60 italic">Пока нет фото</div>
+   429→              ) : (
+   430→                <div className="grid grid-cols-3 gap-1.5">
+   431→                  {photos.map((ph) => (
+   432→                    <div key={ph.id} className="aspect-square rounded-lg overflow-hidden bg-muted">
+   433→                      <img src={ph.url} alt={ph.caption || ""} className="w-full h-full object-cover" />
+   434→                    </div>
+   435→                  ))}
+   436→                </div>
+   437→              )}
+   438→            </div>
+   439→
+   440→            {/* удалить место */}
+   441→            <DeletePlaceButton placeId={place.id} placeName={place.name} onDeleted={onClose} />
+   442→          </div>
+   443→        </motion.div>
+   444→      </motion.div>
+   445→    </AnimatePresence>,
+   446→    document.body
+   447→  );
+   448→}
+   449→
+   450→function DeletePlaceButton({ placeId, placeName, onDeleted }: { placeId: string; placeName: string; onDeleted: () => void }) {
+   451→  const del = useDeletePlace();
+   452→  const [confirm, setConfirm] = useState(false);
+   453→  if (!confirm) {
+   454→    return (
+   455→      <button
+   456→        onClick={() => setConfirm(true)}
+   457→        className="w-full rounded-lg border border-red-500/30 text-red-500 py-2 text-xs font-medium flex items-center justify-center gap-1.5 hover:bg-red-500/5 transition-colors"
+   458→      >
+   459→        <Trash2 className="size-3.5" /> Удалить место
+   460→      </button>
+   461→    );
+   462→  }
+   463→  return (
+   464→    <div className="flex gap-2">
+   465→      <button
+   466→        onClick={() => setConfirm(false)}
+   467→        className="flex-1 rounded-lg bg-secondary py-2 text-xs font-medium"
+   468→      >
+   469→        Отмена
+   470→      </button>
+   471→      <button
+   472→        onClick={() => {
+   473→          del.mutate(placeId);
+   474→          toast.success("Место удалено");
+   475→          onDeleted();
+   476→        }}
+   477→        className="flex-1 rounded-lg bg-red-500 text-white py-2 text-xs font-medium flex items-center justify-center gap-1.5"
+   478→      >
+   479→        <Trash2 className="size-3.5" /> Удалить «{placeName.slice(0, 12)}{placeName.length > 12 ? "…" : ""}»
+   480→      </button>
+   481→    </div>
+   482→  );
+   483→}
+   484→
+   485→function timeLabel(t: string | null) {
+   486→  switch (t) {
+   487→    case "morning": return "Утро";
+   488→    case "afternoon": return "День";
+   489→    case "evening": return "Вечер";
+   490→    default: return "";
+   491→  }
+   492→}
+   493→
+   494→function ItinerarySkeleton() {
+   495→  return (
+   496→    <div className="space-y-3 animate-pulse">
+   497→      {/* Фильтр дней */}
+   498→      <div className="flex gap-1.5 overflow-hidden">
+   499→        {[0, 1, 2, 3, 4].map((i) => (
+   500→          <div key={i} className="h-7 w-20 rounded-full bg-muted" />
+   501→        ))}
+   502→        <div className="size-9 rounded-full bg-muted ml-auto" />
+   503→      </div>
+   504→      {/* Карточки дней */}
+   505→      {[0, 1, 2].map((i) => (
+   506→        <div key={i} className="rounded-2xl bg-card border border-border p-4">
+   507→          <div className="flex items-center gap-3">
+   508→            <div className="size-11 rounded-xl bg-muted" />
+   509→            <div className="flex-1 space-y-2">
+   510→              <div className="h-3 bg-muted rounded w-1/4" />
+   511→              <div className="h-2.5 bg-muted rounded w-1/2" />
+   512→            </div>
+   513→            <div className="size-4 bg-muted rounded" />
+   514→          </div>
+   515→          <div className="mt-3 space-y-1.5">
+   516→            {[0, 1].map((j) => (
+   517→              <div key={j} className="flex items-center gap-3 p-2.5 rounded-xl bg-muted/50">
+   518→                <div className="size-6 rounded-full bg-muted" />
+   519→                <div className="size-9 rounded-lg bg-muted" />
+   520→                <div className="flex-1 space-y-1.5">
+   521→                  <div className="h-3 bg-muted rounded w-2/3" />
+   522→                  <div className="h-2 bg-muted rounded w-1/3" />
+   523→                </div>
+   524→              </div>
+   525→            ))}
+   526→          </div>
+   527→        </div>
+   528→      ))}
+   529→    </div>
+   530→  );
+   531→}
+   532→
+   533→// Кнопка добавления нового дня
+   534→function AddDayButton() {
+   535→  const addDay = useAddDay();
+   536→  const [open, setOpen] = useState(false);
+   537→  const [city, setCity] = useState("");
+   538→  const [selectedCity, setSelectedCity] = useState<{ name: string; lat: number; lng: number; timezone?: string; language?: string } | null>(null);
+   539→  const [title, setTitle] = useState("");
+   540→  const [color, setColor] = useState("#f97316");
+   541→
+   542→  useBodyScrollLock(open);
+   543→
+   544→  const COLORS = ["#f97316", "#06b6d4", "#8b5cf6", "#ec4899", "#10b981", "#f59e0b", "#ef4444", "#3b82f6"];
+   545→
+   546→  const submit = async () => {
+   547→    const cityName = selectedCity?.name || city.trim() || "Новый город";
+   548→    await addDay.mutateAsync({
+   549→      city: cityName,
+   550→      cityKey: selectedCity ? `custom-${selectedCity.lat}-${selectedCity.lng}` : "custom",
+   551→      title: title.trim() || undefined,
+   552→      accentColor: color,
+   553→    });
+   554→    toast.success("День добавлен! 📅");
+   555→    setCity("");
+   556→    setSelectedCity(null);
+   557→    setTitle("");
+   558→    setOpen(false);
+   559→  };
+   560→
+   561→  if (!open) {
+   562→    return (
+   563→      <button
+   564→        onClick={() => setOpen(true)}
+   565→        className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl border-2 border-dashed border-border hover:border-primary hover:text-primary transition-colors"
+   566→      >
+   567→        <CalendarPlus className="size-5" />
+   568→        <span className="text-sm font-medium">Добавить день</span>
+   569→      </button>
+   570→    );
+   571→  }
+   572→
+   573→  return createPortal(
+   574→    <AnimatePresence>
+   575→      <motion.div
+   576→        initial={{ opacity: 0 }}
+   577→        animate={{ opacity: 1 }}
+   578→        exit={{ opacity: 0 }}
+   579→        onClick={() => setOpen(false)}
+   580→        className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex items-end sm:items-center justify-center sm:p-4"
+   581→      >
+   582→        <motion.div
+   583→          initial={{ y: "100%", opacity: 0 }}
+   584→          animate={{ y: 0, opacity: 1 }}
+   585→          exit={{ y: "100%", opacity: 0 }}
+   586→          transition={{ type: "spring", stiffness: 320, damping: 32 }}
+   587→          onClick={(e) => e.stopPropagation()}
+   588→          className="bg-card w-full sm:max-w-md rounded-t-3xl sm:rounded-3xl overflow-y-auto max-h-[90vh]"
+   589→        >
+   590→          <div className="sm:hidden flex justify-center pt-2.5 pb-1">
+   591→            <div className="w-10 h-1 rounded-full bg-muted-foreground/30" />
+   592→          </div>
+   593→          <div className="sticky top-0 bg-card/95 backdrop-blur px-4 py-3 border-b border-border flex items-center justify-between">
+   594→            <h2 className="font-bold text-base flex items-center gap-2">
+   595→              <CalendarPlus className="size-5 text-primary" /> Новый день
+   596→            </h2>
+   597→            <button onClick={() => setOpen(false)} className="size-8 rounded-full hover:bg-accent grid place-items-center">
+   598→              <X className="size-4" />
+   599→            </button>
+   600→          </div>
+   601→          <div className="p-4 space-y-3">
+   602→            <div>
+   603→              <label className="text-xs text-muted-foreground mb-1 block">Город</label>
+   604→              <CityAutocomplete
+   605→                value={city}
+   606→                onChange={setCity}
+   607→                onSelect={(c) => setSelectedCity({ name: c.name, lat: c.lat, lng: c.lng, timezone: c.timezone, language: c.language })}
+   608→                placeholder="Начни вводить город…"
+   609→              />
+   610→            </div>
+   611→            <div>
+   612→              <label className="text-xs text-muted-foreground mb-1 block">Название дня (необязательно)</label>
+   613→              <input
+   614→                value={title}
+   615→                onChange={(e) => setTitle(e.target.value)}
+   616→                placeholder="Например, Переезд в Шанхай"
+   617→                className="w-full rounded-xl border border-input bg-background px-3 py-2.5 text-sm"
+   618→              />
+   619→            </div>
+   620→            <div>
+   621→              <label className="text-xs text-muted-foreground mb-1.5 block">Цвет дня</label>
+   622→              <div className="flex gap-2 flex-wrap">
+   623→                {COLORS.map((c) => (
+   624→                  <button
+   625→                    key={c}
+   626→                    onClick={() => setColor(c)}
+   627→                    className={cn(
+   628→                      "size-9 rounded-full transition-all",
+   629→                      color === c ? "ring-2 ring-offset-2 ring-foreground scale-110" : "opacity-60 hover:opacity-100"
+   630→                    )}
+   631→                    style={{ background: c }}
+   632→                  />
+   633→                ))}
+   634→              </div>
+   635→            </div>
+   636→            {selectedCity?.language && (
+   637→              <div className="text-[11px] text-muted-foreground bg-muted/50 rounded-lg px-3 py-2">
+   638→                💡 После создания дня автоматически добавятся фразы на языке <b className="uppercase">{selectedCity.language}</b> и погода для города.
+   639→              </div>
+   640→            )}
+   641→            <button
+   642→              onClick={submit}
+   643→              disabled={addDay.isPending}
+   644→              className="w-full rounded-xl bg-primary text-primary-foreground py-3 font-medium flex items-center justify-center gap-2 disabled:opacity-50"
+   645→            >
+   646→              {addDay.isPending ? <Loader2 className="size-4 animate-spin" /> : <CalendarPlus className="size-4" />}
+   647→              {addDay.isPending ? "Создание…" : "Добавить день"}
+   648→            </button>
+   649→          </div>
+   650→        </motion.div>
+   651→      </motion.div>
+   652→    </AnimatePresence>,
+   653→    document.body
+   654→  );
+   655→}
+   656→
+   657→// Кнопка удаления дня (внутри DayCard)
+   658→function DeleteDayButton({ dayId, dayNumber }: { dayId: string; dayNumber: number }) {
+   659→  const deleteDay = useDeleteDay();
+   660→  const [confirming, setConfirming] = useState(false);
+   661→
+   662→  if (!confirming) {
+   663→    return (
+   664→      <button
+   665→        onClick={(e) => { e.stopPropagation(); setConfirming(true); }}
+   666→        className="size-7 rounded-lg hover:bg-destructive/10 hover:text-destructive grid place-items-center transition-colors text-muted-foreground"
+   667→        title="Удалить день"
+   668→      >
+   669→        <Trash2 className="size-3.5" />
+   670→      </button>
+   671→    );
+   672→  }
+   673→
+   674→  return (
+   675→    <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+   676→      <button
+   677→        onClick={() => {
+   678→          deleteDay.mutate(dayId, {
+   679→            onSuccess: () => toast.success(`День ${dayNumber} удалён`),
+   680→            onError: (e) => toast.error(e.message),
+   681→          });
+   682→        }}
+   683→        disabled={deleteDay.isPending}
+   684→        className="text-[10px] bg-destructive text-destructive-foreground px-2 py-1 rounded-lg font-medium"
+   685→      >
+   686→        {deleteDay.isPending ? "…" : "Удалить?"}
+   687→      </button>
+   688→      <button
+   689→        onClick={() => setConfirming(false)}
+   690→        className="text-[10px] bg-secondary px-2 py-1 rounded-lg"
+   691→      >
+   692→        Отмена
+   693→      </button>
+   694→    </div>
+   695→  );
+   696→}
+   697→

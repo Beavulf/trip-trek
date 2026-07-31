@@ -128,9 +128,12 @@ export function useCreatePlace() {
       const r = await fetch("/api/places", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
+        body: JSON.stringify({ ...data, tripId: getTripId() }),
       });
-      if (!r.ok) throw new Error("create place failed");
+      if (!r.ok) {
+        const err = await r.json().catch(() => ({}));
+        throw new Error(err.error || "create place failed");
+      }
       return r.json();
     },
     onSuccess: () => {
@@ -427,8 +430,12 @@ export function useAddChecklist() {
       const r = await fetch("/api/checklist", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text, category }),
+        body: JSON.stringify({ text, category, tripId: getTripId() }),
       });
+      if (!r.ok) {
+        const err = await r.json().catch(() => ({}));
+        throw new Error(err.error || "add checklist failed");
+      }
       return r.json();
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["checklist"] }),

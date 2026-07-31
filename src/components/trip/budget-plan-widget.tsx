@@ -86,23 +86,25 @@ export function BudgetPlanWidget() {
                         if (e.key === "Escape") setEditingCat(null);
                       }}
                       autoFocus
-                      className="w-20 text-xs rounded border border-input bg-background px-2 py-1 text-right"
+                      className="w-20 min-h-[36px] text-xs rounded border border-input bg-background px-2 py-1 text-right"
                     />
                     <button
                       onClick={() => saveEdit(cat)}
-                      className="size-6 rounded bg-primary text-primary-foreground grid place-items-center shrink-0"
+                      className="size-9 rounded bg-primary text-primary-foreground grid place-items-center shrink-0 active:scale-95 transition-transform"
                       title="Сохранить"
+                      aria-label="Сохранить"
                     >
-                      <Check className="size-3" />
+                      <Check className="size-4" />
                     </button>
                   </div>
                 ) : (
                   <button
                     onClick={() => { setEditVal(String(plan)); setEditingCat(cat); }}
-                    className="text-xs font-semibold hover:underline flex items-center gap-1"
+                    className="min-h-[36px] px-2 -mx-2 rounded-md text-xs font-semibold hover:bg-accent flex items-center gap-1 active:scale-95 transition-transform"
+                    aria-label={`Изменить план для категории ${meta.label}`}
                   >
-                    ${plan}
-                    <Pencil className="size-2.5 opacity-0 group-hover:opacity-100 text-muted-foreground" />
+                    <span>${plan}</span>
+                    <Pencil className="size-3 text-muted-foreground" />
                   </button>
                 )}
                 <span className={cn("text-xs", over ? "text-red-500 font-semibold" : "text-muted-foreground")}>
@@ -130,8 +132,11 @@ export function BudgetPlanWidget() {
         })}
       </div>
 
-      <p className="text-[10px] text-muted-foreground mt-3 text-center">
-        💡 Тапни по сумме плана, чтобы изменить. Зелёный — норма, жёлтый — близко к лимиту, красный — перерасход.
+      <p className="text-[11px] text-muted-foreground mt-3 text-center">
+        ✏️ Тапни по сумме, чтобы изменить план
+      </p>
+      <p className="text-[10px] text-muted-foreground/70 mt-1 text-center">
+        Зелёный — норма, жёлтый — близко к лимиту, красный — перерасход
       </p>
     </div>
   );

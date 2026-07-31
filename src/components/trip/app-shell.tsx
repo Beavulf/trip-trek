@@ -279,11 +279,19 @@ export function AppShell({ children }: { children: ReactNode }) {
       <footer className="mt-auto border-t border-border bg-card/30">
         <div className="mx-auto max-w-7xl px-4 py-3 flex items-center justify-center gap-2 text-[11px] text-muted-foreground">
           <span className="font-medium">TripTrek</span>
-          <span className="opacity-40">·</span>
-          <span>China 2024</span>
-          <span className="opacity-40">·</span>
-          <span className="hidden sm:inline">Гуанчжоу → Шэньчжэнь → Гонконг → Макао</span>
-          <span className="sm:hidden">12 дней 🌏</span>
+          {trip ? (
+            <>
+              <span className="opacity-40">·</span>
+              <span className="truncate max-w-[60vw]">{trip.settings.title}</span>
+              <span className="opacity-40">·</span>
+              <span>{trip.settings.totalDays} дн. 🌏</span>
+            </>
+          ) : (
+            <>
+              <span className="opacity-40">·</span>
+              <span>планируй путешествия легко</span>
+            </>
+          )}
         </div>
       </footer>
 

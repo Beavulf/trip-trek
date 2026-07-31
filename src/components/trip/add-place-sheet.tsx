@@ -133,19 +133,25 @@ function AddPlaceForm({
       toast.error("Выберите день");
       return;
     }
-    await create.mutateAsync({
-      name: name.trim(),
-      description: description.trim() || undefined,
-      category,
-      lat: initial.lat,
-      lng: initial.lng,
-      dayId,
-      timeOfDay: timeOfDay || undefined,
-      budget: budget ? parseFloat(budget) : undefined,
-      address: address.trim() || undefined,
-    });
-    toast.success("Место добавлено! 📍");
-    onDone();
+    try {
+      await create.mutateAsync({
+        name: name.trim(),
+        description: description.trim() || undefined,
+        category,
+        lat: initial.lat,
+        lng: initial.lng,
+        dayId,
+        timeOfDay: timeOfDay || undefined,
+        budget: budget ? parseFloat(budget) : undefined,
+        address: address.trim() || undefined,
+      });
+      toast.success("Место добавлено! 📍");
+      onDone();
+    } catch (err) {
+      toast.error("Не удалось добавить место", {
+        description: err instanceof Error ? err.message : undefined,
+      });
+    }
   };
 
   return (

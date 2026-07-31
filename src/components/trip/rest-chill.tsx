@@ -1,13 +1,12 @@
 "use client";
 
 import { useDays, useUpdatePlace, useNearby, type NearbyPlace } from "@/hooks/use-trip";
-import { CATEGORY_META, CITIES, type Place, type Day } from "@/lib/types";
-import { Coffee, Star, MapPin, Clock, CheckCircle2, Circle, Search, Navigation, Loader2, Locate, ListPlus } from "lucide-react";
-import { useState, useMemo } from "react";
+import { CATEGORY_META, type Place, type Day } from "@/lib/types";
+import { Coffee, Star, MapPin, Clock, CheckCircle2, Circle, Search, Navigation, Loader2, Locate, ListPlus, Plus, X } from "lucide-react";
+import { useState, useMemo, useEffect } from "react";
 import { motion } from "framer-motion";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import { RestTimer } from "./rest-timer";
 
 const CHILL_CATEGORIES = ["cafe", "bar", "restaurant"];
 
@@ -15,7 +14,7 @@ export function RestChill() {
   const { data: days, isLoading } = useDays();
   const [filter, setFilter] = useState<string>("all");
   const [query, setQuery] = useState("");
-  const [view, setView] = useState<"route" | "nearby">("route");
+  const [view, setView] = useState<"route" | "wishlist" | "nearby">("route");
   const [nearbyCat, setNearbyCat] = useState<string>("all");
 
   const places = useMemo(() => {
@@ -66,30 +65,36 @@ export function RestChill() {
         </div>
       </div>
 
-      {/* Переключатель: маршрут / поблизости */}
-      <div className="grid grid-cols-2 gap-2 p-1 bg-card border border-border rounded-2xl">
+      {/* Переключатель: маршрут / хочу посетить / поблизости */}
+      <div className="grid grid-cols-3 gap-2 p-1 bg-card border border-border rounded-2xl">
         <button
           onClick={() => setView("route")}
           className={cn(
-            "rounded-xl py-2.5 text-sm font-medium flex items-center justify-center gap-1.5 transition-all",
+            "rounded-xl py-2.5 text-xs font-medium flex items-center justify-center gap-1 transition-all",
             view === "route" ? "bg-primary text-primary-foreground shadow" : "text-muted-foreground hover:bg-accent"
           )}
         >
-          <ListPlus className="size-4" /> Из маршрута
+          <ListPlus className="size-4" /> Маршрут
+        </button>
+        <button
+          onClick={() => setView("wishlist")}
+          className={cn(
+            "rounded-xl py-2.5 text-xs font-medium flex items-center justify-center gap-1 transition-all",
+            view === "wishlist" ? "bg-primary text-primary-foreground shadow" : "text-muted-foreground hover:bg-accent"
+          )}
+        >
+          <Star className="size-4" /> Хочу
         </button>
         <button
           onClick={() => setView("nearby")}
           className={cn(
-            "rounded-xl py-2.5 text-sm font-medium flex items-center justify-center gap-1.5 transition-all",
+            "rounded-xl py-2.5 text-xs font-medium flex items-center justify-center gap-1 transition-all",
             view === "nearby" ? "bg-primary text-primary-foreground shadow" : "text-muted-foreground hover:bg-accent"
           )}
         >
-          <Locate className="size-4" /> Поблизости
+          <Locate className="size-4" /> Рядом
         </button>
       </div>
-
-      {/* Таймер отдыха */}
-      <RestTimer />
 
       {view === "route" ? (
         <>
@@ -104,7 +109,7 @@ export function RestChill() {
             className="w-full rounded-xl border border-input bg-card pl-9 pr-3 py-2 text-sm"
           />
         </div>
-        <div className="flex gap-1.5">
+        <div className="flex gap-1.5 overflow-x-auto no-scrollbar">
           {[
             { key: "all", label: "Все", emoji: "✨" },
             { key: "cafe", label: "Кафе", emoji: "☕" },
@@ -115,7 +120,7 @@ export function RestChill() {
               key={f.key}
               onClick={() => setFilter(f.key)}
               className={cn(
-                "flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-medium transition-colors",
+                "flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-colors",
                 filter === f.key ? "bg-primary text-primary-foreground" : "bg-card border border-border hover:bg-accent"
               )}
             >
@@ -136,6 +141,8 @@ export function RestChill() {
         <div className="text-center py-12 text-muted-foreground text-sm">Ничего не найдено</div>
       )}
         </>
+      ) : view === "wishlist" ? (
+        <WishlistView />
       ) : (
         <NearbyView category={nearbyCat} onCategoryChange={setNearbyCat} />
       )}
@@ -143,67 +150,126 @@ export function RestChill() {
   );
 }
 
+type GeoState =
+  | { status: "idle" }
+  | { status: "loading" }
+  | { status: "ready"; lat: number; lng: number }
+  | { status: "denied"; message: string };
+
 function NearbyView({ category, onCategoryChange }: { category: string; onCategoryChange: (c: string) => void }) {
-  const [cityKey, setCityKey] = useState("guangzhou");
-  const city = CITIES.find((c) => c.key === cityKey)!;
-  const { data, isLoading, error } = useNearby(city.lat, city.lng, category, true);
+  const [geo, setGeo] = useState<GeoState>({ status: "idle" });
+
+  const enabled = geo.status === "ready";
+  const { data, isLoading, error } = useNearby(
+    geo.status === "ready" ? geo.lat : null,
+    geo.status === "ready" ? geo.lng : null,
+    category,
+    enabled
+  );
+
+  const requestGeo = () => {
+    if (typeof window === "undefined" || !("geolocation" in navigator)) {
+      setGeo({ status: "denied", message: "Включите геолокацию для поиска мест рядом" });
+      return;
+    }
+    setGeo({ status: "loading" });
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setGeo({ status: "ready", lat: pos.coords.latitude, lng: pos.coords.longitude });
+      },
+      (err) => {
+        const message =
+          err.code === err.PERMISSION_DENIED
+            ? "Включите геолокацию для поиска мест рядом"
+            : "Не удалось определить местоположение. Попробуйте ещё раз.";
+        setGeo({ status: "denied", message });
+        toast.error(message);
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
+    );
+  };
 
   return (
     <div className="space-y-3">
-      {/* Город + категория */}
-      <div className="flex gap-2 flex-wrap">
-        <select
-          value={cityKey}
-          onChange={(e) => setCityKey(e.target.value)}
-          className="rounded-lg border border-input bg-card px-3 py-1.5 text-sm"
-        >
-          {CITIES.map((c) => (
-            <option key={c.key} value={c.key}>{c.name}</option>
-          ))}
-        </select>
-        <div className="flex gap-1.5 flex-wrap">
-          {[
-            { key: "all", label: "Все", emoji: "✨" },
-            { key: "cafe", label: "Кафе", emoji: "☕" },
-            { key: "restaurant", label: "Еда", emoji: "🍽️" },
-            { key: "bar", label: "Бары", emoji: "🍸" },
-          ].map((f) => (
-            <button
-              key={f.key}
-              onClick={() => onCategoryChange(f.key)}
-              className={cn(
-                "flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-medium transition-colors",
-                category === f.key ? "bg-primary text-primary-foreground" : "bg-card border border-border hover:bg-accent"
-              )}
-            >
-              <span>{f.emoji}</span> {f.label}
-            </button>
-          ))}
-        </div>
+      {/* Категории */}
+      <div className="flex gap-1.5 overflow-x-auto no-scrollbar">
+        {[
+          { key: "all", label: "Все", emoji: "✨" },
+          { key: "cafe", label: "Кафе", emoji: "☕" },
+          { key: "restaurant", label: "Еда", emoji: "🍽️" },
+          { key: "bar", label: "Бары", emoji: "🍸" },
+        ].map((f) => (
+          <button
+            key={f.key}
+            onClick={() => onCategoryChange(f.key)}
+            className={cn(
+              "flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-colors",
+              category === f.key ? "bg-primary text-primary-foreground" : "bg-card border border-border hover:bg-accent"
+            )}
+          >
+            <span>{f.emoji}</span> {f.label}
+          </button>
+        ))}
       </div>
 
-      <p className="text-[11px] text-muted-foreground px-1">
-        📍 Реальные места рядом с центром {city.name} (радиус 1.5 км) · данные OpenStreetMap
-      </p>
+      {/* Кнопка геолокации */}
+      {geo.status !== "ready" && (
+        <div className="rounded-2xl border-2 border-dashed border-border bg-card p-4 text-center space-y-2">
+          <Locate className="size-6 mx-auto text-muted-foreground" />
+          {geo.status === "denied" ? (
+            <p className="text-sm text-muted-foreground">{geo.message}</p>
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              Найдём кафе и рестораны рядом с вами
+            </p>
+          )}
+          <button
+            onClick={requestGeo}
+            disabled={geo.status === "loading"}
+            className="min-h-[44px] inline-flex items-center gap-2 rounded-xl bg-primary text-primary-foreground px-4 py-2 text-sm font-medium active:scale-95 transition-transform disabled:opacity-50"
+          >
+            {geo.status === "loading" ? (
+              <><Loader2 className="size-4 animate-spin" /> Определяем местоположение…</>
+            ) : (
+              <><Locate className="size-4" /> Найти рядом со мной</>
+            )}
+          </button>
+        </div>
+      )}
 
-      {isLoading ? (
-        <div className="flex items-center justify-center gap-2 py-12 text-muted-foreground">
-          <Loader2 className="size-5 animate-spin" /> Ищем места поблизости…
-        </div>
-      ) : error ? (
-        <div className="text-center py-12 text-red-500 text-sm">
-          Не удалось загрузить: {error.message}
-        </div>
-      ) : data?.places && data.places.length > 0 ? (
-        <div className="grid sm:grid-cols-2 gap-2">
-          {data.places.map((p, i) => (
-            <NearbyCard key={i} place={p} />
-          ))}
-        </div>
-      ) : (
-        <div className="text-center py-12 text-muted-foreground text-sm">
-          Поблизости ничего не найдено
-        </div>
+      {geo.status === "ready" && (
+        <>
+          <p className="text-[11px] text-muted-foreground px-1 flex items-center gap-1">
+            📍 Рядом с вами (радиус 1.5 км) · данные OpenStreetMap
+            <button
+              onClick={requestGeo}
+              className="ml-auto text-primary hover:underline shrink-0"
+              title="Обновить местоположение"
+            >
+              Обновить
+            </button>
+          </p>
+
+          {isLoading ? (
+            <div className="flex items-center justify-center gap-2 py-12 text-muted-foreground">
+              <Loader2 className="size-5 animate-spin" /> Ищем места поблизости…
+            </div>
+          ) : error ? (
+            <div className="text-center py-12 text-red-500 text-sm">
+              Не удалось загрузить: {error.message}
+            </div>
+          ) : data?.places && data.places.length > 0 ? (
+            <div className="grid sm:grid-cols-2 gap-2">
+              {data.places.map((p, i) => (
+                <NearbyCard key={i} place={p} />
+              ))}
+            </div>
+          ) : (
+            <div className="text-center py-12 text-muted-foreground text-sm">
+              Поблизости ничего не найдено
+            </div>
+          )}
+        </>
       )}
     </div>
   );
@@ -319,4 +385,192 @@ function timeLabel(t: string | null) {
     case "evening": return "Вечер";
     default: return "";
   }
+}
+
+// Хочу посетить — список ресторанов пользователя (localStorage)
+interface WishlistItem {
+  id: string;
+  name: string;
+  category: string;
+  address?: string;
+  note?: string;
+  visited: boolean;
+}
+
+function WishlistView() {
+  const [name, setName] = useState("");
+  const [category, setCategory] = useState("restaurant");
+  const [address, setAddress] = useState("");
+  const [note, setNote] = useState("");
+  const [adding, setAdding] = useState(false);
+
+  // Загружаем из localStorage через lazy initializer
+  const [items, setItems] = useState<WishlistItem[]>(() => {
+    if (typeof window === "undefined") return [];
+    const saved = localStorage.getItem("triptrek-wishlist");
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) return parsed;
+      } catch {}
+    }
+    return [];
+  });
+
+  // Сохраняем в localStorage
+  const save = (newItems: WishlistItem[]) => {
+    setItems(newItems);
+    localStorage.setItem("triptrek-wishlist", JSON.stringify(newItems));
+  };
+
+  const addItem = () => {
+    if (!name.trim()) {
+      toast.error("Введите название");
+      return;
+    }
+    const item: WishlistItem = {
+      id: crypto.randomUUID(),
+      name: name.trim(),
+      category,
+      address: address.trim() || undefined,
+      note: note.trim() || undefined,
+      visited: false,
+    };
+    save([item, ...items]);
+    toast.success("Добавлено в список! ⭐");
+    setName(""); setAddress(""); setNote(""); setCategory("restaurant");
+    setAdding(false);
+  };
+
+  const toggleVisited = (id: string) => {
+    save(items.map(i => i.id === id ? { ...i, visited: !i.visited } : i));
+  };
+
+  const deleteItem = (id: string) => {
+    save(items.filter(i => i.id !== id));
+  };
+
+  const CATS = [
+    { key: "restaurant", emoji: "🍽️", label: "Ресторан" },
+    { key: "cafe", emoji: "☕", label: "Кафе" },
+    { key: "bar", emoji: "🍸", label: "Бар" },
+    { key: "other", emoji: "✨", label: "Другое" },
+  ];
+
+  return (
+    <div className="space-y-3">
+      {/* Кнопка добавить */}
+      {!adding ? (
+        <button
+          onClick={() => setAdding(true)}
+          className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl border-2 border-dashed border-border hover:border-primary hover:text-primary transition-colors"
+        >
+          <Plus className="size-5" />
+          <span className="text-sm font-medium">Добавить место</span>
+        </button>
+      ) : (
+        <div className="bg-card border border-border rounded-2xl p-3 space-y-2">
+          <input
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="Название места *"
+            autoFocus
+            className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm"
+          />
+          <div className="flex gap-1.5 flex-wrap">
+            {CATS.map((c) => (
+              <button
+                key={c.key}
+                onClick={() => setCategory(c.key)}
+                className={cn(
+                  "flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors",
+                  category === c.key ? "bg-primary text-primary-foreground" : "bg-muted hover:bg-accent"
+                )}
+              >
+                {c.emoji} {c.label}
+              </button>
+            ))}
+          </div>
+          <input
+            value={address}
+            onChange={(e) => setAddress(e.target.value)}
+            placeholder="Адрес (необязательно)"
+            className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm"
+          />
+          <input
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            placeholder="Заметка (необязательно)"
+            className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm"
+          />
+          <div className="flex gap-2">
+            <button
+              onClick={() => setAdding(false)}
+              className="flex-1 rounded-lg bg-secondary py-2.5 text-sm font-medium"
+            >
+              Отмена
+            </button>
+            <button
+              onClick={addItem}
+              className="flex-1 rounded-lg bg-primary text-primary-foreground py-2.5 text-sm font-medium flex items-center justify-center gap-1"
+            >
+              <Plus className="size-4" /> Добавить
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Список */}
+      {items.length === 0 && !adding ? (
+        <div className="text-center py-12 text-muted-foreground text-sm">
+          <Star className="size-8 mx-auto mb-2 opacity-30" />
+          Список пуст. Добавь места, которые хочешь посетить!
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {items.map((item) => {
+            const cat = CATS.find(c => c.key === item.category);
+            return (
+              <div
+                key={item.id}
+                className={cn(
+                  "rounded-xl bg-card border border-border p-3 flex items-start gap-3 transition-all",
+                  item.visited && "opacity-60"
+                )}
+              >
+                <button
+                  onClick={() => toggleVisited(item.id)}
+                  className={cn(
+                    "size-6 rounded-full border-2 grid place-items-center shrink-0 mt-0.5",
+                    item.visited ? "bg-green-500 border-green-500" : "border-input"
+                  )}
+                >
+                  {item.visited && <CheckCircle2 className="size-4 text-white" />}
+                </button>
+                <div className="flex-1 min-w-0">
+                  <div className={cn("text-sm font-medium", item.visited && "line-through")}>
+                    {cat?.emoji} {item.name}
+                  </div>
+                  {item.address && (
+                    <div className="text-[11px] text-muted-foreground flex items-center gap-0.5 mt-0.5">
+                      <MapPin className="size-2.5" /> {item.address}
+                    </div>
+                  )}
+                  {item.note && (
+                    <div className="text-[11px] text-muted-foreground mt-0.5">{item.note}</div>
+                  )}
+                </div>
+                <button
+                  onClick={() => deleteItem(item.id)}
+                  className="size-7 rounded-lg hover:bg-red-500/10 hover:text-red-500 grid place-items-center text-muted-foreground shrink-0"
+                >
+                  <X className="size-3.5" />
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
 }
