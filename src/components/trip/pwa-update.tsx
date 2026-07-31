@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { RefreshCw, X } from "lucide-react";
 
 // Компонент для уведомления о новом обновлении PWA
-// Показывает toast "Доступна новая версия" с кнопкой "Обновить"
+// Проверяет обновления SW и показывает toast с кнопкой "Обновить"
 export function PWAUpdateNotification() {
   const [showUpdate, setShowUpdate] = useState(false);
   const [waitingWorker, setWaitingWorker] = useState<ServiceWorker | null>(null);
@@ -13,30 +13,44 @@ export function PWAUpdateNotification() {
   useEffect(() => {
     if (typeof window === "undefined" || !("serviceWorker" in navigator)) return;
 
-    // Проверяем обновления каждые 30 секунд
-    const checkUpdate = () => {
-      navigator.serviceWorker.getRegistrations().then((registrations) => {
-        registrations.forEach((reg) => {
-          reg.update().then(() => {
-            if (reg.waiting) {
-              setWaitingWorker(reg.waiting);
-              setShowUpdate(true);
-            }
-          }).catch(() => {});
+    // Регистрируем SW (если ещё не зарегистрирован)
+    navigator.serviceWorker.register("/sw.js").then((reg) => {
+      // Проверяем обновление сразу
+      reg.update().catch(() => {});
+
+      // Слушаем новое обновление SW
+      reg.addEventListener("updatefound", () => {
+        const newWorker = reg.installing;
+        if (!newWorker) return;
+
+        newWorker.addEventListener("statechange", () => {
+          // Новый SW скачан и ждёт активации
+          if (newWorker.state === "installed" && navigator.serviceWorker.controller) {
+            // Есть обновление! Показываем уведомление
+            setWaitingWorker(newWorker);
+            setShowUpdate(true);
+          }
         });
       });
-    };
+    }).catch(() => {});
 
-    // Сразу при загрузке
-    checkUpdate();
-    // И каждые 30 секунд
-    const interval = setInterval(checkUpdate, 30000);
-
-    // Слушаем нового SW
+    // Слушаем смену контроллера (новый SW активировался)
+    let refreshing = false;
     navigator.serviceWorker.addEventListener("controllerchange", () => {
-      // Перезагружаем страницу когда новый SW взял контроль
+      if (refreshing) return;
+      refreshing = true;
+      // Перезагружаем страницу чтобы загрузить новый код
       window.location.reload();
     });
+
+    // Проверяем обновления каждые 60 секунд
+    const interval = setInterval(() => {
+      navigator.serviceWorker.getRegistrations().then((registrations) => {
+        registrations.forEach((reg) => {
+          reg.update().catch(() => {});
+        });
+      });
+    }, 60000);
 
     return () => clearInterval(interval);
   }, []);
@@ -47,6 +61,7 @@ export function PWAUpdateNotification() {
       waitingWorker.postMessage({ type: "SKIP_WAITING" });
     }
     setShowUpdate(false);
+    // Перезагрузка произойдёт автоматически через controllerchange event
   };
 
   return (
