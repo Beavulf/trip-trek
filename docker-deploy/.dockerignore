@@ -7,5 +7,6 @@ node_modules
 *.log
 db/
 tmp/
-docker-deploy/
 skills/
+docker-deploy/
+.claude/

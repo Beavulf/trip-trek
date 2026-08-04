@@ -2,55 +2,70 @@
 # TripTrek — Docker Deployment Guide
 # ============================================
 
-## Быстрый старт (3 команды)
+## Что это
+
+Production-сборка TripTrek в Docker контейнере:
+- Next.js 16 (production build, Turbopack)
+- WebSocket сервер (socket.io) — real-time обновления
+- Web Push (VAPID) — уведомления на заблокированный телефон
+- Service Worker — PWA, offline кэш
+- Prisma + SQLite — база данных
+- Health check — автопроверка каждые 30с
+
+---
+
+## Быстрый старт (5 шагов)
 
 ```bash
-# 1. Скопируй пример настроек и отредактируй
-cp .env.example .env
-# (поменяй NEXTAUTH_SECRET и NEXTAUTH_URL на свои!)
+# 1. Перейди в папку docker-deploy
+cd docker-deploy
 
-# 2. Собери и запусти
+# 2. Создай .env из примера
+cp .env.example .env
+
+# 3. Отредактируй .env — поменяй секреты!
+nano .env
+
+# 4. Собери и запусти
 docker-compose up -d --build
 
-# 3. Проверь что работает
+# 5. Проверь что работает
 curl http://localhost:3000/api/health
 ```
 
-Готово! Открой http://localhost:3000 в браузере.
+Открой http://localhost:3000 в браузере.
 
 ---
 
 ## Требования
 
 - Docker 20+
-- Docker Compose 2+
+- Docker Compose 2+ (или `docker compose`)
 - 512MB RAM минимум (рекомендуется 1GB)
+- 1GB свободного места
 
 ---
 
-## Настройка перед запуском
+## Настройка .env
 
-### 1. Сгенерируй секреты
+ОБЯЗАТЕЛЬНО поменяй перед запуском:
 
+### NEXTAUTH_SECRET
+Секретный ключ для JWT токенов.
 ```bash
-# NEXTAUTH_SECRET
 openssl rand -base64 32
+```
 
-# VAPID ключи (для push-уведомлений)
+### NEXTAUTH_URL
+URL твоего приложения:
+- Локально: `http://localhost:3000`
+- С доменом: `https://triptrek.example.com`
+
+### VAPID ключи (для push-уведомлений)
+```bash
 npx web-push generate-vapid-keys
 ```
-
-### 2. Отредактируй .env
-
-```bash
-cp .env.example .env
-nano .env
-```
-
-Обязательно поменяй:
-- `NEXTAUTH_SECRET` — твой сгенерированный секрет
-- `NEXTAUTH_URL` — твой домен (например `https://triptrek.example.com`)
-- `VAPID_PUBLIC_KEY` и `VAPID_PRIVATE_KEY` — сгенерированные ключи
+Скопируй public и private ключи в .env
 
 ---
 
@@ -64,26 +79,30 @@ nano .env
 | Перезапустить | `docker-compose restart` |
 | Пересобрать | `docker-compose up -d --build --force-recreate` |
 | Статус | `docker-compose ps` |
+| Зайти в контейнер | `docker-compose exec triptrek sh` |
 
 ---
 
-## Данные
+## Данные (volumes)
 
-База данных SQLite и загруженные фото хранятся в Docker volumes:
-- `triptrek-db` → `/app/data/triptrek.db`
-- `triptrek-uploads` → `/app/public/uploads/`
+База данных и загруженные фото хранятся в Docker volumes:
 
-При `docker-compose down` данные сохраняются.
-При `docker-compose down -v` данные УДАЛЯЮТСЯ.
+| Volume | Путь в контейнере | Что хранит |
+|--------|-------------------|------------|
+| `triptrek-db` | `/app/data/triptrek.db` | SQLite база данных |
+| `triptrek-uploads` | `/app/public/uploads/` | Фото пользователей, аватары |
+
+- `docker-compose down` — данные сохраняются
+- `docker-compose down -v` — данные УДАЛЯЮТСЯ
 
 ### Бэкап
 
 ```bash
-# Создать бэкап БД
-docker-compose exec triptrek cp /app/data/triptrek.db /app/data/backup-$(date +%Y%m%d).db
+# Бэкап БД
+docker cp triptrek-app:/app/data/triptrek.db ./backup-$(date +%Y%m%d).db
 
-# Скопировать на хост
-docker cp triptrek-app:/app/data/triptrek.db ./backup.db
+# Бэкап фото
+docker cp triptrek-app:/app/public/uploads ./uploads-backup
 ```
 
 ### Восстановление
@@ -100,35 +119,41 @@ docker-compose restart
 ```
 docker-deploy/
 ├── docker-compose.yml   — оркестрация
-├── Dockerfile           — сборка образа
-├── .dockerignore        — исключения
-├── .env.example         — шаблон настроек
-└── README.md            — этот файл
+├── Dockerfile            — сборка образа (3 этапа)
+├── .dockerignore         — исключения
+├── .env.example          — шаблон настроек
+├── start.sh              — скрипт быстрого запуска
+└── README.md             — этот файл
 ```
 
 ---
 
 ## Что включено
 
-✅ Next.js 16 (production build)
-✅ WebSocket сервер (socket.io) — real-time обновления
+✅ Next.js 16 production build (Turbopack)
+✅ Custom server.ts (Next.js + socket.io на одном порту)
+✅ WebSocket (socket.io) — real-time обновления между участниками
 ✅ Web Push (VAPID) — уведомления на заблокированный телефон
 ✅ Service Worker — PWA, offline кэш, push
-✅ Prisma + SQLite — база данных
+✅ Prisma + SQLite — база данных в volume (сохраняется)
 ✅ Health check — автопроверка каждые 30с
-✅ Auto-restart — при падении контейнер перезапускается
+✅ Auto-restart — контейнер перезапускается при падении
+✅ Многоэтапная сборка — минимальный размер образа
 
 ---
 
-## Reverse Proxy (для HTTPS)
+## Reverse Proxy (HTTPS)
 
-### Caddy (рекомендуется, авто-HTTPS)
+### Caddy (авто-HTTPS, рекомендуется)
 
-```Caddyfile
+Создай Caddyfile:
+```
 triptrek.example.com {
     reverse_proxy localhost:3000
 }
 ```
+
+Запусти Caddy — он автоматически получит SSL сертификат.
 
 ### Nginx
 
@@ -144,19 +169,27 @@ server {
         proxy_set_header Connection "upgrade";
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
     }
 }
 ```
 
-**Важно:** `proxy_set_header Upgrade` и `Connection "upgrade"` нужны для WebSocket!
+**Важно:** `proxy_set_header Upgrade` и `Connection "upgrade"` обязательны для WebSocket!
+
+После настройки HTTPS, поменяй в .env:
+```
+NEXTAUTH_URL=https://triptrek.example.com
+```
 
 ---
 
 ## Обновление
 
 ```bash
-# 1. Скопируй новые файлы проекта
-# 2. Пересобери
+# 1. Скопируй новые файлы проекта на сервер
+# 2. Пересобери контейнер
+cd docker-deploy
 docker-compose up -d --build
 
 # 3. Примени миграции БД если есть
@@ -165,13 +198,34 @@ docker-compose exec triptrek bunx prisma db push
 
 ---
 
-## Тестовые аккаунты
+## Первый запуск — создание аккаунтов
 
-После первого запуска создай аккаунты через регистрацию:
-- Email: любой
-- Пароль: любой (мин 4 символа)
+После запуска открой http://localhost:3000 → нажми "Регистрация":
+1. Введи имя, email, пароль
+2. Выбери эмодзи и цвет
+3. Готово!
 
-Или используй демо-аккаунты (если DB засеяна):
-- you@triptrek.com / 1234
-- leha@triptrek.com / 1234
-- den@triptrek.com / 1234
+Для создания поездки → нажми на переключатель поездок (🌏) → "Создать из шаблона" или "Создать с нуля".
+
+---
+
+## Troubleshooting
+
+### Контейнер не запускается
+```bash
+docker-compose logs triptrek
+```
+
+### Prisma ошибка
+```bash
+docker-compose exec triptrek bunx prisma generate
+docker-compose exec triptrek bunx prisma db push
+docker-compose restart
+```
+
+### Порт занят
+```bash
+# Смени порт в docker-compose.yml
+ports:
+  - "8080:3000"  # вместо 3000:3000
+```

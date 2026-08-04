@@ -1,39 +1,34 @@
 # ============================================
-# TripTrek — Dockerfile (Production)
+# TripTrek — Production Dockerfile
 # ============================================
-# Многоэтапная сборка: install → build → production
+# Многоэтапная сборка: deps → build → production
 # ============================================
 
 # --- Этап 1: Установка зависимостей ---
 FROM oven/bun:1.1 AS deps
 WORKDIR /app
 
-# Копируем package.json и lock файл
-COPY package.json bun.lockb* yarn.lock* package-lock.json* ./
-
-# Устанавливаем зависимости
-RUN bun install --frozen-lockfile || bun install
+COPY package.json bun.lockb* ./
+RUN bun install
 
 # --- Этап 2: Сборка ---
 FROM oven/bun:1.1 AS builder
 WORKDIR /app
 
-# Копируем зависимости из deps
 COPY --from=deps /app/node_modules ./node_modules
-
-# Копируем исходники
 COPY . .
 
 # Генерируем Prisma клиент
 RUN bunx prisma generate
 
-# Пушим схему в БД (создаст файл при первом запуске)
+# Создаём директорию для БД и пушим схему
 RUN mkdir -p /app/data
-RUN bunx prisma db push --skip-generate || true
+ENV DATABASE_URL=file:/app/data/triptrek.db
+RUN bunx prisma db push --skip-generate
 
 # Собираем Next.js
 ENV NEXT_TELEMETRY_DISABLED=1
-RUN bun run build
+RUN bunx next build
 
 # --- Этап 3: Production ---
 FROM oven/bun:1.1 AS runner
@@ -42,19 +37,27 @@ WORKDIR /app
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV PORT=3000
+ENV HOSTNAME=0.0.0.0
 
-# Устанавливаем только production зависимости
+# Копируем package.json и устанавливаем только production зависимости
 COPY package.json bun.lockb* ./
-RUN bun install --production --frozen-lockfile || bun install --production
+RUN bun install --production
 
 # Копируем собранное приложение
 COPY --from=builder /app/.next ./.next
 COPY --from=builder /app/public ./public
 COPY --from=builder /app/prisma ./prisma
 COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
+COPY --from=builder /app/node_modules/@prisma ./node_modules/@prisma
+
+# Копируем файлы для custom server (WebSocket + Push)
 COPY --from=builder /app/server.ts ./server.ts
 COPY --from=builder /app/server ./server
 COPY --from=builder /app/src/lib ./src/lib
+COPY --from=builder /app/src/hooks ./src/hooks
+COPY --from=builder /app/src/app/api ./src/app/api
+
+# Копируем конфиги
 COPY --from=builder /app/next.config.ts ./next.config.ts
 COPY --from=builder /app/tsconfig.json ./tsconfig.json
 COPY --from=builder /app/package.json ./package.json
@@ -62,7 +65,6 @@ COPY --from=builder /app/package.json ./package.json
 # Создаём директории для данных
 RUN mkdir -p /app/data /app/public/uploads/avatars
 
-# Экспонируем порт
 EXPOSE 3000
 
 # Healthcheck
