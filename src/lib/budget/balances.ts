@@ -23,6 +23,7 @@ export interface Settlement {
 // Считаем paid (сколько каждый реально заплатил, без settlement)
 // и долги (кто кому сколько должен)
 export function calculateBalances(expenses: Expense[], participants: Participant[]): Balance[] {
+  if (participants.length === 0) return [];
   return participants.map((p) => {
     // Сколько реально заплатил (все траты кроме settlement)
     const paid = expenses
@@ -64,6 +65,7 @@ export function calculateBalances(expenses: Expense[], participants: Participant
 // Расчёт кто кому конкретно должен (per-person debts)
 // Упрощаем: если A должен B $X и B должен A $Y → net = X - Y
 export function calculateSettlements(expenses: Expense[], participants: Participant[]): Settlement[] {
+  if (participants.length === 0) return [];
   const debtsMap: Record<string, Record<string, number>> = {};
   expenses
     .filter((e) => e.splitWith && e.splitWith?.length > 0)

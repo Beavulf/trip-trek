@@ -62,8 +62,11 @@ export async function GET(req: NextRequest) {
     timezone = searchParams.get("timezone") || undefined;
   } else {
     // Legacy: ключ города
-    cityKey = searchParams.get("city") || "guangzhou";
-    const city = LEGACY_CITIES[cityKey] || LEGACY_CITIES.guangzhou;
+    cityKey = searchParams.get("city") || "";
+    const city = LEGACY_CITIES[cityKey];
+    if (!city) {
+      return NextResponse.json({ error: "City not found" }, { status: 404 });
+    }
     lat = city.lat;
     lng = city.lng;
     cityName = city.name;

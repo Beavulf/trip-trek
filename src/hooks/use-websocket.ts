@@ -13,9 +13,14 @@ export function getSocket(): Socket | null {
 export function useWebSocket(tripId: string) {
   const qc = useQueryClient();
   const connectedRef = useRef(false);
+  // Track the current tripId so cleanup can leave the right room
+  const currentTripIdRef = useRef<string>("");
 
   useEffect(() => {
     if (!tripId || connectedRef.current) return;
+
+    // Track the tripId we're about to join so cleanup can leave it
+    currentTripIdRef.current = tripId;
 
     // WebSocket подключается к тому же origin что и страница
     // (server.ts: HTTP + WS на одном порту, Caddy проксирует оба)
@@ -173,9 +178,15 @@ export function useWebSocket(tripId: string) {
     });
 
     return () => {
+      // Leave the old trip room before disconnecting
+      const oldTripId = currentTripIdRef.current;
+      if (oldTripId && socket?.connected) {
+        socket.emit("trip:leave", oldTripId);
+      }
       socket?.disconnect();
       socket = null;
       connectedRef.current = false;
+      currentTripIdRef.current = "";
     };
   }, [tripId, qc]);
 }

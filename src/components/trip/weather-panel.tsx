@@ -66,7 +66,7 @@ export function WeatherPanel() {
     currentCity?.timezone,
     7
   );
-  const { data: weatherLegacy, isLoading: loadingLegacy } = useWeather(currentCity?.key || "guangzhou", 7);
+  const { data: weatherLegacy, isLoading: loadingLegacy } = useWeather(currentCity?.key || "", 7);
 
   const weather = hasCoords ? weatherCoords : weatherLegacy;
   const isLoading = hasCoords ? loadingCoords : loadingLegacy;

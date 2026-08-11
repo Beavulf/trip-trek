@@ -12,6 +12,7 @@ import { DashboardSkeleton } from "./DashboardSkeleton";
 import { ActivityChart, DailyTip } from "./DashboardWidgets";
 
 const CITY_EMOJI: Record<string, string> = {
+  "": "🏙️",
   guangzhou: "🏯",
   shenzhen: "🏙️",
   hongkong: "🌃",
@@ -27,7 +28,7 @@ export function Dashboard() {
   }
 
   const currentDay = trip.days.find((d) => d.dayNumber === trip.currentDayNumber);
-  const currentCityKey = currentDay?.cityKey ?? "guangzhou";
+  const currentCityKey = currentDay?.cityKey ?? "";
   const cityEmoji = CITY_EMOJI[currentCityKey] ?? "🏯";
 
   // Обратный отсчёт / прогресс по времени

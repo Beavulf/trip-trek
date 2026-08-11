@@ -7,6 +7,10 @@ export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const tripId = searchParams.get("tripId") || "";
 
+  if (!tripId) {
+    return NextResponse.json({ error: "Trip not found" }, { status: 404 });
+  }
+
   const { response } = await requireTripMember(req, tripId);
   if (response) return response;
 
@@ -40,8 +44,10 @@ export async function GET(req: NextRequest) {
 
   const now = new Date();
   const start = new Date(trip.startDate);
-  start.setHours(0, 0, 0, 0);
-  const diffDays = Math.floor((now.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
+  // Use date-only comparison (ignore time) in UTC to avoid timezone drift
+  const nowUTC = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+  const startUTC = Date.UTC(start.getUTCFullYear(), start.getUTCMonth(), start.getUTCDate());
+  const diffDays = Math.floor((nowUTC - startUTC) / (1000 * 60 * 60 * 24));
   const currentDayNumber = Math.max(1, Math.min(trip.totalDays, diffDays + 1));
 
   const dayProgress = Math.min(100, Math.round(((diffDays + 1) / trip.totalDays) * 100));

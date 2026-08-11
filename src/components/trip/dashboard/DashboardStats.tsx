@@ -128,12 +128,15 @@ function StatCard({ icon, value, label, color, onClick }: { icon: React.ReactNod
 
 function WeatherWidget({ cityKey }: { cityKey: string }) {
   const { data: weather, isLoading } = useWeather(cityKey);
+  const noCity = !cityKey;
   return (
     <div className="rounded-2xl bg-card border border-border p-4">
       <div className="flex items-center gap-2 text-sm text-muted-foreground mb-2">
         <Sun className="size-4" /> Погода
       </div>
-      {isLoading || !weather ? (
+      {noCity ? (
+        <div className="text-xs text-muted-foreground py-1">Добавьте дни в маршрут</div>
+      ) : isLoading || !weather ? (
         <div className="text-2xl">…</div>
       ) : (
         <div>

@@ -37,10 +37,17 @@ export function DashboardHero({ trip, currentDay, cityEmoji }: DashboardHeroProp
           <CalendarDays className="size-3.5" />
           День {trip.currentDayNumber} из {trip.settings.totalDays}
         </div>
-        <h1 className="text-2xl sm:text-3xl font-bold leading-tight">{currentDay?.title}</h1>
-        <p className="text-white/80 text-sm mt-1">
-          {currentDay?.city} · {currentDay?.summary}
-        </p>
+        <h1 className="text-2xl sm:text-3xl font-bold leading-tight">
+          {currentDay?.title ?? `День ${trip.currentDayNumber}`}
+        </h1>
+        {currentDay ? (
+          <p className="text-white/80 text-sm mt-1">
+            {currentDay.city}
+            {currentDay.summary ? ` · ${currentDay.summary}` : ""}
+          </p>
+        ) : (
+          <p className="text-white/80 text-sm mt-1">Город не указан</p>
+        )}
 
         {/* прогресс */}
         <div className="mt-4 space-y-2">

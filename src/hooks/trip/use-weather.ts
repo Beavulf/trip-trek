@@ -11,6 +11,7 @@ export function useWeather(city: string, forecast?: number) {
       const r = await fetch(`/api/weather?city=${city}${params}`);
       return r.json();
     },
+    enabled: Boolean(city),
     staleTime: 10 * 60 * 1000,
   });
 }
@@ -29,6 +30,7 @@ export function useWeatherByCoords(lat: number, lng: number, name: string, timez
       const r = await fetch(`/api/weather?${params}`);
       return r.json();
     },
+    enabled: lat !== 0 || lng !== 0,
     staleTime: 10 * 60 * 1000,
   });
 }

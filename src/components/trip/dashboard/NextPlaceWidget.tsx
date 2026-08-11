@@ -23,17 +23,34 @@ export function NextPlaceWidget({ trip, onGoToItinerary }: { trip: TripSummary; 
   }
 
   if (!nextPlace) {
+    const noPlaces = trip.totalPlaces === 0;
     return (
       <motion.div
         initial={{ opacity: 0, y: 8 }}
         animate={{ opacity: 1, y: 0 }}
-        className="rounded-2xl bg-gradient-to-br from-green-500/10 to-emerald-500/10 border border-green-500/30 p-4"
+        className={
+          noPlaces
+            ? "rounded-2xl bg-muted/40 border border-border p-4"
+            : "rounded-2xl bg-gradient-to-br from-green-500/10 to-emerald-500/10 border border-green-500/30 p-4"
+        }
       >
         <div className="flex items-center gap-3">
-          <div className="size-12 rounded-xl grid place-items-center text-2xl bg-green-500/20">🎉</div>
+          <div
+            className={
+              noPlaces
+                ? "size-12 rounded-xl grid place-items-center text-2xl bg-muted"
+                : "size-12 rounded-xl grid place-items-center text-2xl bg-green-500/20"
+            }
+          >
+            {noPlaces ? "🗺️" : "🎉"}
+          </div>
           <div>
-            <h3 className="font-semibold text-sm">Все места посещены!</h3>
-            <p className="text-xs text-muted-foreground">Поздравляем с завершением маршрута</p>
+            <h3 className="font-semibold text-sm">
+              {noPlaces ? "Нет мест в маршруте" : "Все места посещены!"}
+            </h3>
+            <p className="text-xs text-muted-foreground">
+              {noPlaces ? "Добавьте места, чтобы начать планировать" : "Поздравляем с завершением маршрута"}
+            </p>
           </div>
         </div>
       </motion.div>
