@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { requireTripMember } from "@/lib/api-auth";
+import { calculateCurrentDayNumber } from "@/lib/trip-days";
 
 // GET /api/trip?tripId=... — сводка поездки
 export async function GET(req: NextRequest) {
@@ -46,12 +47,12 @@ export async function GET(req: NextRequest) {
     : trip.totalBudget;
 
   const now = new Date();
+  // P1 #6: shared currentDayNumber formula (была своя здесь + другая в ai-summary)
+  const currentDayNumber = calculateCurrentDayNumber(trip.startDate, trip.totalDays);
   const start = new Date(trip.startDate);
-  // Use date-only comparison (ignore time) in UTC to avoid timezone drift
   const nowUTC = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
   const startUTC = Date.UTC(start.getUTCFullYear(), start.getUTCMonth(), start.getUTCDate());
   const diffDays = Math.floor((nowUTC - startUTC) / (1000 * 60 * 60 * 24));
-  const currentDayNumber = Math.max(1, Math.min(trip.totalDays, diffDays + 1));
 
   const dayProgress = Math.min(100, Math.round(((diffDays + 1) / trip.totalDays) * 100));
   const placeProgress = places.length > 0 ? Math.round((visitedPlaces / places.length) * 100) : 0;

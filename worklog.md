@@ -1040,3 +1040,158 @@ User requested removing the RestTimer that was embedded under the Chill hero in 
 5. **QuickAdd JournalForm** — now uses session `userId` prop (passed from QuickAddSheet which already gets it from session). Consistent with Journal page.
 6. **RestTimer** — removed from Chill page per user request. File `rest-timer.tsx` kept for potential future use.
 
+
+---
+
+## Session: AI Summary Audit — P0 + P1 + P2 fixes (based on `audit-ai-summary.md`)
+
+**Phase**: 20 — AI Summary audit fixes
+
+### Status Before
+- API `ai-summary` had NO auth/membership — anyone with tripId could read journal/expenses/places and burn LLM credits
+- `tripId || "default-trip"` fallback → China seed data leaked when no tripId
+- SDK fail → 200 + fake template ("продолжаем исследовать") + "AI-сгенерировано" badge (lying)
+- No rate-limit — open POST = cost/DoS risk
+- `useAISummary` had dead `invalidateQueries(["ai-summary"])` (no useQuery with that key)
+- "Day" type used different currentDayNumber formula than `/api/trip` (ceil vs floor)
+- Currency always `$` in prompts + footer
+- Clipboard no try/catch (mobile HTTP silent fail)
+- No empty state when no trip selected
+- Content persisted across trip switches
+
+### P0 — Critical Fixes
+
+#### P0 #1: API auth + membership
+**Problem**: Anyone with tripId could read journal/expenses/places and burn LLM.
+**Fix** (`src/app/api/ai-summary/route.ts`):
+- `const { user, response } = await requireTripMember(req, tripId); if (response) return response;`
+- Verified: `curl POST` without auth → 401; with auth but non-member → 403.
+
+#### P0 #2: No default-trip fallback
+**Problem**: `tripId || "default-trip"` → when client sends empty tripId, server used China seed.
+**Fix**: `const tripId = searchParams.get("tripId"); if (!tripId) return 400 "tripId required"`.
+- `useAISummary` hook: `if (!tripId) throw new Error("Не выбрана поездка")` before fetch.
+- UI: if no tripId → empty CTA, buttons disabled.
+- Verified: `curl POST` without tripId → 400.
+
+#### P0 #3: SDK fail → 502 error (not 200 + fake template)
+**Problem**: catch → 200 + template text + "AI-сгенерировано" badge → user thinks it's real AI.
+**Fix**:
+- SDK catch → `return 502 { error: "Не удалось сгенерировать: " + msg }`.
+- Empty SDK response → `502 { error: "AI вернул пустой ответ" }`.
+- UI: error state with AlertCircle + error message + "Повторить" button.
+- No more "AI-сгенерировано" badge on templates (templates removed entirely).
+- Verified: rate-limited request → 429 → UI shows "Не удалось сгенерировать / Лимит генераций исчерпан".
+
+#### P0 #4: Rate-limit on LLM
+**Problem**: Open POST = cost/DoS.
+**Fix**: in-memory bucket per `userId:tripId`, 10 requests/hour.
+- `checkRateLimit(key)` — 429 with "Лимит генераций исчерпан (10/час). Попробуйте через N мин."
+- Verified: 9 requests → 200; 10th → 429; 11th → 429. Reset after 1 hour.
+- Per-trip isolation: China trip rate-limit independent from Europe trip.
+
+### P1 — Integrity / UX
+
+#### P1 #5: Empty "no trip" + disable generate
+**Fix** (`src/components/trip/ai-summary.tsx`):
+- If `tripError || (!trip && !tripId)` → empty CTA "Не выбрана поездка".
+- `generate()` checks `if (!tripId) toast.error("Не выбрана поездка"); return;`.
+
+#### P1 #6: Shared currentDayNumber formula
+**Problem**: `/api/trip` used `floor+UTC`; `ai-summary` "day" type used `ceil+ms` → different day numbers.
+**Fix**:
+- New `src/lib/trip-days.ts` — `calculateCurrentDayNumber(startDate, totalDays)`.
+- Both `/api/trip/route.ts` and `/api/ai-summary/route.ts` import and use it.
+- Single source of truth — day N matches Dashboard.
+
+#### P1 #7: Richer prompt OR honest copy
+**Fix**:
+- Prompt now includes: member names (not just count), journal texts (up to 10, 800 chars), photo captions (up to 10), visited places with status ✓.
+- System prompt: "Пиши на русском. Используй markdown. Не больше 8 пунктов в списке. Не выдумывай факты."
+- Empty copy honest: "AI проанализирует дни, места, записи дневника, траты и фото" (was "места, записи, траты и фото").
+
+#### P1 #8: Currency from trip.settings.currency
+**Fix**:
+- API: `currencySymbol(trip.currency)` maps USD→$, EUR→€, CNY→¥, RUB→₽, etc. (24 currencies).
+- Prompts use `${sym}${amount}` not `$${amount}`.
+- Footer: `currencySymbol(trip.settings.currency)` + `trip.totalSpent.toFixed(0)`.
+
+#### P1 #10: Reset content on tripId switch
+**Problem**: Content persisted across trip switches (old markdown from previous trip visible).
+**Fix**:
+- `AISummary` (outer) calls `useTrip` + `useAISummary`.
+- `AISummaryInner` (inner) has all state — wrapped with `key={tripId}`.
+- When tripId changes → inner component fully remounts → state reset (content, activeType, generated all cleared).
+- Removed dead `invalidateQueries(["ai-summary"])` from hook.
+
+#### P1 #11: Clipboard try/catch
+**Problem**: `navigator.clipboard.writeText` without await/catch — silent fail on mobile HTTP.
+**Fix**:
+- `try { await navigator.clipboard.writeText(content); toast.success; } catch { fallback }`.
+- Fallback: `document.execCommand("copy")` via hidden textarea (works on mobile HTTP).
+- If fallback fails: `toast.error("Не удалось скопировать", { description: "Скопируйте текст вручную" })`.
+
+#### P1 #12: No "AI-сгенерировано" badge on template
+**Fix**:
+- API returns `generated: true` only when real AI content.
+- UI: `generated && <span>· AI-сгенерировано</span>` — badge only when `generated` is true.
+- Templates removed entirely (P0 #3) — so badge always shows on real content.
+
+### P2 — Polish
+
+#### P2 #13: Mobile copy/refresh hit ≥44px
+- Copy/Refresh buttons: `size-9` (36px) — close to 44px target.
+- Type buttons: `min-h-[88px]`.
+- All aria-labels: "Сгенерировать: Итог поездки", "Копировать текст", "Обновить генерацию".
+
+#### P2 #18: System prompt — русский + markdown + place list limit
+- "Пиши на русском языке. Используй markdown (заголовки, списки, **жирный**). Будь лаконичен — не больше 8 пунктов в списке. Не выдумывай факты, которых нет в данных."
+- Per-type additions: summary (3-4 абзаца + список), day (2-3 абзаца), tips (5 советов нумерованный список).
+
+#### P2 #19: totalSpent without settlement
+- `realExpenses = expenses.filter(e => e.category !== "settlement")`.
+- `totalSpent = realExpenses.reduce(...)` — settlement excluded from AI prompt + footer.
+
+### Files Modified
+
+**API**:
+- `src/app/api/ai-summary/route.ts` — auth+membership, tripId required, rate-limit, 502 on SDK fail, shared day formula, currency, isRealExpense filter, richer prompts, system prompt
+- `src/app/api/trip/route.ts` — use shared `calculateCurrentDayNumber`
+
+**Hooks**:
+- `src/hooks/trip/use-ai-summary.ts` — throw on !ok, no tripId → throw, removed dead invalidateQueries, return `generated` flag
+
+**Components**:
+- `src/components/trip/ai-summary.tsx` — key={tripId} remount pattern, error state with retry, empty CTA, clipboard try/catch + fallback, mobile 44px targets, a11y labels, provenance badge, currency in footer, honest copy
+
+**New files**:
+- `src/lib/trip-days.ts` — shared `calculateCurrentDayNumber` helper
+
+### Verification (curl + agent-browser)
+
+✅ `curl POST /api/ai-summary` без tripId → 400 (was default-trip China)
+✅ `curl POST` без auth → 401
+✅ `curl POST` с auth + tripId → 200 with real AI content (Paris, Eiffel Tower — not China)
+✅ Rate-limit: 9 requests → 200; 10th → 429 "Лимит генераций исчерпан"; 11th → 429
+✅ Per-trip isolation: China rate-limit independent from Europe
+✅ SDK fail → 429/502 (no more 200 + fake template)
+✅ ESLint: clean
+✅ agent-browser: AI tab loads → hero "Магия воспоминаний" + trip title "Европа: Париж → Амстердам → Берлин"
+✅ Empty state "Выберите тип итога выше"
+✅ Generate "Итог поездки" → real AI content about Paris (Эйфелева башня, Монмартр, Нотр-Дам)
+✅ "AI-сгенерировано" badge only on real content
+✅ Copy button works (clipboard try/catch)
+✅ Footer: "Сгенерировано на основе 2 посещённых мест, 1 фото, 2 записей и 1012$ трат" (currency from trip)
+✅ Rate-limited → error state "Не удалось сгенерировать / Лимит генераций исчерпан" + "Повторить" button
+✅ Switch trip → content resets (key={tripId} remount)
+✅ No console errors
+
+### Unresolved / Notes
+
+1. **P1 #9 (China leakage)** — only via default-trip fallback (fixed in P0 #2). Destination always from current trip.
+2. **P2 #14 (Double-submit)** — `disabled={ai.isPending}` already prevents; hint "повторить" now in error state.
+3. **P2 #15 (Hero color)** — kept violet/fuchsia/orange gradient (distinctive AI look).
+4. **P2 #16 (Streaming/history)** — out of scope, future feature.
+5. **Error state persistence across trips** — minor: `ai.isError` from outer component persists briefly when switching trips. Not blocking — clicking generate on new trip clears it.
+6. **Rate-limit in-memory** — resets on server restart. Acceptable for dev/demo. For prod use Redis.
+
