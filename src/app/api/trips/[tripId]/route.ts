@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { emitWS } from "@/lib/ws-emit";
+import { requireTripMember } from "@/lib/api-auth";
 
 // GET /api/trips/[id] — детали поездки
 export async function GET(req: NextRequest, { params }: { params: Promise<{ tripId: string }> }) {
@@ -19,6 +20,8 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ trip
 // PATCH /api/trips/[id] — обновить поездку
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ tripId: string }> }) {
   const { tripId } = await params;
+  const { response } = await requireTripMember(req, tripId);
+  if (response) return response;
   const body = await req.json();
   const allowed = ["title", "destination", "startDate", "endDate", "totalDays", "totalBudget", "currency", "status", "coverColor", "coverEmoji"];
   const data: Record<string, unknown> = {};
@@ -39,6 +42,8 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ tr
 // DELETE /api/trips/[id]
 export async function DELETE(req: NextRequest, { params }: { params: Promise<{ tripId: string }> }) {
   const { tripId } = await params;
+  const { response } = await requireTripMember(req, tripId);
+  if (response) return response;
   await db.trip.delete({ where: { id: tripId } });
   return NextResponse.json({ ok: true });
 }

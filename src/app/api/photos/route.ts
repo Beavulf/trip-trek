@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { emitWS } from "@/lib/ws-emit";
+import { requireTripMember } from "@/lib/api-auth";
 
 // GET /api/photos?tripId=...&dayId=...&placeId=...
 export async function GET(req: NextRequest) {
@@ -34,6 +35,9 @@ export async function POST(req: NextRequest) {
   const file = formData.get("file") as File | null;
   const dayId = formData.get("dayId") as string;
   const tripId = formData.get("tripId") as string;
+
+  const { response } = await requireTripMember(req, tripId);
+  if (response) return response;
 
   // Validate file type
   if (file) {
@@ -77,6 +81,13 @@ export async function DELETE(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const id = searchParams.get("id");
   if (!id) return NextResponse.json({ error: "id required" }, { status: 400 });
+
+  // Lookup tripId from existing photo for auth
+  const existing = await db.photo.findUnique({ where: { id }, select: { tripId: true } });
+  if (!existing) return NextResponse.json({ error: "not found" }, { status: 404 });
+  const { response } = await requireTripMember(req, existing.tripId);
+  if (response) return response;
+
   const photo = await db.photo.delete({ where: { id } });
   emitWS("photo:added", photo.tripId, {});
   return NextResponse.json({ ok: true });

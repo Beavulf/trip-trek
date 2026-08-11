@@ -34,7 +34,7 @@ export function TripSwitcher() {
     },
   });
 
-  const currentTripId = typeof window !== "undefined" ? getTripId() : "default-trip";
+  const currentTripId = typeof window !== "undefined" ? getTripId() : "";
   const currentTrip = trips?.find((t) => t.id === currentTripId) || trips?.[0];
 
   // Создать поездку — через /api/limits с проверкой

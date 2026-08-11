@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { requireTripMember } from "@/lib/api-auth";
 
 // GET /api/days?tripId=...
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
-  const tripId = searchParams.get("tripId") || "default-trip";
+  const tripId = searchParams.get("tripId") || "";
 
   const days = await db.day.findMany({
     where: { tripId },
@@ -22,6 +23,9 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   const body = await req.json();
   const { tripId, city, cityKey, title, summary, accentColor } = body;
+
+  const { response } = await requireTripMember(req, tripId);
+  if (response) return response;
 
   if (!tripId) return NextResponse.json({ error: "tripId required" }, { status: 400 });
 
@@ -70,6 +74,9 @@ export async function DELETE(req: NextRequest) {
   const day = await db.day.findUnique({ where: { id }, select: { tripId: true, dayNumber: true } });
   if (!day) return NextResponse.json({ error: "day not found" }, { status: 404 });
 
+  const { response } = await requireTripMember(req, day.tripId);
+  if (response) return response;
+
   // Не даём удалить если это единственный день
   const count = await db.day.count({ where: { tripId: day.tripId } });
   if (count <= 1) {
@@ -104,6 +111,12 @@ export async function PATCH(req: NextRequest) {
   const { id, city, cityKey, title, summary, accentColor } = body;
 
   if (!id) return NextResponse.json({ error: "id required" }, { status: 400 });
+
+  // Lookup tripId from existing day for auth
+  const existing = await db.day.findUnique({ where: { id }, select: { tripId: true } });
+  if (!existing) return NextResponse.json({ error: "day not found" }, { status: 404 });
+  const { response } = await requireTripMember(req, existing.tripId);
+  if (response) return response;
 
   const data: Record<string, unknown> = {};
   if (typeof city === "string") data.city = city;

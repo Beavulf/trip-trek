@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { requireUser } from "@/lib/api-auth";
 
 // GET /api/user?userId=... — получить профиль пользователя со статистикой
 export async function GET(req: NextRequest) {
@@ -153,6 +154,8 @@ export async function GET(req: NextRequest) {
 
 // PATCH /api/user — обновить профиль (имя, эмодзи, цвет, avatarUrl)
 export async function PATCH(req: NextRequest) {
+  const { response } = await requireUser(req);
+  if (response) return response;
   const body = await req.json();
   const { userId, name, emoji, color, avatarUrl } = body;
   if (!userId) return NextResponse.json({ error: "userId required" }, { status: 400 });

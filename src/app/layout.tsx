@@ -15,8 +15,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "TripTrek: China — путешествие в Китай",
-  description: "Приложение для группового путешествия 3 друзей в Китай: Гуанчжоу, Шэньчжэнь, Гонконг, Макао. Маршрут, карта, галерея, бюджет, дневник.",
+  title: "TripTrek — путешествия с друзьями",
+  description: "Планируй путешествия с друзьями: маршрут, карта, бюджет, дневник. Совместное планирование в реальном времени.",
   keywords: ["China", "travel", "Гуанчжоу", "Шэньчжэнь", "Гонконг", "Макао", "trip"],
   manifest: "/manifest.webmanifest",
   appleWebApp: {

@@ -1,11 +1,19 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { emitWS } from "@/lib/ws-emit";
+import { requireTripMember } from "@/lib/api-auth";
 
 // PATCH /api/places/[id] — обновить место (статус, заметки, рейтинг, адрес, имя, категория, бюджет)
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const body = await req.json();
+
+  // Lookup tripId from existing place for auth
+  const existing = await db.place.findUnique({ where: { id }, select: { tripId: true } });
+  if (!existing) return NextResponse.json({ error: "not found" }, { status: 404 });
+  const { response } = await requireTripMember(req, existing.tripId);
+  if (response) return response;
+
   const allowed = ["status", "notes", "rating", "visitedAt", "timeOfDay", "address", "name", "category", "budget", "description", "lat", "lng"];
   const data: Record<string, unknown> = {};
   for (const k of allowed) {
@@ -24,8 +32,15 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 }
 
 // DELETE /api/places/[id]
-export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
+
+  // Lookup tripId from existing place for auth
+  const existing = await db.place.findUnique({ where: { id }, select: { tripId: true } });
+  if (!existing) return NextResponse.json({ error: "not found" }, { status: 404 });
+  const { response } = await requireTripMember(req, existing.tripId);
+  if (response) return response;
+
   const place = await db.place.delete({ where: { id } });
   const tripId = (place as { tripId?: string }).tripId;
   if (tripId) emitWS("place:deleted", tripId, { placeId: id });

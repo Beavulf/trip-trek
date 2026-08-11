@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { emitWS } from "@/lib/ws-emit";
+import { requireTripMember } from "@/lib/api-auth";
 
 // GET /api/foods?tripId=...&city=...
 export async function GET(req: NextRequest) {
@@ -22,6 +23,9 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   const body = await req.json();
   const { tripId, name, nameCn, description, city, place, price, emoji } = body;
+
+  const { response } = await requireTripMember(req, tripId);
+  if (response) return response;
 
   if (!tripId || !name || !city) {
     return NextResponse.json({ error: "tripId, name, city required" }, { status: 400 });
@@ -60,6 +64,9 @@ export async function DELETE(req: NextRequest) {
 
   const food = await db.foodItem.findUnique({ where: { id }, select: { tripId: true } });
   if (!food) return NextResponse.json({ error: "not found" }, { status: 404 });
+
+  const { response } = await requireTripMember(req, food.tripId);
+  if (response) return response;
 
   await db.foodItem.delete({ where: { id } });
   emitWS("food:updated", food.tripId, {});

@@ -1,10 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { requireTripMember } from "@/lib/api-auth";
 
-// GET /api/trip?tripId=default-trip — сводка поездки
+// GET /api/trip?tripId=... — сводка поездки
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
-  const tripId = searchParams.get("tripId") || "default-trip";
+  const tripId = searchParams.get("tripId") || "";
+
+  const { response } = await requireTripMember(req, tripId);
+  if (response) return response;
 
   const trip = await db.trip.findUnique({ where: { id: tripId } });
   if (!trip) return NextResponse.json({ error: "Trip not found" }, { status: 404 });

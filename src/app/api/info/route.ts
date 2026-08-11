@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { emitWS } from "@/lib/ws-emit";
+import { requireTripMember } from "@/lib/api-auth";
 
 // GET /api/info?tripId=...&type=...
 export async function GET(req: NextRequest) {
@@ -21,6 +22,8 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   const body = await req.json();
   const { type, title, content, icon, tripId } = body;
+  const { response } = await requireTripMember(req, tripId);
+  if (response) return response;
   if (!type || !title || !content || !tripId) {
     return NextResponse.json({ error: "type, title, content, tripId required" }, { status: 400 });
   }
@@ -33,6 +36,13 @@ export async function POST(req: NextRequest) {
 export async function PATCH(req: NextRequest) {
   const body = await req.json();
   const { id, title, content, icon, type } = body;
+
+  // Lookup tripId from existing item for auth
+  const existing = await db.infoItem.findUnique({ where: { id }, select: { tripId: true } });
+  if (!existing) return NextResponse.json({ error: "not found" }, { status: 404 });
+  const { response } = await requireTripMember(req, existing.tripId);
+  if (response) return response;
+
   const data: Record<string, unknown> = {};
   if (typeof title === "string") data.title = title;
   if (typeof content === "string") data.content = content;
@@ -47,6 +57,13 @@ export async function DELETE(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const id = searchParams.get("id");
   if (!id) return NextResponse.json({ error: "id required" }, { status: 400 });
+
+  // Lookup tripId from existing item for auth
+  const existing = await db.infoItem.findUnique({ where: { id }, select: { tripId: true } });
+  if (!existing) return NextResponse.json({ error: "not found" }, { status: 404 });
+  const { response } = await requireTripMember(req, existing.tripId);
+  if (response) return response;
+
   const item = await db.infoItem.delete({ where: { id } });
   emitWS("info:updated", item.tripId, {});
   return NextResponse.json({ ok: true });

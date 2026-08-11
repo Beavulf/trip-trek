@@ -1,0 +1,702 @@
+     1→"use client";
+     2→
+     3→import {
+     4→  Sheet,
+     5→  SheetContent,
+     6→  SheetHeader,
+     7→  SheetTitle,
+     8→  SheetDescription,
+     9→} from "@/components/ui/sheet";
+    10→import { useTrip, useUploadPhoto, useAddExpense, useAddJournal } from "@/hooks/use-trip";
+    11→import { useTripStore } from "@/lib/trip-store";
+    12→import { EXPENSE_CATEGORIES, type Day } from "@/lib/types";
+    13→import { Camera, Wallet, BookOpen, Loader2, Check, X, Images, MapPin, Users, Plus as PlusIcon } from "lucide-react";
+    14→import { useRef, useState, useEffect } from "react";
+    15→import { useAuth as useSession } from "@/hooks/use-auth";
+    16→import { toast } from "sonner";
+    17→import { motion } from "framer-motion";
+    18→import exifr from "exifr";
+    19→import { cn } from "@/lib/utils";
+    20→
+    21→type Mode = "photo" | "expense" | "journal";
+    22→
+    23→export function QuickAddSheet({ open, onOpenChange }: { open: boolean; onOpenChange: (v: boolean) => void }) {
+    24→  const [mode, setMode] = useState<Mode>("photo");
+    25→  const { data: trip } = useTrip();
+    26→  const { data: session } = useSession();
+    27→  const userId = (session?.user as { id?: string } | undefined)?.id || trip?.settings.currentUserId || "";
+    28→
+    29→  return (
+    30→    <Sheet open={open} onOpenChange={onOpenChange}>
+    31→      <SheetContent side="bottom" className="rounded-t-3xl max-h-[90vh] overflow-y-auto px-5 pb-6 pt-2">
+    32→        <SheetHeader className="px-0">
+    33→          <SheetTitle className="flex items-center gap-2 text-base">
+    34→            <PlusIcon className="size-4" /> Быстрое добавление
+    35→          </SheetTitle>
+    36→          <SheetDescription>
+    37→            {trip ? `День ${trip.currentDayNumber} · ${trip.days.find(d => d.dayNumber === trip.currentDayNumber)?.city ?? ""}` : ""}
+    38→          </SheetDescription>
+    39→        </SheetHeader>
+    40→
+    41→        {/* Выбор режима */}
+    42→        <div className="grid grid-cols-3 gap-2.5 mt-4">
+    43→          {([
+    44→            { key: "photo", label: "Фото", icon: Camera, color: "#06b6d4" },
+    45→            { key: "expense", label: "Трата", icon: Wallet, color: "#10b981" },
+    46→            { key: "journal", label: "Заметка", icon: BookOpen, color: "#8b5cf6" },
+    47→          ] as const).map((m) => {
+    48→            const Icon = m.icon;
+    49→            const active = mode === m.key;
+    50→            return (
+    51→              <button
+    52→                key={m.key}
+    53→                onClick={() => setMode(m.key)}
+    54→                className={cn(
+    55→                  "relative flex flex-col items-center gap-2 py-4 rounded-2xl border-2 transition-all overflow-hidden active:scale-95",
+    56→                  active
+    57→                    ? "border-primary bg-primary/10 text-primary shadow-md shadow-primary/10"
+    58→                    : "border-border text-muted-foreground hover:bg-accent hover:border-primary/20"
+    59→                )}
+    60→              >
+    61→                {active && (
+    62→                  <div
+    63→                    className="absolute -top-3 -right-3 size-12 rounded-full opacity-15 blur-lg"
+    64→                    style={{ background: m.color }}
+    65→                  />
+    66→                )}
+    67→                <div
+    68→                  className="relative size-10 rounded-xl grid place-items-center transition-transform"
+    69→                  style={{
+    70→                    background: active ? `${m.color}22` : "transparent",
+    71→                    transform: active ? "scale(1.1)" : "scale(1)",
+    72→                  }}
+    73→                >
+    74→                  <Icon className="size-6" strokeWidth={2} style={{ color: active ? m.color : undefined }} />
+    75→                </div>
+    76→                <span className="relative text-sm font-medium">{m.label}</span>
+    77→              </button>
+    78→            );
+    79→          })}
+    80→        </div>
+    81→
+    82→        <div className="mt-4">
+    83→          {mode === "photo" && <PhotoForm userId={userId} onDone={() => onOpenChange(false)} />}
+    84→          {mode === "expense" && <ExpenseForm userId={userId} onDone={() => onOpenChange(false)} />}
+    85→          {mode === "journal" && <JournalForm userId={userId} onDone={() => onOpenChange(false)} />}
+    86→        </div>
+    87→      </SheetContent>
+    88→    </Sheet>
+    89→  );
+    90→}
+    91→
+    92→function DayPicker({ value, onChange }: { value: string; onChange: (id: string) => void }) {
+    93→  const { data: trip } = useTrip();
+    94→  if (!trip) return null;
+    95→  const currentDay = trip.days.find((d) => d.dayNumber === trip.currentDayNumber);
+    96→  return (
+    97→    <select
+    98→      value={value}
+    99→      onChange={(e) => onChange(e.target.value)}
+   100→      className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm"
+   101→    >
+   102→      {trip.days.map((d: Day) => (
+   103→        <option key={d.id} value={d.id}>
+   104→          День {d.dayNumber} · {d.city} — {d.title}
+   105→        </option>
+   106→      ))}
+   107→    </select>
+   108→  );
+   109→}
+   110→
+   111→function PhotoForm({ userId, onDone }: { userId: string; onDone: () => void }) {
+   112→  const { data: trip } = useTrip();
+   113→  const upload = useUploadPhoto();
+   114→  const cameraRef = useRef<HTMLInputElement>(null);
+   115→  const galleryRef = useRef<HTMLInputElement>(null);
+   116→  const previewUrlRef = useRef<string | null>(null);
+   117→  const [preview, setPreview] = useState<string | null>(null);
+   118→  const [file, setFile] = useState<File | null>(null);
+   119→  const [caption, setCaption] = useState("");
+   120→  const [dayId, setDayId] = useState(trip?.days.find((d) => d.dayNumber === trip.currentDayNumber)?.id ?? "");
+   121→  const [geoStatus, setGeoStatus] = useState<"idle" | "requesting" | "granted" | "denied">("idle");
+   122→  const [geoCoords, setGeoCoords] = useState<{ lat: number; lng: number } | null>(null);
+   123→  const [geoAddress, setGeoAddress] = useState<string | null>(null);
+   124→  const [processing, setProcessing] = useState(false);
+   125→
+   126→  const requestGeo = async (): Promise<{ lat: number; lng: number } | null> => {
+   127→    if (typeof navigator === "undefined" || !navigator.geolocation) {
+   128→      return null;
+   129→    }
+   130→    setGeoStatus("requesting");
+   131→    return new Promise((resolve) => {
+   132→      navigator.geolocation.getCurrentPosition(
+   133→        (pos) => {
+   134→          const coords = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+   135→          setGeoCoords(coords);
+   136→          setGeoStatus("granted");
+   137→          resolve(coords);
+   138→        },
+   139→        () => {
+   140→          setGeoStatus("denied");
+   141→          resolve(null);
+   142→        },
+   143→        { enableHighAccuracy: true, timeout: 10000 }
+   144→      );
+   145→    });
+   146→  };
+   147→
+   148→  // Сжатие фото через Canvas (мобильные фото могут быть 5-10MB)
+   149→  const compressImage = (originalFile: File, maxWidth = 1920, quality = 0.8): Promise<File> => {
+   150→    return new Promise((resolve) => {
+   151→      const img = new Image();
+   152→      const url = URL.createObjectURL(originalFile);
+   153→      img.onload = () => {
+   154→        URL.revokeObjectURL(url);
+   155→        const canvas = document.createElement("canvas");
+   156→        let { width, height } = img;
+   157→        // Пропорционально уменьшаем
+   158→        if (width > maxWidth) {
+   159→          height = (height * maxWidth) / width;
+   160→          width = maxWidth;
+   161→        }
+   162→        canvas.width = width;
+   163→        canvas.height = height;
+   164→        const ctx = canvas.getContext("2d");
+   165→        if (!ctx) {
+   166→          resolve(originalFile);
+   167→          return;
+   168→        }
+   169→        ctx.drawImage(img, 0, 0, width, height);
+   170→        canvas.toBlob(
+   171→          (blob) => {
+   172→            if (blob) {
+   173→              const compressed = new File([blob], originalFile.name.replace(/\.[^.]+$/, ".jpg"), {
+   174→                type: "image/jpeg",
+   175→                lastModified: Date.now(),
+   176→              });
+   177→              resolve(compressed);
+   178→            } else {
+   179→              resolve(originalFile);
+   180→            }
+   181→          },
+   182→          "image/jpeg",
+   183→          quality
+   184→        );
+   185→      };
+   186→      img.onerror = () => {
+   187→        URL.revokeObjectURL(url);
+   188→        resolve(originalFile); // Fallback на оригинал
+   189→      };
+   190→      img.src = url;
+   191→    });
+   192→  };
+   193→
+   194→  const onFile = async (f: File) => {
+   195→    setProcessing(true);
+   196→    try {
+   197→      // 0. Проверка размера (макс 25MB)
+   198→      if (f.size > 25 * 1024 * 1024) {
+   199→        toast.error("Фото слишком большое (макс 25MB)");
+   200→        setProcessing(false);
+   201→        return;
+   202→      }
+   203→
+   204→      // 1. Читаем EXIF из ОРИГИНАЛЬНОГО файла (до сжатия)
+   205→      // Используем gps: true для быстрого парсинга только GPS (меньше памяти)
+   206→      let exifCoords: { lat: number; lng: number } | null = null;
+   207→      let takenAt: Date | null = null;
+   208→      try {
+   209→        const exif = await exifr.parse(f, { gps: true });
+   210→        if (exif) {
+   211→          const lat = exif.latitude ?? exif.GPSLatitude;
+   212→          const lng = exif.longitude ?? exif.GPSLongitude;
+   213→          if (lat != null && lng != null && !isNaN(lat) && !isNaN(lng)) {
+   214→            exifCoords = { lat, lng };
+   215→            setGeoCoords(exifCoords);
+   216→            setGeoStatus("granted");
+   217→            toast.success("📍 Координаты из фото", { description: "GPS найден в EXIF" });
+   218→            // Reverse geocode
+   219→            try {
+   220→              const r = await fetch(`/api/geocode?lat=${lat}&lng=${lng}`);
+   221→              const data = await r.json();
+   222→              if (data.address) setGeoAddress(data.address);
+   223→            } catch {
+   224→              // ignore
+   225→            }
+   226→          }
+   227→          // Дата съёмки
+   228→          if (exif.DateTimeOriginal) {
+   229→            takenAt = new Date(exif.DateTimeOriginal);
+   230→          }
+   231→        }
+   232→      } catch {
+   233→        // EXIF нет или не читается — не критично
+   234→      }
+   235→
+   236→      // 2. Сжимаем фото (мобильные камеры дают 4000x3000+ = 8MB+)
+   237→      const compressed = await compressImage(f);
+   238→
+   239→      // 3. Создаём preview (из сжатого файла — меньше памяти)
+   240→      if (previewUrlRef.current) {
+   241→        URL.revokeObjectURL(previewUrlRef.current);
+   242→      }
+   243→      const previewUrl = URL.createObjectURL(compressed);
+   244→      previewUrlRef.current = previewUrl;
+   245→      setPreview(previewUrl);
+   246→      setFile(compressed);
+   247→
+   248→      // 4. Если EXIF GPS нет — запрашиваем текущую геолокацию
+   249→      if (!exifCoords) {
+   250→        toast.info("📍 В фото нет GPS, запрашиваем текущую геолокацию…", {
+   251→          description: "Разрешите доступ к геолокации",
+   252→          duration: 3000,
+   253→        });
+   254→        const coords = await requestGeo();
+   255→        if (coords) {
+   256→          try {
+   257→            const r = await fetch(`/api/geocode?lat=${coords.lat}&lng=${coords.lng}`);
+   258→            const data = await r.json();
+   259→            if (data.address) setGeoAddress(data.address);
+   260→          } catch {
+   261→            // ignore
+   262→          }
+   263→        }
+   264→      }
+   265→    } catch (e) {
+   266→      console.error("Photo processing error:", e);
+   267→      toast.error("Не удалось обработать фото");
+   268→    } finally {
+   269→      setProcessing(false);
+   270→    }
+   271→  };
+   272→
+   273→  // Cleanup object URL on unmount
+   274→  useEffect(() => {
+   275→    return () => {
+   276→      if (previewUrlRef.current) {
+   277→        URL.revokeObjectURL(previewUrlRef.current);
+   278→      }
+   279→    };
+   280→  }, []);
+   281→
+   282→  const submit = async () => {
+   283→    if (!file || !dayId) return;
+   284→    setProcessing(true);
+   285→    // Если геолокация ещё не запрашивалась — запросим
+   286→    let coords = geoCoords;
+   287→    if (!coords && geoStatus === "idle") {
+   288→      coords = await requestGeo();
+   289→    }
+   290→    const fd = new FormData();
+   291→    fd.append("file", file);
+   292→    fd.append("dayId", dayId);
+   293→    fd.append("userId", userId);
+   294→    if (caption) fd.append("caption", caption);
+   295→    if (coords) {
+   296→      fd.append("lat", String(coords.lat));
+   297→      fd.append("lng", String(coords.lng));
+   298→      if (geoAddress) fd.append("address", geoAddress);
+   299→    }
+   300→    try {
+   301→      await upload.mutateAsync(fd);
+   302→      toast.success("Фото добавлено 📸" + (coords ? " с геолокацией" : ""));
+   303→      // Cleanup
+   304→      if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current);
+   305→      previewUrlRef.current = null;
+   306→      setFile(null);
+   307→      setPreview(null);
+   308→      setCaption("");
+   309→      setGeoCoords(null);
+   310→      setGeoAddress(null);
+   311→      setGeoStatus("idle");
+   312→      onDone();
+   313→    } catch {
+   314→      toast.error("Не удалось загрузить фото");
+   315→    } finally {
+   316→      setProcessing(false);
+   317→    }
+   318→  };
+   319→
+   320→  return (
+   321→    <div className="space-y-3">
+   322→      <div>
+   323→        <label className="text-xs text-muted-foreground mb-1 block">День</label>
+   324→        <DayPicker value={dayId} onChange={setDayId} />
+   325→      </div>
+   326→
+   327→      {/* Скрытые input'ы: камера и галерея */}
+   328→      <input
+   329→        ref={cameraRef}
+   330→        type="file"
+   331→        accept="image/*"
+   332→        capture="environment"
+   333→        className="hidden"
+   334→        onChange={(e) => e.target.files?.[0] && onFile(e.target.files[0])}
+   335→      />
+   336→      <input
+   337→        ref={galleryRef}
+   338→        type="file"
+   339→        accept="image/*"
+   340→        className="hidden"
+   341→        onChange={(e) => e.target.files?.[0] && onFile(e.target.files[0])}
+   342→      />
+   343→
+   344→      {preview ? (
+   345→        <div className="relative rounded-xl overflow-hidden border border-border">
+   346→          <img src={preview} alt="preview" className="w-full max-h-60 object-cover" />
+   347→          {processing && (
+   348→            <div className="absolute inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center">
+   349→              <div className="flex flex-col items-center gap-2 text-white">
+   350→                <Loader2 className="size-8 animate-spin" />
+   351→                <span className="text-xs">Обработка фото…</span>
+   352→              </div>
+   353→            </div>
+   354→          )}
+   355→          <button
+   356→            onClick={() => {
+   357→              if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current);
+   358→              previewUrlRef.current = null;
+   359→              setFile(null);
+   360→              setPreview(null);
+   361→              setGeoCoords(null);
+   362→              setGeoAddress(null);
+   363→              setGeoStatus("idle");
+   364→            }}
+   365→            className="absolute top-2 right-2 size-7 rounded-full bg-black/60 text-white grid place-items-center z-10"
+   366→          >
+   367→            <X className="size-4" />
+   368→          </button>
+   369→          {/* Индикатор геолокации */}
+   370→          {geoStatus === "granted" && geoAddress && (
+   371→            <div className="absolute bottom-2 left-2 right-2 bg-black/60 text-white text-[10px] px-2 py-1 rounded-lg flex items-center gap-1">
+   372→              📍 {geoAddress.slice(0, 50)}{geoAddress.length > 50 ? "…" : ""}
+   373→            </div>
+   374→          )}
+   375→          {geoStatus === "granted" && !geoAddress && geoCoords && (
+   376→            <div className="absolute bottom-2 left-2 right-2 bg-black/60 text-white text-[10px] px-2 py-1 rounded-lg flex items-center gap-1">
+   377→              📍 {geoCoords.lat.toFixed(4)}, {geoCoords.lng.toFixed(4)}
+   378→            </div>
+   379→          )}
+   380→          {geoStatus === "denied" && (
+   381→            <div className="absolute bottom-2 left-2 right-2 bg-amber-500/80 text-white text-[10px] px-2 py-1 rounded-lg">
+   382→              📍 Геолокация отключена — фото без метки на карте
+   383→            </div>
+   384→          )}
+   385→        </div>
+   386→      ) : processing ? (
+   387→        <div className="grid grid-cols-2 gap-2">
+   388→          <div className="border-2 border-dashed border-primary/30 rounded-2xl py-8 flex flex-col items-center gap-2 text-primary bg-primary/5">
+   389→            <Loader2 className="size-8 animate-spin" />
+   390→            <span className="text-xs font-medium">Обработка…</span>
+   391→          </div>
+   392→          <div className="border-2 border-dashed border-primary/30 rounded-2xl py-8 flex flex-col items-center gap-2 text-primary bg-primary/5">
+   393→            <Loader2 className="size-8 animate-spin" />
+   394→            <span className="text-xs font-medium">Обработка…</span>
+   395→          </div>
+   396→        </div>
+   397→      ) : (
+   398→        <div className="grid grid-cols-2 gap-2">
+   399→          {/* Снять фото */}
+   400→          <button
+   401→            onClick={() => cameraRef.current?.click()}
+   402→            className="border-2 border-dashed border-border rounded-2xl py-8 flex flex-col items-center gap-2 text-muted-foreground hover:border-primary hover:text-primary transition-colors"
+   403→          >
+   404→            <Camera className="size-8" />
+   405→            <span className="text-xs font-medium">Снять фото</span>
+   406→          </button>
+   407→          {/* Из галереи */}
+   408→          <button
+   409→            onClick={() => galleryRef.current?.click()}
+   410→            className="border-2 border-dashed border-border rounded-2xl py-8 flex flex-col items-center gap-2 text-muted-foreground hover:border-primary hover:text-primary transition-colors"
+   411→          >
+   412→            <Images className="size-8" />
+   413→            <span className="text-xs font-medium">Из галереи</span>
+   414→          </button>
+   415→        </div>
+   416→      )}
+   417→
+   418→      {/* Статус геолокации при выборе */}
+   419→      {geoStatus === "requesting" && (
+   420→        <div className="text-[11px] text-muted-foreground flex items-center gap-1.5">
+   421→          <Loader2 className="size-3 animate-spin" /> Определяем местоположение…
+   422→        </div>
+   423→      )}
+   424→      {geoStatus === "granted" && geoAddress && (
+   425→        <div className="text-[11px] text-green-600 flex items-center gap-1">
+   426→          📍 Адрес определён: {geoAddress.slice(0, 60)}{geoAddress.length > 60 ? "…" : ""}
+   427→        </div>
+   428→      )}
+   429→
+   430→      <input
+   431→        value={caption}
+   432→        onChange={(e) => setCaption(e.target.value)}
+   433→        placeholder="Подпись (необязательно)"
+   434→        className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm"
+   435→      />
+   436→
+   437→      <button
+   438→        onClick={submit}
+   439→        disabled={!file || upload.isPending || processing}
+   440→        className="w-full rounded-xl bg-primary text-primary-foreground py-3.5 text-base font-medium flex items-center justify-center gap-2 disabled:opacity-50"
+   441→      >
+   442→        {upload.isPending || processing ? <Loader2 className="size-4 animate-spin" /> : <Check className="size-4" />}
+   443→        {upload.isPending ? "Загрузка…" : processing ? "Обработка…" : "Добавить фото"}
+   444→      </button>
+   445→    </div>
+   446→  );
+   447→}
+   448→
+   449→function ExpenseForm({ userId, onDone }: { userId: string; onDone: () => void }) {
+   450→  const { data: trip } = useTrip();
+   451→  const addExpense = useAddExpense();
+   452→  const [amount, setAmount] = useState("");
+   453→  const [category, setCategory] = useState("food");
+   454→  const [description, setDescription] = useState("");
+   455→  const [dayId, setDayId] = useState(trip?.days.find((d) => d.dayNumber === trip.currentDayNumber)?.id ?? "");
+   456→  // splitUsers — кто участвует. По умолчанию НИКТО не выбран
+   457→  const [splitUsers, setSplitUsers] = useState<Set<string>>(new Set());
+   458→
+   459→  const submit = async () => {
+   460→    const amt = parseFloat(amount);
+   461→    if (!amt || !description) {
+   462→      toast.error("Укажите сумму и описание");
+   463→      return;
+   464→    }
+   465→    if (splitUsers.size === 0) {
+   466→      toast.error("Выберите хотя бы одного участника");
+   467→      return;
+   468→    }
+   469→
+   470→    // splitWith = все КРОМЕ плательщика. excludeSelf = плательщик не выбран
+   471→    const splitWithArr = Array.from(splitUsers).filter(id => id !== userId);
+   472→    const excludeSelf = !splitUsers.has(userId);
+   473→
+   474→    await addExpense.mutateAsync({
+   475→      amount: amt,
+   476→      category,
+   477→      description,
+   478→      paidById: userId,
+   479→      dayId,
+   480→      splitWith: splitWithArr,
+   481→      excludeSelf,
+   482→    });
+   483→
+   484→    if (splitWithArr.length > 0) {
+   485→      const splitCount = excludeSelf ? splitWithArr.length : splitWithArr.length + 1;
+   486→      const perPerson = (amt / splitCount).toFixed(2);
+   487→      const names = trip?.participants
+   488→        .filter(p => splitWithArr.includes(p.id))
+   489→        .map(p => p.name)
+   490→        .join(", ");
+   491→      toast.success("Трата добавлена 💸", {
+   492→        description: excludeSelf
+   493→          ? `${names} должны по $${perPerson} → тебе`
+   494→          : `Каждый должен $${perPerson} (включая тебя)`,
+   495→        duration: 5000,
+   496→      });
+   497→    } else {
+   498→      toast.success("Трата добавлена 💸");
+   499→    }
+   500→    setAmount("");
+   501→    setDescription("");
+   502→    setSplitUsers(new Set());
+   503→    onDone();
+   504→  };
+   505→
+   506→  const toggleUser = (id: string) => {
+   507→    setSplitUsers(prev => {
+   508→      const next = new Set(prev);
+   509→      if (next.has(id)) next.delete(id);
+   510→      else next.add(id);
+   511→      return next;
+   512→    });
+   513→  };
+   514→
+   515→  const selectAll = () => {
+   516→    setSplitUsers(new Set(trip?.participants.map(p => p.id) || []));
+   517→  };
+   518→
+   519→  const splitCount = splitUsers.size > 0 ? splitUsers.size : 1;
+   520→  const perPerson = amount ? (parseFloat(amount) / splitCount).toFixed(2) : "0";
+   521→
+   522→  return (
+   523→    <div className="space-y-3">
+   524→      <div>
+   525→        <label className="text-xs text-muted-foreground mb-1 block">День</label>
+   526→        <DayPicker value={dayId} onChange={setDayId} />
+   527→      </div>
+   528→
+   529→      <div className="grid grid-cols-2 gap-2">
+   530→        <div>
+   531→          <label className="text-xs text-muted-foreground mb-1 block">Сумма ($)</label>
+   532→          <input
+   533→            type="number"
+   534→            inputMode="decimal"
+   535→            value={amount}
+   536→            onChange={(e) => setAmount(e.target.value)}
+   537→            placeholder="0"
+   538→            className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm"
+   539→          />
+   540→        </div>
+   541→        <div>
+   542→          <label className="text-xs text-muted-foreground mb-1 block">Категория</label>
+   543→          <select
+   544→            value={category}
+   545→            onChange={(e) => setCategory(e.target.value)}
+   546→            className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm"
+   547→          >
+   548→            {Object.entries(EXPENSE_CATEGORIES).map(([k, v]) => (
+   549→              <option key={k} value={k}>{v.emoji} {v.label}</option>
+   550→            ))}
+   551→          </select>
+   552→        </div>
+   553→      </div>
+   554→
+   555→      <input
+   556→        value={description}
+   557→        onChange={(e) => setDescription(e.target.value)}
+   558→        placeholder="Описание (например, Ужин в SoHo)"
+   559→        className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm"
+   560→      />
+   561→
+   562→      {/* Участники траты */}
+   563→      <div>
+   564→        <div className="flex items-center justify-between mb-1">
+   565→          <label className="text-xs text-muted-foreground flex items-center gap-1">
+   566→            <Users className="size-3" /> За кого?
+   567→          </label>
+   568→          <button
+   569→            onClick={selectAll}
+   570→            className="text-[10px] text-primary font-medium active:scale-95 transition-transform"
+   571→          >
+   572→            Выбрать всех
+   573→          </button>
+   574→        </div>
+   575→        <div className="bg-background rounded-lg border border-input p-2 space-y-1">
+   576→          {trip?.participants.map((p) => {
+   577→            const checked = splitUsers.has(p.id);
+   578→            const isPayer = p.id === userId;
+   579→            return (
+   580→              <button
+   581→                key={p.id}
+   582→                onClick={() => toggleUser(p.id)}
+   583→                className={cn(
+   584→                  "w-full flex items-center gap-2 p-1.5 rounded-lg text-sm transition-colors active:scale-98",
+   585→                  "hover:bg-accent active:bg-accent",
+   586→                  checked && "bg-primary/10"
+   587→                )}
+   588→              >
+   589→                <div className={cn(
+   590→                  "size-5 rounded-md border-2 grid place-items-center shrink-0 transition-colors",
+   591→                  checked ? "bg-primary border-primary" : "border-input"
+   592→                )}>
+   593→                  {checked && <Check className="size-3 text-primary-foreground" />}
+   594→                </div>
+   595→                <div className="size-6 rounded-full grid place-items-center text-[10px]" style={{ background: p.color }}>
+   596→                  {p.emoji}
+   597→                </div>
+   598→                <span className="flex-1 text-left">{p.name}</span>
+   599→                {isPayer && <span className="text-[9px] text-muted-foreground bg-muted px-1.5 py-0.5 rounded">ты</span>}
+   600→              </button>
+   601→            );
+   602→          })}
+   603→          {splitUsers.size > 0 && (
+   604→            <div className="text-[11px] text-primary bg-primary/5 rounded-lg px-2 py-1.5 mt-1 border border-primary/20">
+   605→              {splitUsers.has(userId)
+   606→                ? splitUsers.size === 1
+   607→                  ? <>💡 Личная трата (без долгов)</>
+   608→                  : <>💡 Доля каждого: <b>${perPerson}</b> ({splitCount} чел.)</>
+   609→                : <>💡 Каждый должен по <b>${perPerson}</b> тебе ({splitCount} чел.)</>
+   610→              }
+   611→            </div>
+   612→          )}
+   613→          {splitUsers.size === 0 && (
+   614→            <div className="text-[11px] text-amber-500 bg-amber-500/5 rounded-lg px-2 py-1.5 mt-1 border border-amber-500/20">
+   615→              Выбери хотя бы одного участника
+   616→            </div>
+   617→          )}
+   618→        </div>
+   619→      </div>
+   620→
+   621→      <button
+   622→        onClick={submit}
+   623→        disabled={addExpense.isPending || splitUsers.size === 0}
+   624→        className="w-full rounded-xl bg-primary text-primary-foreground py-3.5 text-base font-medium flex items-center justify-center gap-2 disabled:opacity-50"
+   625→      >
+   626→        {addExpense.isPending ? <Loader2 className="size-4 animate-spin" /> : <Check className="size-4" />}
+   627→        Добавить трату
+   628→      </button>
+   629→    </div>
+   630→  );
+   631→}
+   632→
+   633→function JournalForm({ userId, onDone }: { userId: string; onDone: () => void }) {
+   634→  const { data: trip } = useTrip();
+   635→  const addJournal = useAddJournal();
+   636→  const [content, setContent] = useState("");
+   637→  const [mood, setMood] = useState("😊");
+   638→  const [dayId, setDayId] = useState(trip?.days.find((d) => d.dayNumber === trip.currentDayNumber)?.id ?? "");
+   639→
+   640→  const moods = ["😊", "🤩", "😴", "🤤", "🥳", "🤔", "😍", "😰"];
+   641→
+   642→  const submit = async () => {
+   643→    if (!content.trim()) {
+   644→      toast.error("Напишите что-нибудь");
+   645→      return;
+   646→    }
+   647→    await addJournal.mutateAsync({
+   648→      dayId,
+   649→      content,
+   650→      mood,
+   651→      userId,
+   652→    });
+   653→    toast.success("Запись добавлена в дневник 📔");
+   654→    setContent("");
+   655→    onDone();
+   656→  };
+   657→
+   658→  return (
+   659→    <div className="space-y-3">
+   660→      <div>
+   661→        <label className="text-xs text-muted-foreground mb-1 block">День</label>
+   662→        <DayPicker value={dayId} onChange={setDayId} />
+   663→      </div>
+   664→
+   665→      <div>
+   666→        <label className="text-xs text-muted-foreground mb-1 block">Настроение</label>
+   667→        <div className="flex gap-1 flex-wrap">
+   668→          {moods.map((m) => (
+   669→            <button
+   670→              key={m}
+   671→              onClick={() => setMood(m)}
+   672→              className={cn(
+   673→                "size-10 rounded-lg text-xl grid place-items-center transition-all",
+   674→                mood === m ? "bg-primary/20 ring-2 ring-primary scale-110" : "bg-muted hover:bg-accent"
+   675→              )}
+   676→            >
+   677→              {m}
+   678→            </button>
+   679→          ))}
+   680→        </div>
+   681→      </div>
+   682→
+   683→      <textarea
+   684→        value={content}
+   685→        onChange={(e) => setContent(e.target.value)}
+   686→        placeholder="Что запомнилось сегодня?"
+   687→        rows={4}
+   688→        className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm resize-none"
+   689→      />
+   690→
+   691→      <button
+   692→        onClick={submit}
+   693→        disabled={addJournal.isPending}
+   694→        className="w-full rounded-xl bg-primary text-primary-foreground py-3.5 text-base font-medium flex items-center justify-center gap-2 disabled:opacity-50"
+   695→      >
+   696→        {addJournal.isPending ? <Loader2 className="size-4 animate-spin" /> : <Check className="size-4" />}
+   697→        Сохранить запись
+   698→      </button>
+   699→    </div>
+   700→  );
+   701→}
+   702→

@@ -5,7 +5,7 @@ import { db } from "@/lib/db";
 export async function POST(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
-    const tripId = searchParams.get("tripId") || "default-trip";
+    const tripId = searchParams.get("tripId") || "";
     const body = await req.json().catch(() => ({}));
     const type = (body as { type?: string })?.type || "summary";
 

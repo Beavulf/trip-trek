@@ -6,7 +6,7 @@ import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
 export function PushSettings() {
-  const { permission, subscribed, loading, subscribe, unsubscribe } = usePushNotifications("default-trip");
+  const { permission, subscribed, loading, subscribe, unsubscribe } = usePushNotifications("");
 
   const handleToggle = async () => {
     if (subscribed) {

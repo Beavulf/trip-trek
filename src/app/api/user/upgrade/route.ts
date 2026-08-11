@@ -1,8 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { requireUser } from "@/lib/api-auth";
 
 // POST /api/user/upgrade — активировать Premium
 export async function POST(req: NextRequest) {
+  const { response } = await requireUser(req);
+  if (response) return response;
   const body = await req.json();
   const { userId, plan } = body;
   if (!userId) return NextResponse.json({ error: "userId required" }, { status: 400 });

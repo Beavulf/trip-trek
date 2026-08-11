@@ -4,7 +4,7 @@ import { db } from "@/lib/db";
 // GET /api/participants?tripId=...
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
-  const tripId = searchParams.get("tripId") || "default-trip";
+  const tripId = searchParams.get("tripId") || "";
 
   const members = await db.tripMember.findMany({
     where: { tripId },

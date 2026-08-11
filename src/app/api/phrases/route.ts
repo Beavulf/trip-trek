@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { emitWS } from "@/lib/ws-emit";
+import { requireTripMember } from "@/lib/api-auth";
 
 // GET /api/phrases?tripId=...&category=...&favorite=true
 export async function GET(req: NextRequest) {
@@ -23,6 +24,13 @@ export async function GET(req: NextRequest) {
 export async function PATCH(req: NextRequest) {
   const body = await req.json();
   const { id, favorite } = body;
+
+  // Lookup tripId from existing phrase for auth
+  const existing = await db.phrase.findUnique({ where: { id }, select: { tripId: true } });
+  if (!existing) return NextResponse.json({ error: "not found" }, { status: 404 });
+  const { response } = await requireTripMember(req, existing.tripId);
+  if (response) return response;
+
   const phrase = await db.phrase.update({ where: { id }, data: { favorite } });
   emitWS("phrase:updated", phrase.tripId, {});
   return NextResponse.json(phrase);

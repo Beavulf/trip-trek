@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { emitWS } from "@/lib/ws-emit";
+import { requireTripMember } from "@/lib/api-auth";
 
 // GET /api/journal?tripId=...&dayId=...
 export async function GET(req: NextRequest) {
@@ -22,6 +23,8 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   const body = await req.json();
   const { dayId, content, mood, userId, tripId } = body;
+  const { response } = await requireTripMember(req, tripId);
+  if (response) return response;
   if (!dayId || !content || !tripId) {
     return NextResponse.json({ error: "dayId, content, tripId required" }, { status: 400 });
   }
@@ -37,6 +40,13 @@ export async function DELETE(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const id = searchParams.get("id");
   if (!id) return NextResponse.json({ error: "id required" }, { status: 400 });
+
+  // Lookup tripId from existing entry for auth
+  const existing = await db.journalEntry.findUnique({ where: { id }, select: { tripId: true } });
+  if (!existing) return NextResponse.json({ error: "not found" }, { status: 404 });
+  const { response } = await requireTripMember(req, existing.tripId);
+  if (response) return response;
+
   const entry = await db.journalEntry.delete({ where: { id } });
   emitWS("journal:deleted", entry.tripId, { journalId: id });
   return NextResponse.json({ ok: true });

@@ -1,9 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { requireUser } from "@/lib/api-auth";
 
 // POST /api/push/subscribe — сохранить push подписку пользователя
 export async function POST(req: NextRequest) {
   try {
+    const { response } = await requireUser(req);
+    if (response) return response;
+
     const body = await req.json();
     const { userId, subscription } = body;
 
@@ -45,6 +49,9 @@ export async function POST(req: NextRequest) {
 
 // DELETE /api/push/subscribe — удалить подписку
 export async function DELETE(req: NextRequest) {
+  const { response } = await requireUser(req);
+  if (response) return response;
+
   const { searchParams } = new URL(req.url);
   const endpoint = searchParams.get("endpoint");
   const userId = searchParams.get("userId");

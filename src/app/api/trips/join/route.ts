@@ -1,9 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import bcrypt from "bcryptjs";
+import { requireUser } from "@/lib/api-auth";
 
 // POST /api/trips/join?code=CHINA2024 — присоединиться к поездке по invite-коду
 export async function POST(req: NextRequest) {
+  const { response } = await requireUser(req);
+  if (response) return response;
+
   const { searchParams } = new URL(req.url);
   const code = searchParams.get("code");
 

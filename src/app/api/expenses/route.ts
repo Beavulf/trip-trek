@@ -1,12 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { emitWS } from "@/lib/ws-emit";
+import { requireTripMember } from "@/lib/api-auth";
 
 // GET /api/expenses?tripId=...
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const tripId = searchParams.get("tripId");
   if (!tripId) return NextResponse.json([]);
+
+  const { response } = await requireTripMember(req, tripId);
+  if (response) return response;
 
   const expenses = await db.expense.findMany({
     where: { tripId },
@@ -23,6 +27,8 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   const body = await req.json();
   const { amount, category, description, paidById, dayId, tripId, splitWith, excludeSelf } = body;
+  const { response } = await requireTripMember(req, tripId);
+  if (response) return response;
   if (!category || !description || !paidById || !tripId) {
     return NextResponse.json({ error: "category, description, paidById, tripId required" }, { status: 400 });
   }
@@ -69,6 +75,9 @@ export async function DELETE(req: NextRequest) {
 
   const expense = await db.expense.findUnique({ where: { id }, select: { tripId: true } });
   if (!expense) return NextResponse.json({ error: "not found" }, { status: 404 });
+
+  const { response } = await requireTripMember(req, expense.tripId);
+  if (response) return response;
 
   await db.expense.delete({ where: { id } });
 

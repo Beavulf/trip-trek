@@ -1,11 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { emitWS } from "@/lib/ws-emit";
+import { requireTripMember } from "@/lib/api-auth";
 
 // PATCH /api/trips/[tripId]/members/[memberId] — обновить бюджет участника
 // memberId может быть как memberId так и userId (найдём по tripId+userId)
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ tripId: string; memberId: string }> }) {
   const { tripId, memberId } = await params;
+  const { response } = await requireTripMember(req, tripId);
+  if (response) return response;
   const body = await req.json();
   const data: Record<string, unknown> = {};
   if (typeof body.budget === "number" || body.budget === null) data.budget = body.budget;

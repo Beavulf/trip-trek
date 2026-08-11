@@ -1,11 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { emitWS } from "@/lib/ws-emit";
+import { requireTripMember } from "@/lib/api-auth";
 
 // POST /api/places — создать место
 export async function POST(req: NextRequest) {
   const body = await req.json();
   const { name, description, category, lat, lng, dayId, tripId, timeOfDay, budget, address, order, userName } = body;
+  const { response } = await requireTripMember(req, tripId);
+  if (response) return response;
   if (!name || !dayId || !tripId || typeof lat !== "number" || typeof lng !== "number") {
     return NextResponse.json({ error: "name, dayId, tripId, lat, lng required" }, { status: 400 });
   }

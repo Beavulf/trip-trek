@@ -1,10 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { requireTripMember } from "@/lib/api-auth";
 
 // PATCH /api/trip/dates — обновить даты поездки
 export async function PATCH(req: NextRequest) {
   const body = await req.json();
   const { tripId, startDate, endDate } = body;
+  const { response } = await requireTripMember(req, tripId);
+  if (response) return response;
   if (!tripId) return NextResponse.json({ error: "tripId required" }, { status: 400 });
 
   const data: Record<string, unknown> = {};

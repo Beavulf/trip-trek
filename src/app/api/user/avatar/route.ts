@@ -3,10 +3,14 @@ import { db } from "@/lib/db";
 import { writeFile, mkdir } from "fs/promises";
 import path from "path";
 import crypto from "crypto";
+import { requireUser } from "@/lib/api-auth";
 
 // POST /api/user/avatar — загрузить фото профиля
 export async function POST(req: NextRequest) {
   try {
+    const { response } = await requireUser(req);
+    if (response) return response;
+
     const formData = await req.formData();
     const file = formData.get("file") as File | null;
     const userId = formData.get("userId") as string;

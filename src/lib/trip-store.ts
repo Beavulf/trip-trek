@@ -47,7 +47,7 @@ export const useTripStore = create<TripState>()(
       setCurrentUserId: (id) => set({ currentUserId: id }),
       selectedDay: null,
       setSelectedDay: (d) => set({ selectedDay: d }),
-      currentTripId: "default-trip",
+      currentTripId: "",
       setCurrentTripId: (id) => set({ currentTripId: id }),
       mapCityFilter: null,
       setMapCityFilter: (c) => set({ mapCityFilter: c }),

@@ -76,7 +76,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   const [showRightArrow, setShowRightArrow] = useState(false);
 
   // WebSocket real-time
-  useWebSocket(trip?.settings.tripId || "default-trip");
+  useWebSocket(trip?.settings.tripId || "");
 
   const handleTabScroll = () => {
     const el = tabScrollRef.current;
