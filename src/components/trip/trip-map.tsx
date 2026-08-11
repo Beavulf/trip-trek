@@ -13,6 +13,7 @@ import { createPortal } from "react-dom";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { AddPlaceSheet, type AddPlaceData } from "./add-place-sheet";
+import { CHILL_CATEGORIES, isChillCategory } from "@/lib/chill-categories";
 
 // Кастомный пин
 function makeIcon(category: string, status: string, emoji: string) {
@@ -103,7 +104,7 @@ export default function TripMap() {
     let res = allPlaces;
     if (mapCityFilter) res = res.filter((x) => x.day.cityKey === mapCityFilter);
     if (mapOnlyUnvisited) res = res.filter((x) => x.place.status !== "visited");
-    if (mapOnlyChill) res = res.filter((x) => ["cafe", "bar", "restaurant"].includes(x.place.category));
+    if (mapOnlyChill) res = res.filter((x) => isChillCategory(x.place.category));
     return res;
   }, [allPlaces, mapCityFilter, mapOnlyUnvisited, mapOnlyChill]);
 

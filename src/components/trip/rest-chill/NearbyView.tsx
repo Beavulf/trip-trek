@@ -1,13 +1,15 @@
 "use client";
 
-import { useState } from "react";
-import { Locate, Loader2 } from "lucide-react";
+import { useState, useEffect } from "react";
+import { Locate, Loader2, AlertCircle, RotateCw } from "lucide-react";
 import { useNearby } from "@/hooks/use-trip";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import type { GeoState } from "./types";
 import { cachedGeo } from "./types";
 import { NearbyCard } from "./NearbyCard";
+import { getTripId } from "@/hooks/use-trip";
+import { wishlistDedupeKey } from "@/lib/wishlist";
 
 interface NearbyViewProps {
   category: string;
@@ -15,10 +17,19 @@ interface NearbyViewProps {
 }
 
 export function NearbyView({ category, onCategoryChange }: NearbyViewProps) {
+  const tripId = getTripId();
+  // P1 #14: сбрасываем cachedGeo при смене trip — не хотим «GZ кэш» в новой поездке
+  useEffect(() => {
+    if (cachedGeo.tripId !== tripId) {
+      cachedGeo.value = { status: "idle" };
+      cachedGeo.tripId = tripId;
+    }
+  }, [tripId]);
+
   const [geo, setGeo] = useState<GeoState>(cachedGeo.value);
 
   const enabled = geo.status === "ready";
-  const { data, isLoading, error } = useNearby(
+  const { data, isLoading, error, refetch } = useNearby(
     geo.status === "ready" ? geo.lat : null,
     geo.status === "ready" ? geo.lng : null,
     category,
@@ -52,6 +63,20 @@ export function NearbyView({ category, onCategoryChange }: NearbyViewProps) {
     );
   };
 
+  // Дедупликация мест по lat+lng+name (на случай если Overpass вернул дубли)
+  const dedupedPlaces = (() => {
+    const places = data?.places ?? [];
+    const seen = new Set<string>();
+    const result = [];
+    for (const p of places) {
+      const key = wishlistDedupeKey({ name: p.name, lat: p.lat, lng: p.lng });
+      if (seen.has(key)) continue;
+      seen.add(key);
+      result.push(p);
+    }
+    return result;
+  })();
+
   return (
     <div className="space-y-3">
       {/* Категории */}
@@ -59,14 +84,14 @@ export function NearbyView({ category, onCategoryChange }: NearbyViewProps) {
         {[
           { key: "all", label: "Все", emoji: "✨" },
           { key: "cafe", label: "Кафе", emoji: "☕" },
-          { key: "restaurant", label: "Еда", emoji: "🍽️" },
+          { key: "restaurant", label: "Рестораны", emoji: "🍽️" },
           { key: "bar", label: "Бары", emoji: "🍸" },
         ].map((f) => (
           <button
             key={f.key}
             onClick={() => onCategoryChange(f.key)}
             className={cn(
-              "flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-colors",
+              "min-h-[36px] flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-colors",
               category === f.key ? "bg-primary text-primary-foreground" : "bg-card border border-border hover:bg-accent"
             )}
           >
@@ -118,18 +143,34 @@ export function NearbyView({ category, onCategoryChange }: NearbyViewProps) {
               <Loader2 className="size-5 animate-spin" /> Ищем места поблизости…
             </div>
           ) : error ? (
-            <div className="text-center py-12 text-red-500 text-sm">
-              Не удалось загрузить: {error.message}
+            // P0 #4: теперь ошибка отличается от empty — показываем с кнопкой retry
+            <div className="text-center py-12 space-y-2">
+              <AlertCircle className="size-8 mx-auto text-red-500" />
+              <p className="text-sm text-red-500 max-w-xs mx-auto">
+                Не удалось загрузить: {error.message}
+              </p>
+              <button
+                onClick={() => refetch()}
+                className="inline-flex items-center gap-1.5 text-xs px-3 py-2 rounded-lg bg-primary text-primary-foreground"
+              >
+                <RotateCw className="size-3.5" /> Повторить
+              </button>
             </div>
-          ) : data?.places && data.places.length > 0 ? (
+          ) : dedupedPlaces.length > 0 ? (
             <div className="grid sm:grid-cols-2 gap-2">
-              {data.places.map((p, i) => (
-                <NearbyCard key={i} place={p} />
+              {/* P1 #13: key = lat+lng+name (раньше key={i} — терял state при ре-ордере) */}
+              {dedupedPlaces.map((p) => (
+                <NearbyCard
+                  key={`${p.lat.toFixed(5)},${p.lng.toFixed(5)}-${p.name}`}
+                  place={p}
+                />
               ))}
             </div>
           ) : (
-            <div className="text-center py-12 text-muted-foreground text-sm">
-              Поблизости ничего не найдено
+            <div className="text-center py-12 text-muted-foreground text-sm space-y-1">
+              <div className="text-3xl">🔍</div>
+              <p>Поблизости ничего не найдено</p>
+              <p className="text-[11px]">Попробуйте сменить категорию или обновить геолокацию</p>
             </div>
           )}
         </>

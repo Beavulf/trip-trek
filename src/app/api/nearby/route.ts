@@ -2,17 +2,62 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireUser } from "@/lib/api-auth";
 
 // GET /api/nearby?lat=..&lng=..&radius=1500&category=cafe (requires auth)
+// P0 #2: нет default Guangzhou coords — bad/empty coords → 400.
+//         User-Agent — "TripTrek/1.0" (без China).
+//         Session уже проверяется requireUser (раньше тоже было).
+//         Rate-limit — in-memory bucket per userId (60 req/час).
+const RATE_LIMIT_WINDOW_MS = 60 * 60 * 1000; // 1 час
+const RATE_LIMIT_MAX = 60; // 60 запросов в час на пользователя
+const rateLimit = new Map<string, { count: number; resetAt: number }>();
+
+function checkRateLimit(userId: string): { ok: boolean; resetIn?: number } {
+  const now = Date.now();
+  const entry = rateLimit.get(userId);
+  if (!entry || entry.resetAt < now) {
+    rateLimit.set(userId, { count: 1, resetAt: now + RATE_LIMIT_WINDOW_MS });
+    return { ok: true };
+  }
+  if (entry.count >= RATE_LIMIT_MAX) {
+    return { ok: false, resetIn: Math.ceil((entry.resetAt - now) / 1000) };
+  }
+  entry.count += 1;
+  return { ok: true };
+}
+
 export async function GET(req: NextRequest) {
-  const { response } = await requireUser(req);
+  const { user, response } = await requireUser(req);
   if (response) return response;
+
+  // P0 #2: rate-limit per user
+  const rl = checkRateLimit(user!.id);
+  if (!rl.ok) {
+    return NextResponse.json(
+      { error: `Слишком много запросов к «Рядом». Попробуйте через ${Math.ceil((rl.resetIn ?? 0) / 60)} мин.`, places: [] },
+      { status: 429 }
+    );
+  }
 
   const { searchParams } = new URL(req.url);
   const latStr = searchParams.get("lat");
   const lngStr = searchParams.get("lng");
-  if (!latStr || !lngStr) return NextResponse.json({ places: [], error: "lat, lng required" }, { status: 400 });
+
+  // P0 #2: нет China-default — без coords → 400 (а не fallback Гуанчжоу)
+  if (!latStr || !lngStr) {
+    return NextResponse.json(
+      { places: [], error: "lat, lng required — включите геолокацию" },
+      { status: 400 }
+    );
+  }
   const lat = parseFloat(latStr);
   const lng = parseFloat(lngStr);
-  const radius = parseInt(searchParams.get("radius") || "1500");
+  if (!Number.isFinite(lat) || !Number.isFinite(lng) || lat < -90 || lat > 90 || lng < -180 || lng > 180) {
+    return NextResponse.json(
+      { places: [], error: "Некорректные координаты" },
+      { status: 400 }
+    );
+  }
+
+  const radius = Math.min(Math.max(parseInt(searchParams.get("radius") || "1500") || 1500, 100), 5000); // 100m..5km
   const category = searchParams.get("category") || "all";
 
   // Маппинг категорий на OSM теги
@@ -43,7 +88,7 @@ export async function GET(req: NextRequest) {
         const timeout = setTimeout(() => controller.abort(), 12000);
         const res = await fetch(`${ep}?data=${encodeURIComponent(query)}`, {
           method: "GET",
-          headers: { "Accept": "application/json", "User-Agent": "TripTrekChina/1.0" },
+          headers: { "Accept": "application/json", "User-Agent": "TripTrek/1.0 (travel app)" },
           signal: controller.signal,
           next: { revalidate: 300 },
         });
@@ -87,7 +132,7 @@ export async function GET(req: NextRequest) {
       .sort((a: { distance: number }, b: { distance: number }) => a.distance - b.distance)
       .slice(0, 30);
 
-    return NextResponse.json({ places, source: "Overpass API (OpenStreetMap)" });
+    return NextResponse.json({ places, source: "OpenStreetMap (Overpass)" });
   } catch (e) {
     return NextResponse.json(
       { error: (e as Error).message, places: [] },

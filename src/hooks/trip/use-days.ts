@@ -11,9 +11,12 @@ export function useDays() {
     queryFn: async () => {
       if (!tripId) return [];
       const r = await fetch(`/api/days?tripId=${tripId}`);
-      return r.json();
+      if (!r.ok) throw new Error("fetch days failed");
+      const data = await r.json();
+      return Array.isArray(data) ? data : [];
     },
     enabled: !!tripId,
+    placeholderData: [],
   });
 }
 

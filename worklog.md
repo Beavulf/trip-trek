@@ -723,3 +723,176 @@ In these cases, the app correctly falls back to requesting current geolocation.
 3. **BudgetHero `toFixed(0)`** намеренно — компактный hero. Если пользователь редактирует бюджет, видит $2000, не $2000.00.
 4. **Memory constraint** — сервер падал от OOM когда одновременно работал Next.js dev + agent-browser chrome. Без chrome сервер стабилен. QA в браузере возможно требует `pkill chrome` перед тестами.
 
+
+---
+
+## Session: Chill Audit — P0 + P1 + P2 fixes (based on `audit-chill-rest.md`)
+
+**Phase**: 18 — Chill audit fixes
+
+### Status Before
+- RestChill was already split into `rest-chill/` folder (7 files: RestChill, ChillCard, WishlistView, NearbyView, NearbyCard, types, index)
+- API `GET /api/nearby` had `requireUser` already, but no rate-limit; bad coords fell back to Guangzhou default; User-Agent was "TripTrekChina/1.0"
+- `useNearby` swallowed `!r.ok` as empty (500 → UI "ничего не найдено")
+- `useUpdatePlace` already threw on `!ok`, but ChillCard showed toast immediately after `mutate` (not waiting)
+- `RestTimer` component existed but was orphan — never imported anywhere
+- Wishlist used single LS key `triptrek-wishlist` (shared across all trips)
+- `cachedGeo` module-level — never reset on trip switch
+- Hero was EN "Rest & Chill" + China-agnostic but not trip-aware
+
+### P0 — Critical Fixes
+
+#### P0 #1: Empty/error states in RestChill
+**Problem**: Without tripId, `useDays` + `api/days` default-trip fallback could show another trip's days or false "Ничего не найдено".
+**Fix** (`src/components/trip/rest-chill/RestChill.tsx`):
+- Added `error: daysError` from `useDays()` → screen with 🤔 "Не удалось загрузить маршрут" + "Обновить" button.
+- `useDays` hook: `if (!r.ok) throw`, `placeholderData: []`, `enabled: !!tripId` (was already), `Array.isArray(data) ? data : []`.
+- Loading state shows spinner instead of bare "Загрузка…".
+
+#### P0 #2: GET /api/nearby — no China default + rate-limit
+**Problem**: Bad/empty coords fell back to Guangzhou lat/lng; open proxy without rate-limit; User-Agent "TripTrekChina/1.0".
+**Fix** (`src/app/api/nearby/route.ts`):
+- Without `lat`/`lng` → 400 "lat, lng required — включите геолокацию" (was returning empty array).
+- Invalid coords (lat>90, lat<-90, lng>180, lng<-180, NaN) → 400 "Некорректные координаты".
+- **Rate-limit**: in-memory bucket per userId, 60 requests/hour. 429 with "Слишком много запросов к «Рядом»" + reset time.
+- User-Agent: "TripTrek/1.0 (travel app)" (was "TripTrekChina/1.0").
+- Radius clamped to 100m..5km (was unbounded).
+- Verified: `curl /api/nearby` without coords → 400; with `lat=999&lng=999` → 400; valid Moscow coords → 200 with places.
+
+#### P0 #4: useNearby throws on !ok (empty vs error)
+**Problem**: `return r.json()` without `r.ok` check → 500 from Overpass parsed as `{places: [], error: ...}` → UI showed "ничего не найдено".
+**Fix** (`src/hooks/trip/use-nearby.ts`):
+- `if (!r.ok) throw new Error(body.error || status)` — now React Query puts it in `error` not `data`.
+- `retry: 1` (don't loop on dead Overpass).
+- Empty `places: []` on `r.ok` is still legit empty (not error).
+- NearbyView: error state shows AlertCircle + error message + "Повторить" button (was just "Не удалось загрузить").
+
+### P1 — Integrity / UX
+
+#### P1 #5 + #6: Wishlist isolated per trip + unified helper
+**Problem**: Single LS key `triptrek-wishlist` → wishlist mixed across all trips. Direct LS writes in 2 places (WishlistView + NearbyCard) — desync risk.
+**Fix**:
+- New `src/lib/wishlist.ts` — `wishlistKey(tripId)`, `loadWishlist(tripId)`, `saveWishlist(items, tripId)`, `wishlistDedupeKey(item)`, `migrateLegacyWishlist(tripId)`.
+- Key: `triptrek-wishlist:${tripId}` (was `triptrek-wishlist`).
+- **Migration**: on first load, if legacy key exists → migrate to scoped key + delete legacy.
+- WishlistView + NearbyCard both use the helper (no direct LS writes).
+- **Honest copy**: banner "📱 Хранится только на этом телефоне — не виден компании. (X/Y отмечено)".
+- Verified: switched Europe trip (had 1 item) → China trip shows "0 в «Хочу»" (isolated, not shared).
+
+#### P1 #7: Visit/rating pending + ok-check + userName in PATCH
+**Problem**: ChillCard showed toast immediately after `mutate` (not waiting for response); double-tap risk; UI didn't send `userName` to PATCH (API could emit it).
+**Fix** (`src/components/trip/rest-chill/ChillCard.tsx`):
+- `update.mutate(data, { onSuccess: () => toast(...), onError: (err) => toast.error(...) })` — toast only after response.
+- `userName` from `useAuth()` session included in PATCH body → API emits WS with real name.
+- `disabled={update.isPending}` on visit toggle + rating buttons — no double-tap.
+- aria-labels: "Снять отметку «отдохнули»" / "Отметить как «отдохнули»" / "Оценить на N звёзд" (P2 #19).
+
+#### P1 #8: Empty distinguishes — no chill places / filter / no days
+**Problem**: Single "Ничего не найдено" for all empty cases.
+**Fix**: `EmptyRouteState` component with 3 branches:
+- No days → "🗺️ Сначала создайте маршрут" + "Перейти в Маршрут" CTA.
+- Has filter but no matches → "🔍 Ничего не найдено" + "Сбросить фильтр" CTA.
+- Has days but no chill places → "☕ Пока нет кафе и баров в маршруте" + "Перейти в Маршрут" CTA.
+
+#### P1 #9: Currency from trip.settings.currency
+**Problem**: ChillCard always showed `$` regardless of trip currency.
+**Fix**: ChillCard accepts `currency` prop (passed from RestChill via `trip?.settings.currency`). Maps currency code → symbol ($, €, ¥, ₽, £, ₸, ฿, ₩). Falls back to `$`.
+
+#### P1 #10: Trip-agnostic RU hero
+**Problem**: Hero had EN "Rest & Chill" eyebrow; China copy on Nearby.
+**Fix**: Hero now:
+- Eyebrow: "☕ Отдых и перекус" (was "Coffee / Rest & Chill").
+- Subtitle: shows current trip title "Европа: Париж → Амстердам → Берлин" (trip-aware, not China).
+- NearbyView label: "Рестораны" (was "Еда" — aligned with Route filter labels, P2 #16).
+
+#### P1 #11: RestTimer embedded under hero
+**Problem**: `RestTimer` component existed in `rest-timer.tsx` but was never imported anywhere (orphan).
+**Fix**: Imported and embedded in RestChill under the hero, before the Маршрут/Хочу/Рядом segment switcher. Now visible and usable. (Audit said "embed or leave — don't delete silently".)
+
+#### P1 #13: Nearby key = lat+lng+name + dedup by composite key
+**Problem**: `key={i}` (index) — loses state on re-order; dedup by name → collisions (different places with same name).
+**Fix**:
+- `key={`${p.lat.toFixed(5)},${p.lng.toFixed(5)}-${p.name}`}`.
+- `wishlistDedupeKey(item)` helper: `name.toLowerCase()@lat,lng` if coords, else `name@address`.
+- NearbyView also dedupes Overpass results by composite key before rendering.
+
+#### P1 #14: cachedGeo reset on trip change
+**Problem**: Module-level `cachedGeo` never reset → stale "ready" state from previous trip persisted.
+**Fix** (`src/components/trip/rest-chill/types.ts` + `NearbyView.tsx`):
+- `cachedGeo` now has `tripId: string | null` field.
+- NearbyView `useEffect([tripId])`: if `cachedGeo.tripId !== tripId` → reset to `{status: "idle"}`.
+- Verified: switched Europe→China trip → Nearby showed geo CTA (not stale "ready").
+
+### P2 — Polish
+
+#### P2 #15: Mobile segment hit ≥44px
+- Маршрут/Хочу/Рядом buttons: `min-h-[44px]` (was `py-2.5` ~36px).
+- Filter chips: `min-h-[36px]`.
+- All interactive buttons in WishlistView: `min-h-[36px]` or `min-h-[40px]`.
+
+#### P2 #17: Hero metrics — wishlist count
+- Hero now shows 3 metrics: "X посещено" / "Y в маршруте" / "Z в «Хочу»".
+- Wishlist count loaded from `loadWishlist(tripId)` on each view change.
+
+#### P2 #18: Sync CHILL_CATEGORIES with mapOnlyChill
+- New `src/lib/chill-categories.ts` — `CHILL_CATEGORIES = ["cafe", "bar", "restaurant"]`, `isChillCategory()`, `CHILL_CATEGORY_LABELS`.
+- `RestChill.tsx` imports it (was local const).
+- `trip-map.tsx` uses `isChillCategory()` for `mapOnlyChill` filter (was inline `["cafe","bar","restaurant"].includes()`).
+- Single source of truth — adding a category in one place updates both.
+
+#### P2 #19: a11y labels on visit/stars
+- Visit toggle: `aria-label` + `aria-pressed`.
+- Rating stars: `aria-label="Оценить на N звёзд"`.
+- Wishlist toggle/delete: `aria-label`s.
+- Nearby "Хочу посетить" button: `aria-label`.
+
+### Files Modified
+
+**API**:
+- `src/app/api/nearby/route.ts` — rate-limit, 400 on bad coords, clamp radius, User-Agent fix
+
+**Hooks**:
+- `src/hooks/trip/use-nearby.ts` — throw on !ok, retry: 1
+- `src/hooks/trip/use-days.ts` — throw on !ok, placeholderData: []
+
+**Components**:
+- `src/components/trip/rest-chill/RestChill.tsx` — error states, EmptyRouteState, trip-aware hero, RestTimer embed, CHILL_CATEGORIES shared, mobile 44px, wishlist count
+- `src/components/trip/rest-chill/ChillCard.tsx` — toast onSuccess/onError, userName in PATCH, pending disabled, currency prop, a11y labels
+- `src/components/trip/rest-chill/WishlistView.tsx` — loadWishlist/saveWishlist helpers, tripId scoping, honest copy banner, a11y labels, mobile targets
+- `src/components/trip/rest-chill/NearbyView.tsx` — error state with retry, dedup by composite key, cachedGeo reset on trip switch, mobile targets, aligned labels
+- `src/components/trip/rest-chill/NearbyCard.tsx` — wishlist helpers, composite dedup key, a11y labels
+- `src/components/trip/rest-chill/types.ts` — lat/lng on WishlistItem, cachedGeo.tripId field
+- `src/components/trip/trip-map.tsx` — isChillCategory() from shared const
+
+**New files**:
+- `src/lib/chill-categories.ts` — shared CHILL_CATEGORIES constant + isChillCategory helper + labels
+- `src/lib/wishlist.ts` — wishlistKey/loadWishlist/saveWishlist/wishlistDedupeKey/migrateLegacyWishlist
+
+### Verification (curl + agent-browser)
+
+✅ `curl /api/nearby` без coords → 400 (was empty array)
+✅ `curl /api/nearby?lat=999&lng=999` → 400 "Некорректные координаты"
+✅ `curl /api/nearby` без auth → 401
+✅ `curl /api/nearby?lat=55.7558&lng=37.6173` → 200 with Moscow cafe places
+✅ Rate-limit: 3 rapid requests → all 200 (limit is 60/hour)
+✅ ESLint: clean
+✅ agent-browser: Chill tab loads → hero "Отдых и перекус" (RU, not EN), shows trip title "Европа: Париж → Амстердам → Берлин", 3 metrics (посещено/в маршруте/в «Хочу»)
+✅ RestTimer visible under hero (was orphan)
+✅ Маршрут empty state: "Пока нет кафе и баров в маршруте" + "Перейти в Маршрут" CTA
+✅ Хочу tab: "📱 Хранится только на этом телефоне — не виден компании" banner + Add form works
+✅ Added "Test Paris Cafe" to Europe wishlist → localStorage key `triptrek-wishlist:cms8liuk60001p6cmm80tx66q` (scoped, not shared)
+✅ Switched to China trip → hero shows "0 в «Хочу»" (wishlist isolated per trip, P1 #5 confirmed)
+✅ China trip shows 8 chill cards (Bingtang Hugu, Yonghe Palace, etc.) with $7, $5 budgets (currency from trip)
+✅ ChillCard: aria-labels "Снять отметку «отдохнули»", "Оценить на N звёзд"
+✅ Switched trip → Nearby showed geo CTA (cachedGeo reset, P1 #14 confirmed)
+✅ No console errors
+
+### Unresolved / Notes
+
+1. **P1 #12 (Card click → setSelectedDay + itinerary/map)** — ChillCard already shows "День N · city" inline. Full click-to-navigate would require app-shell coordination. Skipped — audit item is "nice to have", not blocking.
+2. **P2 #16 (Labels "Рестораны" vs "Еда")** — aligned: Nearby now uses "Рестораны" (was "Еда"). Route filter already "Рестораны".
+3. **P2 #20 (Less motion on long list)** — `motion.div layout` on ChillCard/NearbyCard is lightweight; with 8-30 items no perf issue observed. Can revisit if lists grow.
+4. **P2 #21 (Nearby → create place in day)** — out of scope, separate feature.
+5. **Wishlist server-side** — audit says "не Prisma wishlist без ТЗ". Kept client-only with honest copy. LS migration handles existing users.
+6. **Overpass fallback chain** — 3 mirrors already in place (kumi.systems, overpass-api.de, openstreetmap.fr). Not changed.
+
