@@ -1,7 +1,7 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { CalendarDays, MapPin } from "lucide-react";
+import { CalendarDays, MapPin, Plane, CheckCircle2, Compass } from "lucide-react";
 import type { TripSummary } from "@/lib/types";
 
 interface DashboardHeroProps {
@@ -33,6 +33,22 @@ export function DashboardHero({ trip, currentDay, cityEmoji }: DashboardHeroProp
         style={{ background: "white" }}
       />
       <div className="relative">
+        {/* Статус поездки + invite code */}
+        <div className="flex items-center justify-between mb-2">
+          <div className="flex items-center gap-1.5 text-[10px] font-medium px-2 py-0.5 rounded-full bg-white/15 backdrop-blur">
+            {(() => {
+              const status = trip.trip?.status || "planning";
+              const icon = status === "completed" ? <CheckCircle2 className="size-3" /> : status === "active" ? <Plane className="size-3" /> : <Compass className="size-3" />;
+              const label = status === "completed" ? "Завершена" : status === "active" ? "В пути" : "Планирование";
+              return <>{icon} {label}</>;
+            })()}
+          </div>
+          {trip.settings.inviteCode && (
+            <div className="text-[10px] text-white/60 font-mono">
+              Код: {trip.settings.inviteCode.slice(0, 8)}
+            </div>
+          )}
+        </div>
         <div className="flex items-center gap-2 text-white/80 text-xs font-medium mb-1">
           <CalendarDays className="size-3.5" />
           День {trip.currentDayNumber} из {trip.settings.totalDays}

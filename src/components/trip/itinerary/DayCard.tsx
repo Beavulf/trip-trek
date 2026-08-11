@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { ChevronDown, MapPin } from "lucide-react";
+import { ChevronDown, MapPin, Plus } from "lucide-react";
 import { CATEGORY_META, type Day, type Place } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { PlaceRow } from "./PlaceRow";
@@ -11,9 +11,10 @@ import { DeleteDayButton } from "./DeleteDayButton";
 interface DayCardProps {
   day: Day;
   onOpenPlace: (p: Place) => void;
+  onAddPlace?: (dayId: string) => void;
 }
 
-export function DayCard({ day, onOpenPlace }: DayCardProps) {
+export function DayCard({ day, onOpenPlace, onAddPlace }: DayCardProps) {
   const [expanded, setExpanded] = useState(true);
   const visited = day.places.filter((p) => p.status === "visited").length;
   const progress = day.places.length ? (visited / day.places.length) * 100 : 0;
@@ -72,6 +73,16 @@ export function DayCard({ day, onOpenPlace }: DayCardProps) {
               {day.places.map((place) => (
                 <PlaceRow key={place.id} place={place} accentColor={day.accentColor ?? "#f97316"} onOpen={() => onOpenPlace(place)} />
               ))}
+              {/* Empty day CTA */}
+              {day.places.length === 0 && onAddPlace && (
+                <button
+                  onClick={() => onAddPlace(day.id)}
+                  className="w-full flex items-center justify-center gap-1.5 py-3 rounded-xl border-2 border-dashed border-border hover:border-primary hover:text-primary transition-colors active:scale-95"
+                >
+                  <Plus className="size-4" />
+                  <span className="text-xs font-medium">Добавить место</span>
+                </button>
+              )}
             </div>
           </motion.div>
         )}

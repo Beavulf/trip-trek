@@ -5,12 +5,15 @@ import type { Day } from "@/lib/types";
 import { getTripId } from "./trip-id";
 
 export function useDays() {
+  const tripId = getTripId();
   return useQuery<Day[]>({
-    queryKey: ["days"],
+    queryKey: ["days", tripId],
     queryFn: async () => {
-      const r = await fetch(`/api/days?tripId=${getTripId()}`);
+      if (!tripId) return [];
+      const r = await fetch(`/api/days?tripId=${tripId}`);
       return r.json();
     },
+    enabled: !!tripId,
   });
 }
 

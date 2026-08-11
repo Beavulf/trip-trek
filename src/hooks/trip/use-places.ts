@@ -12,6 +12,10 @@ export function useUpdatePlace() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(data),
       });
+      if (!r.ok) {
+        const err = await r.json().catch(() => ({}));
+        throw new Error(err.error || "update place failed");
+      }
       return r.json();
     },
     onSuccess: () => {
@@ -57,7 +61,11 @@ export function useDeletePlace() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (id: string) => {
-      await fetch(`/api/places/${id}`, { method: "DELETE" });
+      const r = await fetch(`/api/places/${id}`, { method: "DELETE" });
+      if (!r.ok) {
+        const err = await r.json().catch(() => ({}));
+        throw new Error(err.error || "delete place failed");
+      }
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["days"] });

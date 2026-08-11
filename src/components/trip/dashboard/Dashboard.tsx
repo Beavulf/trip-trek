@@ -17,6 +17,13 @@ const CITY_EMOJI: Record<string, string> = {
   shenzhen: "🏙️",
   hongkong: "🌃",
   macau: "🎰",
+  tokyo: "🗾",
+  paris: "🗼",
+  bangkok: "🛕",
+  phuket: "🏖️",
+  seoul: "🇰🇷",
+  singapore: "🦁",
+  dubai: "🕌",
 };
 
 export function Dashboard() {
@@ -29,7 +36,7 @@ export function Dashboard() {
 
   const currentDay = trip.days.find((d) => d.dayNumber === trip.currentDayNumber);
   const currentCityKey = currentDay?.cityKey ?? "";
-  const cityEmoji = CITY_EMOJI[currentCityKey] ?? "🏯";
+  const cityEmoji = CITY_EMOJI[currentCityKey] ?? "🏙️";
 
   // Обратный отсчёт / прогресс по времени
   const now = new Date();

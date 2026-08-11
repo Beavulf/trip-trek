@@ -88,7 +88,7 @@ export function PlaceRow({ place, accentColor, onOpen }: PlaceRowProps) {
         </div>
         {/* Кнопка "как добраться" */}
         <a
-          href={`https://www.openstreetmap.org/directions?from=&to=${place.lat}%2C${place.lng}`}
+          href={`https://www.google.com/maps/dir/?api=1&destination=${place.lat},${place.lng}`}
           target="_blank"
           rel="noopener noreferrer"
           onClick={(e) => e.stopPropagation()}

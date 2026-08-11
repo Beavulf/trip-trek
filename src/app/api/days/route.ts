@@ -6,6 +6,7 @@ import { requireTripMember } from "@/lib/api-auth";
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const tripId = searchParams.get("tripId") || "";
+  if (!tripId) return NextResponse.json([]);
 
   const days = await db.day.findMany({
     where: { tripId },
@@ -56,10 +57,14 @@ export async function POST(req: NextRequest) {
     },
   });
 
-  // Обновим totalDays в поездке
+  // Обновим totalDays и endDate в поездке
+  const endDate = new Date(trip.startDate.getTime() + newDayNumber * 24 * 60 * 60 * 1000);
   await db.trip.update({
     where: { id: tripId },
-    data: { totalDays: newDayNumber },
+    data: {
+      totalDays: newDayNumber,
+      endDate,
+    },
   });
 
   return NextResponse.json(day);

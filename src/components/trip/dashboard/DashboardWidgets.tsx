@@ -23,12 +23,13 @@ export function ActivityChart({ trip }: { trip: TripSummary }) {
     };
   });
 
-  const cityColors: Record<string, string> = {
-    guangzhou: "#f97316",
-    shenzhen: "#06b6d4",
-    hongkong: "#ec4899",
-    macau: "#8b5cf6",
-  };
+  // Динамические цвета из данных дней (не хардкод Китай)
+  const cityColors = new Map<string, string>();
+  dayData.forEach((d) => {
+    if (!cityColors.has(d.cityKey)) {
+      cityColors.set(d.cityKey, d.accentColor || "#f97316");
+    }
+  });
 
   return (
     <div className="rounded-2xl bg-card border border-border p-4">
@@ -38,7 +39,7 @@ export function ActivityChart({ trip }: { trip: TripSummary }) {
 
       <div className="flex items-end justify-between gap-1 h-24 mb-2">
         {dayData.map((d) => {
-          const color = cityColors[d.cityKey] ?? "#f97316";
+          const color = cityColors.get(d.cityKey) ?? "#f97316";
           return (
             <div key={d.day} className="flex-1 flex flex-col items-center gap-1 group relative">
               <div className="absolute -top-8 opacity-0 group-hover:opacity-100 transition-opacity bg-card border border-border rounded px-1.5 py-0.5 text-[9px] whitespace-nowrap z-10 shadow-md pointer-events-none">
@@ -70,22 +71,20 @@ export function ActivityChart({ trip }: { trip: TripSummary }) {
         })}
       </div>
 
-      <div className="flex items-center gap-3 flex-wrap text-[10px] text-muted-foreground pt-2 border-t border-border">
-        {Object.entries({
-          guangzhou: "Гуанчжоу",
-          shenzhen: "Шэньчжэнь",
-          hongkong: "Гонконг",
-          macau: "Макао",
-        }).map(([key, name]) => (
-          <span key={key} className="flex items-center gap-1">
-            <span className="size-2 rounded-full" style={{ background: cityColors[key] }} />
-            {name}
+      {/* Легенда городов — из данных поездки, не хардкод */}
+      {dayData.length > 0 && (
+        <div className="flex items-center gap-3 flex-wrap text-[10px] text-muted-foreground pt-2 border-t border-border">
+          {[...new Map(dayData.map((d) => [d.cityKey, d])).values()].map((d) => (
+            <span key={d.cityKey} className="flex items-center gap-1">
+              <span className="size-2 rounded-full" style={{ background: cityColors.get(d.cityKey) }} />
+              {d.city}
+            </span>
+          ))}
+          <span className="ml-auto">
+            {trip.visitedPlaces}/{trip.totalPlaces} мест посещено
           </span>
-        ))}
-        <span className="ml-auto">
-          {trip.visitedPlaces}/{trip.totalPlaces} мест посещено
-        </span>
-      </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -94,6 +93,7 @@ export function DailyTip({ trip }: { trip: TripSummary }) {
   const currentDay = trip.days.find((d) => d.dayNumber === trip.currentDayNumber);
   if (!currentDay) return null;
 
+  // Общие советы для любого города + специфичные для известных
   const cityTips: Record<string, string[]> = {
     guangzhou: [
       "Попробуйте уличную еду на Шансяцзю — чашеобразная лапша и манго саго!",
@@ -105,25 +105,40 @@ export function DailyTip({ trip }: { trip: TripSummary }) {
       "Смотровая Free Sky на 116 этаже Ping An — билеты от $44",
       "OCT-LOFT — модный район с галереями и % Arabica",
       "Haidilao — хот-пот с легендарным сервисом",
-      "Пляж Дамейша — атмосфера французского курорта",
     ],
     hongkong: [
       "Пик Виктория — поднимайтесь на историческом трамвайчике",
       "Симфония огней в 20:00 на набережной Чимсачёй",
-      "Ozone — самый высокий бар мира (118 этаж Ritz-Carlton)",
       "Lan Kwai Fong — центр ночной жизни Гонконга",
     ],
     macau: [
       "Lord Stow's Bakery — легендарные португальские яичные тарты",
       "Казино можно просто осматривать — это бесплатно!",
-      "Бесплатные шаттлы от казино до паромных терминалов",
       "Rua do Cunha — пешеходная улица с деликатесами",
+    ],
+    tokyo: [
+      "Суши на Цукидзи — самый свежий улов с утра",
+      "Сибуя на закате — перекрёсток в огнях",
+      "Янака — старый Токио с атмосферой прошлого",
+    ],
+    paris: [
+      "Эйфелева башня — приходите к 18:00 для заката",
+      "Латинский квартал — дешёвые бистро и студенческая атмосфера",
+      "Монмартр — художники и вид на весь Париж",
     ],
   };
 
-  const tips = cityTips[currentDay.cityKey] ?? [];
-  if (tips.length === 0) return null;
+  // Нейтральные советы для неизвестных городов
+  const genericTips = [
+    "Спросите местных о лучшем месте для обеда — они знают!",
+    "Сделайте фото на главную достопримечательность города",
+    "Попробуйте местную уличную еду — это самый честный вкус города",
+    "Загляните в местную кофейню — там уютнее, чем в сетевых",
+    "Пройдитесь пешком утром — города открываются по-другому",
+    "Купите сувенир на местном рынке, а не в туристическом магазине",
+  ];
 
+  const tips = cityTips[currentDay.cityKey] ?? genericTips;
   const tipIndex = (trip.currentDayNumber - 1) % tips.length;
   const tip = tips[tipIndex];
 
