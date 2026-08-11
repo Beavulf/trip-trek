@@ -42,7 +42,11 @@ export function useDeletePhoto() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (id: string) => {
-      await fetch(`/api/photos?id=${id}`, { method: "DELETE" });
+      const r = await fetch(`/api/photos?id=${id}`, { method: "DELETE" });
+      if (!r.ok) {
+        const err = await r.json().catch(() => ({}));
+        throw new Error(err.error || "delete photo failed");
+      }
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["photos"] });

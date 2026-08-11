@@ -76,6 +76,15 @@ export function useWebSocket(tripId: string) {
       }
     });
 
+    socket.on("photo:deleted", (data: { tripId: string }) => {
+      if (data.tripId === tripId) {
+        qc.invalidateQueries({ queryKey: ["photos"] });
+        qc.invalidateQueries({ queryKey: ["photos-geo"] });
+        qc.invalidateQueries({ queryKey: ["days"] });
+        qc.invalidateQueries({ queryKey: ["trip"] });
+      }
+    });
+
     socket.on("expense:added", (data: { tripId: string }) => {
       if (data.tripId === tripId) {
         qc.invalidateQueries({ queryKey: ["expenses"] });

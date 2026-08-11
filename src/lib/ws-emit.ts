@@ -9,6 +9,7 @@ type WSEvent =
   | "place:updated"
   | "place:deleted"
   | "photo:added"
+  | "photo:deleted"
   | "expense:added"
   | "expense:deleted"
   | "journal:added"

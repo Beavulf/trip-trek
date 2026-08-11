@@ -11,8 +11,12 @@ export async function GET(req: NextRequest) {
   const placeId = searchParams.get("placeId");
   const userId = searchParams.get("userId");
 
-  const where: Record<string, unknown> = {};
-  if (tripId) where.tripId = tripId;
+  if (!tripId) return NextResponse.json([]);
+
+  const { response } = await requireTripMember(req, tripId);
+  if (response) return response;
+
+  const where: Record<string, unknown> = { tripId };
   if (dayId) where.dayId = dayId;
   if (placeId) where.placeId = placeId;
   if (userId) where.userId = userId;
@@ -82,16 +86,25 @@ export async function DELETE(req: NextRequest) {
   const id = searchParams.get("id");
   if (!id) return NextResponse.json({ error: "id required" }, { status: 400 });
 
-  // Lookup tripId from existing photo for auth
-  const existing = await db.photo.findUnique({ where: { id }, select: { tripId: true } });
+  // Lookup tripId + url from existing photo for auth + cleanup
+  const existing = await db.photo.findUnique({ where: { id }, select: { tripId: true, url: true } });
   if (!existing) return NextResponse.json({ error: "not found" }, { status: 404 });
   const { response } = await requireTripMember(req, existing.tripId);
   if (response) return response;
 
   const photo = await db.photo.delete({ where: { id } });
-  emitWS("photo:added", photo.tripId, {});
+
+  // Delete file from disk
+  try {
+    const filePath = path.join(process.cwd(), "public", photo.url);
+    await unlink(filePath);
+  } catch {
+    // File may not exist — ignore
+  }
+
+  emitWS("photo:deleted", photo.tripId, { photoId: id });
   return NextResponse.json({ ok: true });
 }
 
-import { writeFile, mkdir } from "fs/promises";
+import { writeFile, mkdir, unlink } from "fs/promises";
 import path from "path";
