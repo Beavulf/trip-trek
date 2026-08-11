@@ -19,19 +19,28 @@ export interface FoodItem {
   order: number;
 }
 
+// P0 #2: enabled !!tripId, placeholderData: []
+// P1 #5: throw on !ok
 export function useFoods(city?: string) {
+  const tripId = getTripId();
   const params = new URLSearchParams();
-  params.set("tripId", getTripId()); // ВСЕГДА фильтруем по поездке
+  if (tripId) params.set("tripId", tripId);
   if (city && city !== "all") params.set("city", city);
   return useQuery<FoodItem[]>({
-    queryKey: ["foods", getTripId(), city],
+    queryKey: ["foods", tripId, city],
     queryFn: async () => {
+      if (!tripId) return [];
       const r = await fetch(`/api/foods?${params}`);
-      return r.json();
+      if (!r.ok) throw new Error("fetch foods failed");
+      const data = await r.json();
+      return Array.isArray(data) ? data : [];
     },
+    enabled: !!tripId,
+    placeholderData: [],
   });
 }
 
+// P1 #5: throw on !ok — UI ловит в try/catch
 export function useUpdateFood() {
   const qc = useQueryClient();
   return useMutation({
@@ -41,7 +50,11 @@ export function useUpdateFood() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ id, ...data }),
       });
-      return r.json();
+      const body = await r.json().catch(() => ({}));
+      if (!r.ok) {
+        throw new Error(body?.error || `Ошибка ${r.status}`);
+      }
+      return body;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["foods"] }),
   });
@@ -56,18 +69,27 @@ export function useAddFood() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ ...data, tripId: getTripId() }),
       });
-      if (!r.ok) throw new Error("add food failed");
-      return r.json();
+      const body = await r.json().catch(() => ({}));
+      if (!r.ok) {
+        throw new Error(body?.error || `Ошибка ${r.status}`);
+      }
+      return body;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["foods"] }),
   });
 }
 
+// P0 #1: delete hook уже был, но throw on !ok добавлен
 export function useDeleteFood() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (id: string) => {
-      await fetch(`/api/foods?id=${id}`, { method: "DELETE" });
+      const r = await fetch(`/api/foods?id=${id}`, { method: "DELETE" });
+      const body = await r.json().catch(() => ({}));
+      if (!r.ok) {
+        throw new Error(body?.error || `Ошибка ${r.status}`);
+      }
+      return body;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["foods"] }),
   });
@@ -81,8 +103,11 @@ export function useUploadFoodPhoto() {
       fd.append("file", file);
       fd.append("id", id);
       const r = await fetch("/api/foods", { method: "PATCH", body: fd });
-      if (!r.ok) throw new Error("upload failed");
-      return r.json();
+      const body = await r.json().catch(() => ({}));
+      if (!r.ok) {
+        throw new Error(body?.error || `Ошибка ${r.status}`);
+      }
+      return body;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["foods"] }),
   });

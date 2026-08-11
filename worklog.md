@@ -1334,3 +1334,139 @@ User requested removing the RestTimer that was embedded under the Chill hero in 
 5. **`CITIES` in types.ts** — still used by budget charts, global-search, transport-map. Not removed (different purpose — chart colors). Weather uses shared `KNOWN_CITIES` now.
 6. **Dashboard WeatherWidget** — still uses `useWeather(cityKey)` directly. Could migrate to shared resolveCityCoords but audit says "не переписывать Dashboard WeatherWidget".
 
+
+---
+
+## Session: Food Audit — P0 + P1 + P2 fixes (based on `audit-food-eda.md`)
+
+**Phase**: 22 — Food audit fixes
+
+### Status Before
+- `useDeleteFood` hook + `Trash2` icon imported in food-guide.tsx, but delete button NEVER rendered (dead code)
+- `GET /api/foods` without tripId → `where={}` → all foods from all trips (leak)
+- `useFoods` no `enabled: !!tripId`, no `placeholderData`
+- PATCH (JSON + multipart) had NO membership check — anyone could toggle tried/rating/upload photo
+- All hooks (`useUpdateFood`, `useDeleteFood`, `useUploadFoodPhoto`) returned `r.json()` without `!r.ok` check → false success toasts
+- Toggle/rating: toast immediately after `mutate()` (not waiting for response)
+- Upload: no MIME/size limits
+- Empty state: single "Ничего не найдено" for all cases (no foods vs filter empty)
+- China bias: placeholder "点心", label "Местное название"
+- `food:tried` dead type in websocket-client.ts
+
+### P0 — Critical Fixes
+
+#### P0 #1: Delete UI — button was imported but never rendered
+**Problem**: `useDeleteFood` + `Trash2` imported, but no delete button in `FoodCard`.
+**Fix** (`src/components/trip/food-guide.tsx`):
+- Added delete button with `confirmingDelete` state — click → "Да"/"Нет" inline confirm.
+- `handleDelete`: `try { await del.mutateAsync(id); toast.success("Удалено"); } catch (err) { toast.error(err.message); }`.
+- Button: `md:opacity-0 md:group-hover:opacity-100` (visible on mobile, hover on desktop).
+- aria-labels: "Удалить блюдо", "Подтвердить удаление", "Отменить удаление".
+- `del.isPending` per-row (only confirming row shows spinner).
+
+#### P0 #2: GET /api/foods requires tripId
+**Problem**: `if (tripId) where.tripId = tripId` — empty string → `where={}` → all foods.
+**Fix** (`src/app/api/foods/route.ts`):
+- `if (!tripId) return 400 "tripId required"`.
+- Added `requireTripMember` auth check on GET.
+- `useFoods`: `enabled: !!tripId`, `placeholderData: []`, `if (!tripId) return []`, `if (!r.ok) throw`, `Array.isArray(data) ? data : []`.
+- Verified: `curl /api/foods` без tripId → 400; без auth → 401.
+
+#### P0 #3: Auth/membership on all CRUD
+**Problem**: PATCH (JSON + multipart) had NO membership check — anyone could modify.
+**Fix**:
+- PATCH JSON: `existing = findUnique(id)` → 404 if not found → `requireTripMember(req, existing.tripId)`.
+- PATCH multipart: same membership check before file save.
+- POST/DELETE already had `requireTripMember` (было).
+- Verified: `curl PATCH` без auth → 401; с fake id → 404; с valid → 200.
+
+### P1 — Integrity / UX
+
+#### P1 #4: Empty distinguishes no-foods vs filter-empty
+**Fix**:
+- `hasFoods = foods.length > 0` + `hasFilter = cityFilter !== "all" || showTried !== "all"`.
+- If `hasFoods && hasFilter` → "🔍 Ничего не найдено" + "Сбросить фильтр" button.
+- If `!hasFoods` → "🍽️ Пока нет блюд" + CTA description.
+- Verified: filter "Попробовать" with only tried food → "Ничего не найдено" + "Сбросить фильтр".
+
+#### P1 #5: Hooks throw on !ok + toast onSuccess only
+**Fix** (`src/hooks/trip/use-foods.ts`):
+- `useUpdateFood`: `if (!r.ok) throw new Error(body.error || status)`.
+- `useDeleteFood`: same throw on !ok.
+- `useUploadFoodPhoto`: same.
+- `useAddFood`: already threw on !ok, now returns error message.
+- UI: toggle/rating/upload — `mutate(data, { onSuccess: () => toast.success, onError: (err) => toast.error })`.
+- Add food form: `try { await addFood.mutateAsync(...); toast.success; } catch (err) { toast.error }` — doesn't clear form on fail.
+
+#### P1 #6: Anti double-submit
+- Toggle/rating/upload/delete buttons: `disabled={update.isPending || del.isPending || upload.isPending}`.
+- Emoji buttons in AddFood form: not disabled (selection, not async).
+
+#### P1 #7: China bias removed
+- Placeholder: "Например, Пельмени" (was "Например, Димсам").
+- Label: "Оригинальное название" (was "Местное название").
+- Placeholder for nameCn: "На местном языке" (was "点心").
+- City placeholder: "Выберите из списка или введите" (was "Например, Токио").
+- `nameCn` DB column NOT renamed (audit says "не rename колонки БД").
+- City filters still dynamic from foods data (not hardcoded China).
+
+#### P1 #8: Upload limits
+- MIME validation: `["image/jpeg", "image/png", "image/webp", "image/gif"]` — others → 400 "Только изображения".
+- Size limit: 10MB — over → 400 "Файл слишком большой".
+- `<input accept="image/jpeg,image/png,image/webp,image/gif">`.
+- PATCH requires id: 400 if missing; 404 if food not found.
+- Verified: `curl upload` без file → 400; wrong MIME → 400.
+
+#### P1 #9: Dead `food:tried` type
+- Not touched (audit says "не плодить второй event"). `food:updated` used for all changes.
+
+### P2 — Polish
+
+#### P2 #10: Sticky top + a11y
+- City header: `top-[5.5rem]` (was `top-[6.5rem]`) + `bg-background/80 backdrop-blur-sm` for contrast.
+- All buttons have aria-labels: "Фильтр: {city}", "Фильтр: Все/Попробовать/Попробовал", "Удалить блюдо", "Отметить как попробованное", "Оценить на N звёзд", "Добавить фото", etc.
+- `aria-pressed` on toggle/filter buttons.
+- Mobile targets: `min-h-[36px]` chips, `min-h-[40px]` filters, `min-h-[48px]` add button.
+
+### Files Modified
+
+**API**:
+- `src/app/api/foods/route.ts` — tripId required on GET, membership on PATCH (was missing!), upload MIME/size limits, 404 on not found, await emitWS
+
+**Hooks**:
+- `src/hooks/trip/use-foods.ts` — all hooks throw on !ok, useFoods enabled + placeholderData, delete hook throw
+
+**Components**:
+- `src/components/trip/food-guide.tsx` — delete button rendered (was dead code), confirm flow, try/catch on toggle/rating/upload, toast onSuccess only, empty distinguishes no-foods/filter, China bias removed, a11y labels, sticky fix, mobile targets
+
+### Verification (curl + agent-browser)
+
+✅ `curl /api/foods` без tripId → 400 (was all foods)
+✅ `curl /api/foods` без auth → 401
+✅ `curl /api/foods?tripId=...` → 200 with foods (Croissant, Baguette, Steak-frit — Paris)
+✅ `curl DELETE` без id → 400
+✅ `curl PATCH` без auth → 401 (was open!)
+✅ `curl PATCH` с fake id → 404
+✅ `curl PATCH` с valid → 200, tried toggled
+✅ `curl upload` без file → 400
+✅ `curl upload` wrong MIME → 400 "Только изображения"
+✅ ESLint: clean
+✅ agent-browser: Food tab loads → "Что попробовать" + trip title
+✅ Food cards show: Croissant/Baguette/Steak-frit (Europe) + Хачап (China)
+✅ Delete button visible (was dead code!) — click → "Подтвердить удаление"/"Отменить удаление"
+✅ Toggle aria-labels: "Отметить как попробованное" / "Убрать из попробованных"
+✅ Rating aria-labels: "Оценить на N звёзд"
+✅ Filter chips aria-labels: "Фильтр: Гуанчжоу", "Фильтр: Все/Попробовать/Попробовал"
+✅ Add food form: neutral placeholder "Например, Пельмени" (was "Димсам"), "Оригинальное название" (was "Местное название")
+✅ Filter "Попробовать" with only tried food → "Ничего не найдено" + "Сбросить фильтр"
+✅ No console errors
+
+### Unresolved / Notes
+
+1. **P1 #6 (Multi-user tried)** — single Boolean per food for whole group; last-write-wins. Per-user tried needs schema change — out of scope (audit says "не делать per-user tried без согласования").
+2. **P2 #11 (Edit fields after create)** — only tried/rating/photo/delete. Future feature.
+3. **P2 #12 (City colors all orange)** — dynamic from foods, all default orange. Could use day accentColor — future.
+4. **P2 #13 (Achievements hardcoded)** — `triedFoods: 0`, `totalFoods: 16` — follow-up.
+5. **P2 #14 (Don't split food-guide.tsx)** — kept as single file (audit says "не дробить").
+6. **`food:tried` dead type** — left as-is (audit says "не плодить второй event").
+

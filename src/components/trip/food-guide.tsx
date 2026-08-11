@@ -1,7 +1,7 @@
 "use client";
 
 import { useFoods, useUpdateFood, useUploadFoodPhoto, useAddFood, useDeleteFood, type FoodItem } from "@/hooks/use-trip";
-import { useDays } from "@/hooks/use-trip";
+import { useDays, useTrip } from "@/hooks/use-trip";
 import { motion, AnimatePresence } from "framer-motion";
 import { UtensilsCrossed, Star, MapPin, DollarSign, CheckCircle2, Circle, Loader2, Camera, X, Plus, Trash2 } from "lucide-react";
 import { useState, useMemo, useRef } from "react";
@@ -13,9 +13,10 @@ import { useBodyScrollLock } from "@/hooks/use-body-scroll-lock";
 export function FoodGuide() {
   const [cityFilter, setCityFilter] = useState<string>("all");
   const [showTried, setShowTried] = useState<"all" | "tried" | "todo">("all");
-  const { data: foods, isLoading } = useFoods();
+  const { data: foods, isLoading, error: foodsError } = useFoods();
+  const { data: trip, error: tripError } = useTrip();
 
-  // Динамический список городов из еды (не захардкоженный)
+  // Динамический список городов из еды (не захардкоженный China)
   const foodCities = useMemo(() => {
     if (!foods) return [];
     const cities = new Map<string, { name: string; color: string }>();
@@ -52,6 +53,34 @@ export function FoodGuide() {
     return Array.from(map.entries());
   }, [filtered]);
 
+  // P0 #4: error states
+  if (tripError) {
+    return (
+      <div className="py-16 text-center text-muted-foreground space-y-2">
+        <div className="text-3xl">🤔</div>
+        <p className="text-sm font-medium">Не удалось загрузить поездку</p>
+        <button onClick={() => window.location.reload()} className="mt-2 text-xs px-3 py-1.5 rounded-lg bg-primary text-primary-foreground">
+          Обновить
+        </button>
+      </div>
+    );
+  }
+  if (foodsError) {
+    return (
+      <div className="py-16 text-center text-muted-foreground space-y-2">
+        <div className="text-3xl">🍽️</div>
+        <p className="text-sm font-medium">Не удалось загрузить блюда</p>
+        <button onClick={() => window.location.reload()} className="mt-2 text-xs px-3 py-1.5 rounded-lg bg-primary text-primary-foreground">
+          Обновить
+        </button>
+      </div>
+    );
+  }
+
+  // P1 #4: различаем empty cases
+  const hasFoods = (foods?.length ?? 0) > 0;
+  const hasFilter = cityFilter !== "all" || showTried !== "all";
+
   return (
     <div className="space-y-4 animate-fade-up pb-20">
       {/* Hero */}
@@ -62,10 +91,13 @@ export function FoodGuide() {
             <UtensilsCrossed className="size-4" /> Гастрономический гид
           </div>
           <h1 className="text-2xl font-bold">Что попробовать</h1>
-          <p className="text-white/80 text-sm mt-1">Обязательные блюда поездки</p>
+          <p className="text-white/80 text-sm mt-1">
+            Обязательные блюда поездки
+            {trip?.settings.title && <span className="text-white/60"> · {trip.settings.title}</span>}
+          </p>
           <div className="flex gap-4 mt-3">
             <div>
-              <div className="text-2xl font-bold">{triedCount}/{totalCount}</div>
+              <div className="text-2xl font-bold tabular-nums">{triedCount}/{totalCount}</div>
               <div className="text-xs text-white/70">попробовано</div>
             </div>
           </div>
@@ -73,7 +105,7 @@ export function FoodGuide() {
             <div className="mt-2 h-1.5 rounded-full bg-white/20 overflow-hidden max-w-[200px]">
               <motion.div
                 initial={{ width: 0 }}
-                animate={{ width: `${(triedCount / totalCount) * 100}%` }}
+                animate={{ width: `${totalCount > 0 ? (triedCount / totalCount) * 100 : 0}%` }}
                 className="h-full rounded-full bg-white"
               />
             </div>
@@ -84,31 +116,35 @@ export function FoodGuide() {
       {/* Фильтры */}
       <div className="space-y-2">
         {/* Города — динамически из еды */}
-        <div className="flex gap-1.5 overflow-x-auto no-scrollbar">
-          <button
-            onClick={() => setCityFilter("all")}
-            className={cn(
-              "px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-colors",
-              cityFilter === "all" ? "bg-primary text-primary-foreground" : "bg-card border border-border hover:bg-accent"
-            )}
-          >
-            Все города
-          </button>
-          {foodCities.map((c) => (
+        {foodCities.length > 0 && (
+          <div className="flex gap-1.5 overflow-x-auto no-scrollbar">
             <button
-              key={c.key}
-              onClick={() => setCityFilter(c.key)}
+              onClick={() => setCityFilter("all")}
+              aria-label="Все города"
               className={cn(
-                "flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-colors",
-                cityFilter === c.key ? "text-white" : "bg-card border border-border hover:bg-accent"
+                "min-h-[36px] px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-colors",
+                cityFilter === "all" ? "bg-primary text-primary-foreground" : "bg-card border border-border hover:bg-accent"
               )}
-              style={cityFilter === c.key ? { background: c.color } : undefined}
             >
-              <span className="size-1.5 rounded-full" style={{ background: c.color }} />
-              {c.name}
+              Все города
             </button>
-          ))}
-        </div>
+            {foodCities.map((c) => (
+              <button
+                key={c.key}
+                onClick={() => setCityFilter(c.key)}
+                aria-label={`Фильтр: ${c.name}`}
+                className={cn(
+                  "min-h-[36px] flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-colors",
+                  cityFilter === c.key ? "text-white" : "bg-card border border-border hover:bg-accent"
+                )}
+                style={cityFilter === c.key ? { background: c.color } : undefined}
+              >
+                <span className="size-1.5 rounded-full" style={{ background: c.color }} />
+                {c.name}
+              </button>
+            ))}
+          </div>
+        )}
 
         {/* Статус */}
         <div className="grid grid-cols-3 gap-1.5">
@@ -120,8 +156,10 @@ export function FoodGuide() {
             <button
               key={s.key}
               onClick={() => setShowTried(s.key)}
+              aria-label={`Фильтр: ${s.label}`}
+              aria-pressed={showTried === s.key}
               className={cn(
-                "flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-medium transition-colors",
+                "min-h-[40px] flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-medium transition-colors",
                 showTried === s.key ? "bg-primary text-primary-foreground" : "bg-card border border-border hover:bg-accent"
               )}
             >
@@ -140,17 +178,35 @@ export function FoodGuide() {
           <Loader2 className="size-5 animate-spin" /> Загрузка блюд…
         </div>
       ) : grouped.length === 0 ? (
-        <div className="rounded-2xl border-2 border-dashed border-border py-12 text-center">
-          <p className="text-sm text-muted-foreground">Ничего не найдено</p>
-        </div>
+        // P1 #4: различаем нет блюд vs фильтр пуст
+        hasFoods && hasFilter ? (
+          <div className="rounded-2xl border-2 border-dashed border-border py-12 text-center space-y-2">
+            <div className="text-3xl">🔍</div>
+            <p className="text-sm text-muted-foreground">Ничего не найдено</p>
+            <button
+              onClick={() => { setCityFilter("all"); setShowTried("all"); }}
+              className="mt-2 text-xs px-3 py-1.5 rounded-lg bg-primary text-primary-foreground"
+            >
+              Сбросить фильтр
+            </button>
+          </div>
+        ) : !hasFoods ? (
+          <div className="rounded-2xl border-2 border-dashed border-border py-12 text-center space-y-2">
+            <div className="text-3xl">🍽️</div>
+            <p className="text-sm font-medium text-muted-foreground">Пока нет блюд</p>
+            <p className="text-xs text-muted-foreground max-w-xs mx-auto">
+              Добавьте блюда, которые хотите попробовать — чек-лист, фото и оценки помогут вспомнить лучшее
+            </p>
+          </div>
+        ) : null
       ) : (
         <div className="space-y-5">
           {grouped.map(([cityKey, items]) => {
             const city = foodCities.find((c) => c.key === cityKey);
             return (
               <div key={cityKey}>
-                {/* Заголовок города */}
-                <div className="flex items-center gap-2 mb-2 sticky top-[6.5rem] z-10 py-1">
+                {/* Заголовок города — P2 #10: sticky top fix */}
+                <div className="flex items-center gap-2 mb-2 sticky top-[5.5rem] z-10 py-1 bg-background/80 backdrop-blur-sm rounded-lg">
                   <div
                     className="size-7 rounded-lg grid place-items-center text-white text-xs font-bold"
                     style={{ background: city?.color ?? "#f97316" }}
@@ -181,19 +237,66 @@ export function FoodGuide() {
 function FoodCard({ food, cityColor }: { food: FoodItem; cityColor: string }) {
   const update = useUpdateFood();
   const upload = useUploadFoodPhoto();
+  const del = useDeleteFood();
   const inputRef = useRef<HTMLInputElement>(null);
   const [lightbox, setLightbox] = useState(false);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
 
+  // P1 #5: toggle/rating с try/catch, toast в onSuccess (не сразу)
   const toggle = () => {
-    update.mutate({ id: food.id, tried: !food.tried });
-    toast(food.tried ? "Убрано из попробованных" : "Отмечено как попробованное! 🍽️", {
-      description: food.name,
-    });
+    update.mutate(
+      { id: food.id, tried: !food.tried },
+      {
+        onSuccess: () => {
+          toast(food.tried ? "Убрано из попробованных" : "Отмечено как попробованное! 🍽️", {
+            description: food.name,
+          });
+        },
+        onError: (err) => {
+          toast.error("Не удалось обновить", {
+            description: err instanceof Error ? err.message : "Попробуйте ещё раз",
+          });
+        },
+      }
+    );
   };
 
+  const setRating = (s: number) => {
+    update.mutate(
+      { id: food.id, rating: s === food.rating ? null : s },
+      {
+        onError: (err) => {
+          toast.error("Не удалось сохранить оценку", {
+            description: err instanceof Error ? err.message : "Попробуйте ещё раз",
+          });
+        },
+      }
+    );
+  };
+
+  // P1 #5: upload try/catch
   const onFile = async (f: File) => {
-    await upload.mutateAsync({ id: food.id, file: f });
-    toast.success("Фото блюда добавлено 📸");
+    try {
+      await upload.mutateAsync({ id: food.id, file: f });
+      toast.success("Фото блюда добавлено 📸");
+    } catch (err) {
+      toast.error("Не удалось загрузить фото", {
+        description: err instanceof Error ? err.message : "Попробуйте ещё раз",
+      });
+    }
+  };
+
+  // P0 #1: delete с confirm + try/catch + toast onSuccess
+  const handleDelete = async () => {
+    try {
+      await del.mutateAsync(food.id);
+      toast.success("Удалено");
+      setConfirmingDelete(false);
+    } catch (err) {
+      toast.error("Не удалось удалить", {
+        description: err instanceof Error ? err.message : "Попробуйте ещё раз",
+      });
+    }
   };
 
   return (
@@ -217,6 +320,7 @@ function FoodCard({ food, cityColor }: { food: FoodItem; cityColor: string }) {
           {food.imageUrl ? (
             <button
               onClick={() => setLightbox(true)}
+              aria-label={`Показать фото: ${food.name}`}
               className="size-16 rounded-xl overflow-hidden bg-muted block"
             >
               <img src={food.imageUrl} alt={food.name} className="w-full h-full object-cover" />
@@ -230,8 +334,9 @@ function FoodCard({ food, cityColor }: { food: FoodItem; cityColor: string }) {
           <button
             onClick={() => inputRef.current?.click()}
             disabled={upload.isPending}
+            aria-label={food.imageUrl ? "Заменить фото" : "Добавить фото"}
             className={cn(
-              "absolute -bottom-1 -right-1 size-6 rounded-full grid place-items-center shadow-md transition-transform active:scale-90",
+              "absolute -bottom-1 -right-1 size-6 rounded-full grid place-items-center shadow-md transition-transform active:scale-90 disabled:opacity-50",
               food.imageUrl ? "bg-primary text-primary-foreground" : "bg-card border border-border text-muted-foreground hover:text-primary"
             )}
             title={food.imageUrl ? "Заменить фото" : "Добавить фото"}
@@ -241,7 +346,7 @@ function FoodCard({ food, cityColor }: { food: FoodItem; cityColor: string }) {
           <input
             ref={inputRef}
             type="file"
-            accept="image/*"
+            accept="image/jpeg,image/png,image/webp,image/gif"
             className="hidden"
             onChange={(e) => e.target.files?.[0] && onFile(e.target.files[0])}
           />
@@ -258,7 +363,13 @@ function FoodCard({ food, cityColor }: { food: FoodItem; cityColor: string }) {
                 <span className="text-xs text-muted-foreground">{food.nameCn}</span>
               )}
             </div>
-            <button onClick={toggle} className="shrink-0">
+            <button
+              onClick={toggle}
+              disabled={update.isPending}
+              aria-label={food.tried ? "Убрать из попробованных" : "Отметить как попробованное"}
+              aria-pressed={food.tried}
+              className="shrink-0 disabled:opacity-50"
+            >
               {food.tried ? (
                 <CheckCircle2 className="size-5 text-green-500" />
               ) : (
@@ -292,8 +403,10 @@ function FoodCard({ food, cityColor }: { food: FoodItem; cityColor: string }) {
               {[1, 2, 3, 4, 5].map((s) => (
                 <button
                   key={s}
-                  onClick={() => update.mutate({ id: food.id, rating: s === food.rating ? null : s })}
-                  className="p-1 -m-1 active:scale-90 transition-transform"
+                  onClick={() => setRating(s)}
+                  disabled={update.isPending}
+                  aria-label={`Оценить на ${s} звёзд`}
+                  className="p-1 -m-1 active:scale-90 transition-transform disabled:opacity-50"
                 >
                   <Star
                     className={cn(
@@ -308,6 +421,39 @@ function FoodCard({ food, cityColor }: { food: FoodItem; cityColor: string }) {
               )}
             </div>
           )}
+
+          {/* P0 #1: Delete button with confirm — видно на mobile (не только group-hover) */}
+          <div className="mt-2 flex justify-end">
+            {confirmingDelete ? (
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={handleDelete}
+                  disabled={del.isPending}
+                  aria-label="Подтвердить удаление"
+                  className="min-h-[32px] min-w-[32px] text-[10px] bg-red-500 text-white px-2 py-1 rounded-lg font-medium flex items-center gap-1"
+                >
+                  {del.isPending ? <Loader2 className="size-3 animate-spin" /> : null}
+                  {del.isPending ? "…" : "Да"}
+                </button>
+                <button
+                  onClick={() => setConfirmingDelete(false)}
+                  disabled={del.isPending}
+                  aria-label="Отменить удаление"
+                  className="min-h-[32px] min-w-[32px] text-[10px] bg-secondary px-2 py-1 rounded-lg"
+                >
+                  Нет
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={() => setConfirmingDelete(true)}
+                aria-label="Удалить блюдо"
+                className="size-8 rounded-lg md:opacity-0 md:group-hover:opacity-100 hover:bg-red-500/10 hover:text-red-500 grid place-items-center transition-opacity text-muted-foreground"
+              >
+                <Trash2 className="size-3.5" />
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
@@ -317,7 +463,7 @@ function FoodCard({ food, cityColor }: { food: FoodItem; cityColor: string }) {
           className="fixed inset-0 z-[200] bg-black/95 flex flex-col items-center justify-center p-4"
           onClick={() => setLightbox(false)}
         >
-          <button className="absolute top-4 right-4 size-10 rounded-full bg-white/10 text-white grid place-items-center hover:bg-white/20 z-10">
+          <button className="absolute top-4 right-4 size-10 rounded-full bg-white/10 text-white grid place-items-center hover:bg-white/20 z-10" aria-label="Закрыть">
             <X className="size-5" />
           </button>
           <img
@@ -352,23 +498,31 @@ function AddFoodButton() {
 
   useBodyScrollLock(open);
 
+  // P1 #5: try/catch — не чистим форму при fail
   const submit = async () => {
     if (!name.trim() || !city.trim()) {
       toast.error("Название и город обязательны");
       return;
     }
-    await addFood.mutateAsync({
-      name: name.trim(),
-      nameCn: nameCn.trim() || undefined,
-      description: description.trim() || undefined,
-      city: city.trim(),
-      place: place.trim() || undefined,
-      price: price.trim() || undefined,
-      emoji,
-    });
-    toast.success("Блюдо добавлено! 🍽️");
-    setName(""); setNameCn(""); setDescription(""); setCity(""); setPlace(""); setPrice(""); setEmoji("🍽️");
-    setOpen(false);
+    try {
+      await addFood.mutateAsync({
+        name: name.trim(),
+        nameCn: nameCn.trim() || undefined,
+        description: description.trim() || undefined,
+        city: city.trim(),
+        place: place.trim() || undefined,
+        price: price.trim() || undefined,
+        emoji,
+      });
+      toast.success("Блюдо добавлено! 🍽️");
+      setName(""); setNameCn(""); setDescription(""); setCity(""); setPlace(""); setPrice(""); setEmoji("🍽️");
+      setOpen(false);
+    } catch (err) {
+      toast.error("Не удалось добавить блюдо", {
+        description: err instanceof Error ? err.message : "Попробуйте ещё раз",
+      });
+      // НЕ чистим форму — пусть пользователь видит что ввёл
+    }
   };
 
   const EMOJIS = ["🍽️", "🍜", "🥟", "🍣", "🍕", "🍔", "🥘", "🍲", "🌮", "🥗", "🍖", "🦆", "🍤", "🥩", "🍛", "🧆", "🥙", "🍰", "🧋", "🍺"];
@@ -377,7 +531,8 @@ function AddFoodButton() {
     return (
       <button
         onClick={() => setOpen(true)}
-        className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl border-2 border-dashed border-border hover:border-primary hover:text-primary transition-colors"
+        aria-label="Добавить блюдо"
+        className="w-full min-h-[48px] flex items-center justify-center gap-2 py-3 rounded-2xl border-2 border-dashed border-border hover:border-primary hover:text-primary transition-colors"
       >
         <Plus className="size-5" />
         <span className="text-sm font-medium">Добавить блюдо</span>
@@ -409,7 +564,7 @@ function AddFoodButton() {
             <h2 className="font-bold text-base flex items-center gap-2">
               <UtensilsCrossed className="size-5 text-primary" /> Новое блюдо
             </h2>
-            <button onClick={() => setOpen(false)} className="size-8 rounded-full hover:bg-accent grid place-items-center">
+            <button onClick={() => setOpen(false)} aria-label="Закрыть" className="size-8 rounded-full hover:bg-accent grid place-items-center">
               <X className="size-4" />
             </button>
           </div>
@@ -422,8 +577,10 @@ function AddFoodButton() {
                   <button
                     key={e}
                     onClick={() => setEmoji(e)}
+                    aria-label={`Иконка ${e}`}
+                    aria-pressed={emoji === e}
                     className={cn(
-                      "size-9 rounded-lg text-xl grid place-items-center transition-all",
+                      "min-h-[36px] size-9 rounded-lg text-xl grid place-items-center transition-all",
                       emoji === e ? "bg-primary/20 ring-2 ring-primary scale-110" : "bg-muted hover:bg-accent"
                     )}
                   >
@@ -437,17 +594,18 @@ function AddFoodButton() {
               <input
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                placeholder="Например, Димсам"
+                placeholder="Например, Пельмени"
                 autoFocus
                 className="w-full rounded-xl border border-input bg-background px-3 py-2.5 text-sm"
               />
             </div>
             <div>
-              <label className="text-xs text-muted-foreground mb-1 block">Местное название</label>
+              {/* P1 #7: нейтральный placeholder (был 点心) и label (был «Местное название») */}
+              <label className="text-xs text-muted-foreground mb-1 block">Оригинальное название</label>
               <input
                 value={nameCn}
                 onChange={(e) => setNameCn(e.target.value)}
-                placeholder="Например, 点心"
+                placeholder="На местном языке"
                 className="w-full rounded-xl border border-input bg-background px-3 py-2.5 text-sm"
               />
             </div>
@@ -456,7 +614,7 @@ function AddFoodButton() {
               <input
                 value={city}
                 onChange={(e) => setCity(e.target.value)}
-                placeholder="Например, Токио"
+                placeholder="Выберите из списка или введите"
                 list="food-cities"
                 className="w-full rounded-xl border border-input bg-background px-3 py-2.5 text-sm"
               />
@@ -499,7 +657,7 @@ function AddFoodButton() {
             <button
               onClick={submit}
               disabled={addFood.isPending}
-              className="w-full rounded-xl bg-primary text-primary-foreground py-3 font-medium flex items-center justify-center gap-2 disabled:opacity-50"
+              className="w-full min-h-[48px] rounded-xl bg-primary text-primary-foreground py-3 font-medium flex items-center justify-center gap-2 disabled:opacity-50"
             >
               {addFood.isPending ? <Loader2 className="size-4 animate-spin" /> : <Plus className="size-4" />}
               {addFood.isPending ? "Добавление…" : "Добавить блюдо"}
