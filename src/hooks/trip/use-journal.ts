@@ -5,15 +5,18 @@ import type { JournalEntry } from "@/lib/types";
 import { getTripId } from "./trip-id";
 
 export function useJournal(dayId?: string) {
+  const tripId = getTripId();
   const params = new URLSearchParams();
-  params.set("tripId", getTripId());
+  if (tripId) params.set("tripId", tripId);
   if (dayId) params.set("dayId", dayId);
   return useQuery<JournalEntry[]>({
-    queryKey: ["journal", getTripId(), dayId],
+    queryKey: ["journal", tripId, dayId],
     queryFn: async () => {
+      if (!tripId) return [];
       const r = await fetch(`/api/journal?${params}`);
       return r.json();
     },
+    enabled: !!tripId,
   });
 }
 

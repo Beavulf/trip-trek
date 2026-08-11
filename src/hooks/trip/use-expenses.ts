@@ -5,12 +5,15 @@ import type { Expense } from "@/lib/types";
 import { getTripId } from "./trip-id";
 
 export function useExpenses() {
+  const tripId = getTripId();
   return useQuery<Expense[]>({
-    queryKey: ["expenses", getTripId()],
+    queryKey: ["expenses", tripId],
     queryFn: async () => {
-      const r = await fetch(`/api/expenses?tripId=${getTripId()}`);
+      if (!tripId) return [];
+      const r = await fetch(`/api/expenses?tripId=${tripId}`);
       return r.json();
     },
+    enabled: !!tripId,
   });
 }
 

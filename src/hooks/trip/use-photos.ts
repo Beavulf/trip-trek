@@ -5,16 +5,19 @@ import type { Photo } from "@/lib/types";
 import { getTripId } from "./trip-id";
 
 export function usePhotos(dayId?: string, placeId?: string) {
+  const tripId = getTripId();
   const params = new URLSearchParams();
-  params.set("tripId", getTripId()); // ВСЕГДА фильтруем по текущей поездке
+  if (tripId) params.set("tripId", tripId);
   if (dayId) params.set("dayId", dayId);
   if (placeId) params.set("placeId", placeId);
   return useQuery<Photo[]>({
-    queryKey: ["photos", getTripId(), dayId, placeId],
+    queryKey: ["photos", tripId, dayId, placeId],
     queryFn: async () => {
+      if (!tripId) return [];
       const r = await fetch(`/api/photos?${params}`);
       return r.json();
     },
+    enabled: !!tripId,
   });
 }
 
