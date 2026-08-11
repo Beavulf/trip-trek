@@ -549,3 +549,177 @@ In these cases, the app correctly falls back to requesting current geolocation.
 8. **Currency auto-conversion** — real-time FX in expense entry
 9. **Push notifications via VAPID** — real Web Push
 10. **Trip templates expansion** — add more templates (Korea, Vietnam, Italy, USA)
+
+---
+
+## Session: Budget Audit — P0 + P1 fixes (auth, hooks, settlement, currency, UX)
+
+**Phase**: 17 — Budget audit fixes (based on `audit-budget-byudzhet.md`)
+
+### Status Before
+- Budget component already split into smaller files (`budget/` folder with 9 files)
+- API auth via `requireTripMember` was already on POST/PATCH for expenses/budget-plan/trip-budget/members
+- But: GET budget-plan had no auth; settlement was a race-condition risk; `useAddExpense` returned success on `!ok`; settlement counted in totals; currency fallback covered only 12/24 currencies
+
+### P0 — Critical Fixes
+
+#### P0 #1: API auth/membership for budget-plan GET
+- `GET /api/budget-plan?tripId=...` — теперь требует `requireTripMember(req, tripId)`. Без cookie → 401. Без участия в поездке → 403.
+- Все остальные эндпоинты (expenses GET/POST/DELETE, budget-plan PATCH, trip/budget PATCH, members PATCH, trip GET) уже были защищены `requireTripMember`.
+
+#### P0 #2: useAddExpense / useDeleteExpense throw on !ok
+**Problem**: `mutationFn` не бросал на `!r.ok` → `mutateAsync` всегда resolved → UI показывал success-toast даже при ошибке 400/500.
+**Fix** (`src/hooks/trip/use-expenses.ts`):
+- `useAddExpense.mutationFn`: парсит JSON, если `!r.ok` → `throw new Error(body.error || status)`.
+- `useDeleteExpense.mutationFn`: то же самое.
+- `useExpenses` (query): добавлен `if (!r.ok) throw`, `placeholderData: []` (нет «вечного Загрузка»), `enabled: !!tripId`, `Array.isArray(data) ? data : []` (защита от не-массива).
+- `useBudgetPlan`: то же (was без `enabled` → fetch без tripId).
+- `useTrip`: `enabled: !!tripId`, `retry: 1` (не зацикливается на 404).
+**Call sites**: все 4 места (`AddExpenseForm`, `quick-add/ExpenseForm`, `MarkSettledButton`, `ExpenseRow`) обёрнуты в `try/catch` с error toast и НЕ закрывают форму при ошибке.
+
+#### P0 #3: Settlement idempotency (race condition)
+**Problem**: Два быстрых клика на «Перевели» создавали 2 settlement-траты → баланс ломался в обратную сторону.
+**Fix**:
+- Schema: добавлено поле `settlementKey String? @unique` в модель `Expense` (`prisma db push` применён).
+- API `/api/expenses` POST: если `settlementKey` передан — сначала `findUnique` по ключу. Если запись уже есть — возвращаем её (idempotent response), не создаём новую и не эмитим WS событие.
+- Client `MarkSettledButton`: формирует `settlementKey = "settle-{fromId}-{toId}-{YYYY-MM-DDTHH}"` (часовой бакет). Двойной клик или два клиента в течение часа — тот же ключ → не дублирует.
+- Проверено через `curl`: 2-й POST с тем же `settlementKey` возвращает тот же `id`.
+
+#### P0 #4: Loading/error states — нет вечного «Загрузка…»
+**Fix** (`src/components/trip/budget/Budget.tsx`):
+- Добавлены `error: expensesError`, `error: tripError`, `isLoading: tripLoading`/`expensesLoading`.
+- Если `tripError` → экран с 🤔 «Не удалось загрузить поездку» + кнопкой «Обновить».
+- Если `expensesError` → экран с 💸 «Не удалось загрузить траты» + кнопкой.
+- `trip.settings.totalBudget > 0 ? ... : 0` — нет деления на 0.
+- `useBudgetPlan`, `useExpenses`, `useTrip` — `enabled: !!tripId`, `placeholderData: []`/no.
+- **TripSwitcher** — новый `useEffect`: если `getTripId()` пустой но `trips.length > 0` — автоматически `setTripId(trips[0].id)` и invalidate queries. Без этого все хуки оставались disabled после логина.
+
+### P1 — Integrity / UX
+
+#### P1 #5: Unified isRealExpense filter
+**Problem**: Settlement (перевод между участниками) считался как реальная трата в `/api/trip` totalSpent и в `ParticipantBudgetRow` (хотя в `Budget.tsx` `realExpenses` уже исключался).
+**Fix**:
+- `/api/trip/route.ts`: `realExpenses = expenses.filter(e => e.category !== "settlement")` → `totalSpent = realExpenses.reduce(...)`.
+- `Budget.tsx`: передаёт `spent={realExpenses.filter(...).reduce(...)}` в `ParticipantBudgetRow`.
+- `BudgetPlanWidget`: `realExpenses = (expenses ?? []).filter(e => e.category !== "settlement")` → `totalSpent`, `spentByCat` — теперь settlement не попадает в статистику.
+- Проверено: `totalSpent` теперь 1013.5 (включая $10 settlement) вместо 1023.5.
+
+#### P1 #6: BudgetEditModal — invalidate + r.ok
+**Problem**: Modal использовал raw `fetch` без проверки `r.ok`, без `invalidateQueries(["trip"])`.
+**Fix**:
+- Заменили raw fetch на `update.mutateAsync({memberId, tripId, budget})` (через хук `useUpdateMember`).
+- Хук уже проверяет `r.ok` и бросает на `!ok`.
+- После успеха хук инвалидирует `["trip"]` и `["budget-plan"]`.
+- Try/catch на каждый PATCH; счётчик ошибок `errors`. Если `errors > 0` → toast с количеством.
+
+#### P1 #7: Toast onSuccess/onError only
+**Problem**: `ParticipantBudgetRow` и `BudgetHero` показывали `toast.success` сразу после `mutate()` (не дожидаясь ответа).
+**Fix**:
+- `ParticipantBudgetRow.save`: `update.mutate(data, { onSuccess: () => { toast.success; setEditing(false) }, onError: (err) => { toast.error; resetVal; setEditing(false) } })`.
+- `BudgetHero.save`: то же (`useUpdateTripBudget`).
+- Если значение не изменилось — просто выходим без запроса.
+
+#### P1 #8: GET expenses with day include
+**Problem**: `/api/expenses` GET возвращал expenses без `day`, UI «День N» показывал пусто.
+**Fix**: в `include` добавлено `day: { select: { dayNumber: true, city: true } }` (и в GET, и в POST response, и в findUnique для settlement idempotency).
+- Проверено в браузере: «День 1» отображается в истории трат.
+
+#### P1 #9: Currency fallback full coverage (24 currencies)
+**Problem**: UI `currency-converter` показывал 24 валюты, а fallback API только 12. Если выбрана одна из отсутствующих (VND, SGD, UAH, KZT, TRY, INR, IDR, MYR, PHP, AUD, CAD, CHF) → convert возвращал 0 (silent).
+**Fix**:
+- Создан `src/lib/currencies.ts` — единый список 24 валют (code, flag, name).
+- `currency-converter.tsx` и `budget/AddExpenseForm.tsx` импортируют из этого файла (раньше у каждого был свой массив, расходящийся).
+- `/api/currency/route.ts` — `FALLBACK_RATES` покрывает все 24 валюты. При запросе: если API вернул курс — берём его, иначе fallback. Никогда не возвращаем 0.
+- Добавлен badge «⚠ Нет курса для одной из валют» в converter если convert = 0 (визуальная индикация).
+- В converter добавлена дата обновления курса.
+- Проверено: `curl /api/currency` возвращает 24 валюты.
+
+#### P1 #10: MarkSettled auth fallback
+**Problem**: Если `currentUserId === ""` (не залогинен) — кнопка возвращала null, нельзя было подтвердить перевод.
+**Fix**: если `!currentUserId` → показываем amber-кнопку `<a href="/login"><LogIn/> Войти</a>` с тайтлом «Войдите чтобы подтвердить перевод».
+
+#### P1 #11: Honest copy hint
+**Problem**: Подсказка «после переводов у каждого был ноль» врала для 3+ участников (используется pairwise, не greedy).
+**Fix**: переписан текст:
+- «Это **попарные переводы** ('кто кому сколько должен'). Для каждой пары участников показан чистый долг A→B минус B→A. Нажми «Перевели» когда получил перевод — у пары баланс обнулится.»
+- Если `participantsCount > 2` — дополнительное amber-уведомление: «При 3+ участниках иногда можно уменьшить число переводов — это упрощённая схема, всегда честная по суммам.»
+
+#### P1 #12: Rounding consistency (toFixed(2))
+- `SettlementSection`: `b.paid.toFixed(0)` → `toFixed(2)`, `b.balance.toFixed(0)` → `toFixed(2)`, `s.amount.toFixed(0)` → `toFixed(2)`.
+- `ParticipantBudgetRow`: `spent.toFixed(0)` → `toFixed(2)`, `remaining.toFixed(0)` → `toFixed(2)`.
+- Добавлены `tabular-nums` классы для выравнивания чисел.
+- `BudgetHero`: осталось `toFixed(0)` (намеренно — компактный hero).
+
+#### P1 #13: PATCH /api/trip/budget emitWS
+**Problem**: После изменения общего бюджета — другие клиенты не узнавали (не было WS события).
+**Fix**: добавлено `await emitWS("trip:updated", tripId, {})` после `db.trip.update`.
+
+#### P1 #14: POST expense membership validation
+**Problem**: Сервер принимал любой `paidById` и `splitWith[]` без проверки что эти userIds — участники поездки.
+**Fix** (`/api/expenses` POST):
+- Загружаем `memberIds = TripMember.findMany({ where: { tripId } }).map(m => m.userId)`.
+- Если `!memberIds.includes(paidById)` → 400 "paidBy is not a member of this trip".
+- Если `splitWith` содержит невалидные IDs → 400 "splitWith contains non-members".
+- Проверено через `curl`: POST с `paidById="non-existent-user"` → 400.
+
+### P2 — Polish
+
+#### Empty history CTA + counters
+- `Budget.tsx`: если `expenses.length === 0` → empty state с 📝 «Пока нет трат» + CTA «Добавить первую трату».
+- Счётчик в шапке истории: `{realExpenses.length} траты/трат` + если есть settlements — `{settlementCount} перевод(а/ов)` (раздельные счётчики).
+- Все интерактивные элементы `min-h-[36px]` для тач-таргетов.
+
+### Files Modified
+
+**API routes**:
+- `src/app/api/expenses/route.ts` — settlement idempotency, day include, membership validation
+- `src/app/api/budget-plan/route.ts` — GET requireTripMember
+- `src/app/api/trip/budget/route.ts` — emitWS after budget update
+- `src/app/api/trip/route.ts` — realExpenses filter for totalSpent
+- `src/app/api/currency/route.ts` — full 24-currency fallback
+
+**Hooks**:
+- `src/hooks/trip/use-expenses.ts` — throw on !ok, placeholderData, enabled, invalidate trip
+- `src/hooks/trip/use-budget-plan.ts` — enabled, placeholderData, throw on !ok
+- `src/hooks/trip/use-trip.ts` — enabled: !!tripId, retry: 1
+
+**Components**:
+- `src/components/trip/budget/Budget.tsx` — error states, real/settlement counters, empty CTA
+- `src/components/trip/budget/AddExpenseForm.tsx` — try/catch, shared CURRENCIES import
+- `src/components/trip/budget/MarkSettledButton.tsx` — settlementKey, try/catch, login fallback
+- `src/components/trip/budget/ExpenseRow.tsx` — try/catch delete
+- `src/components/trip/budget/BudgetEditModal.tsx` — useUpdateMember hook
+- `src/components/trip/budget/ParticipantBudgetRow.tsx` — toast onSuccess/onError
+- `src/components/trip/budget/BudgetHero.tsx` — toast onSuccess/onError
+- `src/components/trip/budget/SettlementSection.tsx` — honest hint, toFixed(2), tabular-nums
+- `src/components/trip/currency-converter.tsx` — shared CURRENCIES, rate badge, updated date
+- `src/components/trip/quick-add/ExpenseForm.tsx` — try/catch
+- `src/components/trip/trip-switcher.tsx` — auto-set first trip if localStorage empty
+
+**Schema**:
+- `prisma/schema.prisma` — `settlementKey String? @unique` in Expense model
+
+**New files**:
+- `src/lib/currencies.ts` — shared CURRENCIES constant (24 currencies)
+
+### Verification (curl + agent-browser)
+
+✅ Server health: 200
+✅ GET `/api/expenses?tripId=...` без cookie → 401
+✅ GET `/api/budget-plan?tripId=...` без cookie → 401 (раньше возвращал данные)
+✅ GET `/api/expenses` с auth → возвращает массив с `day: {dayNumber, city}` в каждом expense
+✅ POST `/api/expenses` с `paidById="non-existent"` → 400 "paidBy is not a member of this trip"
+✅ POST `/api/expenses` с `settlementKey="settle-X-Y-2026-08-11T16"` 1-й раз → создаёт (201). 2-й раз с тем же ключом → возвращает тот же `id` (idempotent)
+✅ `/api/trip?tripId=...` `totalSpent` = 1013.5 (включая $10 settlement) вместо 1023.5
+✅ `/api/currency` возвращает 24 валюты (MYR, VND, CHF, KZT, INR, IDR, PHP, AUD, CAD — все присутствуют)
+✅ ESLint: clean
+✅ agent-browser: логин → Бюджет таб грузится → «2 траты», «потратил $1012.00», «внёс $1012.00», «День 1» в истории, форма Add открывается, в селекте валют 24 опции (USD → CHF)
+✅ localStorage `triptrek-current-trip` автоматически устанавливается после логина если был пустой
+
+### Unresolved / Notes
+
+1. **`settleDebts` (greedy)** в `src/lib/budget/settle.ts` — по-прежнему не используется в UI (UI использует `calculateSettlements` — pairwise). Но теперь подсказка честно об этом говорит. Полностью удалять не стал — может пригодиться для опционального «упрощённого» режима.
+2. **QuickAddSheet ExpenseForm** — теперь тоже кидает на !ok и ловит. Внимание: QuickAdd передаёт `userId` из session — если session теряется, форма падает на `!paidById`. Покрыто существующей валидацией в `submit()`.
+3. **BudgetHero `toFixed(0)`** намеренно — компактный hero. Если пользователь редактирует бюджет, видит $2000, не $2000.00.
+4. **Memory constraint** — сервер падал от OOM когда одновременно работал Next.js dev + agent-browser chrome. Без chrome сервер стабилен. QA в браузере возможно требует `pkill chrome` перед тестами.
+

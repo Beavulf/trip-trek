@@ -37,36 +37,42 @@ export function ExpenseForm({ userId, onDone }: ExpenseFormProps) {
     const splitWithArr = Array.from(splitUsers).filter(id => id !== userId);
     const excludeSelf = !splitUsers.has(userId);
 
-    await addExpense.mutateAsync({
-      amount: amt,
-      category,
-      description,
-      paidById: userId,
-      dayId,
-      splitWith: splitWithArr,
-      excludeSelf,
-    });
-
-    if (splitWithArr.length > 0) {
-      const splitCount = excludeSelf ? splitWithArr.length : splitWithArr.length + 1;
-      const perPerson = (amt / splitCount).toFixed(2);
-      const names = trip?.participants
-        .filter(p => splitWithArr.includes(p.id))
-        .map(p => p.name)
-        .join(", ");
-      toast.success("Трата добавлена 💸", {
-        description: excludeSelf
-          ? `${names} должны по $${perPerson} → тебе`
-          : `Каждый должен $${perPerson} (включая тебя)`,
-        duration: 5000,
+    try {
+      await addExpense.mutateAsync({
+        amount: amt,
+        category,
+        description,
+        paidById: userId,
+        dayId,
+        splitWith: splitWithArr,
+        excludeSelf,
       });
-    } else {
-      toast.success("Трата добавлена 💸");
+
+      if (splitWithArr.length > 0) {
+        const splitCount = excludeSelf ? splitWithArr.length : splitWithArr.length + 1;
+        const perPerson = (amt / splitCount).toFixed(2);
+        const names = trip?.participants
+          .filter(p => splitWithArr.includes(p.id))
+          .map(p => p.name)
+          .join(", ");
+        toast.success("Трата добавлена 💸", {
+          description: excludeSelf
+            ? `${names} должны по $${perPerson} → тебе`
+            : `Каждый должен $${perPerson} (включая тебя)`,
+          duration: 5000,
+        });
+      } else {
+        toast.success("Трата добавлена 💸");
+      }
+      setAmount("");
+      setDescription("");
+      setSplitUsers(new Set());
+      onDone();
+    } catch (err) {
+      toast.error("Не удалось добавить трату", {
+        description: err instanceof Error ? err.message : "Попробуйте ещё раз",
+      });
     }
-    setAmount("");
-    setDescription("");
-    setSplitUsers(new Set());
-    onDone();
   };
 
   const toggleUser = (id: string) => {

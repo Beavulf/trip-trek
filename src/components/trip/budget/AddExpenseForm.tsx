@@ -8,6 +8,7 @@ import { cn } from "@/lib/utils";
 import { useTrip, useAddExpense, useCurrency } from "@/hooks/use-trip";
 import { useAuth } from "@/hooks/use-auth";
 import { EXPENSE_CATEGORIES } from "@/lib/types";
+import { CURRENCIES } from "@/lib/currencies";
 
 interface AddExpenseFormProps {
   onDone: () => void;
@@ -83,55 +84,50 @@ export function AddExpenseForm({ onDone }: AddExpenseFormProps) {
     // excludeSelf = плательщик НЕ в splitUsers (купил только для других)
     const excludeSelf = !splitUsers.has(paidById);
 
-    await add.mutateAsync({
-      amount: Math.round(amountUSD * 100) / 100,
-      category,
-      description: description.trim(),
-      paidById,
-      dayId: dayId || undefined,
-      splitWith: splitWithArr,
-      excludeSelf,
-    });
-
-    // Подсказка
-    if (splitWithArr.length > 0) {
-      const splitCount = excludeSelf ? splitWithArr.length : splitWithArr.length + 1;
-      const perPerson = (amountUSD / splitCount).toFixed(2);
-      const payer = trip?.participants.find(p => p.id === paidById);
-      const names = trip?.participants
-        .filter(p => splitWithArr.includes(p.id))
-        .map(p => p.name)
-        .join(", ");
-      toast.success("Трата добавлена 💸", {
-        description: excludeSelf
-          ? `${names} должны по $${perPerson} → ${payer?.name || "тебе"}`
-          : `Каждый должен $${perPerson} (включая ${payer?.name || "плательщика"})`,
-        duration: 5000,
+    try {
+      await add.mutateAsync({
+        amount: Math.round(amountUSD * 100) / 100,
+        category,
+        description: description.trim(),
+        paidById,
+        dayId: dayId || undefined,
+        splitWith: splitWithArr,
+        excludeSelf,
       });
-    } else {
-      const usdText = currencyCode !== "USD" ? ` (${amountNum} ${currencyCode} → $${amountUSD.toFixed(2)})` : "";
-      toast.success("Трата добавлена 💸", { description: `$${amountUSD.toFixed(2)}${usdText}` });
+
+      // Подсказка — только после реального успеха
+      if (splitWithArr.length > 0) {
+        const splitCount = excludeSelf ? splitWithArr.length : splitWithArr.length + 1;
+        const perPerson = (amountUSD / splitCount).toFixed(2);
+        const payer = trip?.participants.find(p => p.id === paidById);
+        const names = trip?.participants
+          .filter(p => splitWithArr.includes(p.id))
+          .map(p => p.name)
+          .join(", ");
+        toast.success("Трата добавлена 💸", {
+          description: excludeSelf
+            ? `${names} должны по $${perPerson} → ${payer?.name || "тебе"}`
+            : `Каждый должен $${perPerson} (включая ${payer?.name || "плательщика"})`,
+          duration: 5000,
+        });
+      } else {
+        const usdText = currencyCode !== "USD" ? ` (${amountNum} ${currencyCode} → $${amountUSD.toFixed(2)})` : "";
+        toast.success("Трата добавлена 💸", { description: `$${amountUSD.toFixed(2)}${usdText}` });
+      }
+      setAmount(""); setDescription("");
+      setSplitUsers(new Set());
+      onDone();
+    } catch (err) {
+      toast.error("Не удалось добавить трату", {
+        description: err instanceof Error ? err.message : "Попробуйте ещё раз",
+      });
+      // НЕ закрываем форму — пусть пользователь видит что ввёл
     }
-    setAmount(""); setDescription("");
-    setSplitUsers(new Set());
-    onDone();
   };
 
   // Расчёт доли
   const splitCount = splitUsers.size > 0 ? splitUsers.size : 1;
   const perPersonUSD = amountUSD > 0 ? (amountUSD / splitCount).toFixed(2) : "0";
-
-  const CURRENCIES = [
-    { code: "USD", flag: "🇺🇸", name: "USD" },
-    { code: "EUR", flag: "🇪🇺", name: "EUR" },
-    { code: "CNY", flag: "🇨🇳", name: "CNY" },
-    { code: "JPY", flag: "🇯🇵", name: "JPY" },
-    { code: "KRW", flag: "🇰🇷", name: "KRW" },
-    { code: "HKD", flag: "🇭🇰", name: "HKD" },
-    { code: "THB", flag: "🇹🇭", name: "THB" },
-    { code: "RUB", flag: "🇷🇺", name: "RUB" },
-    { code: "GBP", flag: "🇬🇧", name: "GBP" },
-  ];
 
   return (
     <motion.div

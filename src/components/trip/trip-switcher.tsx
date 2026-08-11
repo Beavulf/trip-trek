@@ -37,6 +37,18 @@ export function TripSwitcher() {
   const currentTripId = typeof window !== "undefined" ? getTripId() : "";
   const currentTrip = trips?.find((t) => t.id === currentTripId) || trips?.[0];
 
+  // P0 #4: Если localStorage пустой но поездки есть — автоматически выбираем первую.
+  // Без этого все хуки (useTrip, useExpenses, useBudgetPlan) остаются disabled → «Загрузка…» вечно.
+  useEffect(() => {
+    if (!currentTripId && trips && trips.length > 0) {
+      setTripId(trips[0].id);
+      qc.invalidateQueries({ queryKey: ["trip"] });
+      qc.invalidateQueries({ queryKey: ["expenses"] });
+      qc.invalidateQueries({ queryKey: ["budget-plan"] });
+      qc.invalidateQueries({ queryKey: ["days"] });
+    }
+  }, [currentTripId, trips, qc]);
+
   // Создать поездку — через /api/limits с проверкой
   const createTrip = useMutation({
     mutationFn: async (data: { title: string; destination: string; startDate: string; totalDays: number; totalBudget: number; userId: string; displayName: string; emoji: string; color: string }) => {

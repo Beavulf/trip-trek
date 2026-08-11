@@ -24,12 +24,29 @@ export function ParticipantBudgetRow({ participant, spent }: ParticipantBudgetRo
 
   const save = () => {
     const num = val.trim() ? parseFloat(val) : null;
-    // participant.id — это userId, нужно найти memberId из trip.members
-    // Но в текущей архитектуре participants уже имеют id = userId
-    // Используем tripId + participant.id как memberId (упрощение)
-    update.mutate({ memberId: participant.id, tripId, budget: num });
-    toast.success("Бюджет обновлён");
-    setEditing(false);
+    if (num === participant.budget) {
+      // Ничего не изменилось — просто выходим из режима редактирования
+      setEditing(false);
+      return;
+    }
+    // P1 #7: toast только в onSuccess/onError — не показываем фейковый success
+    update.mutate(
+      { memberId: participant.id, tripId, budget: num },
+      {
+        onSuccess: () => {
+          toast.success("Бюджет обновлён");
+          setEditing(false);
+        },
+        onError: (err) => {
+          toast.error("Не удалось сохранить", {
+            description: err instanceof Error ? err.message : "Попробуйте ещё раз",
+          });
+          // Возвращаем старое значение
+          setVal(participant.budget?.toString() ?? "");
+          setEditing(false);
+        },
+      }
+    );
   };
 
   return (
@@ -39,7 +56,7 @@ export function ParticipantBudgetRow({ participant, spent }: ParticipantBudgetRo
       </div>
       <div className="flex-1 min-w-0">
         <div className="text-sm font-medium">{participant.name}</div>
-        <div className="text-[11px] text-muted-foreground">потратил ${spent.toFixed(0)}</div>
+        <div className="text-[11px] text-muted-foreground tabular-nums">потратил ${spent.toFixed(2)}</div>
         {pct !== null && (
           <div className="mt-1 h-1 rounded-full bg-muted overflow-hidden max-w-[120px]">
             <div
@@ -72,8 +89,8 @@ export function ParticipantBudgetRow({ participant, spent }: ParticipantBudgetRo
             {budget !== null ? `$${budget}` : "—"}
           </div>
           {remaining !== null && (
-            <div className={cn("text-[10px]", remaining < 0 ? "text-red-500" : "text-muted-foreground")}>
-              ост. ${remaining.toFixed(0)}
+            <div className={cn("text-[10px] tabular-nums", remaining < 0 ? "text-red-500" : "text-muted-foreground")}>
+              ост. ${remaining.toFixed(2)}
             </div>
           )}
           <Pencil className="size-2.5 text-muted-foreground/0 group-hover:text-muted-foreground transition-colors inline-block ml-1" />

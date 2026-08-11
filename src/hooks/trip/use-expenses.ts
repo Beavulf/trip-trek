@@ -11,24 +11,36 @@ export function useExpenses() {
     queryFn: async () => {
       if (!tripId) return [];
       const r = await fetch(`/api/expenses?tripId=${tripId}`);
-      return r.json();
+      if (!r.ok) throw new Error("fetch expenses failed");
+      const data = await r.json();
+      return Array.isArray(data) ? data : [];
     },
     enabled: !!tripId,
+    // Всегда возвращаем массив — нет «вечного Загрузка»
+    placeholderData: [],
   });
 }
 
 export function useAddExpense() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (data: { amount: number; category: string; description: string; paidById: string; dayId?: string; splitWith?: string[]; excludeSelf?: boolean }) => {
+    mutationFn: async (data: { amount: number; category: string; description: string; paidById: string; dayId?: string; splitWith?: string[]; excludeSelf?: boolean; settlementKey?: string }) => {
       const r = await fetch("/api/expenses", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ ...data, tripId: getTripId() }),
       });
-      return r.json();
+      // Бросаем на !ok чтобы UI не показывал фейковый success-toast
+      const body = await r.json().catch(() => ({}));
+      if (!r.ok) {
+        throw new Error(body?.error || `Ошибка ${r.status}`);
+      }
+      return body as Expense;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["expenses"] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["expenses"] });
+      qc.invalidateQueries({ queryKey: ["trip"] });
+    },
   });
 }
 
@@ -36,8 +48,16 @@ export function useDeleteExpense() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (id: string) => {
-      await fetch(`/api/expenses?id=${id}`, { method: "DELETE" });
+      const r = await fetch(`/api/expenses?id=${id}`, { method: "DELETE" });
+      const body = await r.json().catch(() => ({}));
+      if (!r.ok) {
+        throw new Error(body?.error || `Ошибка ${r.status}`);
+      }
+      return body;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["expenses"] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["expenses"] });
+      qc.invalidateQueries({ queryKey: ["trip"] });
+    },
   });
 }

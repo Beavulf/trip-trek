@@ -163,16 +163,20 @@ model Photo {
 
 // === Трата ===
 model Expense {
-  id          String   @id @default(cuid())
-  tripId      String
-  amount      Float
-  category    String
-  description String
-  paidById    String   // userId кто заплатил
-  dayId       String?
-  splitWith   String   @default("")  // comma-separated userIds (пусто = личная трата)
-  excludeSelf Boolean  @default(false) // true = плательщик не участвует в делении
-  createdAt   DateTime @default(now())
+  id            String   @id @default(cuid())
+  tripId        String
+  amount        Float
+  category      String
+  description   String
+  paidById      String   // userId кто заплатил
+  dayId         String?
+  splitWith     String   @default("")  // comma-separated userIds (пусто = личная трата)
+  excludeSelf   Boolean  @default(false) // true = плательщик не участвует в делении
+  // settlementKey — детерминированный ключ для идемпотентности переводов (P0 #3).
+  // Формат: "settle-{fromId}-{toId}-{YYYY-MM-DDTHH}". В течение часа повторный клик
+  // даёт тот же ключ → второй клик не дублирует расчёт, баланс не ломается.
+  settlementKey String?  @unique
+  createdAt     DateTime @default(now())
 
   trip        Trip     @relation(fields: [tripId], references: [id], onDelete: Cascade)
   paidBy      User     @relation(fields: [paidById], references: [id])

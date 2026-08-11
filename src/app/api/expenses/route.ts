@@ -12,10 +12,12 @@ export async function GET(req: NextRequest) {
   const { response } = await requireTripMember(req, tripId);
   if (response) return response;
 
+  // Include day (для UI «День N» в ExpenseRow)
   const expenses = await db.expense.findMany({
     where: { tripId },
     include: {
       paidBy: { select: { id: true, name: true, emoji: true, color: true } },
+      day: { select: { dayNumber: true, city: true } },
     },
     orderBy: { createdAt: "desc" },
   });
@@ -26,7 +28,7 @@ export async function GET(req: NextRequest) {
 // POST /api/expenses — добавить трату
 export async function POST(req: NextRequest) {
   const body = await req.json();
-  const { amount, category, description, paidById, dayId, tripId, splitWith, excludeSelf } = body;
+  const { amount, category, description, paidById, dayId, tripId, splitWith, excludeSelf, settlementKey } = body;
   const { response } = await requireTripMember(req, tripId);
   if (response) return response;
   if (!category || !description || !paidById || !tripId) {
@@ -40,6 +42,38 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "description required (max 500 chars)" }, { status: 400 });
   }
 
+  // P1 #14: проверяем что paidById и splitWith — участники поездки
+  const memberIds = (await db.tripMember.findMany({
+    where: { tripId },
+    select: { userId: true },
+  })).map(m => m.userId);
+  if (!memberIds.includes(paidById)) {
+    return NextResponse.json({ error: "paidBy is not a member of this trip" }, { status: 400 });
+  }
+  const splitArr: string[] = Array.isArray(splitWith)
+    ? splitWith.filter((id: unknown): id is string => typeof id === "string")
+    : [];
+  const invalidSplit = splitArr.filter((id: string) => !memberIds.includes(id));
+  if (invalidSplit.length > 0) {
+    return NextResponse.json({ error: "splitWith contains non-members" }, { status: 400 });
+  }
+
+  // P0 #3: идемпотентность settlement — если settlementKey передан,
+  // проверяем есть ли уже запись с этим ключом. Если да — возвращаем её.
+  if (settlementKey && typeof settlementKey === "string") {
+    const existing = await db.expense.findUnique({
+      where: { settlementKey },
+      include: {
+        paidBy: { select: { id: true, name: true, emoji: true, color: true } },
+        day: { select: { dayNumber: true, city: true } },
+      },
+    });
+    if (existing) {
+      // Идемпотентный ответ — не создаём дубль, не эмитим новое событие
+      return NextResponse.json(existing);
+    }
+  }
+
   const expense = await db.expense.create({
     data: {
       amount: parsedAmount,
@@ -48,11 +82,13 @@ export async function POST(req: NextRequest) {
       paidById,
       dayId: dayId || null,
       tripId,
-      splitWith: Array.isArray(splitWith) ? splitWith.join(",") : (splitWith || ""),
+      splitWith: splitArr.join(","),
       excludeSelf: !!excludeSelf,
+      settlementKey: settlementKey || null,
     },
     include: {
       paidBy: { select: { id: true, name: true, emoji: true, color: true } },
+      day: { select: { dayNumber: true, city: true } },
     },
   });
 

@@ -34,7 +34,10 @@ export async function GET(req: NextRequest) {
   ]);
 
   const visitedPlaces = places.filter((p) => p.status === "visited").length;
-  const totalSpent = expenses.reduce((sum, e) => sum + e.amount, 0);
+  // P1 #5: унифицированный фильтр — settlement (переводы между участниками)
+  // НЕ считается как реальная трата. Это компенсация долгов, не расход.
+  const realExpenses = expenses.filter((e) => e.category !== "settlement");
+  const totalSpent = realExpenses.reduce((sum, e) => sum + e.amount, 0);
 
   // totalBudget = сумма бюджетов участников (если у всех есть budget), иначе из настроек
   const allHaveBudget = members.length > 0 && members.every((m) => m.budget != null);

@@ -1,0 +1,552 @@
+     1→     1→# TripTrek China — Work Log
+     2→     2→
+     3→     3→## Current Project Status
+     4→     4→
+     5→     5→**Phase**: 16 (Login UX + Join Fix + Budget Plan Fix + AI Trip-Scoped + Currency + Food Add) — COMPLETED
+     6→     6→**Build**: ✅ TypeScript clean, ESLint clean (1 minor warning)
+     7→     7→**Dev Server**: Running via `bun server.ts` (Next.js + WebSocket + Push on port 3000)
+     8→     8→**Test Accounts**: you@/leha@/den@triptrek.com (password: 1234)
+     9→     9→
+    10→    10→---
+    11→    11→
+    12→    12→## Session: Login UX + Join Fix + Budget Plan Fix + AI Trip-Scoped + Currency + Food Add
+    13→    13→
+    14→    14→### Feature: Login — password confirmation + eye icon
+    15→    15→- Added "Подтвердите пароль" field (registration only)
+    16→    16→- Eye/EyeOff toggle on both password fields
+    17→    17→- Live validation: red border if mismatch, green if match
+    18→    18→- Hints: "Пароли не совпадают" / "✓ Пароли совпадают"
+    19→    19→- Min length check (4 chars)
+    20→    20→
+    21→    21→### Fix: Join by code → 404
+    22→    22→**Problem**: Button linked to `/join/` (trailing slash) but route was `/join/[code]`. No page for code input.
+    23→    23→**Fix**: Created `/join/page.tsx` — standalone code entry page:
+    24→    24→- Input field with uppercase + monospace
+    25→    25→- "Найти поездку" → preview trip (title, emoji, members)
+    26→    26→- "Присоединиться" → joins trip, switches, navigates to main
+    27→    27→- Fixed button: `/join/` → `/join`
+    28→    28→
+    29→    29→### Fix: Budget plan not saving on mobile
+    30→    30→**Root cause**: `useUpdateBudgetPlan` didn't send `tripId` in body → API returned 400. Also `onBlur` lost focus on mobile.
+    31→    31→**Fix**:
+    32→    32→- Hook now sends `tripId: getTripId()` in body
+    33→    33→- Removed `onBlur` (unreliable on mobile)
+    34→    34→- Added explicit ✓ checkmark button next to input
+    35→    35→- Better error handling with toast
+    36→    36→
+    37→    37→### Fix: AI summary hardcoded "China 2024"
+    38→    38→**Root cause**: `useAISummary` hook didn't pass `tripId` → API used `"default-trip"` → always China trip.
+    39→    39→**Fix**: Hook now sends `?tripId=${getTripId()}` in URL. AI generates summary for the CURRENT trip (title, destination, days, places).
+    40→    40→
+    41→    41→### Feature: Currency converter — 24 currencies
+    42→    42→Added EUR, GBP, JPY, KRW, THB, VND, SGD, UAH, KZT, TRY, AED, INR, IDR, MYR, PHP, AUD, CAD, CHF (was 6, now 24). All from open.er-api.com (free, no key).
+    43→    43→
+    44→    44→### Feature: Add/Delete food items
+    45→    45→- `POST /api/foods` — create food (name, nameCn, city, place, price, emoji, description)
+    46→    46→- `DELETE /api/foods?id=` — delete food
+    47→    47→- `useAddFood`, `useDeleteFood` hooks
+    48→    48→- "Добавить блюдо" button in food guide → modal with:
+    49→    49→  - 20 emoji icons
+    50→    50→  - Name, local name, city (datalist from trip days), place, price, description
+    51→    51→  - Auto-scroll lock, bottom sheet style
+    52→    52→
+    53→    53→---
+    54→    54→
+    55→    55→## Session: Web Push VAPID + Avatar Upload + Achievement Details + Food City Fix + Map Perf
+    56→    56→
+    57→    57→### Feature: Web Push notifications (VAPID) — works on locked phone!
+    58→    58→**Problem**: Push toggle said "не поддерживаются" because it used basic `Notification` API (only works when site is open). No way to notify locked phone.
+    59→    59→
+    60→    60→**Solution**: Full Web Push implementation with VAPID:
+    61→    61→1. **Generated VAPID keys** (public + private) — stored in `.env`
+    62→    62→2. **New Prisma model**: `PushSubscription` (userId, endpoint, p256dh, auth)
+    63→    63→3. **API endpoints**:
+    64→    64→   - `GET /api/push/vapid-public-key` — returns public key
+    65→    65→   - `POST /api/push/subscribe` — saves subscription to DB
+    66→    66→   - `DELETE /api/push/subscribe?endpoint=` — removes subscription
+    67→    67→4. **`src/lib/push-send.ts`**: `sendPushToTripMembers(tripId, notification)` — sends push to ALL trip members (even offline)
+    68→    68→5. **`server/emit-handler.ts`**: When WS event has notification → also sends Web Push (for offline users)
+    69→    69→6. **PushToggle rewritten**: Uses `pushManager.subscribe()` with VAPID key, saves to server
+    70→    70→7. **SW updated**: Handles push events with `data.body`, `vibrate`, `actions`
+    71→    71→
+    72→    72→**How it works now:**
+    73→    73→- User A adds expense → API → `/emit` → server.ts
+    74→    74→  - WebSocket broadcast to online users (instant toast)
+    75→    75→  - Web Push to offline users (notification on locked phone!)
+    76→    76→- User B's phone shows notification even if app closed
+    77→    77→
+    78→    78→### Feature: Achievement details on tap (mobile)
+    79→    79→**Problem**: On mobile, achievement labels were truncated, no way to see description.
+    80→    80→**Fix**: Click achievement → expands description card below grid:
+    81→    81→- Shows emoji, label, status badge ("✓ Получено" or "🔒 Заблокировано")
+    82→    82→- Description: "Как получить: 10 фото" or "Достижение разблокировано!"
+    83→    83→- Lock icon 🔒 on locked achievements
+    84→    84→- Ring highlight on selected
+    85→    85→- X button to close
+    86→    86→
+    87→    87→### Feature: Avatar photo upload
+    88→    88→**Problem**: Only emoji avatars, no photo upload.
+    89→    89→**Solution**:
+    90→    90→1. **Schema**: Added `avatarUrl` field to User model
+    91→    91→2. **API**: `POST /api/user/avatar` — saves file to `/uploads/avatars/`, updates user
+    92→    92→3. **Profile UI**: Camera button on avatar (in edit mode) → file picker → upload → instant preview
+    93→    93→4. **Display**: If `avatarUrl` exists → show `<img>`, otherwise show emoji
+    94→    94→
+    95→    95→### Fix: Food guide showing hardcoded China cities
+    96→    96→**Problem**: Food guide used `CITIES` constant (4 China cities) for filter buttons. New trip to Tokyo showed China cities.
+    97→    97→**Fix**: `foodCities` now built dynamically from `foods` data (unique cities from food items). Filter buttons show only cities that have food in current trip.
+    98→    98→
+    99→    99→### Fix: "excludeSelf" (paid for others only) added to budget
+   100→   100→**Problem**: Budget AddExpenseForm didn't have "paid only for others" option (only in QuickAdd).
+   101→   101→**Fix**: Added `excludeSelf` checkbox to budget form:
+   102→   102→- "Заплатил только за них (на себя не тратил)"
+   103→   103→- When checked: payer NOT included in split, debt = amount / selected count
+   104→   104→- Live hint: "💡 Каждый должен по $5.00 плательщику (ты не участвуешь)"
+   105→   105→
+   106→   106→### Fix: Map performance on mobile
+   107→   107→**Problem**: Map lagged when dragging/zooming on mobile.
+   108→   108→**Fix**:
+   109→   109→- `preferCanvas={true}` — renders markers on canvas (faster than SVG)
+   110→   110→- `zoomControl={false}` + manual `<ZoomControl position="bottomright" />` — prevents accidental zoom on drag
+   111→   111→- Removed default zoom control that overlapped with map interactions
+   112→   112→
+   113→   113→---
+   114→   114→
+   115→   115→## Session: QuickAdd Expense UX + WebSocket Fix + PWA Updates + Mobile Delete
+   116→   116→
+   117→   117→### Fix: WebSocket not updating for other users
+   118→   118→**Root cause**: `use-websocket.ts` formed URL as `ws://hostname:3000` with explicit port. Through Caddy gateway (sandbox preview), client sees HTTPS without port → `window.location.port` empty → fallback to `3000` → `wss://hostname:3000` fails (Caddy doesn't expose 3000 directly).
+   119→   119→
+   120→   120→**Fix**: Changed to `window.location.origin` — WebSocket connects to same origin as page. Caddy proxies `/socket.io/` path correctly to localhost:3000.
+   121→   121→
+   122→   122→```ts
+   123→   123→// Было: ws://hostname:3000 (не работает через Caddy)
+   124→   124→const wsUrl = `${protocol}//${host}:${wsPort}`;
+   125→   125→
+   126→   126→// Стало: window.location.origin (работает через Caddy/HTTPS)
+   127→   127→const wsUrl = window.location.origin;
+   128→   128→```
+   129→   129→
+   130→   130→Also added `polling` as fallback transport (in case WebSocket blocked) and explicit `path: "/socket.io/"`.
+   131→   131→
+   132→   132→### Feature: QuickAddSheet ExpenseForm — full split functionality
+   133→   133→**Problem**: QuickAdd "+" sheet had basic expense form without split/debt features. Budget page had full features.
+   134→   134→
+   135→   135→**Fix**: Rewrote ExpenseForm in quick-add.tsx to match budget page:
+   136→   136→1. **Hint banner**: "Кто платит — ты. Отметь за кого, чтобы посчитать долги."
+   137→   137→2. **"За кого заплатил?"** — checkbox list (excluding self as payer)
+   138→   138→3. **"Заплатил только за них"** — special checkbox for "paid only for others, not for myself"
+   139→   139→   - When checked: debt split only among selected people (not payer)
+   140→   140→   - Example: I bought coffee for Лёха ($5), excludeSelf → Лёха owes me $5 (not $2.50)
+   141→   141→4. **Live calculation**: "💡 Каждый должен по $5.00 тебе" or "включая тебя"
+   142→   142→5. **On submit**: toast shows debt info with names
+   143→   143→
+   144→   144→### Fix: QuickAddSheet UI/UX — padding too close to edges
+   145→   145→- SheetContent: added `px-5 pb-6 pt-2` padding
+   146→   146→- SheetHeader: `px-0` (inherits from parent padding)
+   147→   147→- SheetTitle: `text-base` for better hierarchy
+   148→   148→- Plus icon: proper `PlusIcon` from lucide-react (was dummy function returning null)
+   149→   149→
+   150→   150→### Fix: Delete expense icon missing on mobile
+   151→   151→**Root cause**: Button had `opacity-0 group-hover:opacity-100` — mobile devices don't have hover, so button was invisible.
+   152→   152→
+   153→   153→**Fix**: Removed hover dependency. Now:
+   154→   154→- Delete button always visible (muted color)
+   155→   155→- On click → confirmation "Да"/"Нет" inline buttons
+   156→   156→- After delete → toast "Удалено"
+   157→   157→
+   158→   158→### Feature: PWA update notification
+   159→   159→**Created**: `src/components/trip/pwa-update.tsx`
+   160→   160→- Checks for SW updates every 30 seconds
+   161→   161→- When new SW waiting → shows animated toast "Доступна новая версия"
+   162→   162→- Button "Обновить" → sends `SKIP_WAITING` message to SW → page reloads
+   163→   163→- Button "X" → dismiss (will show again next check)
+   164→   164→
+   165→   165→**SW updates** (`public/sw.js`):
+   166→   166→- Cache version bumped to `triptrek-v2`
+   167→   167→- Removed auto `skipWaiting()` on install (now controlled by user)
+   168→   168→- Added `message` event handler for `SKIP_WAITING`
+   169→   169→- Added `icon-1024.png` to static assets
+   170→   170→
+   171→   171→**SW registration** (`providers.tsx`):
+   172→   172→- Added `navigator.serviceWorker.register("/sw.js")` on window load
+   173→   173→- Was missing — SW was never registered!
+   174→   174→
+   175→   175→---
+   176→   176→
+   177→   177→## Session: City Autocomplete Integration + Weather Anywhere + Expense UX + WebSocket
+   178→   178→
+   179→   179→### Feature: CityAutocomplete integrated into AddDayButton
+   180→   180→- Replaced plain text input with `CityAutocomplete` component
+   181→   181→- On city select: shows confirmation card with flag + language
+   182→   182→- Hint: "После создания дня автоматически добавятся фразы на языке [lang] и погода"
+   183→   183→- Stores cityKey as `custom-{lat}-{lng}` for weather lookup
+   184→   184→
+   185→   185→### Feature: Weather works for ANY city worldwide
+   186→   186→- `/api/weather` rewritten to accept `lat`, `lng`, `name`, `timezone` params
+   187→   187→- Legacy city keys (guangzhou, tokyo, etc.) still work via LEGACY_CITIES map
+   188→   188→- New `useWeatherByCoords(lat, lng, name, timezone, forecast)` hook
+   189→   189→- WeatherPanel rewritten: dynamically builds city list from trip days (useDays)
+   190→   190→  - Extracts lat/lng from cityKey format `custom-{lat}-{lng}`
+   191→   191→  - Falls back to legacy cities if cityKey matches
+   192→   192→  - Shows unique cities only (deduped)
+   193→   193→  - Empty state: "Добавьте дни в маршрут, чтобы увидеть погоду"
+   194→   194→
+   195→   195→### Feature: Expense UX redesign — clear split/debt pattern
+   196→   196→**Problem**: Adding expenses was confusing — unclear who to select, what "внёс" means, how debts work.
+   197→   197→
+   198→   198→**Fix**: Complete redesign of AddExpenseForm:
+   199→   199→1. **Hint banner**: "Кто платит — тот кто достал карту. Отметь за кого, чтобы посчитать долги."
+   200→   200→2. **"Кто заплатил?"** — button chips with avatars (not dropdown), defaults to current user
+   201→   201→3. **"За кого заплатил?"** — always visible checkbox list (not hidden in toggle)
+   202→   202→   - Payer auto-checked + disabled "(заплатил)"
+   203→   203→   - Live calculation: "💡 Каждый должен по $16.67 плательщику"
+   204→   204→4. **On submit**: if split selected → toast shows "Долг: каждый должен $16.67 → Лёха"
+   205→   205→5. **"Расчёт между друзьями"** section: added explanation "Внёс — сколько реально заплатил. + ему должны, − он должен"
+   206→   206→
+   207→   207→### Fix: Settlement button — role-based (debtor only)
+   208→   208→- **Debtor** (owes): sees "Я перевёл" button
+   209→   209→- **Creditor** (owed): sees "🕐 Ждём перевод" (no button)
+   210→   210→- **Others**: see nothing
+   211→   211→- After marking: "✅ Переведено"
+   212→   212→
+   213→   213→### Fix: Phrase pronunciation — universal language detection
+   214→   214→**Problem**: Always said "китайский голос не установлен" even for Japanese phrases.
+   215→   215→**Fix**: Auto-detects language from phrase characters:
+   216→   216→- Hiragana/Katakana → Japanese (ja)
+   217→   217→- Hanzi → Chinese (zh)
+   218→   218→- Hangul → Korean (ko)
+   219→   219→- Thai script → Thai (th)
+   220→   220→- Arabic script → Arabic (ar)
+   221→   221→- Cyrillic → Russian (ru)
+   222→   222→- French/German/Spanish diacritics → respective languages
+   223→   223→- Toast: "Не установлен [язык] голос" with correct language name
+   224→   224→
+   225→   225→### WebSocket server running in sandbox!
+   226→   226→- Started via `bun server.ts` (not `next dev`)
+   227→   227→- Next.js + Socket.io on same port 3000
+   228→   228→- `/socket.io/` endpoint: 200 OK
+   229→   229→- `/emit` endpoint: 200 OK (API → WS bridge works)
+   230→   230→- Real-time updates now work between participants
+   231→   231→
+   232→   232→---
+   233→   233→
+   234→   234→## Session: City Autocomplete + Settlement Logic + App Icons
+   235→   235→
+   236→   236→### Feature: City Autocomplete API
+   237→   237→**Created**: `GET /api/city-search?q=...` using Open-Meteo Geocoding API (free, no key)
+   238→   238→- Searches cities worldwide in Russian
+   239→   239→- Returns: name, country, region, lat/lng, timezone, language, flag emoji
+   240→   240→- Language auto-detected from country code (zh, ja, ko, th, fr, de, en, etc.)
+   241→   241→- 35+ country-to-language mappings
+   242→   242→
+   243→   243→### Feature: CityAutocomplete component
+   244→   244→**Created**: `src/components/trip/city-autocomplete.tsx`
+   245→   245→- Debounced search (350ms)
+   246→   246→- Dropdown with flag, city name, region, country, language badge
+   247→   247→- On select: shows confirmation card with city + language
+   248→   248→- Ready to integrate into trip creation and "add day" forms
+   249→   249→
+   250→   250→### Feature: Auto-generate phrases by language
+   251→   251→**Created**: `POST /api/phrases/generate` with phrase database for 8 languages:
+   252→   252→- zh (Chinese): 30 phrases — basics, food, transport, shopping, emergency
+   253→   253→- ja (Japanese): 13 phrases
+   254→   254→- ko (Korean): 9 phrases
+   255→   255→- th (Thai): 9 phrases
+   256→   256→- fr (French): 10 phrases
+   257→   257→- en (English): 10 phrases
+   258→   258→- vi, es, de: basic phrases
+   259→   259→- Skips if phrases already exist for trip
+   260→   260→
+   261→   261→### Fix: Settlement button logic
+   262→   262→**Problem**: Anyone could click "Оплачен" — confusing, no accountability.
+   263→   263→**Fix**: Now role-based using current user session:
+   264→   264→- **Debtor** (owes money): sees "Я перевёл" button → marks payment sent
+   265→   265→- **Creditor** (owed money): sees "Ждём перевод" status → knows to expect payment
+   266→   266→- **Other participants**: see nothing (not their transaction)
+   267→   267→- After marking: shows "✅ Переведено" confirmation
+   268→   268→
+   269→   269→### Asset: App icons generated
+   270→   270→- `public/icon-1024.png` — master icon (orange-rose gradient, paper airplane)
+   271→   271→- `public/icon-512.png` — PWA icon (compass/map pin)
+   272→   272→- `public/icon-192.png` — existing small icon
+   273→   273→- Manifest updated with correct icon references
+   274→   274→
+   275→   275→---
+   276→   276→
+   277→   277→## Session: Trip Scoping Fixes + Split Expenses + Button-in-button
+   278→   278→
+   279→   279→### Bug: Button-in-button hydration error in Itinerary
+   280→   280→**Problem**: `DeleteDayButton` (a `<button>`) was rendered inside DayCard's outer `<button>` — HTML doesn't allow nested buttons, causes hydration error.
+   281→   281→**Fix**: Replaced outer `<button>` with `<div role="button" tabIndex={0}>` + keyboard handler (Enter/Space). Keeps accessibility without HTML violation.
+   282→   282→
+   283→   283→### Bug: Gallery showed photos from ALL trips (China photos in Tokyo trip)
+   284→   284→**Root cause**: `usePhotos()` hook didn't pass `tripId` to API or queryKey. Same for `photos/geo` endpoint — no tripId filter at all.
+   285→   285→**Fix**:
+   286→   286→- `usePhotos()`: Added `params.set("tripId", getTripId())` + `getTripId()` in queryKey
+   287→   287→- `photos/geo` API: Added `tripId` query param support
+   288→   288→- `trip-map.tsx`: Fetches `/api/photos/geo?tripId=${getTripId()}` + tripId in queryKey
+   289→   289→
+   290→   290→### Bug: Expenses not appearing / list inconsistent
+   291→   291→**Root cause**: `useExpenses` queryKey was `["expenses"]` without tripId. When switching trips, stale cache showed old data.
+   292→   292→**Fix**: queryKey now `["expenses", getTripId()]`. Same fix applied to ALL trip-scoped hooks:
+   293→   293→- useJournal, useBoard, useChecklist, useInfo, usePhrases, useBudgetPlan
+   294→   294→All now include `getTripId()` in queryKey AND pass tripId to API.
+   295→   295→
+   296→   296→### Bug: Food list disappeared after creating new trip
+   297→   297→**Root cause**: `useFoods()` didn't pass tripId — showed ALL foods from DB. New trip had no foods, but old foods from China trip were shown... or not shown depending on cache.
+   298→   298→**Fix**: `useFoods()` now passes `tripId` and includes it in queryKey.
+   299→   299→
+   300→   300→### Feature: "Заплатил за других" (Split Expense) in Budget
+   301→   301→**Problem**: Settlement feature was confusing — hard to understand who owes whom.
+   302→   302→**Solution**: Added split expense UI directly in AddExpenseForm:
+   303→   303→- "Заплатил за других" toggle button (with Users icon)
+   304→   304→- Opens checkbox list of participants (payer is auto-included, disabled)
+   305→   305→- Shows live calculation: "3 чел · $16.67/каждый"
+   306→   306→- Hint: "💡 Каждый должен по $16.67 плательщику"
+   307→   307→- Settlement section below now shows calculated debts with "Оплачен" button
+   308→   308→
+   309→   309→---
+   310→   310→
+   311→   311→## Session: UI Polish + Day Management + Settlements + Bug Fixes
+   312→   312→
+   313→   313→### Bug: "Cannot read properties of undefined (reading 'lat')" on Add Place
+   314→   314→**Root cause**: `itinerary.tsx` had hardcoded `cityCoords` with only 4 China cities. If trip used a different cityKey (e.g. "tokyo" from Japan template), `cityCoords[currentDay.cityKey]` returned undefined → crash on `.lat`.
+   315→   315→
+   316→   316→**Fix**: Added more cities (tokyo, paris, bangkok, phuket) + fallback to guangzhou: `const c = (currentDay && cityCoords[currentDay.cityKey]) || cityCoords.guangzhou;`
+   317→   317→
+   318→   318→### Bug: Turbopack warning "Cannot update a component (Router) while rendering"
+   319→   319→**Fix**: Moved `router.push("/login")` from render body to `useEffect` in `page.tsx`.
+   320→   320→
+   321→   321→### Bug: Mobile browser crash on photo upload
+   322→   322→**Fix**: Added Canvas image compression (max 1920px, JPEG 0.8), EXIF optimization (`{ gps: true }`), Object URL cleanup, processing state with loading overlay.
+   323→   323→
+   324→   324→### Feature: Body scroll lock when bottom sheet is open
+   325→   325→**Problem**: On mobile, when a bottom sheet (AddPlaceSheet, ShareCard, InviteFriends, etc.) opened, the background page could still scroll, causing the sheet to "drift".
+   326→   326→
+   327→   327→**Fix**: Created `useBodyScrollLock(active)` hook that sets `body.overflow = hidden` with scrollbar-width padding compensation. Applied to all 8 portal/modal components:
+   328→   328→- AddPlaceSheet, ShareCard, TemplatePicker, InviteFriends, BudgetEditModal, PremiumModal, GlobalSearch, PlaceDialog
+   329→   329→- (QuickAddSheet uses Radix Sheet which already has scroll lock built-in)
+   330→   330→
+   331→   331→### Feature: Day management (add/delete) in Itinerary
+   332→   332→**Problem**: No way to add or delete trip days.
+   333→   333→
+   334→   334→**Fix**:
+   335→   335→- `/api/days` POST — create new day (auto-increments dayNumber, updates trip.totalDays)
+   336→   336→- `/api/days` DELETE — delete day (renumbers remaining days, prevents deleting last day)
+   337→   337→- `/api/days` PATCH — update day (city, title, accentColor)
+   338→   338→- `useAddDay`, `useDeleteDay`, `useUpdateDay` hooks
+   339→   339→- "Добавить день" button at bottom of itinerary (opens modal with city/title/color picker)
+   340→   340→- DeleteDayButton in each DayCard header (with confirmation)
+   341→   341→
+   342→   342→### Feature: Settlement/Transfer recording in Budget
+   343→   343→**Problem**: "Расчёт между друзьями" showed who owes whom, but no way to record payments.
+   344→   344→
+   345→   345→**Fix**:
+   346→   346→- Added "Оплачен" button on each settlement
+   347→   347→- Creates expense with `category: "settlement"` (excluded from totalSpent, charts, category breakdown)
+   348→   348→- Settlement expenses show in history with "💸" icon and "Перевод" label
+   349→   349→- After marking as paid, settlement disappears (balance recalculated)
+   350→   350→- `realExpenses = expenses.filter(e => e.category !== "settlement")` used for all calculations
+   351→   351→
+   352→   352→### UI: Budget "Добавить" button rename
+   353→   353→**Problem**: When add expense form was expanded, the toggle button still said "Добавить" — confusing.
+   354→   354→
+   355→   355→**Fix**: Button now shows "Скрыть" with X icon when form is open, "Добавить" with Plus icon when closed. Style also changes (secondary when open, primary when closed).
+   356→   356→
+   357→   357→### UI: Chart tooltip text color
+   358→   358→**Problem**: Bar chart tooltip "Потрачено: $60" text was black on dark background.
+   359→   359→
+   360→   360→**Fix**: Added `labelStyle={{ color: "var(--foreground)" }}` and `itemStyle={{ color: "var(--foreground)" }}` to the BarChart Tooltip (was missing, only PieChart had it).
+   361→   361→
+   362→   362→### UI: Achievements labels overflow in Profile
+   363→   363→**Problem**: Achievement labels were positioned absolutely at bottom of `aspect-square` cards, overflowing on long names.
+   364→   364→
+   365→   365→**Fix**: Changed to flex column layout (`p-2 flex flex-col items-center gap-1`), removed `aspect-square`, used `line-clamp-2` for labels, grid changed from 4/6 cols to 3/5 cols.
+   366→   366→
+   367→   367→### UI: QuickAddSheet animation optimization
+   368→   368→**Problem**: Opening the + sheet felt laggy on mobile.
+   369→   369→
+   370→   370→**Fix**: Replaced `motion.button` (framer-motion whileTap) with regular `button` + CSS `active:scale-95` transition. Framer-motion inside Radix Sheet caused unnecessary re-renders during open animation.
+   371→   371→
+   372→   372→---
+   373→   373→
+   374→   374→## Session: Mobile Photo Crash Fix + Turbopack Warning Fix
+   375→   375→
+   376→   376→### Bug: Turbopack warning "Cannot update a component (Router) while rendering a different component (Home)"
+   377→   377→**Root cause**: In `src/app/page.tsx`, `router.push("/login")` was called **during render** (line 38-40), which is a React anti-pattern that triggers the warning.
+   378→   378→
+   379→   379→**Fix**: Moved `router.push` to `useEffect`:
+   380→   380→```tsx
+   381→   381→// Было (WRONG):
+   382→   382→if (status === "unauthenticated") {
+   383→   383→  router.push("/login");  // ← setState during render!
+   384→   384→}
+   385→   385→
+   386→   386→// Стало (CORRECT):
+   387→   387→useEffect(() => {
+   388→   388→  if (status === "unauthenticated") {
+   389→   389→    router.push("/login");
+   390→   390→  }
+   391→   391→}, [status, router]);
+   392→   392→```
+   393→   393→
+   394→   394→### Bug: Mobile browser crashes when taking/uploading photo
+   395→   395→**Root causes**:
+   396→   396→1. **Large photos (5-10MB)** — `exifr.parse(f)` reads full file into memory → crash
+   397→   397→2. **No compression** — original 4000x3000 photo uploaded as-is
+   398→   398→3. **Object URL leak** — `URL.createObjectURL(f)` never revoked → memory grows
+   399→   399→4. **Preview at full resolution** — `<img>` renders 8MB image
+   400→   400→5. **No processing indicator** — user doesn't know what's happening
+   401→   401→
+   402→   402→**Fix** (in `src/components/trip/quick-add.tsx`):
+   403→   403→1. **Image compression via Canvas**: Resize to max 1920px, JPEG quality 0.8. Reduces 8MB → ~500KB
+   404→   404→2. **EXIF optimization**: `exifr.parse(f, { gps: true })` — only parses GPS segment (much faster, less memory)
+   405→   405→3. **Object URL cleanup**: `previewUrlRef` tracks URL, `URL.revokeObjectURL()` on cleanup/remove/unmount
+   406→   406→4. **Processing state**: `processing` state with loading overlay on preview + disabled buttons
+   407→   407→5. **Size validation**: Max 25MB before processing starts
+   408→   408→6. **Error handling**: try-catch on all async ops, fallback to original if compression fails
+   409→   409→
+   410→   410→### EXIF geolocation from gallery photos — confirmed working
+   411→   411→The code already reads EXIF GPS from gallery photos. Verified:
+   412→   412→- `exifr.parse(f, { gps: true })` reads GPS from any photo file (camera or gallery)
+   413→   413→- If GPS found → toast "📍 Координаты из фото" + reverse geocode
+   414→   414→- If no GPS → falls back to current geolocation request
+   415→   415→- Works for: photos taken with phone camera, photos saved to gallery with location, photos shared from other apps
+   416→   416→
+   417→   417→**Note**: Some phones strip EXIF when:
+   418→   418→- Photo edited in gallery app
+   419→   419→- Photo shared via WhatsApp/Telegram (metadata stripped)
+   420→   420→- Photo taken with location services disabled
+   421→   421→In these cases, the app correctly falls back to requesting current geolocation.
+   422→   422→
+   423→   423→---
+   424→   424→
+   425→   425→## Session: Freemium Limits Clarity + Member Limit Enforcement
+   426→   426→
+   427→   427→### Question from user: How do limits work when premium user invites free user to 10 trips?
+   428→   428→
+   429→   429→**Clarified logic:**
+   430→   430→- Free user limit "1 trip" counts ONLY trips where they are `owner` (creator)
+   431→   431→- Joining trips as `member` has NO limit for free users
+   432→   432→- This means: premium user can invite free user to unlimited trips, free user can participate in all
+   433→   433→
+   434→   434→**Bug found**: `/api/trips/join` endpoint did NOT check `maxMembers` limit — anyone could join any trip regardless of member count.
+   435→   435→
+   436→   436→**Fix applied**:
+   437→   437→- `/api/trips/join` POST now checks member limit based on TRIP OWNER's plan (not joining user's plan)
+   438→   438→- If owner is free → max 5 members; if premium → unlimited
+   439→   439→- Returns 403 with "upgrade: true" when limit reached
+   440→   440→- Verified: 6th member gets 403 "Лимит участников (5) исчерпан"
+   441→   441→
+   442→   442→### New: Limits visibility in Profile
+   443→   443→
+   444→   444→**Added to `/api/user` response**: `limits` object with `maxOwnedTrips`, `maxMembersPerTrip`, `canCreateTrip`; `stats.ownedTrips` count.
+   445→   445→
+   446→   446→**Added "Твой Free план" card in profile** (shown only for free users):
+   447→   447→- Создание поездок: прогресс-бар 1/1
+   448→   448→- Участников в поездке: 5 макс
+   449→   449→- Участие в чужих поездках: Безлимит ✅
+   450→   450→- Tooltip explaining the freemium model
+   451→   451→
+   452→   452→**Trip count in header**: "создано 1/1 · всего 1" (owned vs total)
+   453→   453→
+   454→   454→---
+   455→   455→
+   456→   456→## Session: Trip Templates + UI Polish
+   457→   457→
+   458→   458→### QA Results (agent-browser)
+   459→   459→- ✅ Login flow works (you@triptrek.com → main page with tabs)
+   460→   460→- ✅ No redirect to localhost on tab switching
+   461→   461→- ✅ Profile page loads correctly (avatar, stats, achievements, premium card)
+   462→   462→- ✅ Premium card visible in profile (gold gradient, "Получить Premium от $5")
+   463→   463→- ✅ PremiumModal opens, $5/$30 buttons work, API upgrades user
+   464→   464→- ✅ Tabs switch without errors (0 console errors)
+   465→   465→- ✅ URL stays on `/` during navigation (no unwanted redirects)
+   466→   466→
+   467→   467→### New Feature: Trip Templates
+   468→   468→**Problem**: Creating a trip from scratch requires manually adding places, foods, phrases — tedious for new users.
+   469→   469→
+   470→   470→**Solution**: Pre-built trip templates that auto-create days, places, foods, phrases.
+   471→   471→
+   472→   472→**Files created**:
+   473→   473→- `src/lib/trip-templates.ts` — 4 templates: China 🇨🇳 (12 days), Japan 🇯🇵 (10 days), Europe 🇪🇺 (14 days), Thailand 🇹🇭 (10 days)
+   474→   474→- `src/app/api/trips/from-template/route.ts` — POST endpoint creates trip + days + places + foods + phrases with limit checking
+   475→   475→- `src/components/trip/template-picker.tsx` — Beautiful modal with template cards (cover gradient, emoji, stats, create button)
+   476→   476→
+   477→   477→**Integration**:
+   478→   478→- Added "Создать из шаблона" button in TripSwitcher (gradient, Sparkles icon)
+   479→   479→- Template picker opens as portal, shows all 4 templates with covers + stats
+   480→   480→- On create: API checks premium limits (free=1 trip, premium=unlimited)
+   481→   481→- Success: switches to new trip, invalidates queries, navigates to main page
+   482→   482→
+   483→   483→**Verified**:
+   484→   484→- Free user → 403 "Лимит поездок исчерпан"
+   485→   485→- Premium user → 200, trip created with 4 places (Japan), 3 foods, 3 phrases
+   486→   486→- Template "Япония мечты" created successfully with custom title
+   487→   487→- UI shows all 4 templates with correct emojis 🇨🇳🇯🇵🇪🇺🇹🇭
+   488→   488→
+   489→   489→### UI Polish: Skeleton Loading
+   490→   490→- Improved `DashboardSkeleton` with shimmer animation (staggered delays for stats grid)
+   491→   491→- Uses existing `.shimmer` CSS class for consistent loading state
+   492→   492→
+   493→   493→---
+   494→   494→
+   495→   495→## Previous Sessions Summary
+   496→   496→
+   497→   497→### Auth System (custom JWT, bypasses NextAuth v4 + Turbopack bug)
+   498→   498→- `POST /api/auth/custom-login` — bcrypt verify + JWT in cookie
+   499→   499→- `GET /api/auth/custom-session` — reads JWT from cookie
+   500→   500→- `POST /api/auth/custom-signout` — clears cookie
+   501→   501→- `useAuth` hook replaces `useSession` everywhere (retry: 1, refetchOnWindowFocus, staleTime 5min)
+   502→   502→- Removed NextAuth `<SessionProvider>` from providers.tsx (was clearing our JWT)
+   503→   503→
+   504→   504→### Premium Features
+   505→   505→- `POST /api/user/upgrade` — sets plan=premium + planExpiry (30d/365d)
+   506→   506→- PremiumModal wired to API, shows loading, invalidates queries
+   507→   507→- Crown button in header (gold if premium, grey if free)
+   508→   508→- Prominent Premium card in profile (gold gradient if not premium, status card if premium)
+   509→   509→
+   510→   510→### Profile Page
+   511→   511→- Avatar with emoji/color picker (30 emojis, 12 colors)
+   512→   512→- 6 stat cards (trips, photos, spent, journals, messages, places)
+   513→   513→- 13 achievements grid (unlocked/locked)
+   514→   514→- All trips list with role + member count
+   515→   515→- Settings: theme, premium, push, about
+   516→   516→- Sign out button
+   517→   517→
+   518→   518→### Server Architecture (modular)
+   519→   519→- `server.ts` — entry point (~40 lines)
+   520→   520→- `server/emit-handler.ts` — /emit HTTP endpoint
+   521→   521→- `server/socket-handlers.ts` — socket.io handlers (data-driven)
+   522→   522→- `server/rooms.ts` — TripRooms class
+   523→   523→- `server/notification-map.ts` — notification config
+   524→   524→
+   525→   525→### Security Fixes
+   526→   526→- Photos: file type validation + 20MB limit
+   527→   527→- Expenses: amount validation (positive, ≤1000000)
+   528→   528→- Board: fixed tripIds typo, content validation
+   529→   529→- Export/Import: multi-trip schema
+   530→   530→- AI-summary: multi-trip schema + ES import
+   531→   531→- emitWS: 3-arg signature fixed
+   532→   532→
+   533→   533→## Unresolved Issues / Risks
+   534→   534→
+   535→   535→1. **Seed scripts** — `prisma/seed*.ts` still use old schema. Low priority.
+   536→   536→2. **WebSocket server** — `server.ts` not used in dev mode. WS works via /emit bridge only.
+   537→   537→3. **Stripe** — Premium upgrade is demo-mode (no real payment).
+   538→   538→4. **No rate limiting** — API routes have no rate limiting.
+   539→   539→
+   540→   540→## Priority Recommendations for Next Phase
+   541→   541→
+   542→   542→1. **Real-time presence** — show who's online in each trip (using TripRooms)
+   543→   543→2. **Public trip view** — read-only trip view via share link
+   544→   544→3. **Offline support** — PWA caching for offline trip access
+   545→   545→4. **Expense splitting improvements** — already exists in budget.tsx, could add "mark as paid" + notifications
+   546→   546→5. **AI itinerary planner** — generate day-by-day plan from preferences
+   547→   547→6. **Photo albums** — organize photos by day/city
+   548→   548→7. **Trip cloning** — duplicate existing trip as template
+   549→   549→8. **Currency auto-conversion** — real-time FX in expense entry
+   550→   550→9. **Push notifications via VAPID** — real Web Push
+   551→   551→10. **Trip templates expansion** — add more templates (Korea, Vietnam, Italy, USA)
+   552→   552→

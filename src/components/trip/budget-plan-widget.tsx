@@ -23,15 +23,18 @@ export function BudgetPlanWidget() {
     );
   }
 
+  // P1 #5: унифицированный фильтр реальных трат — settlement исключён
+  const realExpenses = (expenses ?? []).filter((e) => e.category !== "settlement");
+
   // Расходы по категориям
   const spentByCat: Record<string, number> = {};
-  expenses?.forEach((e) => {
+  realExpenses.forEach((e) => {
     spentByCat[e.category] = (spentByCat[e.category] ?? 0) + e.amount;
   });
 
   const allCats = Object.keys(EXPENSE_CATEGORIES);
   const totalPlan = plans.reduce((s, p) => s + p.amount, 0);
-  const totalSpent = expenses?.reduce((s, e) => s + e.amount, 0) ?? 0;
+  const totalSpent = realExpenses.reduce((s, e) => s + e.amount, 0);
 
   const saveEdit = (cat: string) => {
     const num = parseFloat(editVal);

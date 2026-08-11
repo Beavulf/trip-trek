@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { emitWS } from "@/lib/ws-emit";
 import { requireTripMember } from "@/lib/api-auth";
 
 // PATCH /api/trip/budget — обновить общий бюджет поездки
@@ -16,5 +17,7 @@ export async function PATCH(req: NextRequest) {
     where: { id: tripId },
     data: { totalBudget },
   });
+  // Уведомляем других клиентов через WS что бюджет обновился
+  await emitWS("trip:updated", tripId, {});
   return NextResponse.json(trip);
 }

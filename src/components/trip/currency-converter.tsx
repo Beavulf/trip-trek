@@ -5,33 +5,7 @@ import { ArrowRight, Loader2, RefreshCw } from "lucide-react";
 import { useState } from "react";
 import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
-
-const CURRENCIES = [
-  { code: "USD", flag: "🇺🇸", name: "Доллар США" },
-  { code: "EUR", flag: "🇪🇺", name: "Евро" },
-  { code: "GBP", flag: "🇬🇧", name: "Фунт" },
-  { code: "CNY", flag: "🇨🇳", name: "Юань" },
-  { code: "JPY", flag: "🇯🇵", name: "Иена" },
-  { code: "KRW", flag: "🇰🇷", name: "Вона" },
-  { code: "HKD", flag: "🇭🇰", name: "Гонконг$" },
-  { code: "MOP", flag: "🇲🇴", name: "Патака" },
-  { code: "THB", flag: "🇹🇭", name: "Бат" },
-  { code: "VND", flag: "🇻🇳", name: "Донг" },
-  { code: "SGD", flag: "🇸🇬", name: "Сингапур$" },
-  { code: "RUB", flag: "🇷🇺", name: "Рубль" },
-  { code: "BYN", flag: "🇧🇾", name: "Бел.рубль" },
-  { code: "UAH", flag: "🇺🇦", name: "Гривна" },
-  { code: "KZT", flag: "🇰🇿", name: "Тенге" },
-  { code: "TRY", flag: "🇹🇷", name: "Лира" },
-  { code: "AED", flag: "🇦🇪", name: "Дирхам" },
-  { code: "INR", flag: "🇮🇳", name: "Рупия" },
-  { code: "IDR", flag: "🇮🇩", name: "Рупия ID" },
-  { code: "MYR", flag: "🇲🇾", name: "Ринггит" },
-  { code: "PHP", flag: "🇵🇭", name: "Песо" },
-  { code: "AUD", flag: "🇦🇺", name: "Австрал$" },
-  { code: "CAD", flag: "🇨🇦", name: "Канад$" },
-  { code: "CHF", flag: "🇨🇭", name: "Франк" },
-];
+import { CURRENCIES } from "@/lib/currencies";
 
 export function CurrencyConverter() {
   const { data: rates, isLoading } = useCurrency();
@@ -121,14 +95,25 @@ export function CurrencyConverter() {
           </div>
 
           {/* Курс */}
-          <div className="mt-3 pt-3 border-t border-border text-[11px] text-muted-foreground flex items-center justify-between">
+          <div className="mt-3 pt-3 border-t border-border text-[11px] text-muted-foreground flex items-center justify-between flex-wrap gap-1">
             <span>
               1 {from} = {convert(1, from, to).toFixed(2)} {to}
             </span>
             <span className={cn("flex items-center gap-1", rates.fallback && "text-amber-500")}>
-              {rates.fallback ? "⚠ примерные курсы" : "🔄 обновлено"}
+              {rates.fallback
+                ? "⚠ примерные курсы"
+                : rates.updated
+                  ? <>🔄 обновлено {new Date(rates.updated).toLocaleDateString("ru-RU", { day: "numeric", month: "short" })}</>
+                  : "🔄 обновлено"}
             </span>
           </div>
+
+          {/* Бейдж если курс 0 — предупреждение */}
+          {(convert(amountNum, from, to) === 0 && amountNum > 0) && (
+            <div className="mt-2 text-[11px] text-amber-500 bg-amber-500/10 rounded-lg px-2 py-1.5 border border-amber-500/20">
+              ⚠ Нет курса для одной из валют. Используется fallback.
+            </div>
+          )}
 
           {/* Быстрые суммы */}
           <div className="flex gap-1.5 mt-2 flex-wrap">

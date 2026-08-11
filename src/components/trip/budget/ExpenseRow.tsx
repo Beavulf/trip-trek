@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Trash2, Users } from "lucide-react";
+import { Trash2, Users, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { useDeleteExpense } from "@/hooks/use-trip";
@@ -29,6 +29,18 @@ export function ExpenseRow({ expense, participants }: ExpenseRowProps) {
   const timeStr = new Date(expense.createdAt).toLocaleString("ru-RU", {
     day: "numeric", month: "short", hour: "2-digit", minute: "2-digit"
   });
+
+  const handleDelete = async () => {
+    try {
+      await del.mutateAsync(expense.id);
+      toast.success("Удалено");
+      setConfirming(false);
+    } catch (err) {
+      toast.error("Не удалось удалить", {
+        description: err instanceof Error ? err.message : "Попробуйте ещё раз",
+      });
+    }
+  };
 
   return (
     <div className="flex items-start gap-2.5 p-2.5 rounded-xl hover:bg-accent/50 transition-colors">
@@ -88,13 +100,14 @@ export function ExpenseRow({ expense, participants }: ExpenseRowProps) {
         {confirming ? (
           <div className="flex items-center gap-1">
             <button
-              onClick={() => { del.mutate(expense.id); toast.success("Удалено"); setConfirming(false); }}
+              onClick={handleDelete}
               disabled={del.isPending}
-              className="text-[10px] bg-red-500 text-white px-2 py-1 rounded-lg font-medium"
+              className="text-[10px] bg-red-500 text-white px-2 py-1 rounded-lg font-medium flex items-center gap-1"
             >
+              {del.isPending ? <Loader2 className="size-3 animate-spin" /> : null}
               {del.isPending ? "…" : "Да"}
             </button>
-            <button onClick={() => setConfirming(false)} className="text-[10px] bg-secondary px-2 py-1 rounded-lg">
+            <button onClick={() => setConfirming(false)} disabled={del.isPending} className="text-[10px] bg-secondary px-2 py-1 rounded-lg">
               Нет
             </button>
           </div>

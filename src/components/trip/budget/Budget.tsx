@@ -18,20 +18,53 @@ import { BudgetEditModal } from "./BudgetEditModal";
 import { SettlementSection } from "./SettlementSection";
 
 export function Budget() {
-  const { data: expenses, isLoading } = useExpenses();
-  const { data: trip } = useTrip();
+  const { data: expenses, isLoading: expensesLoading, error: expensesError } = useExpenses();
+  const { data: trip, isLoading: tripLoading, error: tripError } = useTrip();
   const [showAdd, setShowAdd] = useState(false);
   const [showBudgetModal, setShowBudgetModal] = useState(false);
 
-  if (isLoading || !expenses || !trip) {
+  // P0 #4: нет trip / ошибка → показываем осмысленное сообщение, а не вечный «Загрузка…»
+  if (tripError) {
+    return (
+      <div className="py-16 text-center text-muted-foreground space-y-2">
+        <div className="text-3xl">🤔</div>
+        <p className="text-sm font-medium">Не удалось загрузить поездку</p>
+        <p className="text-xs">Возможно поездка удалена или нет доступа</p>
+        <button
+          onClick={() => window.location.reload()}
+          className="mt-2 text-xs px-3 py-1.5 rounded-lg bg-primary text-primary-foreground"
+        >
+          Обновить
+        </button>
+      </div>
+    );
+  }
+
+  if (expensesError) {
+    return (
+      <div className="py-16 text-center text-muted-foreground space-y-2">
+        <div className="text-3xl">💸</div>
+        <p className="text-sm font-medium">Не удалось загрузить траты</p>
+        <button
+          onClick={() => window.location.reload()}
+          className="mt-2 text-xs px-3 py-1.5 rounded-lg bg-primary text-primary-foreground"
+        >
+          Обновить
+        </button>
+      </div>
+    );
+  }
+
+  if (tripLoading || expensesLoading || !expenses || !trip) {
     return <div className="py-20 text-center text-muted-foreground flex items-center justify-center gap-2"><Loader2 className="size-4 animate-spin" /> Загрузка бюджета…</div>;
   }
 
-  // Исключаем переводы (settlement) из общей статистики
+  // Единый фильтр реальных трат (P1 #5) — settlement исключён везде
   const realExpenses = expenses.filter((e) => e.category !== "settlement");
+  const settlementCount = expenses.length - realExpenses.length;
   const totalSpent = realExpenses.reduce((s, e) => s + e.amount, 0);
   const remaining = trip.settings.totalBudget - totalSpent;
-  const budgetPct = (totalSpent / trip.settings.totalBudget) * 100;
+  const budgetPct = trip.settings.totalBudget > 0 ? (totalSpent / trip.settings.totalBudget) * 100 : 0;
 
   // По категориям (без переводов)
   const byCategory = Object.keys(EXPENSE_CATEGORIES).map((key) => {
@@ -163,7 +196,7 @@ export function Budget() {
         </div>
         <div className="space-y-2">
           {trip.participants.map((p) => (
-            <ParticipantBudgetRow key={p.id} participant={p} spent={expenses.filter((e) => e.paidById === p.id).reduce((s, e) => s + e.amount, 0)} />
+            <ParticipantBudgetRow key={p.id} participant={p} spent={realExpenses.filter((e) => e.paidById === p.id).reduce((s, e) => s + e.amount, 0)} />
           ))}
         </div>
         <p className="text-[11px] text-muted-foreground mt-2.5">
@@ -185,11 +218,18 @@ export function Budget() {
       {/* Список трат */}
       <div className="rounded-2xl bg-card border border-border p-4">
         <div className="flex items-center justify-between mb-3">
-          <h2 className="font-semibold text-sm">История трат ({expenses.length})</h2>
+          <div className="flex items-center gap-2">
+            <h2 className="font-semibold text-sm">История трат</h2>
+            {/* P2 #18: раздельные счётчики реальных трат и переводов */}
+            <span className="text-xs text-muted-foreground">
+              {realExpenses.length} {realExpenses.length === 1 ? "трата" : realExpenses.length < 5 ? "траты" : "трат"}
+              {settlementCount > 0 && <span className="text-muted-foreground/70"> · {settlementCount} перевод{settlementCount === 1 ? "" : settlementCount < 5 ? "а" : "ов"}</span>}
+            </span>
+          </div>
           <button
             onClick={() => setShowAdd((v) => !v)}
             className={cn(
-              "text-xs px-2.5 py-1 rounded-lg flex items-center gap-1 transition-colors",
+              "text-xs px-2.5 py-1.5 rounded-lg flex items-center gap-1 transition-colors min-h-[36px]",
               showAdd
                 ? "bg-secondary text-foreground border border-border"
                 : "bg-primary text-primary-foreground"
@@ -204,11 +244,30 @@ export function Budget() {
           {showAdd && <AddExpenseForm onDone={() => setShowAdd(false)} />}
         </AnimatePresence>
 
-        <div className="space-y-1.5 max-h-96 overflow-y-auto">
-          {expenses.map((e) => (
-            <ExpenseRow key={e.id} expense={e} participants={trip.participants} />
-          ))}
-        </div>
+        {/* P2 #17: Empty state «нет трат» + CTA */}
+        {expenses.length === 0 ? (
+          <div className="py-10 text-center space-y-2">
+            <div className="text-4xl">📝</div>
+            <p className="text-sm font-medium">Пока нет трат</p>
+            <p className="text-xs text-muted-foreground max-w-xs mx-auto">
+              Добавь первую трату — обед, билет, сувенир. Бюджет и расчёты между друзьями обновятся автоматически.
+            </p>
+            {!showAdd && (
+              <button
+                onClick={() => setShowAdd(true)}
+                className="mt-2 inline-flex items-center gap-1.5 text-xs px-3 py-2 rounded-lg bg-primary text-primary-foreground"
+              >
+                <Plus className="size-3.5" /> Добавить первую трату
+              </button>
+            )}
+          </div>
+        ) : (
+          <div className="space-y-1.5 max-h-96 overflow-y-auto">
+            {expenses.map((e) => (
+              <ExpenseRow key={e.id} expense={e} participants={trip.participants} />
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Конвертер валют */}

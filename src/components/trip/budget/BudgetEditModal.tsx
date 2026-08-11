@@ -35,22 +35,30 @@ export function BudgetEditModal({ open, onOpenChange }: BudgetEditModalProps) {
 
   const total = Object.values(budgets).reduce((s, v) => s + (parseFloat(v) || 0), 0);
 
+  // P1 #6: используем useUpdateMember hook + try/catch + проверяем r.ok на каждый PATCH.
+  // Хук уже инвалидирует ["trip"] и ["budget-plan"] после успеха.
   const save = async () => {
     setSaving(true);
+    let errors = 0;
     try {
       for (const p of trip.participants) {
         const val = budgets[p.id] ?? "";
         const num = val.trim() ? parseFloat(val) : null;
+        // Сохраняем только то что изменилось
         if (num !== p.budget) {
-          await fetch(`/api/trips/${tripId}/members/${p.id}`, {
-            method: "PATCH",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ budget: num }),
-          });
+          try {
+            await update.mutateAsync({ memberId: p.id, tripId, budget: num });
+          } catch {
+            errors++;
+          }
         }
       }
-      toast.success("Бюджеты обновлены! 💰");
-      onOpenChange(false);
+      if (errors > 0) {
+        toast.error(`Не удалось сохранить ${errors} из ${trip.participants.length}`);
+      } else {
+        toast.success("Бюджеты обновлены! 💰");
+        onOpenChange(false);
+      }
     } catch {
       toast.error("Ошибка сохранения");
     } finally {

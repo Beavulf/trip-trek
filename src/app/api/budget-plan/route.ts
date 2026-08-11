@@ -7,7 +7,10 @@ import { requireTripMember } from "@/lib/api-auth";
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const tripId = searchParams.get("tripId");
-  const plans = await db.budgetPlan.findMany({ where: tripId ? { tripId } : undefined });
+  if (!tripId) return NextResponse.json([]);
+  const { response } = await requireTripMember(req, tripId);
+  if (response) return response;
+  const plans = await db.budgetPlan.findMany({ where: { tripId } });
   return NextResponse.json(plans);
 }
 

@@ -83,12 +83,12 @@ export function SettlementSection({ balances, settlements, totalSpent, participa
                   onClick={() => setExpandedBalance(expandedBalance === b.participant.id ? null : b.participant.id)}
                   className="text-[10px] text-muted-foreground flex items-center gap-1 active:scale-95 transition-transform"
                 >
-                  внёс ${b.paid.toFixed(0)}
+                  внёс ${b.paid.toFixed(2)}
                   <ChevronDown className={cn("size-2.5 transition-transform", expandedBalance === b.participant.id && "rotate-180")} />
                 </button>
               </div>
-              <span className={cn("font-semibold text-right text-sm shrink-0", b.balance > 0 ? "text-green-600" : b.balance < 0 ? "text-red-500" : "text-muted-foreground")}>
-                {b.balance > 0 ? `+$${b.balance.toFixed(0)}` : b.balance < 0 ? `−$${Math.abs(b.balance).toFixed(0)}` : "ровно"}
+              <span className={cn("font-semibold text-right text-sm shrink-0 tabular-nums", b.balance > 0 ? "text-green-600" : b.balance < 0 ? "text-red-500" : "text-muted-foreground")}>
+                {b.balance > 0 ? `+$${b.balance.toFixed(2)}` : b.balance < 0 ? `−$${Math.abs(b.balance).toFixed(2)}` : "ровно"}
               </span>
             </div>
           );
@@ -156,7 +156,13 @@ export function SettlementSection({ balances, settlements, totalSpent, participa
                 className="overflow-hidden"
               >
                 <div className="bg-muted/50 rounded-lg p-2.5 mb-2 text-[11px] text-muted-foreground">
-                  💡 Чтобы все были в расчёте, достаточно сделать эти переводы. Сумма подобрана так, чтобы после переводов у каждого был ноль.
+                  💡 Это <b className="text-foreground">попарные переводы</b> («кто кому сколько должен»).
+                  Для каждой пары участников показан чистый долг A→B минус B→A. Нажми «Перевели» когда получил перевод — у пары баланс обнулится.
+                  {participantsCount > 2 && (
+                    <span className="block mt-1 text-amber-500">
+                      При 3+ участниках иногда можно уменьшить число переводов — это упрощённая схема, всегда честная по суммам.
+                    </span>
+                  )}
                 </div>
               </motion.div>
             )}
@@ -180,7 +186,7 @@ export function SettlementSection({ balances, settlements, totalSpent, participa
                   <div className="text-xs font-medium truncate">{s.to.name}</div>
                   <div className="text-[10px] text-green-600">получит</div>
                 </div>
-                <span className="font-bold text-primary text-sm shrink-0">${s.amount.toFixed(0)}</span>
+                <span className="font-bold text-primary text-sm shrink-0">${s.amount.toFixed(2)}</span>
               </div>
               {/* Кнопка отметки */}
               <div className="mt-2 flex justify-end">

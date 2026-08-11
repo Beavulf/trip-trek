@@ -22,11 +22,22 @@ export function BudgetHero({ totalSpent, totalBudget, budgetPct, remaining }: Bu
 
   const save = () => {
     const num = parseFloat(val);
-    if (!isNaN(num) && num >= 0) {
-      update.mutate(num);
-      toast.success("Бюджет обновлён");
+    if (isNaN(num) || num < 0) {
+      toast.error("Введите корректную сумму");
+      return;
     }
-    setEditing(false);
+    // P1 #7: toast только в onSuccess/onError — не показываем фейковый success
+    update.mutate(num, {
+      onSuccess: () => {
+        toast.success("Бюджет обновлён");
+        setEditing(false);
+      },
+      onError: (err) => {
+        toast.error("Не удалось обновить бюджет", {
+          description: err instanceof Error ? err.message : "Попробуйте ещё раз",
+        });
+      },
+    });
   };
 
   return (

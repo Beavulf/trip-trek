@@ -6,13 +6,17 @@ import { getTripId } from "./trip-id";
 
 // Сводка поездки
 export function useTrip() {
+  const tripId = getTripId();
   return useQuery<TripSummary>({
-    queryKey: ["trip"],
+    queryKey: ["trip", tripId],
     queryFn: async () => {
-      const r = await fetch(`/api/trip?tripId=${getTripId()}`);
+      if (!tripId) throw new Error("no trip selected");
+      const r = await fetch(`/api/trip?tripId=${tripId}`);
       if (!r.ok) throw new Error("fetch trip");
       return r.json();
     },
+    enabled: !!tripId,
+    retry: 1,
   });
 }
 

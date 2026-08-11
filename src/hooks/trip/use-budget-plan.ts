@@ -11,12 +11,18 @@ export interface BudgetPlan {
 }
 
 export function useBudgetPlan() {
+  const tripId = getTripId();
   return useQuery<BudgetPlan[]>({
-    queryKey: ["budget-plan", getTripId()],
+    queryKey: ["budget-plan", tripId],
     queryFn: async () => {
-      const r = await fetch(`/api/budget-plan?tripId=${getTripId()}`);
-      return r.json();
+      if (!tripId) return [];
+      const r = await fetch(`/api/budget-plan?tripId=${tripId}`);
+      if (!r.ok) throw new Error("fetch budget-plan failed");
+      const data = await r.json();
+      return Array.isArray(data) ? data : [];
     },
+    enabled: !!tripId,
+    placeholderData: [],
   });
 }
 
