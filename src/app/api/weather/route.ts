@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { KNOWN_CITIES, decodeCustomKey } from "@/lib/city-coords";
 
 // Коды погоды WMO → описание + эмодзи
 const WMO_CODES: Record<number, { label: string; emoji: string }> = {
@@ -25,25 +26,16 @@ const WMO_CODES: Record<number, { label: string; emoji: string }> = {
   99: { label: "Гроза с градом", emoji: "⛈️" },
 };
 
-// Совместимость: старые ключи городов → координаты
-const LEGACY_CITIES: Record<string, { lat: number; lng: number; name: string; timezone?: string }> = {
-  guangzhou: { lat: 23.1291, lng: 113.2644, name: "Гуанчжоу", timezone: "Asia/Shanghai" },
-  shenzhen: { lat: 22.5431, lng: 114.0579, name: "Шэньчжэнь", timezone: "Asia/Shanghai" },
-  hongkong: { lat: 22.3193, lng: 114.1694, name: "Гонконг", timezone: "Asia/Hong_Kong" },
-  macau: { lat: 22.1987, lng: 113.5439, name: "Макао", timezone: "Asia/Macau" },
-  tokyo: { lat: 35.6762, lng: 139.6503, name: "Токио", timezone: "Asia/Tokyo" },
-  paris: { lat: 48.8566, lng: 2.3522, name: "Париж", timezone: "Europe/Paris" },
-  bangkok: { lat: 13.7563, lng: 100.5018, name: "Бангкок", timezone: "Asia/Bangkok" },
-  phuket: { lat: 7.8804, lng: 98.3923, name: "Пхукет", timezone: "Asia/Bangkok" },
-};
-
 // GET /api/weather?city=guangzhou&forecast=7
 // GET /api/weather?lat=35.68&lng=139.69&name=Токио&timezone=Asia/Tokyo&forecast=7
+// P1 #6: shared dictionary (KNOWN_CITIES) вместо LEGACY_CITIES — единый source of truth.
+// P0 #3: decode custom key поддерживает отрицательные coords (новый формат custom:{lat},{lng}).
+// P1 #5: при падении open-meteo → 502 error (не 200 + fake 28° fallback).
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const days = Math.min(7, Math.max(1, parseInt(searchParams.get("forecast") || "1")));
 
-  // Определяем город: либо lat/lng напрямую, либо legacy ключ
+  // Определяем город: либо lat/lng напрямую, либо known/custom ключ
   let lat: number;
   let lng: number;
   let cityName: string;
@@ -57,27 +49,46 @@ export async function GET(req: NextRequest) {
     // Прямые координаты (новый способ)
     lat = parseFloat(latParam);
     lng = parseFloat(lngParam);
+    // P0 #1: не Null Island — если coords невалидны, 400
+    if (isNaN(lat) || isNaN(lng) || (lat === 0 && lng === 0)) {
+      return NextResponse.json({ error: "Невалидные координаты" }, { status: 400 });
+    }
     cityName = searchParams.get("name") || "Город";
-    cityKey = searchParams.get("key") || `custom-${lat}-${lng}`;
+    cityKey = searchParams.get("key") || `custom:${lat},${lng}`;
     timezone = searchParams.get("timezone") || undefined;
   } else {
-    // Legacy: ключ города
+    // Known или custom ключ
     cityKey = searchParams.get("city") || "";
-    const city = LEGACY_CITIES[cityKey];
-    if (!city) {
-      return NextResponse.json({ error: "City not found" }, { status: 404 });
+    if (!cityKey || cityKey === "custom") {
+      // P0 #2: cityKey "custom" без autocomplete → 400
+      return NextResponse.json({ error: "City not found — выберите город в Маршруте" }, { status: 400 });
     }
-    lat = city.lat;
-    lng = city.lng;
-    cityName = city.name;
-    timezone = city.timezone;
+    // P1 #6: shared dictionary
+    const known = KNOWN_CITIES[cityKey];
+    if (known) {
+      lat = known.lat;
+      lng = known.lng;
+      cityName = known.name;
+      timezone = known.timezone;
+    } else {
+      // P0 #3: decode custom key (поддерживает отрицательные coords)
+      const decoded = decodeCustomKey(cityKey);
+      if (!decoded) {
+        // Unknown city → 400 (не fallback на GZ — уже было закрыто, подтверждаем)
+        return NextResponse.json({ error: "City not found" }, { status: 400 });
+      }
+      lat = decoded.lat;
+      lng = decoded.lng;
+      cityName = searchParams.get("name") || "Город";
+      timezone = searchParams.get("timezone") || undefined;
+    }
   }
 
   try {
     const tzParam = timezone ? `&timezone=${encodeURIComponent(timezone)}` : "&timezone=auto";
     const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}&current=temperature_2m,relative_humidity_2m,apparent_temperature,weather_code,wind_speed_10m&daily=temperature_2m_max,temperature_2m_min,weather_code,precipitation_probability_max${tzParam}&forecast_days=${days}`;
     const res = await fetch(url, { next: { revalidate: 600 } });
-    if (!res.ok) throw new Error("weather fetch failed");
+    if (!res.ok) throw new Error(`open-meteo returned ${res.status}`);
     const data = await res.json();
 
     const code = data.current?.weather_code ?? 0;
@@ -117,23 +128,13 @@ export async function GET(req: NextRequest) {
       min: Math.round(data.daily?.temperature_2m_min?.[0] ?? 0),
       forecast,
     });
-  } catch {
-    return NextResponse.json({
-      city: cityName,
-      cityKey,
-      lat,
-      lng,
-      temperature: 28,
-      apparent: 31,
-      humidity: 70,
-      wind: 8,
-      code: 0,
-      label: "Ясно",
-      emoji: "☀️",
-      max: 31,
-      min: 25,
-      forecast: [],
-      fallback: true,
-    });
+  } catch (e) {
+    // P1 #5: при падении open-meteo → 502 error (не 200 + fake 28° fallback)
+    const msg = e instanceof Error ? e.message : "weather fetch failed";
+    console.error("[weather] open-meteo error:", msg);
+    return NextResponse.json(
+      { error: "Не удалось загрузить погоду. Попробуйте позже.", city: cityName, cityKey },
+      { status: 502 }
+    );
   }
 }

@@ -1195,3 +1195,142 @@ User requested removing the RestTimer that was embedded under the Chill hero in 
 5. **Error state persistence across trips** — minor: `ai.isError` from outer component persists briefly when switching trips. Not blocking — clicking generate on new trip clears it.
 6. **Rate-limit in-memory** — resets on server restart. Acceptable for dev/demo. For prod use Redis.
 
+
+---
+
+## Session: Weather Audit — P0 + P1 + P2 fixes (based on `audit-weather-pogoda.md`)
+
+**Phase**: 21 — Weather audit fixes
+
+### Status Before
+- Weather panel always ran BOTH `useWeather` (legacy) + `useWeatherByCoords` hooks → double fetch + Null Island (0,0) weather when no coords
+- `custom-{lat}-{lng}` format broke on negative coords: `custom--33.86-151.2`.split("-") → NaN
+- `cityKey: "custom"` (no autocomplete) → `useWeather("custom")` → 400 → empty hero
+- Loading days = false empty "Добавьте дни…" (not "loading…")
+- No error/fallback UI — 400/network → empty hero; `fallback: true` looked like real 28°
+- `CITIES` (4 China) vs `LEGACY_CITIES` (8) in weather route vs `cityCoords` in itinerary — desync
+- `|| "guangzhou"` default in panel when no city selected
+- API returned 200 + fake data on open-meteo fail (silent fallback)
+
+### P0 — Critical Fixes
+
+#### P0 #1: Single weather fetch path — no Null Island
+**Problem**: Always both hooks; without coords → `lat||0, lng||0` → ready → weather in ocean; parallel legacy on custom-* → 400.
+**Fix** (`src/components/trip/weather-panel.tsx` + `src/hooks/trip/use-weather.ts`):
+- Panel: `hasCoords = currentCity?.hasCoords && lat != null && lng != null`. Only ONE query runs:
+  - If coords → `useWeatherByCoords(lat, lng, name, tz, 7)`.
+  - If known city without coords → `useWeather(key, 7)`.
+- `useWeatherByCoords`: `enabled: lat != null && lng != null && lat !== 0 && lng !== 0` (no Null Island).
+- `useWeather`: `enabled: Boolean(city) && city !== "custom"` (no "custom" key).
+- No more parallel fetches.
+
+#### P0 #2: cityKey "custom" without autocomplete → CTA
+**Problem**: `useWeather("custom")` → 400 → empty hero.
+**Fix**:
+- `resolveCityCoords("custom")` → null → `hasCoords: false`.
+- Panel: if `!currentCity?.hasCoords` → CTA "Нет координат для «{name}»" + "Выберите город через автодополнение в Маршруте" + "Перейти в Маршрут" button.
+- API: `cityKey === "custom"` → 400 "City not found — выберите город в Маршруте".
+- Verified: clicked "Ар" chip (cityKey="custom") → CTA displayed.
+
+#### P0 #3: Negative coords in custom-*
+**Problem**: `"custom--33.86-151.2".split("-")` → `["custom", "", "33.86", "151.2"]` → NaN.
+**Fix** (`src/lib/city-coords.ts`):
+- New format: `custom:{lat},{lng}` — colon separator, comma between lat/lng.
+- `encodeCustomKey(lat, lng)` → `custom:{lat},{lng}`.
+- `decodeCustomKey(key)`:
+  - New format: `custom:-33.86,151.2` → split by comma → works.
+  - Old format with regex: `/^custom-(-?\d+\.?\d*)-(-?\d+\.?\d*)$/` → captures negative numbers.
+  - Old format fallback: split (only works for positive).
+- Backward compatible: existing `custom-23.12-113.26` keys still work.
+- Verified via curl: `custom:-33.86,151.2` → 200 (Sydney); `custom--33.86-151.2` → 200 (was broken, now fixed).
+
+#### P0 #4: Loading days = false empty
+**Problem**: `days` undefined → `cities=[]` → "Добавьте дни…" (not loading).
+**Fix**:
+- `daysLoading` from `useDays()` → spinner "Загрузка погоды…".
+- `!trip` → "Не выбрана поездка" CTA.
+- `cities.length === 0` (after load) → "Нет дней в маршруте" + "Перейти в Маршрут" CTA.
+- 4 distinct states: loading / no-trip / no-days / ok.
+
+### P1 — Integrity / UX
+
+#### P1 #5: Error / fallback UI
+**Problem**: 400/network → empty hero; `fallback: true` looked like real 28°.
+**Fix**:
+- API: open-meteo fail → `502 { error: "Не удалось загрузить погоду" }` (was 200 + fake 28°).
+- `useWeather`/`useWeatherByCoords`: `throw on !ok` → React Query `error`.
+- Panel: error state with AlertCircle + error.message + "Повторить" button.
+- If `weather.fallback` true → amber badge "⚠ Примерные данные".
+- `retry: 1` (don't loop on dead API).
+
+#### P1 #6: Shared dictionary (CITIES vs LEGACY sync)
+**Problem**: Panel knew coords only China-4; weather route had LEGACY_CITIES (8) — desync.
+**Fix** (`src/lib/city-coords.ts`):
+- `KNOWN_CITIES` dict: 15 cities (China 4, Asia 5, Europe 6) with lat/lng/timezone/color.
+- `resolveCityCoords(cityKey)` — known city → coords; custom key → decode.
+- `hasCityCoords(cityKey)` — boolean check.
+- API weather route imports `KNOWN_CITIES` + `decodeCustomKey` (was LEGACY_CITIES).
+- Panel imports `resolveCityCoords` + `hasCityCoords`.
+
+#### P1 #7: Remove "|| guangzhou" default
+**Fix**: `currentCity = cities.find(c => c.key === selectedKey) || cities[0]` — if no cities, empty state (not guangzhou fallback).
+
+#### P1 #10: Places coords fallback
+**Problem**: Dashboard takes lat/lng from places; Weather — no.
+**Fix**: Panel builds cities from days — if `resolveCityCoords` fails, tries `day.places.find(p => p.lat && p.lng)` (first place with coords).
+
+### P2 — Polish
+
+#### P2 #11: Mobile chips safe-area
+- Chips container: `px-1` padding + `overflow-x-auto no-scrollbar pb-1`.
+- `pb-20` on root container for tab bar clearance.
+
+#### P2 #13: forecast:[] explanation
+- If `weather.forecast.length === 0` (and not fallback) → "Прогноз на неделю недоступен для этого города".
+
+#### P2 #14: Gradient — no indigo
+- `darkenColor(hex)` helper: reduces RGB by 30% → darker shade of city accent color.
+- Was: `linear-gradient(135deg, ${color} 0%, #6366f1 100%)` (indigo hardcoded).
+- Now: `linear-gradient(135deg, ${cityColor} 0%, ${darkenColor(cityColor)} 100%)`.
+
+### Files Modified
+
+**API**:
+- `src/app/api/weather/route.ts` — shared KNOWN_CITIES, decode custom key (negative coords), 502 on fail (not fake fallback), 400 on "custom"/Null Island
+
+**Hooks**:
+- `src/hooks/trip/use-weather.ts` — throw on !ok, enabled only when real coords (no 0,0), enabled only when city != "" and != "custom", retry: 1
+
+**Components**:
+- `src/components/trip/weather-panel.tsx` — single fetch path, loading/no-trip/no-days/no-coords/error states, places fallback, mobile chips, no indigo gradient, fallback badge, forecast:[] explanation, aria-labels
+
+**New files**:
+- `src/lib/city-coords.ts` — KNOWN_CITIES dict (15 cities), encodeCustomKey/decodeCustomKey (supports negative coords), resolveCityCoords, hasCityCoords
+
+### Verification (curl + agent-browser)
+
+✅ `curl /api/weather?city=moscow` → 400 (unknown city)
+✅ `curl /api/weather?city=custom` → 400 (no autocomplete)
+✅ `curl /api/weather?city=guangzhou&forecast=7` → 200, 29°, 7-day forecast
+✅ `curl /api/weather?city=tokyo&forecast=7` → 200, 24°, 7-day forecast (known dict sync)
+✅ `curl /api/weather?lat=35.68&lng=139.69&name=Tokyo` → 200, direct coords
+✅ `curl /api/weather?lat=0&lng=0` → 400 (Null Island rejected)
+✅ `curl /api/weather?city=custom:-33.86,151.2` → 200, Sydney 10° (negative coords work — P0 #3)
+✅ `curl /api/weather?city=custom-23.12-113.26` → 200 (old format backward compat)
+✅ `curl /api/weather?city=custom--33.86-151.2` → 200 (old format negative — was broken, now fixed)
+✅ ESLint: clean
+✅ agent-browser: Europe trip → Weather tab → "☀️ 32°" Paris, 7-day forecast
+✅ Click "Ар" (cityKey="custom") → CTA "Нет координат для «Ар»" + "Перейти в Маршрут"
+✅ China trip → Weather → "☀️ 29°" Guangzhou, chips: Гуанчжоу/Шэньчжэнь/Гонконг/Макао (all with aria-labels)
+✅ City chips show ⚠ for cities without coords
+✅ No console errors
+
+### Unresolved / Notes
+
+1. **P1 #8 (Timezone)** — `timezone=auto` used when Day has no tz. Autocomplete provides tz but Day doesn't store it. Prisma migration needed to store tz — out of scope (audit says "не Prisma-migrate без нужды").
+2. **P2 #12 (Today/Tomorrow by TZ)** — uses browser TZ not city TZ. Minor — open-meteo returns dates in requested TZ (`timezone=auto`).
+3. **P2 #15 (Deep-link from Dashboard)** — optional, not implemented.
+4. **P2 #16 (Current city by currentDay)** — cities ordered by days, first selected. Could auto-select current day's city — future enhancement.
+5. **`CITIES` in types.ts** — still used by budget charts, global-search, transport-map. Not removed (different purpose — chart colors). Weather uses shared `KNOWN_CITIES` now.
+6. **Dashboard WeatherWidget** — still uses `useWeather(cityKey)` directly. Could migrate to shared resolveCityCoords but audit says "не переписывать Dashboard WeatherWidget".
+
