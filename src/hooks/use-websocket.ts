@@ -70,6 +70,7 @@ export function useWebSocket(tripId: string) {
     socket.on("photo:added", (data: { tripId: string }) => {
       if (data.tripId === tripId) {
         qc.invalidateQueries({ queryKey: ["photos"] });
+        qc.invalidateQueries({ queryKey: ["photos-geo"] });
         qc.invalidateQueries({ queryKey: ["days"] });
         qc.invalidateQueries({ queryKey: ["trip"] });
       }

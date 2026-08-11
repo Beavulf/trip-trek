@@ -2,7 +2,7 @@
 
 import { useDays, useUpdatePlace, getTripId } from "@/hooks/use-trip";
 import { useTripStore } from "@/lib/trip-store";
-import { CATEGORY_META, CITIES, type Place, type Day, type Photo } from "@/lib/types";
+import { CATEGORY_META, type Place, type Day, type Photo } from "@/lib/types";
 import { MapContainer, TileLayer, Marker, Popup, useMap, useMapEvents, ZoomControl } from "react-leaflet";
 import L from "leaflet";
 import { useEffect, useMemo, useState } from "react";
@@ -29,15 +29,16 @@ function makeIcon(category: string, status: string, emoji: string) {
   });
 }
 
-// Фото-пин (маленький круглый с миниатюрой)
+// Фото-пин (маленький круглый с миниатюрой) — безопасный HTML
 function makePhotoIcon(thumbUrl: string) {
+  const safeUrl = thumbUrl.replace(/"/g, "&quot;").replace(/'/g, "&#39;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
   return L.divIcon({
     className: "trip-photo-pin",
     html: `<div style="
       width:40px;height:40px;border-radius:50%;overflow:hidden;
       border:3px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,0.3);
       background:#000;
-    "><img src="${thumbUrl}" style="width:100%;height:100%;object-fit:cover;" /></div>`,
+    "><img src="${safeUrl}" style="width:100%;height:100%;object-fit:cover;" /></div>`,
     iconSize: [40, 40],
     iconAnchor: [20, 20],
     popupAnchor: [0, -20],
@@ -58,12 +59,15 @@ export default function TripMap() {
   const { resolvedTheme } = useTheme();
 
   // Фото с геолокацией для карты (только текущая поездка)
+  const tripId = getTripId();
   const { data: geoPhotos } = useQuery<Photo[]>({
-    queryKey: ["photos-geo", getTripId()],
+    queryKey: ["photos-geo", tripId],
     queryFn: async () => {
-      const r = await fetch(`/api/photos/geo?tripId=${getTripId()}`);
+      if (!tripId) return [];
+      const r = await fetch(`/api/photos/geo?tripId=${tripId}`);
       return r.json();
     },
+    enabled: !!tripId,
   });
 
   // Автоматический выбор слоя по теме
@@ -103,10 +107,62 @@ export default function TripMap() {
     return res;
   }, [allPlaces, mapCityFilter, mapOnlyUnvisited, mapOnlyChill]);
 
-  // Центр карты по выбранному городу или общий
-  const center = mapCityFilter
-    ? CITIES.find((c) => c.key === mapCityFilter)!
-    : { lat: 22.8, lng: 113.9, name: "China" }; // между городами
+  // Центр карты: из выбранного города (safe fallback), или из мест поездки
+  const cityCoords: Record<string, { lat: number; lng: number }> = {
+    guangzhou: { lat: 23.1291, lng: 113.2644 },
+    shenzhen: { lat: 22.5431, lng: 114.0579 },
+    hongkong: { lat: 22.3193, lng: 114.1694 },
+    macau: { lat: 22.1987, lng: 113.5439 },
+    tokyo: { lat: 35.6762, lng: 139.6503 },
+    paris: { lat: 48.8566, lng: 2.3522 },
+    bangkok: { lat: 13.7563, lng: 100.5018 },
+    phuket: { lat: 7.8804, lng: 98.3923 },
+  };
+
+  // Safe center — не крашится на неизвестном cityKey
+  const center = useMemo(() => {
+    if (mapCityFilter && cityCoords[mapCityFilter]) {
+      return cityCoords[mapCityFilter];
+    }
+    // Из мест поездки
+    if (allPlaces.length > 0) {
+      return { lat: allPlaces[0].place.lat, lng: allPlaces[0].place.lng };
+    }
+    // Из первого дня
+    if (days && days.length > 0) {
+      const d = days[0];
+      if (d.cityKey && cityCoords[d.cityKey]) return cityCoords[d.cityKey];
+      if (d.cityKey?.startsWith("custom-")) {
+        const parts = d.cityKey.split("-");
+        const lat = parseFloat(parts[1]);
+        const lng = parseFloat(parts[2]);
+        if (!isNaN(lat) && !isNaN(lng)) return { lat, lng };
+      }
+    }
+    // Нейтральный fallback
+    return { lat: 0, lng: 0 };
+  }, [mapCityFilter, allPlaces, days]);
+
+  // Empty state: нет поездки или нет дней
+  if (!isLoading && (!days || days.length === 0)) {
+    return (
+      <div className="space-y-4 animate-fade-up pb-20">
+        <div className="rounded-3xl p-5 bg-gradient-to-br from-orange-500 to-rose-500 text-white shadow-xl text-center">
+          <div className="text-5xl mb-3">🗺️</div>
+          <h1 className="text-xl font-bold">Карта пуста</h1>
+          <p className="text-white/80 text-sm mt-1">
+            {days?.length === 0 ? "Добавьте дни в маршрут, чтобы увидеть места на карте" : "Нет активной поездки"}
+          </p>
+          <button
+            onClick={() => useTripStore.getState().setActiveTab("itinerary")}
+            className="mt-4 rounded-xl bg-white/20 backdrop-blur px-4 py-2.5 text-sm font-medium active:scale-95 transition-transform"
+          >
+            К маршруту →
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   if (isLoading) return <div className="py-20 text-center text-muted-foreground">Загрузка карты…</div>;
 
@@ -151,18 +207,22 @@ export default function TripMap() {
           >
             Все города
           </button>
-          {CITIES.map((c) => (
+          {/* Чипы городов из дней поездки, не из хардкода CITIES */}
+          {(days || []).reduce((acc, d) => {
+            if (!acc.find((c) => c.cityKey === d.cityKey)) acc.push(d);
+            return acc;
+          }, [] as Day[]).map((d) => (
             <button
-              key={c.key}
-              onClick={() => setMapCityFilter(c.key)}
+              key={d.cityKey}
+              onClick={() => setMapCityFilter(d.cityKey)}
               className={cn(
                 "flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium transition-colors",
-                mapCityFilter === c.key ? "text-white" : "bg-secondary hover:bg-accent"
+                mapCityFilter === d.cityKey ? "text-white" : "bg-secondary hover:bg-accent"
               )}
-              style={mapCityFilter === c.key ? { background: c.color } : undefined}
+              style={mapCityFilter === d.cityKey ? { background: d.accentColor ?? "#f97316" } : undefined}
             >
-              <span className="size-1.5 rounded-full" style={{ background: c.color }} />
-              {c.name}
+              <span className="size-1.5 rounded-full" style={{ background: d.accentColor ?? "#f97316" }} />
+              {d.city}
             </button>
           ))}
         </div>

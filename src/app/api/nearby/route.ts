@@ -1,11 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
+import { requireUser } from "@/lib/api-auth";
 
-// GET /api/nearby?lat=..&lng=..&radius=1500&category=cafe
-// Использует Overpass API (OpenStreetMap) — бесплатно, без ключа, работает в Китае
+// GET /api/nearby?lat=..&lng=..&radius=1500&category=cafe (requires auth)
 export async function GET(req: NextRequest) {
+  const { response } = await requireUser(req);
+  if (response) return response;
+
   const { searchParams } = new URL(req.url);
-  const lat = parseFloat(searchParams.get("lat") || "23.1291");
-  const lng = parseFloat(searchParams.get("lng") || "113.2644");
+  const latStr = searchParams.get("lat");
+  const lngStr = searchParams.get("lng");
+  if (!latStr || !lngStr) return NextResponse.json({ places: [], error: "lat, lng required" }, { status: 400 });
+  const lat = parseFloat(latStr);
+  const lng = parseFloat(lngStr);
   const radius = parseInt(searchParams.get("radius") || "1500");
   const category = searchParams.get("category") || "all";
 

@@ -1,7 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
+import { requireUser } from "@/lib/api-auth";
 
-// GET /api/geocode?lat=..&lng=.. — reverse geocoding через OpenStreetMap Nominatim (бесплатно, без ключа)
+// GET /api/geocode?lat=..&lng=.. — reverse geocoding (requires auth)
 export async function GET(req: NextRequest) {
+  const { response } = await requireUser(req);
+  if (response) return response;
+
   const { searchParams } = new URL(req.url);
   const lat = searchParams.get("lat");
   const lng = searchParams.get("lng");
