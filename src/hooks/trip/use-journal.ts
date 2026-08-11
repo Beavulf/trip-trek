@@ -4,6 +4,8 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import type { JournalEntry } from "@/lib/types";
 import { getTripId } from "./trip-id";
 
+// P0 #2: enabled: !!tripId, без tripId → []
+// P1 #7: throw on !ok, placeholderData: []
 export function useJournal(dayId?: string) {
   const tripId = getTripId();
   const params = new URLSearchParams();
@@ -14,12 +16,16 @@ export function useJournal(dayId?: string) {
     queryFn: async () => {
       if (!tripId) return [];
       const r = await fetch(`/api/journal?${params}`);
-      return r.json();
+      if (!r.ok) throw new Error("fetch journal failed");
+      const data = await r.json();
+      return Array.isArray(data) ? data : [];
     },
     enabled: !!tripId,
+    placeholderData: [],
   });
 }
 
+// P1 #7: throw on !ok — UI ловит в try/catch, не чистит textarea при fail
 export function useAddJournal() {
   const qc = useQueryClient();
   return useMutation({
@@ -29,7 +35,11 @@ export function useAddJournal() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ ...data, tripId: getTripId() }),
       });
-      return r.json();
+      const body = await r.json().catch(() => ({}));
+      if (!r.ok) {
+        throw new Error(body?.error || `Ошибка ${r.status}`);
+      }
+      return body as JournalEntry;
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["journal"] });
@@ -42,7 +52,12 @@ export function useDeleteJournal() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (id: string) => {
-      await fetch(`/api/journal?id=${id}`, { method: "DELETE" });
+      const r = await fetch(`/api/journal?id=${id}`, { method: "DELETE" });
+      const body = await r.json().catch(() => ({}));
+      if (!r.ok) {
+        throw new Error(body?.error || `Ошибка ${r.status}`);
+      }
+      return body;
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["journal"] });

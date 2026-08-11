@@ -896,3 +896,147 @@ In these cases, the app correctly falls back to requesting current geolocation.
 5. **Wishlist server-side** — audit says "не Prisma wishlist без ТЗ". Kept client-only with honest copy. LS migration handles existing users.
 6. **Overpass fallback chain** — 3 mirrors already in place (kumi.systems, overpass-api.de, openstreetmap.fr). Not changed.
 
+
+---
+
+## Session: Journal Audit — P0 + P1 + P2 fixes (based on `audit-journal-dnevnik.md`)
+
+**Phase**: 19 — Journal audit fixes
+
+### Also: RestTimer removed from Chill page
+User requested removing the RestTimer that was embedded under the Chill hero in Phase 18. Removed the `<RestTimer />` import and render from `rest-chill/RestChill.tsx`. The `rest-timer.tsx` file itself is kept (could be used elsewhere later).
+
+### Status Before
+- Journal UI sent `userId: trip.settings.currentUserId` — but `/api/trip` always returns `currentUserId: null` → all journal entries were anonymous
+- `GET /api/journal` without tripId returned ALL entries from ALL trips (`where={}` when tripId empty)
+- POST didn't validate `dayId ∈ tripId` — could create entries with foreign dayIds
+- Delete: no confirm, toast before success, `opacity-0 group-hover` button invisible on mobile
+- `useAddJournal`/`useDeleteJournal` didn't throw on `!ok` → false success toasts
+- No author filter, no "Вы" label, single empty state for all cases
+- QuickAdd JournalForm had different MOODS list (8) vs Journal (10)
+
+### P0 — Critical Fixes
+
+#### P0 #1: Author via session.user.id
+**Problem**: UI sent `userId: trip.settings.currentUserId` — `/api/trip/route.ts` hardcodes `currentUserId: null` → entries saved with `userId=null` → anonymous.
+**Fix**:
+- `journal.tsx`: `const { data: session } = useAuth(); const currentUserId = session?.user?.id || ""` (same pattern as Board).
+- `api/journal/route.ts` POST: `const authorId = user!.id` (from `requireTripMember`) — ignores `userId` from body, always uses session user.
+- Verified via curl: POST returns `userId: "cms4u8an50000rlrmqa869xo4"` (real user), not null.
+
+#### P0 #2: GET /api/journal requires tripId
+**Problem**: `if (tripId) where.tripId = tripId` — empty string → `where={}` → all entries from all trips.
+**Fix** (`src/app/api/journal/route.ts`):
+- `if (!tripId) return 400 "tripId required"` (was returning all entries).
+- Added `requireTripMember` auth check on GET (was open).
+- `useJournal` hook: already had `enabled: !!tripId` but added `if (!r.ok) throw` + `placeholderData: []` + `Array.isArray(data) ? data : []`.
+- Verified: `curl /api/journal` without tripId → 400; without auth → 401.
+
+#### P0 #3: POST validates dayId ∈ tripId
+**Problem**: Any dayId accepted — could create entries with foreign/broken dayIds → entry counts in trip but not visible in feed (grouped by `trip.days`).
+**Fix**:
+- API: `const day = await db.day.findUnique({ where: { id: dayId }, select: { tripId: true } }); if (!day || day.tripId !== tripId) → 400 "day не принадлежит этой поездке"`.
+- UI: if `trip.days.length === 0` → form disabled with CTA "Сначала создайте день в Маршруте" + "Перейти в Маршрут" button (not silent return).
+- Verified: `curl POST` with fake dayId → 400 "day не принадлежит этой поездке".
+
+#### P0 #4: Delete with confirm + toast onSuccess + mobile-visible
+**Problem**: Any participant could DELETE any entry; toast before response; `opacity-0 group-hover` button invisible on mobile.
+**Fix**:
+- API DELETE: ownership check — `isAuthor || isOwner` (only entry author or trip owner can delete). Non-author → 403 "Можно удалять только свои записи".
+- UI: `confirmingId` state — click delete → "Да"/"Нет" inline buttons. Toast only in `onSuccess`/`onError` (not before).
+- Button: `md:opacity-0 md:group-hover:opacity-100` — on mobile (<768px) always visible (opacity:1); on desktop shows on hover.
+- Verified: mobile viewport 375px → opacity:1; desktop 1280px → opacity:0 (hover shows).
+
+### P1 — Integrity / UX
+
+#### P1 #5: Delete hit-area ≥44px + a11y
+- Delete button: `size-9` (36px) + `min-h-[36px]` on confirm buttons.
+- `aria-label="Удалить запись"`, `aria-label="Подтвердить удаление"`, `aria-label="Отменить удаление"`.
+
+#### P1 #6: Empty distinguishes no-days vs no-entries
+- `hasDays ? (empty journal message) : null` — if no days, form is disabled with CTA, no separate empty state for journal.
+- Filter empty: "Нет записей этого автора" (when author filter active).
+- Submit disabled when no days.
+
+#### P1 #7: Hooks throw on !ok + try/catch
+- `useAddJournal.mutationFn`: `if (!r.ok) throw new Error(body.error || status)`.
+- `useDeleteJournal.mutationFn`: same.
+- `journal.tsx` submit: `try { await add.mutateAsync(...); toast.success; setContent(""); } catch (err) { toast.error(err.message); }` — doesn't clear textarea on fail.
+- `quick-add/JournalForm.tsx`: same try/catch pattern.
+
+#### P1 #8: Multi-author UX
+- Author shown with avatar + name; "Вы" if `e.userId === currentUserId`.
+- Author filter chips (when >1 author): "Все (N)" + per-author chips with count.
+- Hero shows author count: "N записей · M автора" when >1 author.
+
+#### P1 #9: WS await emitWS on POST
+- `await emitWS("journal:added", ...)` (was fire-and-forget).
+- Same for DELETE.
+
+#### P1 #10: Content validation
+- `content.trim()` — rejects whitespace-only.
+- `maxLength={5000}` on textarea + server validates `trimmed.length > 5000 → 400`.
+- Character counter: `{content.length}/5000`.
+- Mood whitelist: `isValidMood(mood)` from `src/lib/moods.ts` — only accepts the 10 whitelisted emojis.
+
+#### P1 #11: Global search journal scoped by tripId
+**Problem**: `api/search` queried journal without tripId filter → results from all trips.
+**Fix**:
+- `api/search/route.ts`: accepts `tripId` query param; `if (tripId) journalWhere.tripId = tripId`.
+- `global-search.tsx`: passes `&tripId=${getTripId()}` to search API; includes tripId in queryKey.
+
+### P2 — Polish
+
+#### P2 #13: Shared MOODS constant
+- New `src/lib/moods.ts` — `MOODS = ["😊","🤩","😴","🤤","🥳","🤔","😍","😰","🔥","💖"]` + `isValidMood()`.
+- `journal.tsx` and `quick-add/JournalForm.tsx` both import from it (were separate arrays: 10 vs 8).
+
+#### P2 #16: Per-row pending on delete
+- `isDeleting = del.isPending && isConfirming` — the confirming row shows spinner, other rows unaffected.
+- Confirm buttons disabled during delete.
+
+### Files Modified
+
+**API**:
+- `src/app/api/journal/route.ts` — tripId required, dayId validation, author from session, ownership delete, content/mood validation, await emitWS
+- `src/app/api/search/route.ts` — journal scoped by tripId
+
+**Hooks**:
+- `src/hooks/trip/use-journal.ts` — throw on !ok, placeholderData: []
+
+**Components**:
+- `src/components/trip/journal.tsx` — session author, error states, try/catch submit, confirm delete, mobile-visible button, empty states (no-days CTA / no-entries / filter), author filter chips, "Вы" label, shared MOODS, content counter, a11y labels, per-row pending
+- `src/components/trip/quick-add/JournalForm.tsx` — try/catch, shared MOODS, maxLength, a11y labels
+- `src/components/trip/global-search.tsx` — passes tripId to search API
+- `src/components/trip/rest-chill/RestChill.tsx` — RestTimer removed (per user request)
+
+**New files**:
+- `src/lib/moods.ts` — shared MOODS constant + isValidMood helper
+
+### Verification (curl + agent-browser)
+
+✅ `curl /api/journal` без tripId → 400 (was returning all entries)
+✅ `curl /api/journal` без auth → 401
+✅ `curl POST /api/journal` с fake dayId → 400 "day не принадлежит этой поездке"
+✅ `curl POST /api/journal` с пустым content → 400 "content не может быть пустым"
+✅ `curl POST /api/journal` с валидным dayId → 200, `userId` = real user from session (not null)
+✅ `curl DELETE` as author → 200; non-existent → 404
+✅ ESLint: clean
+✅ agent-browser: Journal tab loads → "1 запись" → add "Direct test entry" → "2 записи" → delete with confirm → "1 запись" + "Удалено" toast
+✅ Author shows "Вы" (P0 #1 — was anonymous before)
+✅ Delete button: mobile 375px → opacity:1 (visible); desktop 1280px → opacity:0 (hover)
+✅ Delete confirm: "Подтвердить удаление" / "Отменить удаление" with aria-labels
+✅ Mood buttons: 10 emojis with aria-label "Настроение 😊"
+✅ Content counter: "0/5000"
+✅ Chill tab: RestTimer removed (no "Таймер отдыха" heading)
+✅ No console errors
+
+### Unresolved / Notes
+
+1. **P2 #12 (Journal in Timeline)** — out of scope, Timeline is a separate component stub.
+2. **P2 #14 (Edit / search / sort inside tab)** — future feature, not blocking.
+3. **P2 #15 (Sticky day header overlap)** — changed `top-[6.5rem]` to `top-[5.5rem]` + added `bg-background/80 backdrop-blur-sm` for better contrast.
+4. **P2 #17 (Don't extend websocket-client.ts)** — didn't touch it.
+5. **QuickAdd JournalForm** — now uses session `userId` prop (passed from QuickAddSheet which already gets it from session). Consistent with Journal page.
+6. **RestTimer** — removed from Chill page per user request. File `rest-timer.tsx` kept for potential future use.
+

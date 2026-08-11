@@ -8,7 +8,6 @@ import { CHILL_CATEGORIES } from "@/lib/chill-categories";
 import { ChillCard } from "./ChillCard";
 import { NearbyView } from "./NearbyView";
 import { WishlistView } from "./WishlistView";
-import { RestTimer } from "../rest-timer";
 import { loadWishlist, migrateLegacyWishlist } from "@/lib/wishlist";
 import { useTripStore } from "@/lib/trip-store";
 
@@ -108,9 +107,6 @@ export function RestChill() {
           </div>
         </div>
       </div>
-
-      {/* P1 #11: RestTimer встроен под hero (раньше orphan, нигде не импортировался) */}
-      <RestTimer />
 
       {/* P2 #15: переключатель min-h-[44px] для mobile touch target */}
       <div className="grid grid-cols-3 gap-2 p-1 bg-card border border-border rounded-2xl">

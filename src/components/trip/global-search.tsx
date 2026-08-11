@@ -9,6 +9,7 @@ import { useTripStore } from "@/lib/trip-store";
 import { CITIES } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { useBodyScrollLock } from "@/hooks/use-body-scroll-lock";
+import { getTripId } from "@/hooks/use-trip";
 
 interface SearchResult {
   id: string;
@@ -43,9 +44,12 @@ export function GlobalSearch({ open, onOpenChange }: { open: boolean; onOpenChan
   const { setActiveTab, setSelectedDay } = useTripStore();
 
   const { data, isLoading } = useQuery<{ results: SearchResult[] }>({
-    queryKey: ["search", query],
+    queryKey: ["search", query, getTripId()],
     queryFn: async () => {
-      const r = await fetch(`/api/search?q=${encodeURIComponent(query)}`);
+      // P1 #11: передаём tripId чтобы сервер отфильтровал journal по текущей поездке
+      const tripId = getTripId();
+      const url = `/api/search?q=${encodeURIComponent(query)}${tripId ? `&tripId=${tripId}` : ""}`;
+      const r = await fetch(url);
       return r.json();
     },
     enabled: query.trim().length >= 2,

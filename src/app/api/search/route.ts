@@ -1,10 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 
-// GET /api/search?q=лапша — глобальный поиск по местам, фразам, блюдам, тратам
+// GET /api/search?q=лапша&tripId=... — глобальный поиск по местам, фразам, блюдам, тратам, дневнику
+// P1 #11: journal scoped by tripId (раньше без фильтра → все записи всех поездок)
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const q = searchParams.get("q")?.trim().toLowerCase();
+  const tripId = searchParams.get("tripId");
   if (!q || q.length < 2) return NextResponse.json({ results: [] });
 
   const results: Array<{
@@ -102,9 +104,11 @@ export async function GET(req: NextRequest) {
     });
   }
 
-  // Дневник
+  // Дневник — P1 #11: scoped by tripId если передан
+  const journalWhere: Record<string, unknown> = { content: { contains: q } };
+  if (tripId) journalWhere.tripId = tripId;
   const journals = await db.journalEntry.findMany({
-    where: { content: { contains: q } },
+    where: journalWhere,
     take: 5,
   });
   for (const j of journals) {
