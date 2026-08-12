@@ -119,6 +119,7 @@ async function compressViaImageElement(
 
 /**
  * Compress for upload. Never returns the original huge/HEIC file.
+ * Falls back to original JPEG/PNG/WebP if under maxBytes when canvas fails (mobile).
  */
 export async function compressImageForUpload(
   file: File,
@@ -132,9 +133,18 @@ export async function compressImageForUpload(
     throw new ImageCompressError("Фото слишком большое (макс ~30MB)");
   }
 
+  const type = (file.type || "").toLowerCase();
+  const webFriendly =
+    type === "image/jpeg" ||
+    type === "image/jpg" ||
+    type === "image/png" ||
+    type === "image/webp" ||
+    /\.jpe?g$/i.test(file.name) ||
+    /\.png$/i.test(file.name) ||
+    /\.webp$/i.test(file.name);
+
   // Browser often cannot decode HEIC — fail early with clear message
   if (isLikelyHeic(file)) {
-    // Still try decode; many Androids fail → clear error
     try {
       await createImageBitmap(file);
     } catch {
@@ -169,6 +179,23 @@ export async function compressImageForUpload(
     } catch (e) {
       lastError = e;
     }
+  }
+
+  // Last resort: already-small web image (camera sometimes gives JPEG that canvas rejects)
+  if (webFriendly && file.size <= maxBytes) {
+    const name = file.name?.includes(".") ? file.name : "photo.jpg";
+    return new File([file], name.replace(/\.[^.]+$/, "") + ".jpg", {
+      type: type.startsWith("image/") ? type : "image/jpeg",
+      lastModified: Date.now(),
+    });
+  }
+  if (webFriendly && file.size <= 8 * 1024 * 1024) {
+    // Still try original — server sharp will resize
+    const name = file.name?.includes(".") ? file.name : "photo.jpg";
+    return new File([file], name, {
+      type: type || "image/jpeg",
+      lastModified: Date.now(),
+    });
   }
 
   if (lastError instanceof ImageCompressError) throw lastError;

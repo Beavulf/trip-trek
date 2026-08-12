@@ -15,6 +15,7 @@ import next from "next";
 import { handleEmitRequest } from "./server/emit-handler";
 import { setupSocketHandlers } from "./server/socket-handlers";
 import { TripRooms } from "./server/rooms";
+import { handleUploadsRequest } from "./server/static-uploads";
 
 const dev = process.env.NODE_ENV !== "production";
 const port = parseInt(process.env.PORT || "3000");
@@ -32,8 +33,10 @@ const rooms = new TripRooms();
 let io: IOServer;
 
 app.prepare().then(() => {
-  // HTTP server (Next.js) + /emit endpoint for WS emission from API routes
+  // HTTP server (Next.js) + /emit + runtime /uploads from disk volume
   const server = createServer((req, res) => {
+    // Runtime uploads (Docker volume) — must bypass Next static snapshot
+    if (handleUploadsRequest(req, res)) return;
     // Try to handle /emit first (internal WS bridge)
     if (io && handleEmitRequest(req, res, io)) return;
     // Otherwise — Next.js handler

@@ -143,7 +143,9 @@ export function PhotoForm({ onDone }: PhotoFormProps) {
       coords = await requestGeo();
     }
     const fd = new FormData();
-    fd.append("file", file);
+    // Explicit filename — some mobile browsers send empty name for camera captures
+    const uploadName = file.name?.trim() || `photo-${Date.now()}.jpg`;
+    fd.append("file", file, uploadName);
     fd.append("dayId", dayId);
     if (caption) fd.append("caption", caption);
     if (coords) {
@@ -190,7 +192,7 @@ export function PhotoForm({ onDone }: PhotoFormProps) {
       <input
         ref={cameraRef}
         type="file"
-        accept="image/jpeg,image/png,image/webp,image/*"
+        accept="image/*"
         capture="environment"
         className="hidden"
         onChange={(e) => e.target.files?.[0] && onFile(e.target.files[0])}
@@ -198,7 +200,7 @@ export function PhotoForm({ onDone }: PhotoFormProps) {
       <input
         ref={galleryRef}
         type="file"
-        accept="image/jpeg,image/png,image/webp,image/*"
+        accept="image/*"
         className="hidden"
         onChange={(e) => e.target.files?.[0] && onFile(e.target.files[0])}
       />

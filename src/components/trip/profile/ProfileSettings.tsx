@@ -102,7 +102,7 @@ export function ProfileSettings({ profile, setPremiumOpen }: ProfileSettingsProp
           </div>
           <div className="flex-1">
             <div className="text-sm font-medium">TripTrek</div>
-            <div className="text-xs text-muted-foreground">Версия 0.2.15 · TripTrek</div>
+            <div className="text-xs text-muted-foreground">Версия 0.2.16 · TripTrek</div>
           </div>
         </div>
       </div>

@@ -105,7 +105,12 @@ export async function POST(req: NextRequest) {
   if (response) return response;
 
   if (file.type && !ALLOWED.has(file.type.toLowerCase())) {
-    return NextResponse.json({ error: "Недопустимый тип файла" }, { status: 400 });
+    // Mobile camera sometimes sends empty/octet-stream — allow by extension
+    const name = (file.name || "").toLowerCase();
+    const okExt = /\.(jpe?g|png|webp|gif|heic|heif)$/.test(name);
+    if (!okExt && file.type !== "application/octet-stream") {
+      return NextResponse.json({ error: "Недопустимый тип файла" }, { status: 400 });
+    }
   }
   if (file.size > MAX_BYTES) {
     return NextResponse.json({ error: "Файл слишком большой (макс 20MB)" }, { status: 400 });
