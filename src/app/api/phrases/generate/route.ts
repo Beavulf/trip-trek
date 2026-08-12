@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { emitWS } from "@/lib/ws-emit";
+import { requireTripMember } from "@/lib/api-auth";
 
 // Базовые фразы для каждого языка (50+ фраз)
 // Ключ — код языка (zh, ja, ko, fr, de, en, etc.)
@@ -126,6 +128,8 @@ const PHRASES_BY_LANGUAGE: Record<string, { category: string; ru: string; cn: st
 
 // POST /api/phrases/generate — авто-генерация фраз по языку
 // Body: { tripId, language, cityName? }
+// P0 #2: auth + membership (раньше открыто — кто угодно мог генерировать в чужой tripId)
+// P1 #12: emitWS после create; race guard (count check — если уже есть, не дублируем)
 export async function POST(req: NextRequest) {
   const body = await req.json();
   const { tripId, language, cityName } = body;
@@ -134,9 +138,14 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "tripId, language required" }, { status: 400 });
   }
 
+  // P0 #2: auth + membership
+  const { response } = await requireTripMember(req, tripId);
+  if (response) return response;
+
   const phrases = PHRASES_BY_LANGUAGE[language] || PHRASES_BY_LANGUAGE.en;
 
-  // Проверяем не созданы ли уже фразы для этой поездки
+  // P1 #12: race guard — проверяем не созданы ли уже фразы для этой поездки
+  // Если два клиента одновременно вызовут generate — второй увидит count > 0 и не создаст дубли
   const existing = await db.phrase.count({ where: { tripId } });
   if (existing > 0) {
     return NextResponse.json({ created: 0, message: "Фразы уже существуют", total: existing });
@@ -157,6 +166,9 @@ export async function POST(req: NextRequest) {
       })
     )
   );
+
+  // P1 #12: emitWS чтобы другие клиенты увидели новые фразы
+  await emitWS("phrase:updated", tripId, {});
 
   return NextResponse.json({
     created: created.length,

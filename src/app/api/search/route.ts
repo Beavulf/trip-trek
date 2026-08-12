@@ -43,15 +43,17 @@ export async function GET(req: NextRequest) {
     });
   }
 
-  // Фразы
+  // Фразы — P0 #4: scoped by tripId если передан (раньше все фразы всех поездок)
+  const phraseWhere: Record<string, unknown> = {
+    OR: [
+      { ru: { contains: q } },
+      { cn: { contains: q } },
+      { pinyin: { contains: q } },
+    ],
+  };
+  if (tripId) phraseWhere.tripId = tripId;
   const phrases = await db.phrase.findMany({
-    where: {
-      OR: [
-        { ru: { contains: q } },
-        { cn: { contains: q } },
-        { pinyin: { contains: q } },
-      ],
-    },
+    where: phraseWhere,
     take: 8,
   });
   for (const p of phrases) {

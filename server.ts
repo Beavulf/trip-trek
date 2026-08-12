@@ -19,7 +19,9 @@ import { TripRooms } from "./server/rooms";
 const dev = process.env.NODE_ENV !== "production";
 const port = parseInt(process.env.PORT || "3000");
 
-const app = next({ dev });
+// Workaround: Turbopack has issues resolving @prisma/client (cached hash mismatch)
+// Force webpack by setting webpack: true
+const app = next({ dev, webpack: true });
 const handle = app.getRequestHandler();
 
 // Trip rooms: tracks which sockets are in which trip rooms

@@ -1470,3 +1470,155 @@ User requested removing the RestTimer that was embedded under the Chill hero in 
 5. **P2 #14 (Don't split food-guide.tsx)** — kept as single file (audit says "не дробить").
 6. **`food:tried` dead type** — left as-is (audit says "не плодить второй event").
 
+
+---
+
+## Session: Phrases Audit — P0 + P1 + P2 fixes (based on `audit-phrases-frazy.md`)
+
+**Phase**: 23 — Phrases audit fixes
+
+### Also: Turbopack → Webpack fix
+Server was crashing with "Failed to load external module @prisma/client-2c3a283f134fdcb6" — Turbopack cached a prisma client hash that didn't exist. Fixed by forcing webpack in `server.ts`: `const app = next({ dev, webpack: true });`.
+
+### Status Before
+- `GET /api/phrases` without tripId → all phrases from all trips (leak)
+- `usePhrases` no `enabled: !!tripId`, no `placeholderData`
+- No auth on GET; generate API was open (anyone could generate into any tripId)
+- Generate API existed but UI NEVER called it — empty state had no CTA
+- Google Translate `sl=zh-CN` hardcoded for all languages
+- TTS defaulted to `zh-CN` for Latin text (en/fr without diacritics → Chinese voice)
+- Toggle favorite: no `!r.ok` check, no pending disable
+- Itinerary AddDay lied about "auto-фразы" (never called generate)
+- China-centric: 🀄 hero, "Китайский" labels, "Baidu/Pleco" footer always
+- `food:tried` dead type in websocket-client.ts
+- `seed-phrases.ts` without tripId — outdated
+
+### P0 — Critical Fixes
+
+#### P0 #1: GET requires tripId + usePhrases enabled
+**Fix** (`src/app/api/phrases/route.ts`):
+- `if (!tripId) return 400 "tripId required"` (was `if (tripId) where.tripId` → leak).
+- Added `requireTripMember` auth on GET.
+- `usePhrases`: `enabled: !!tripId`, `placeholderData: []`, `if (!tripId) return []`, `if (!r.ok) throw`, `Array.isArray(data) ? data : []`.
+- Verified: `curl /api/phrases` без tripId → 400; без auth → 401.
+
+#### P0 #2: Auth/membership on all endpoints
+**Fix**:
+- GET: `requireTripMember` (was open).
+- PATCH: already had membership check (было).
+- POST generate: added `requireTripMember(req, tripId)` — was open (anyone could generate into any tripId).
+- Verified: `curl POST /generate` без auth → 401.
+
+#### P0 #3: Generate UI connected
+**Problem**: Generate API existed but UI never called it — empty state had no CTA.
+**Fix** (`src/components/trip/phrasebook.tsx`):
+- New `useGeneratePhrases` hook (`src/hooks/trip/use-phrases.ts`).
+- Empty state: "💬 Пока нет фраз" + "Загрузить разговорник" button.
+- Click → language picker (9 languages: zh/ja/ko/th/vi/fr/de/es/en) + "Загрузить" button.
+- `handleGenerate`: `try { await generate.mutateAsync({tripId, language}); if (created === 0) toast.info("Фразы уже существуют"); else toast.success("Создано N фраз"); } catch (err) { toast.error }`.
+- API: `await emitWS("phrase:updated", tripId, {})` after create.
+- Race guard: `count check` — if phrases already exist, returns `created: 0` (no duplicates).
+- Itinerary AddDay: honest copy "фразы можно загрузить во вкладке «Фразы»" (was "фразы и погода доступны в соответствующих вкладках" — lying about auto-generation).
+
+#### P0 #4: Global search phrases scoped by tripId
+**Fix** (`src/app/api/search/route.ts`):
+- `phraseWhere.tripId = tripId` if tripId passed.
+- `global-search.tsx` already passes `&tripId=` (from AI summary audit).
+
+### P1 — Integrity / UX
+
+#### P1 #5: Google Translate sl not hardcoded
+**Fix** (`src/lib/language-detect.ts`):
+- New `detectLanguage(text)` helper — returns `{langCode, langPrefix, translateSl, langName, isLatin}`.
+- `googleTranslateUrl(text)` uses `translateSl` (was hardcoded `zh-CN`).
+- PhraseCard: `href={googleTranslateUrl(phrase.cn)}` — now `sl=ja` for Japanese, `sl=fr` for French, etc.
+
+#### P1 #6: Speech fallback en/auto for Latin
+**Fix**:
+- `detectLanguage` returns `en-US` for Latin without diacritics (was `zh-CN` → Chinese voice for English/French!).
+- `doSpeak`: if no voice for detected language AND `isLatin` → fallback to `en-US` voice + toast "Используем английский голос".
+- `voiceschanged` not explicitly handled (voices loaded via 500ms timeout retry).
+- Disable while speaking: `disabled={speaking}`.
+
+#### P1 #7: Favorite copy "общее избранное поездки"
+- Banner: "⭐ Избранное — общее для всей компании в этой поездке" (was no explanation).
+
+#### P1 #8: Toggle throw on !ok + disable on pending
+- `useTogglePhraseFavorite`: `if (!r.ok) throw new Error(body.error)`.
+- `handleToggle`: `mutate(data, { onError: (err) => toast.error })`.
+- Button: `disabled={toggle.isPending}`.
+
+#### P1 #11: Neutral labels when lang ≠ zh
+- Hero emoji: `isChinese ? "🀄" : getLangEmoji(langPrefix)` — shows 🎌 for Japanese, 🇫🇷 for French, etc.
+- Pronunciation label: `langPrefix === "zh" ? "Пиньинь" : langPrefix === "ja" ? "Ромадзи" : "Произношение"` (was always "Пиньинь").
+- Footer: "💡 Произношение через Web Speech API. Для лучшего результата используйте Google Translate." (was "Baidu Translate / Pleco").
+- `cn`/`pinyin` DB columns NOT renamed (audit says "не rename колонки БД").
+
+#### P1 #12: Generate emitWS + race guard
+- API: `await emitWS("phrase:updated", tripId, {})` after create.
+- Race guard: `count check` before create — if existing > 0, returns `created: 0` (no duplicates).
+- UI: `disabled={generate.isPending}` — no double-submit.
+
+### P2 — Polish
+
+#### P2 #15: Hero metrics
+- "N фраз · M избранных" in hero (was no metrics).
+
+#### P2 #19: a11y labels
+- Listen: `aria-label="Произнести фразу"` / `aria-label="Останавить воспроизведение"`.
+- Translate: `aria-label="Открыть в Google Translate"`.
+- Favorite: `aria-label="Добавить в избранное"` / `aria-label="Убрать из избранного"` + `aria-pressed`.
+- Categories: `aria-label="Категория: {label}"` + `aria-pressed`.
+- Favorite filter: `aria-label="Только избранные"` + `aria-pressed`.
+- Language picker: `aria-label="Язык: {label}"` + `aria-pressed`.
+
+### Files Modified
+
+**API**:
+- `src/app/api/phrases/route.ts` — tripId required, auth on GET, await emitWS
+- `src/app/api/phrases/generate/route.ts` — auth + membership, await emitWS, race guard
+- `src/app/api/search/route.ts` — phrases scoped by tripId
+
+**Hooks**:
+- `src/hooks/trip/use-phrases.ts` — throw on !ok, enabled, placeholderData, new `useGeneratePhrases`
+
+**Components**:
+- `src/components/trip/phrasebook.tsx` — generate UI, empty CTA, neutral labels, shared detectLanguage, toggle try/catch, a11y labels, hero metrics, honest footer
+- `src/components/trip/itinerary/AddDayButton.tsx` — honest copy (no false "auto-фразы" promise)
+
+**Server**:
+- `server.ts` — `webpack: true` instead of Turbopack (prisma client resolution fix)
+
+**New files**:
+- `src/lib/language-detect.ts` — detectLanguage + googleTranslateUrl helpers (TTS + Translate)
+
+### Verification (curl + agent-browser)
+
+✅ `curl /api/phrases` без tripId → 400 (was all phrases)
+✅ `curl /api/phrases` без auth → 401
+✅ `curl /api/phrases?tripId=...` → 200 with phrases (你好, 谢谢 — China)
+✅ `curl POST /generate` без auth → 401
+✅ `curl POST /generate` с auth + existing phrases → `created: 0` (race guard)
+✅ ESLint: clean
+✅ agent-browser: Phrases tab loads → "Полезные фразы" + trip title
+✅ Europe trip: 3 French phrases (Merci, Le menu, Au secours) — not China!
+✅ Japan trip: 3 Japanese phrases (こんにちは, ありがとうございます, おいしいです)
+✅ Hero metrics: "3 фраз · 0 избранных"
+✅ "⭐ Избранное — общее для всей компании в этой поездке"
+✅ Pronunciation label: "Ромадзи" for Japanese (was always "Пиньинь")
+✅ Hero emoji: 🎌 for Japan (was always 🀄)
+✅ Empty state: "💬 Пока нет фраз" + "Загрузить разговорник" CTA → language picker (9 langs)
+✅ a11y: "Произнести фразу", "Открыть в Google Translate", "Добавить в избранное", "Категория: Все"
+✅ No console errors
+
+### Unresolved / Notes
+
+1. **P1 #9 (Stale trip switch)** — `usePhrases` uses `getTripId()` in queryKey + `enabled`. Works after reload.
+2. **P1 #10 (Fav badge `relative`)** — button has `relative` class now.
+3. **P2 #13 (social category in generate)** — generate packs don't include "social" category. Minor — can add later.
+4. **P2 #14 (Copy phrase on mobile)** — future feature.
+5. **P2 #16 (Per-user favorites)** — out of scope (needs schema change).
+6. **P2 #17 (audio field)** — not used.
+7. **P2 #18 (seed-phrases.ts)** — outdated but not critical (templates use from-template API).
+8. **Turbopack issue** — `webpack: true` workaround in server.ts. Turbopack cached a prisma client hash `2c3a283f134fdcb6` that didn't exist. Webpack resolves correctly.
+

@@ -114,7 +114,7 @@ export function AddDayButton() {
             </div>
             {selectedCity?.language && (
               <div className="text-[11px] text-muted-foreground bg-muted/50 rounded-lg px-3 py-2">
-                💡 Язык города: <b className="uppercase">{selectedCity.language}</b> — фразы и погода доступны в соответствующих вкладках.
+                💡 Язык города: <b className="uppercase">{selectedCity.language}</b> — погода появится во вкладке «Погода». Фразы можно загрузить во вкладке «Фразы».
               </div>
             )}
             <button
