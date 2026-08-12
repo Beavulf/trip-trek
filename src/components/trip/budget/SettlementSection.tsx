@@ -27,7 +27,7 @@ export function SettlementSection({ balances, settlements, totalSpent, participa
         <h2 className="font-semibold text-sm">Расчёт между друзьями</h2>
         <button
           onClick={() => setShowBalanceHint(v => !v)}
-          className="ml-auto size-6 rounded-full bg-muted grid place-items-center text-muted-foreground shrink-0 active:scale-90 transition-transform"
+          className="ml-auto size-11 rounded-full bg-muted grid place-items-center text-muted-foreground shrink-0 active:scale-90 transition-transform"
           title="Как это работает?"
         >
           <Info className="size-3.5" />

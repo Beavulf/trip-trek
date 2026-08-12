@@ -1,5 +1,13 @@
 # TripTrek — Patch notes
 
+## v0.2.15 — Мелочи полировки
+
+- Бюджет: валюта из settings везде (hero / pie / план); hit targets
+- Валюта траты scoped по tripId в localStorage
+- PhotoForm без client `userId`
+- Закрытие модалок ≥44px; карта: слои/fullscreen/валюта
+- Удалены мёртвые `transport-map` и `rest-timer`
+
 ## v0.2.14 — Invite, Templates, Currency, Push
 
 ### Критичное

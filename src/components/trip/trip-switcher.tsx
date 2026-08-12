@@ -177,7 +177,7 @@ export function TripSwitcher() {
                 <h2 className="font-bold text-base flex items-center gap-2">
                   <Globe className="size-4" /> Мои поездки
                 </h2>
-                <button onClick={() => { setOpen(false); setShowCreate(false); }} className="size-8 rounded-full hover:bg-accent grid place-items-center">
+                <button onClick={() => { setOpen(false); setShowCreate(false); }} className="size-11 rounded-full hover:bg-accent grid place-items-center" aria-label="Закрыть">
                   <X className="size-4" />
                 </button>
               </div>

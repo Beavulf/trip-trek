@@ -1,7 +1,8 @@
 "use client";
 
-import { useBudgetPlan, useUpdateBudgetPlan, useExpenses } from "@/hooks/use-trip";
+import { useBudgetPlan, useUpdateBudgetPlan, useExpenses, useTrip } from "@/hooks/use-trip";
 import { EXPENSE_CATEGORIES } from "@/lib/types";
+import { currencySymbol } from "@/lib/currencies";
 import { motion } from "framer-motion";
 import { Target, Pencil, Check, Loader2, X } from "lucide-react";
 import { useState } from "react";
@@ -9,11 +10,13 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
 export function BudgetPlanWidget() {
+  const { data: trip } = useTrip();
   const { data: plans, isLoading } = useBudgetPlan();
   const { data: expenses } = useExpenses();
   const update = useUpdateBudgetPlan();
   const [editingCat, setEditingCat] = useState<string | null>(null);
   const [editVal, setEditVal] = useState("");
+  const sym = currencySymbol(trip?.settings.currency);
 
   if (isLoading || !plans) {
     return (
@@ -59,7 +62,7 @@ export function BudgetPlanWidget() {
           <Target className="size-4" /> План vs Факт
         </h2>
         <div className="text-xs text-muted-foreground">
-          План: ${totalPlan} · Потрачено: ${totalSpent.toFixed(0)}
+          План: {sym}{totalPlan} · Потрачено: {sym}{totalSpent.toFixed(0)}
         </div>
       </div>
 
@@ -89,11 +92,11 @@ export function BudgetPlanWidget() {
                         if (e.key === "Escape") setEditingCat(null);
                       }}
                       autoFocus
-                      className="w-16 min-h-[36px] text-xs rounded border border-input bg-background px-2 py-1 text-right"
+                      className="w-16 min-h-11 text-xs rounded border border-input bg-background px-2 py-1 text-right"
                     />
                     <button
                       onClick={() => saveEdit(cat)}
-                      className="size-9 rounded bg-primary text-primary-foreground grid place-items-center shrink-0 active:scale-95 transition-transform"
+                      className="size-11 rounded bg-primary text-primary-foreground grid place-items-center shrink-0 active:scale-95 transition-transform"
                       title="Сохранить"
                       aria-label="Сохранить"
                     >
@@ -101,7 +104,7 @@ export function BudgetPlanWidget() {
                     </button>
                     <button
                       onClick={() => setEditingCat(null)}
-                      className="size-9 rounded bg-secondary border border-border grid place-items-center shrink-0 active:scale-95 transition-transform"
+                      className="size-11 rounded bg-secondary border border-border grid place-items-center shrink-0 active:scale-95 transition-transform"
                       title="Отменить"
                       aria-label="Отменить"
                     >
@@ -111,15 +114,15 @@ export function BudgetPlanWidget() {
                 ) : (
                   <button
                     onClick={() => { setEditVal(String(plan)); setEditingCat(cat); }}
-                    className="min-h-[36px] px-2 -mx-2 rounded-md text-xs font-semibold hover:bg-accent flex items-center gap-1 active:scale-95 transition-transform"
+                    className="min-h-11 px-2 -mx-2 rounded-md text-xs font-semibold hover:bg-accent flex items-center gap-1 active:scale-95 transition-transform"
                     aria-label={`Изменить план для категории ${meta.label}`}
                   >
-                    <span>${plan}</span>
+                    <span>{sym}{plan}</span>
                     <Pencil className="size-3 text-muted-foreground" />
                   </button>
                 )}
                 <span className={cn("text-xs", over ? "text-red-500 font-semibold" : "text-muted-foreground")}>
-                  / ${spent.toFixed(0)}
+                  / {sym}{spent.toFixed(0)}
                 </span>
               </div>
               <div className="h-1.5 rounded-full bg-muted overflow-hidden">
@@ -135,7 +138,7 @@ export function BudgetPlanWidget() {
               </div>
               {over && (
                 <div className="text-[10px] text-red-500 mt-0.5">
-                  Перерасход на ${(spent - plan).toFixed(0)}
+                  Перерасход на {sym}{(spent - plan).toFixed(0)}
                 </div>
               )}
             </div>

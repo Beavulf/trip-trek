@@ -611,7 +611,7 @@ function AddFoodButton() {
             <h2 className="font-bold text-base flex items-center gap-2">
               <UtensilsCrossed className="size-5 text-primary" /> Новое блюдо
             </h2>
-            <button onClick={() => setOpen(false)} aria-label="Закрыть" className="size-8 rounded-full hover:bg-accent grid place-items-center">
+            <button onClick={() => setOpen(false)} aria-label="Закрыть" className="size-11 rounded-full hover:bg-accent grid place-items-center">
               <X className="size-4" />
             </button>
           </div>

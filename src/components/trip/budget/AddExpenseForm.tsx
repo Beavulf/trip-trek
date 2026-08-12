@@ -4,7 +4,7 @@ import { useState } from "react";
 import { Wallet, Plus, Users, Check, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import { useTrip, useAddExpense, useCurrency } from "@/hooks/use-trip";
+import { useTrip, useAddExpense, useCurrency, useCurrentTripId } from "@/hooks/use-trip";
 import { useAuth } from "@/hooks/use-auth";
 import { EXPENSE_CATEGORIES } from "@/lib/types";
 import { CURRENCIES } from "@/lib/currencies";
@@ -13,7 +13,12 @@ interface AddExpenseFormProps {
   onDone: () => void;
 }
 
+function currencyKey(tripId: string) {
+  return `triptrek-currency:${tripId}`;
+}
+
 export function AddExpenseForm({ onDone }: AddExpenseFormProps) {
+  const tripId = useCurrentTripId();
   const { data: trip } = useTrip();
   const add = useAddExpense();
   const { data: currency } = useCurrency();
@@ -23,10 +28,12 @@ export function AddExpenseForm({ onDone }: AddExpenseFormProps) {
   const [amount, setAmount] = useState("");
   const [currencyCode, setCurrencyCode] = useState(() => {
     if (typeof window === "undefined") return "USD";
-    return localStorage.getItem("triptrek-currency") || "USD";
+    const scoped = tripId ? localStorage.getItem(currencyKey(tripId)) : null;
+    return scoped || localStorage.getItem("triptrek-currency") || "USD";
   });
   const [rememberCurrency, setRememberCurrency] = useState(() => {
     if (typeof window === "undefined") return false;
+    if (tripId && localStorage.getItem(currencyKey(tripId))) return true;
     return !!localStorage.getItem("triptrek-currency");
   });
   const [category, setCategory] = useState("food");
@@ -73,9 +80,9 @@ export function AddExpenseForm({ onDone }: AddExpenseFormProps) {
       return;
     }
 
-    // Сохраняем валюту если выбрана галочка
-    if (rememberCurrency) {
-      localStorage.setItem("triptrek-currency", currencyCode);
+    // Сохраняем валюту если выбрана галочка (scoped по trip)
+    if (rememberCurrency && tripId) {
+      localStorage.setItem(currencyKey(tripId), currencyCode);
     }
 
     // splitWith = все участники КРОМЕ плательщика
@@ -167,10 +174,11 @@ export function AddExpenseForm({ onDone }: AddExpenseFormProps) {
               checked={rememberCurrency}
               onChange={(e) => {
                 setRememberCurrency(e.target.checked);
+                if (!tripId) return;
                 if (e.target.checked) {
-                  localStorage.setItem("triptrek-currency", currencyCode);
+                  localStorage.setItem(currencyKey(tripId), currencyCode);
                 } else {
-                  localStorage.removeItem("triptrek-currency");
+                  localStorage.removeItem(currencyKey(tripId));
                 }
               }}
               className="size-3.5 accent-primary"

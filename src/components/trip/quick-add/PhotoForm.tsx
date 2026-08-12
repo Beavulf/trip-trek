@@ -11,11 +11,10 @@ import { DayPicker } from "./DayPicker";
 type GeoStatus = "idle" | "requesting" | "granted" | "denied";
 
 interface PhotoFormProps {
-  userId: string;
   onDone: () => void;
 }
 
-export function PhotoForm({ userId, onDone }: PhotoFormProps) {
+export function PhotoForm({ onDone }: PhotoFormProps) {
   const { data: trip } = useTrip();
   const upload = useUploadPhoto();
   const cameraRef = useRef<HTMLInputElement>(null);
@@ -146,7 +145,6 @@ export function PhotoForm({ userId, onDone }: PhotoFormProps) {
     const fd = new FormData();
     fd.append("file", file);
     fd.append("dayId", dayId);
-    fd.append("userId", userId);
     if (caption) fd.append("caption", caption);
     if (coords) {
       fd.append("lat", String(coords.lat));

@@ -67,7 +67,7 @@ export function AddPlaceSheet({
             <h2 className="font-bold text-base sm:text-lg flex items-center gap-2">
               <Plus className="size-5 text-primary" /> Новое место
             </h2>
-            <button onClick={() => onOpenChange(false)} className="size-8 rounded-full hover:bg-accent grid place-items-center">
+            <button onClick={() => onOpenChange(false)} className="size-11 rounded-full hover:bg-accent grid place-items-center" aria-label="Закрыть">
               <X className="size-4" />
             </button>
           </div>

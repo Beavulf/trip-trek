@@ -74,7 +74,7 @@ export function AddDayButton() {
             <h2 className="font-bold text-base flex items-center gap-2">
               <CalendarPlus className="size-5 text-primary" /> Новый день
             </h2>
-            <button onClick={() => setOpen(false)} className="size-8 rounded-full hover:bg-accent grid place-items-center">
+            <button onClick={() => setOpen(false)} className="size-11 rounded-full hover:bg-accent grid place-items-center" aria-label="Закрыть">
               <X className="size-4" />
             </button>
           </div>

@@ -93,7 +93,7 @@ export function BudgetEditModal({ open, onOpenChange }: BudgetEditModalProps) {
             <h2 className="font-bold text-base flex items-center gap-2">
               <Users className="size-4" /> Бюджеты участников
             </h2>
-            <button onClick={() => onOpenChange(false)} className="size-8 rounded-full hover:bg-accent grid place-items-center">
+            <button onClick={() => onOpenChange(false)} className="size-11 rounded-full hover:bg-accent grid place-items-center" aria-label="Закрыть">
               <X className="size-4" />
             </button>
           </div>

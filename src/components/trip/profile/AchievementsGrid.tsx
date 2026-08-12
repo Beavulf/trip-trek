@@ -88,7 +88,7 @@ export function AchievementsGrid({ profile, selectedAchievement, setSelectedAchi
             </div>
             <button
               onClick={() => setSelectedAchievement(null)}
-              className="size-6 rounded-full hover:bg-accent grid place-items-center text-muted-foreground shrink-0"
+              className="size-11 rounded-full hover:bg-accent grid place-items-center text-muted-foreground shrink-0"
             >
               <X className="size-3.5" />
             </button>

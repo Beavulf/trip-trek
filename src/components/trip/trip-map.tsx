@@ -11,6 +11,7 @@ import { useTheme } from "next-themes";
 import { useQuery } from "@tanstack/react-query";
 import { createPortal } from "react-dom";
 import { cn } from "@/lib/utils";
+import { currencySymbol } from "@/lib/currencies";
 import { toast } from "sonner";
 import { AddPlaceSheet, type AddPlaceData } from "./add-place-sheet";
 import { CHILL_CATEGORIES, isChillCategory } from "@/lib/chill-categories";
@@ -425,7 +426,7 @@ export default function TripMap() {
             onClick={() => setAutoTheme(true)}
             title="Авто (по теме)"
             className={cn(
-              "size-9 rounded-md text-base grid place-items-center transition-colors",
+              "size-11 rounded-md text-base grid place-items-center transition-colors",
               autoTheme ? "bg-primary text-primary-foreground" : "hover:bg-accent"
             )}
           >
@@ -443,7 +444,7 @@ export default function TripMap() {
               onClick={() => { setAutoTheme(false); setManualLayer(l.key); }}
               title={l.title}
               className={cn(
-                "size-9 rounded-md text-base grid place-items-center transition-colors",
+                "size-11 rounded-md text-base grid place-items-center transition-colors",
                 !autoTheme && tileLayer === l.key ? "bg-primary text-primary-foreground" : "hover:bg-accent"
               )}
             >
@@ -470,7 +471,7 @@ export default function TripMap() {
           onClick={() => setFullscreenPhoto(null)}
         >
           <button
-            className="absolute top-4 right-4 size-10 rounded-full bg-white/10 text-white grid place-items-center hover:bg-white/20 z-10"
+            className="absolute top-4 right-4 size-11 rounded-full bg-white/10 text-white grid place-items-center hover:bg-white/20 z-10"
             onClick={() => setFullscreenPhoto(null)}
           >
             <X className="size-5" />
@@ -519,6 +520,8 @@ function FlyTo({ center }: { center: { lat: number; lng: number } }) {
 
 function PlacePopup({ place, day }: { place: Place; day: Day }) {
   const update = useUpdatePlace();
+  const { data: tripMeta } = useTrip();
+  const sym = currencySymbol(tripMeta?.settings.currency);
   const meta = CATEGORY_META[place.category];
   const visited = place.status === "visited";
 
@@ -549,7 +552,7 @@ function PlacePopup({ place, day }: { place: Place; day: Day }) {
         <p className="text-[11px] text-muted-foreground mt-1.5 line-clamp-2">{place.description}</p>
       )}
       <div className="flex items-center gap-2 mt-2 text-[11px]">
-        {place.budget ? <span className="text-muted-foreground">${place.budget}</span> : null}
+        {place.budget ? <span className="text-muted-foreground">{sym}{place.budget}</span> : null}
         {place.rating ? (
           <span className="flex items-center gap-0.5 text-amber-500">
             <Star className="size-2.5 fill-current" /> {place.rating}

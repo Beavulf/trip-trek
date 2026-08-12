@@ -107,6 +107,7 @@ export function Budget() {
 
   const balances = calculateBalances(expenses, trip.participants);
   const settlements = calculateSettlements(expenses, trip.participants);
+  const sym = currencySymbol(trip.settings.currency);
 
   return (
     <div className="space-y-4 animate-fade-up">
@@ -115,6 +116,7 @@ export function Budget() {
         totalBudget={trip.settings.totalBudget}
         budgetPct={budgetPct}
         remaining={remaining}
+        currencySymbol={sym}
       />
 
       {byCategory.length > 0 && (
@@ -132,7 +134,7 @@ export function Budget() {
                     ))}
                   </Pie>
                   <Tooltip
-                    formatter={(v: number) => [`$${v.toFixed(0)}`, ""]}
+                    formatter={(v: number) => [`${sym}${v.toFixed(0)}`, ""]}
                     contentStyle={{
                       background: "var(--card)",
                       border: "1px solid var(--border)",
@@ -154,7 +156,7 @@ export function Budget() {
                     <span className="size-2.5 rounded-full shrink-0" style={{ background: c.color }} />
                     <span className="text-base">{c.emoji}</span>
                     <span className="flex-1 truncate text-muted-foreground">{c.label}</span>
-                    <span className="font-semibold">${c.value.toFixed(0)}</span>
+                    <span className="font-semibold">{sym}{c.value.toFixed(0)}</span>
                     <span className="text-xs text-muted-foreground w-10 text-right">
                       {((c.value / totalSpent) * 100).toFixed(0)}%
                     </span>
@@ -254,7 +256,7 @@ export function Budget() {
           ))}
         </div>
         <p className="text-[11px] text-muted-foreground mt-2.5">
-          Общий бюджет группы: ${trip.settings.totalBudget} — сумма бюджетов участников.
+          Общий бюджет группы: {sym}{trip.settings.totalBudget} — сумма бюджетов участников.
         </p>
       </div>
 

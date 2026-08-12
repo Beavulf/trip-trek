@@ -117,7 +117,7 @@ export function QuickAddSheet({ open, onOpenChange }: { open: boolean; onOpenCha
               </div>
             ) : (
               <>
-                {mode === "photo" && <PhotoForm userId={userId} onDone={() => onOpenChange(false)} />}
+                {mode === "photo" && <PhotoForm onDone={() => onOpenChange(false)} />}
                 {mode === "expense" && <ExpenseForm userId={userId} onDone={() => onOpenChange(false)} />}
                 {mode === "journal" && <JournalForm userId={userId} onDone={() => onOpenChange(false)} />}
               </>
