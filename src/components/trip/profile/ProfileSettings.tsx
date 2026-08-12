@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { ArrowRight, Bell, Crown, Info, Moon, Settings, Sun } from "lucide-react";
 import { useTheme } from "next-themes";
@@ -13,7 +14,18 @@ interface ProfileSettingsProps {
 }
 
 export function ProfileSettings({ profile, setPremiumOpen }: ProfileSettingsProps) {
-  const { theme, setTheme } = useTheme();
+  const { theme, setTheme, resolvedTheme } = useTheme();
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+
+  const isDark = mounted && (theme === "dark" || (theme === "system" && resolvedTheme === "dark"));
+  const themeLabel = !mounted
+    ? "…"
+    : theme === "system"
+      ? "Системная"
+      : isDark
+        ? "Тёмная"
+        : "Светлая";
 
   return (
     <motion.div
@@ -27,23 +39,25 @@ export function ProfileSettings({ profile, setPremiumOpen }: ProfileSettingsProp
         <h3 className="font-semibold text-sm">Настройки</h3>
       </div>
       <div className="divide-y divide-border">
-        {/* Тема */}
         <button
-          onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
-          className="w-full flex items-center gap-3 p-3.5 text-left hover:bg-accent/50 transition-colors"
+          type="button"
+          onClick={() => setTheme(isDark ? "light" : "dark")}
+          className="w-full flex items-center gap-3 p-3.5 text-left hover:bg-accent/50 transition-colors min-h-11"
         >
           <div className="size-9 rounded-xl bg-secondary grid place-items-center">
-            {theme === "dark" ? <Moon className="size-4.5" /> : <Sun className="size-4.5" />}
+            {isDark ? <Moon className="size-4.5" /> : <Sun className="size-4.5" />}
           </div>
           <div className="flex-1">
             <div className="text-sm font-medium">Тема оформления</div>
-            <div className="text-xs text-muted-foreground">{theme === "dark" ? "Тёмная" : "Светлая"}</div>
+            <div className="text-xs text-muted-foreground">{themeLabel}</div>
           </div>
-          <div className="w-10 h-6 rounded-full bg-muted relative transition-colors">
-            <div className={cn(
-              "absolute top-0.5 size-5 rounded-full bg-white shadow transition-transform",
-              theme === "dark" ? "translate-x-4" : "translate-x-0.5"
-            )} />
+          <div className={cn("w-11 h-6 rounded-full relative transition-colors", isDark ? "bg-primary" : "bg-muted")}>
+            <div
+              className={cn(
+                "absolute top-0.5 size-5 rounded-full bg-white shadow transition-transform",
+                isDark ? "translate-x-5" : "translate-x-0.5"
+              )}
+            />
           </div>
         </button>
 
@@ -87,8 +101,8 @@ export function ProfileSettings({ profile, setPremiumOpen }: ProfileSettingsProp
             <Info className="size-4.5 text-muted-foreground" />
           </div>
           <div className="flex-1">
-            <div className="text-sm font-medium">TripTrek China</div>
-            <div className="text-xs text-muted-foreground">Версия 1.0.0 · Made with ❤️</div>
+            <div className="text-sm font-medium">TripTrek</div>
+            <div className="text-xs text-muted-foreground">Версия 0.2.12 · TripTrek</div>
           </div>
         </div>
       </div>

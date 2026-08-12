@@ -121,7 +121,7 @@ export function BudgetEditModal({ open, onOpenChange }: BudgetEditModalProps) {
                     value={budgets[p.id] ?? ""}
                     onChange={(e) => setBudgets({ ...budgets, [p.id]: e.target.value })}
                     placeholder="—"
-                    className="w-20 text-sm rounded-lg border border-input bg-background px-2 py-1.5 text-right"
+                    className="w-24 min-h-11 text-base input-mobile rounded-xl border border-input bg-background px-2 py-2 text-right"
                   />
                 </div>
               </div>

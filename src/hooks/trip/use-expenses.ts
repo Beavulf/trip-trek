@@ -2,10 +2,10 @@
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import type { Expense } from "@/lib/types";
-import { getTripId } from "./trip-id";
+import { getTripId, useCurrentTripId } from "./trip-id";
 
 export function useExpenses() {
-  const tripId = getTripId();
+  const tripId = useCurrentTripId();
   return useQuery<Expense[]>({
     queryKey: ["expenses", tripId],
     queryFn: async () => {
@@ -16,8 +16,6 @@ export function useExpenses() {
       return Array.isArray(data) ? data : [];
     },
     enabled: !!tripId,
-    // Всегда возвращаем массив — нет «вечного Загрузка»
-    placeholderData: [],
   });
 }
 

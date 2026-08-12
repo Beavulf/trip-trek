@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { getTripId } from "./trip-id";
+import { getTripId, useCurrentTripId } from "./trip-id";
 
 // === Checklist ===
 export interface ChecklistItem {
@@ -15,7 +15,7 @@ export interface ChecklistItem {
 // P0 #1: enabled !!tripId, placeholderData: []
 // P1 #8: throw on !ok
 export function useChecklist() {
-  const tripId = getTripId();
+  const tripId = useCurrentTripId();
   return useQuery<ChecklistItem[]>({
     queryKey: ["checklist", tripId],
     queryFn: async () => {
@@ -26,7 +26,6 @@ export function useChecklist() {
       return Array.isArray(data) ? data : [];
     },
     enabled: !!tripId,
-    placeholderData: [],
   });
 }
 

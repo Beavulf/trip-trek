@@ -1,6 +1,6 @@
 "use client";
 
-import { useJournal, useAddJournal, useDeleteJournal, useTrip } from "@/hooks/use-trip";
+import { useJournal, useAddJournal, useDeleteJournal, useTrip, useCurrentTripId } from "@/hooks/use-trip";
 import { useAuth } from "@/hooks/use-auth";
 import { motion, AnimatePresence } from "framer-motion";
 import { BookOpen, Plus, Trash2, Loader2, Send, MapPin } from "lucide-react";
@@ -11,27 +11,49 @@ import { MOODS, isValidMood } from "@/lib/moods";
 import { useTripStore } from "@/lib/trip-store";
 
 export function Journal() {
-  const { data: entries, isLoading, error: entriesError } = useJournal();
-  const { data: trip, error: tripError } = useTrip();
+  const tripId = useCurrentTripId();
+  const { data: entries, isLoading, error: entriesError, refetch: refetchEntries } = useJournal();
+  const { data: trip, error: tripError, isLoading: tripLoading, refetch: refetchTrip } = useTrip();
   const { data: session } = useAuth();
   const currentUserId = (session?.user as { id?: string } | undefined)?.id || "";
   const add = useAddJournal();
   const del = useDeleteJournal();
-  const { setActiveTab } = useTripStore();
+  const { setActiveTab, setTripSwitcherOpen } = useTripStore();
   const [content, setContent] = useState("");
   const [mood, setMood] = useState<string>("😊");
   const [dayId, setDayId] = useState("");
   const [authorFilter, setAuthorFilter] = useState<string>("all");
-  // Track which entry is confirming delete (P0 #4 confirm + P2 #16 per-row pending)
   const [confirmingId, setConfirmingId] = useState<string | null>(null);
 
-  // P0 #1: нет trip / ошибка → экран ошибки, не вечный спиннер
+  if (!tripId) {
+    return (
+      <div className="space-y-4 animate-fade-up pb-20">
+        <div className="rounded-3xl p-5 bg-gradient-to-br from-violet-500 to-purple-600 text-white shadow-xl text-center">
+          <div className="text-5xl mb-3">📔</div>
+          <h1 className="text-xl font-bold">Нет активной поездки</h1>
+          <p className="text-white/80 text-sm mt-1">Создай или выбери поездку</p>
+          <button
+            type="button"
+            onClick={() => setTripSwitcherOpen(true)}
+            className="mt-4 rounded-xl bg-white/20 backdrop-blur px-4 py-3 text-sm font-medium active:scale-95 min-h-11"
+          >
+            Мои поездки →
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   if (tripError) {
     return (
       <div className="py-16 text-center text-muted-foreground space-y-2">
         <div className="text-3xl">🤔</div>
         <p className="text-sm font-medium">Не удалось загрузить поездку</p>
-        <button onClick={() => window.location.reload()} className="mt-2 text-xs px-3 py-1.5 rounded-lg bg-primary text-primary-foreground">
+        <button
+          type="button"
+          onClick={() => refetchTrip()}
+          className="mt-2 text-xs px-3 py-2 rounded-lg bg-primary text-primary-foreground min-h-11"
+        >
           Обновить
         </button>
       </div>
@@ -42,14 +64,22 @@ export function Journal() {
       <div className="py-16 text-center text-muted-foreground space-y-2">
         <div className="text-3xl">📔</div>
         <p className="text-sm font-medium">Не удалось загрузить дневник</p>
-        <button onClick={() => window.location.reload()} className="mt-2 text-xs px-3 py-1.5 rounded-lg bg-primary text-primary-foreground">
+        <button
+          type="button"
+          onClick={() => refetchEntries()}
+          className="mt-2 text-xs px-3 py-2 rounded-lg bg-primary text-primary-foreground min-h-11"
+        >
           Обновить
         </button>
       </div>
     );
   }
-  if (isLoading || !trip) {
-    return <div className="py-20 text-center text-muted-foreground flex items-center justify-center gap-2"><Loader2 className="size-4 animate-spin" /> Загрузка дневника…</div>;
+  if (isLoading || tripLoading || !trip) {
+    return (
+      <div className="py-20 text-center text-muted-foreground flex items-center justify-center gap-2">
+        <Loader2 className="size-4 animate-spin" /> Загрузка дневника…
+      </div>
+    );
   }
 
   // P0 #1: автор из session.user.id (как в Board), не trip.settings.currentUserId (который null)
@@ -158,7 +188,7 @@ export function Journal() {
                   aria-label={`Настроение ${m}`}
                   aria-pressed={mood === m}
                   className={cn(
-                    "size-9 rounded-lg text-lg grid place-items-center transition-all min-h-[36px]",
+                    "size-11 rounded-lg text-lg grid place-items-center transition-all min-h-11",
                     mood === m ? "bg-primary/20 ring-2 ring-primary scale-110" : "bg-muted hover:bg-accent"
                   )}
                 >
@@ -182,7 +212,7 @@ export function Journal() {
               <select
                 value={dayId}
                 onChange={(e) => setDayId(e.target.value)}
-                className="rounded-lg border border-input bg-background px-3 py-2.5 text-sm flex-1 min-h-[40px]"
+                className="rounded-lg border border-input bg-background px-3 py-2.5 text-base input-mobile flex-1 min-h-11"
               >
                 <option value="">День {trip.currentDayNumber} (сегодня)</option>
                 {trip.days
@@ -194,7 +224,7 @@ export function Journal() {
               <button
                 onClick={submit}
                 disabled={add.isPending}
-                className="min-h-[40px] rounded-lg bg-primary text-primary-foreground px-4 py-2 text-sm font-medium flex items-center gap-1.5 disabled:opacity-50"
+                className="min-h-11 rounded-lg bg-primary text-primary-foreground px-4 py-2 text-sm font-medium flex items-center gap-1.5 disabled:opacity-50"
               >
                 {add.isPending ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}
                 Добавить
@@ -219,11 +249,11 @@ export function Journal() {
 
       {/* P1 #8: фильтр по автору (если >1 автора) */}
       {authors.length > 1 && (
-        <div className="flex gap-1.5 overflow-x-auto no-scrollbar">
+        <div className="chip-rail no-scrollbar">
           <button
             onClick={() => setAuthorFilter("all")}
             className={cn(
-              "min-h-[36px] flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-colors",
+              "min-h-11 flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-colors",
               authorFilter === "all" ? "bg-primary text-primary-foreground" : "bg-card border border-border hover:bg-accent"
             )}
           >
@@ -236,7 +266,7 @@ export function Journal() {
                 key={a.id}
                 onClick={() => setAuthorFilter(a.id)}
                 className={cn(
-                  "min-h-[36px] flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-colors",
+                  "min-h-11 flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-colors",
                   authorFilter === a.id ? "bg-primary text-primary-foreground" : "bg-card border border-border hover:bg-accent"
                 )}
               >
@@ -265,7 +295,7 @@ export function Journal() {
         <div className="space-y-5">
           {grouped.map(({ day, entries: dayEntries }) => (
             <div key={day.id}>
-              <div className="flex items-center gap-2 mb-2 sticky top-[5.5rem] z-10 py-1 bg-background/80 backdrop-blur-sm rounded-lg">
+              <div className="flex items-center gap-2 mb-2 sticky sticky-under-shell z-10 py-1 bg-background/80 backdrop-blur-sm rounded-lg">
                 <div className="size-7 rounded-lg grid place-items-center text-white text-xs font-bold shrink-0" style={{ background: day.accentColor ?? "#f97316" }}>
                   {day.dayNumber}
                 </div>
@@ -303,37 +333,39 @@ export function Journal() {
                               <span>· {new Date(e.createdAt).toLocaleString("ru-RU", { hour: "2-digit", minute: "2-digit", day: "numeric", month: "short" })}</span>
                             </div>
                           </div>
-                          {/* P0 #4 + P1 #5: delete с confirm, hit-area ≥44px, видно на mobile (не только group-hover) */}
-                          {isConfirming ? (
+                          {isOwn &&
+                            (isConfirming ? (
                             <div className="flex items-center gap-1 shrink-0">
                               <button
+                                type="button"
                                 onClick={() => handleDelete(e.id)}
                                 disabled={isDeleting}
                                 aria-label="Подтвердить удаление"
-                                className="min-h-[36px] min-w-[36px] text-[10px] bg-red-500 text-white px-2 py-1 rounded-lg font-medium flex items-center gap-1"
+                                className="btn-confirm-yes"
                               >
                                 {isDeleting ? <Loader2 className="size-3 animate-spin" /> : null}
                                 {isDeleting ? "…" : "Да"}
                               </button>
                               <button
+                                type="button"
                                 onClick={() => setConfirmingId(null)}
                                 disabled={isDeleting}
                                 aria-label="Отменить удаление"
-                                className="min-h-[36px] min-w-[36px] text-[10px] bg-secondary px-2 py-1 rounded-lg"
+                                className="btn-confirm-no"
                               >
                                 Нет
                               </button>
                             </div>
                           ) : (
-                            // P1 #5: видно на mobile всегда (opacity-100), на desktop — group-hover
                             <button
+                              type="button"
                               onClick={() => setConfirmingId(e.id)}
                               aria-label="Удалить запись"
-                              className="size-9 rounded-lg md:opacity-0 md:group-hover:opacity-100 hover:bg-red-500/10 hover:text-red-500 grid place-items-center transition-opacity text-muted-foreground shrink-0"
+                              className="size-11 rounded-xl hover:bg-red-500/10 hover:text-red-500 grid place-items-center transition-opacity text-muted-foreground shrink-0"
                             >
                               <Trash2 className="size-3.5" />
                             </button>
-                          )}
+                          ))}
                         </div>
                       </motion.div>
                     );

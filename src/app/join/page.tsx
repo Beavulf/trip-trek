@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { Suspense, useState, useEffect, useCallback } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
 import { ArrowRight, Loader2, Plane, MapPin } from "lucide-react";
@@ -9,33 +9,39 @@ import { useAuth } from "@/hooks/use-auth";
 import { setTripId } from "@/hooks/use-trip";
 import { useQueryClient } from "@tanstack/react-query";
 
-export default function JoinPage() {
+function memberLabel(n: number) {
+  const mod10 = n % 10;
+  const mod100 = n % 100;
+  if (mod10 === 1 && mod100 !== 11) return `${n} участник`;
+  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return `${n} участника`;
+  return `${n} участников`;
+}
+
+function JoinPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const qc = useQueryClient();
   const { data: session } = useAuth();
   const [code, setCode] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [preview, setPreview] = useState<{ title: string; coverEmoji: string; coverColor: string; members: { displayName: string; emoji: string; color: string }[] } | null>(null);
+  const [looking, setLooking] = useState(false);
+  const [joining, setJoining] = useState(false);
+  const [preview, setPreview] = useState<{
+    title: string;
+    coverEmoji: string;
+    coverColor: string;
+    members: { displayName: string; emoji: string; color: string }[];
+  } | null>(null);
 
   const userId = (session?.user as { id?: string } | undefined)?.id || "";
 
-  // Автоподстановка кода из URL (?code=XXX)
-  useEffect(() => {
-    const urlCode = searchParams.get("code");
-    if (urlCode) {
-      setCode(urlCode);
-    }
-  }, [searchParams]);
-
-  const lookupTrip = async () => {
-    if (code.trim().length < 3) {
+  const lookupTrip = useCallback(async (rawCode: string) => {
+    if (rawCode.trim().length < 3) {
       toast.error("Введите код поездки");
       return;
     }
-    setLoading(true);
+    setLooking(true);
     try {
-      const r = await fetch(`/api/trips/join?code=${encodeURIComponent(code.trim())}`);
+      const r = await fetch(`/api/trips/join?code=${encodeURIComponent(rawCode.trim())}`);
       const data = await r.json();
       if (data.error) {
         toast.error(data.error);
@@ -46,23 +52,31 @@ export default function JoinPage() {
     } catch {
       toast.error("Не удалось найти поездку");
     } finally {
-      setLoading(false);
+      setLooking(false);
     }
-  };
+  }, []);
+
+  // Автоподстановка + preview из URL (?code=XXX)
+  useEffect(() => {
+    const urlCode = searchParams.get("code");
+    if (!urlCode) return;
+    setCode(urlCode);
+    void lookupTrip(urlCode);
+  }, [searchParams, lookupTrip]);
 
   const joinTrip = async () => {
     if (!userId) {
       toast.error("Войдите чтобы присоединиться");
-      router.push("/login");
+      const returnTo = `/join?code=${encodeURIComponent(code.trim())}`;
+      router.push(`/login?callbackUrl=${encodeURIComponent(returnTo)}`);
       return;
     }
-    setLoading(true);
+    setJoining(true);
     try {
       const res = await fetch(`/api/trips/join?code=${encodeURIComponent(code.trim())}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          userId,
           displayName: (session?.user as { name?: string })?.name || "Я",
           emoji: "👤",
           color: "#94a3b8",
@@ -79,7 +93,7 @@ export default function JoinPage() {
     } catch (e) {
       toast.error((e as Error).message || "Не удалось присоединиться");
     } finally {
-      setLoading(false);
+      setJoining(false);
     }
   };
 
@@ -112,20 +126,24 @@ export default function JoinPage() {
               <input
                 type="text"
                 value={code}
-                onChange={(e) => { setCode(e.target.value); setPreview(null); }}
-                onKeyDown={(e) => e.key === "Enter" && lookupTrip()}
+                onChange={(e) => {
+                  setCode(e.target.value);
+                  setPreview(null);
+                }}
+                onKeyDown={(e) => e.key === "Enter" && lookupTrip(code)}
                 placeholder="Например, CHINA2024"
                 autoFocus
-                className="w-full rounded-xl border border-input bg-background px-3 py-3 text-sm uppercase tracking-wider font-mono"
+                className="w-full rounded-xl border border-input bg-background px-3 py-3 text-base uppercase tracking-wider font-mono input-mobile"
               />
             </div>
 
             <button
-              onClick={lookupTrip}
-              disabled={loading || code.trim().length < 3}
-              className="w-full rounded-xl bg-secondary border border-border py-2.5 text-sm font-medium flex items-center justify-center gap-2 hover:bg-accent transition-colors disabled:opacity-50"
+              type="button"
+              onClick={() => lookupTrip(code)}
+              disabled={looking || joining || code.trim().length < 3}
+              className="w-full min-h-11 rounded-xl bg-secondary border border-border py-2.5 text-sm font-medium flex items-center justify-center gap-2 hover:bg-accent transition-colors disabled:opacity-50"
             >
-              {loading ? <Loader2 className="size-4 animate-spin" /> : <MapPin className="size-4" />}
+              {looking ? <Loader2 className="size-4 animate-spin" /> : <MapPin className="size-4" />}
               Найти поездку
             </button>
 
@@ -145,7 +163,9 @@ export default function JoinPage() {
                     </div>
                     <div>
                       <div className="font-bold text-sm">{preview.title}</div>
-                      <div className="text-[11px] text-muted-foreground">{preview.members.length} участника</div>
+                      <div className="text-[11px] text-muted-foreground">
+                        {memberLabel(preview.members.length)}
+                      </div>
                     </div>
                   </div>
                   <div className="flex -space-x-2">
@@ -161,11 +181,12 @@ export default function JoinPage() {
                     ))}
                   </div>
                   <button
+                    type="button"
                     onClick={joinTrip}
-                    disabled={loading}
-                    className="w-full rounded-xl bg-primary text-primary-foreground py-3 font-medium flex items-center justify-center gap-2 disabled:opacity-50"
+                    disabled={looking || joining}
+                    className="w-full min-h-11 rounded-xl bg-primary text-primary-foreground py-3 font-medium flex items-center justify-center gap-2 disabled:opacity-50"
                   >
-                    {loading ? <Loader2 className="size-4 animate-spin" /> : <ArrowRight className="size-4" />}
+                    {joining ? <Loader2 className="size-4 animate-spin" /> : <ArrowRight className="size-4" />}
                     Присоединиться
                   </button>
                 </div>
@@ -173,8 +194,9 @@ export default function JoinPage() {
             )}
 
             <button
+              type="button"
               onClick={() => router.push("/")}
-              className="w-full text-xs text-muted-foreground hover:text-foreground py-2"
+              className="w-full text-xs text-muted-foreground hover:text-foreground py-2 min-h-11"
             >
               ← Назад
             </button>
@@ -182,5 +204,19 @@ export default function JoinPage() {
         </div>
       </motion.div>
     </div>
+  );
+}
+
+export default function JoinPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-orange-500 via-rose-500 to-violet-600">
+          <Loader2 className="size-8 text-white animate-spin" />
+        </div>
+      }
+    >
+      <JoinPageContent />
+    </Suspense>
   );
 }

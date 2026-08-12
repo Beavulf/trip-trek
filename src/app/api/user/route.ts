@@ -2,11 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { requireUser } from "@/lib/api-auth";
 
-// GET /api/user?userId=... — получить профиль пользователя со статистикой
+// GET /api/user — профиль текущего пользователя (сессия)
 export async function GET(req: NextRequest) {
-  const { searchParams } = new URL(req.url);
-  const userId = searchParams.get("userId");
-  if (!userId) return NextResponse.json({ error: "userId required" }, { status: 400 });
+  const { user: authUser, response } = await requireUser(req);
+  if (response) return response;
+  const userId = authUser!.id;
 
   const user = await db.user.findUnique({
     where: { id: userId },
@@ -25,16 +25,19 @@ export async function GET(req: NextRequest) {
 
   if (!user) return NextResponse.json({ error: "user not found" }, { status: 404 });
 
-  // Статистика: считаем через связи
-  const [tripMembers, photos, expenses, journals, messages] = await Promise.all([
-    db.tripMember.count({ where: { userId } }),
+  const [photos, expenses, journals, messages, visitedPlaces] = await Promise.all([
     db.photo.count({ where: { userId } }),
     db.expense.findMany({ where: { paidById: userId }, select: { amount: true } }),
     db.journalEntry.count({ where: { userId } }),
     db.boardMessage.count({ where: { userId } }),
+    db.place.count({
+      where: {
+        status: "visited",
+        trip: { members: { some: { userId } } },
+      },
+    }),
   ]);
 
-  // Поездки с деталями
   const memberships = await db.tripMember.findMany({
     where: { userId },
     include: {
@@ -85,25 +88,22 @@ export async function GET(req: NextRequest) {
   }));
 
   const totalSpent = expenses.reduce((sum, e) => sum + e.amount, 0);
-  const visitedPlaces = trips.reduce((sum, t) => sum + t.places, 0);
 
-  // Достижения (бейджи)
-  const achievements: { emoji: string; label: string; unlocked: boolean }[] = [];
-  if (trips.length >= 1) achievements.push({ emoji: "🌏", label: "Первое путешествие", unlocked: true });
-  if (trips.length >= 3) achievements.push({ emoji: "🗺️", label: "Исследователь", unlocked: true });
-  if (trips.length >= 5) achievements.push({ emoji: "✈️", label: "Глобал-тревелер", unlocked: true });
-  if (photos >= 10) achievements.push({ emoji: "📸", label: "Фотограф", unlocked: true });
-  if (photos >= 50) achievements.push({ emoji: "🎬", label: "Папарацци", unlocked: true });
-  if (journals >= 5) achievements.push({ emoji: "📔", label: "Дневник", unlocked: true });
-  if (journals >= 20) achievements.push({ emoji: "✍️", label: "Летописец", unlocked: true });
-  if (totalSpent >= 100) achievements.push({ emoji: "💰", label: "Шопоголик", unlocked: true });
-  if (totalSpent >= 1000) achievements.push({ emoji: "💎", label: "Тяжеловес", unlocked: true });
-  if (messages >= 10) achievements.push({ emoji: "💬", label: "Болтун", unlocked: true });
-  if (messages >= 50) achievements.push({ emoji: "📢", label: "Оратор", unlocked: true });
-  if (visitedPlaces >= 10) achievements.push({ emoji: "📍", label: "Маршрут", unlocked: true });
-  if (user.plan === "premium") achievements.push({ emoji: "👑", label: "Premium", unlocked: true });
+  const unlocked: { emoji: string; label: string; unlocked: boolean }[] = [];
+  if (trips.length >= 1) unlocked.push({ emoji: "🌏", label: "Первое путешествие", unlocked: true });
+  if (trips.length >= 3) unlocked.push({ emoji: "🗺️", label: "Исследователь", unlocked: true });
+  if (trips.length >= 5) unlocked.push({ emoji: "✈️", label: "Глобал-тревелер", unlocked: true });
+  if (photos >= 10) unlocked.push({ emoji: "📸", label: "Фотограф", unlocked: true });
+  if (photos >= 50) unlocked.push({ emoji: "🎬", label: "Папарацци", unlocked: true });
+  if (journals >= 5) unlocked.push({ emoji: "📔", label: "Дневник", unlocked: true });
+  if (journals >= 20) unlocked.push({ emoji: "✍️", label: "Летописец", unlocked: true });
+  if (totalSpent >= 100) unlocked.push({ emoji: "💰", label: "Шопоголик", unlocked: true });
+  if (totalSpent >= 1000) unlocked.push({ emoji: "💎", label: "Тяжеловес", unlocked: true });
+  if (messages >= 10) unlocked.push({ emoji: "💬", label: "Болтун", unlocked: true });
+  if (messages >= 50) unlocked.push({ emoji: "📢", label: "Оратор", unlocked: true });
+  if (visitedPlaces >= 10) unlocked.push({ emoji: "📍", label: "Маршрут", unlocked: true });
+  if (user.plan === "premium") unlocked.push({ emoji: "👑", label: "Premium", unlocked: true });
 
-  // Заблокированные (не разблокированные) достижения
   const allAchievements = [
     { emoji: "🌏", label: "Первое путешествие", req: "1 поездка" },
     { emoji: "🗺️", label: "Исследователь", req: "3 поездки" },
@@ -116,13 +116,11 @@ export async function GET(req: NextRequest) {
     { emoji: "💎", label: "Тяжеловес", req: "$1000 потрачено" },
     { emoji: "💬", label: "Болтун", req: "10 сообщений" },
     { emoji: "📢", label: "Оратор", req: "50 сообщений" },
-    { emoji: "📍", label: "Маршрут", req: "10 мест" },
+    { emoji: "📍", label: "Маршрут", req: "10 посещённых мест" },
     { emoji: "👑", label: "Premium", req: "Premium подписка" },
   ];
 
   const isPremium = user.plan === "premium" && (!user.planExpiry || user.planExpiry > new Date());
-
-  // Лимиты freemium
   const ownedTrips = trips.filter((t) => t.role === "owner").length;
   const maxOwnedTrips = isPremium ? null : 1;
   const maxMembersPerTrip = isPremium ? null : 5;
@@ -147,18 +145,19 @@ export async function GET(req: NextRequest) {
     trips,
     achievements: allAchievements.map((a) => ({
       ...a,
-      unlocked: achievements.some((u) => u.label === a.label),
+      unlocked: unlocked.some((u) => u.label === a.label),
     })),
   });
 }
 
-// PATCH /api/user — обновить профиль (имя, эмодзи, цвет, avatarUrl)
+// PATCH /api/user — обновить свой профиль
 export async function PATCH(req: NextRequest) {
-  const { response } = await requireUser(req);
+  const { user: authUser, response } = await requireUser(req);
   if (response) return response;
+  const userId = authUser!.id;
+
   const body = await req.json();
-  const { userId, name, emoji, color, avatarUrl } = body;
-  if (!userId) return NextResponse.json({ error: "userId required" }, { status: 400 });
+  const { name, emoji, color, avatarUrl } = body;
 
   const data: Record<string, unknown> = {};
   if (typeof name === "string" && name.trim()) data.name = name.trim();
@@ -176,7 +175,6 @@ export async function PATCH(req: NextRequest) {
     select: { id: true, name: true, emoji: true, color: true, avatarUrl: true },
   });
 
-  // Обновим также displayName/emoji/color во всех TripMember
   if (data.name || data.emoji || data.color) {
     const memberUpdate: Record<string, unknown> = {};
     if (data.name) memberUpdate.displayName = data.name;

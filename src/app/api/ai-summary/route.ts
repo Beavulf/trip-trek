@@ -152,34 +152,170 @@ export async function POST(req: NextRequest) {
 Дай 5 практичных советов.`;
     }
 
-    // P0 #3: SDK fail → 502 error (не 200 + fake template)
+    // LLM: OpenAI-compatible (Docker) → ZAI SDK → local draft from trip data
     try {
-      const ZAIModule = await import("z-ai-web-dev-sdk");
-      const ZAI = ZAIModule.default;
-      const zai = await ZAI.create();
-      const completion = await zai.chat.completions.create({
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: userPrompt },
-        ],
-      });
-      const content = (completion as { choices?: { message?: { content?: string } }[] })?.choices?.[0]?.message?.content;
-      if (!content) {
-        // SDK вернул пустой ответ — это ошибка, не шаблон
-        return NextResponse.json({ error: "AI вернул пустой ответ" }, { status: 502 });
+      const llm = await generateWithLLM(systemPrompt, userPrompt);
+      if (llm) {
+        return NextResponse.json({ content: llm, type, generated: true, source: llmSource });
       }
-      return NextResponse.json({ content, type, generated: true });
     } catch (sdkErr) {
-      // P0 #3: не маскируем ошибку шаблоном — возвращаем 502
       const msg = sdkErr instanceof Error ? sdkErr.message : "SDK недоступен";
-      console.error("[ai-summary] SDK error:", msg);
-      return NextResponse.json(
-        { error: `Не удалось сгенерировать: ${msg}`, type },
-        { status: 502 }
-      );
+      console.error("[ai-summary] LLM error:", msg);
+      // Fall through to local draft so Docker still works without keys
     }
+
+    const currentDayNum = calculateCurrentDayNumber(trip.startDate, trip.totalDays);
+    const local = buildLocalSummary({
+      type,
+      title: trip.title,
+      destination: trip.destination,
+      totalDays: trip.totalDays,
+      memberNames,
+      placesCount: places.length,
+      visitedCount: visitedPlaces.length,
+      totalSpent,
+      budget: trip.totalBudget,
+      sym,
+      progress,
+      currentDayNum,
+      days: days.map((d) => ({ dayNumber: d.dayNumber, city: d.city, title: d.title })),
+      visitedNames: visitedPlaces.map((p) => p.name).slice(0, 12),
+      journalTexts,
+      photoCaptions,
+    });
+    return NextResponse.json({
+      content: local,
+      type,
+      generated: false,
+      source: "local",
+    });
   } catch (e) {
     console.error("AI summary error:", e);
     return NextResponse.json({ error: "AI request failed" }, { status: 500 });
   }
+}
+
+let llmSource: "openai" | "zai" | "local" = "local";
+
+async function generateWithLLM(systemPrompt: string, userPrompt: string): Promise<string | null> {
+  const openaiKey = process.env.OPENAI_API_KEY;
+  const openaiBase = (process.env.OPENAI_BASE_URL || "https://api.openai.com/v1").replace(/\/$/, "");
+  const openaiModel = process.env.OPENAI_MODEL || "gpt-4o-mini";
+
+  if (openaiKey) {
+    const r = await fetch(`${openaiBase}/chat/completions`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${openaiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: openaiModel,
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: userPrompt },
+        ],
+        temperature: 0.7,
+      }),
+    });
+    if (!r.ok) {
+      const t = await r.text().catch(() => "");
+      throw new Error(`OpenAI ${r.status}: ${t.slice(0, 200)}`);
+    }
+    const data = (await r.json()) as { choices?: { message?: { content?: string } }[] };
+    const content = data?.choices?.[0]?.message?.content;
+    if (!content) throw new Error("OpenAI вернул пустой ответ");
+    llmSource = "openai";
+    return content;
+  }
+
+  try {
+    const ZAIModule = await import("z-ai-web-dev-sdk");
+    const ZAI = ZAIModule.default;
+    const zai = await ZAI.create();
+    const completion = await zai.chat.completions.create({
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userPrompt },
+      ],
+    });
+    const content = (completion as { choices?: { message?: { content?: string } }[] })?.choices?.[0]
+      ?.message?.content;
+    if (!content) return null;
+    llmSource = "zai";
+    return content;
+  } catch {
+    return null;
+  }
+}
+
+function buildLocalSummary(input: {
+  type: string;
+  title: string;
+  destination: string;
+  totalDays: number;
+  memberNames: string[];
+  placesCount: number;
+  visitedCount: number;
+  totalSpent: number;
+  budget: number;
+  sym: string;
+  progress: number;
+  currentDayNum: number;
+  days: { dayNumber: number; city: string; title: string }[];
+  visitedNames: string[];
+  journalTexts: string[];
+  photoCaptions: string[];
+}): string {
+  const who = input.memberNames.length ? input.memberNames.join(", ") : "участники";
+  if (input.type === "day") {
+    const day =
+      input.days.find((d) => d.dayNumber === input.currentDayNum) || input.days[0];
+    return [
+      `### Итог дня (черновик)`,
+      ``,
+      `**${input.title}** · ${day ? `День ${day.dayNumber}, ${day.city}` : input.destination}`,
+      day?.title ? `План дня: *${day.title}*` : "",
+      ``,
+      `- Мест в поездке: **${input.placesCount}**, посещено **${input.visitedCount}** (${input.progress}%)`,
+      `- Расходы всего: **${input.sym}${input.totalSpent.toFixed(0)}** из ${input.sym}${input.budget}`,
+      input.visitedNames.length ? `- Уже были: ${input.visitedNames.join(", ")}` : `- Пока нет отмеченных посещений — отметь места в маршруте`,
+      input.journalTexts.length ? `- Из дневника: ${input.journalTexts[0]}` : "",
+      ``,
+      `_Сгенерировано без нейросети (нет OPENAI_API_KEY в Docker). Добавь ключ для живого AI._`,
+    ]
+      .filter(Boolean)
+      .join("\n");
+  }
+  if (input.type === "tips") {
+    return [
+      `### Советы на поездку`,
+      ``,
+      `1. Сверьте маршрут на ближайшие 1–2 дня и отметьте посещённые места.`,
+      `2. Следите за бюджетом: сейчас ${input.sym}${input.totalSpent.toFixed(0)} из ${input.sym}${input.budget}.`,
+      `3. Добавляйте фото с геометкой — они появятся на карте и в ленте.`,
+      `4. Короткая запись в дневнике вечером сохранит атмосферу дня.`,
+      `5. Сверьте долги в бюджете между: ${who}.`,
+      ``,
+      `_Черновик без нейросети. Для AI-советов задай OPENAI_API_KEY._`,
+    ].join("\n");
+  }
+  return [
+    `### Итог поездки «${input.title}»`,
+    ``,
+    `Направление: **${input.destination}**. Дней: **${input.totalDays}**. Компания: ${who}.`,
+    ``,
+    `- Мест: **${input.placesCount}**, посещено **${input.visitedCount}** (${input.progress}%)`,
+    `- Бюджет: **${input.sym}${input.totalSpent.toFixed(0)}** / ${input.sym}${input.budget}`,
+    input.days.length
+      ? `- Дни: ${input.days.map((d) => `Д${d.dayNumber} ${d.city}`).join(" · ")}`
+      : "",
+    input.visitedNames.length ? `- Запомнившиеся места: ${input.visitedNames.join(", ")}` : "",
+    input.photoCaptions.length ? `- Подписи к фото: ${input.photoCaptions.slice(0, 5).join("; ")}` : "",
+    input.journalTexts.length ? `- Дневник: ${input.journalTexts.slice(0, 2).join(" | ")}` : "",
+    ``,
+    `_Это структурированный черновик по данным поездки. Для настоящей генерации добавь \`OPENAI_API_KEY\` в docker-deploy/.env и перезапусти контейнер._`,
+  ]
+    .filter(Boolean)
+    .join("\n");
 }

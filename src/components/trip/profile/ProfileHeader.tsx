@@ -76,23 +76,19 @@ export function ProfileHeader({
             >
               {profile.avatarUrl ? (
                 <img src={profile.avatarUrl} alt={profile.name} className="w-full h-full object-cover" />
-              ) : editing ? (
-                <button
-                  onClick={() => setEmoji(emoji === profile.emoji ? emoji : emoji)}
-                  className="text-5xl"
-                >
-                  {emoji}
-                </button>
+              ) : editing && !profile.avatarUrl ? (
+                <span className="text-5xl select-none">{emoji}</span>
               ) : (
                 <span>{profile.emoji}</span>
               )}
             </div>
-            {/* Кнопка загрузки фото */}
             {editing && (
               <button
+                type="button"
                 onClick={() => avatarInputRef.current?.click()}
-                className="absolute -bottom-1 -right-1 size-8 rounded-full bg-primary text-primary-foreground grid place-items-center shadow-lg border-2 border-background"
+                className="absolute -bottom-1 -right-1 size-11 rounded-full bg-primary text-primary-foreground grid place-items-center shadow-lg border-2 border-background"
                 title="Загрузить фото"
+                aria-label="Загрузить фото"
               >
                 <Camera className="size-4" />
               </button>
@@ -144,15 +140,17 @@ export function ProfileHeader({
         ) : (
           <div className="flex gap-2 mt-3">
             <button
+              type="button"
               onClick={() => setEditing(true)}
-              className="flex-1 rounded-xl bg-secondary border border-border py-2.5 text-sm font-medium flex items-center justify-center gap-2 hover:bg-accent transition-colors"
+              className="flex-1 min-h-11 rounded-xl bg-secondary border border-border py-2.5 text-sm font-medium flex items-center justify-center gap-2 hover:bg-accent transition-colors"
             >
               <Camera className="size-4" /> Редактировать
             </button>
             {!profile.isPremium && (
               <button
+                type="button"
                 onClick={() => setPremiumOpen(true)}
-                className="flex-1 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 text-white py-2.5 text-sm font-medium flex items-center justify-center gap-2 shadow-lg shadow-amber-500/20"
+                className="flex-1 min-h-11 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 text-white py-2.5 text-sm font-medium flex items-center justify-center gap-2 shadow-lg shadow-amber-500/20"
               >
                 <Crown className="size-4" /> Premium
               </button>

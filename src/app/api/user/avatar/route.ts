@@ -5,32 +5,28 @@ import path from "path";
 import crypto from "crypto";
 import { requireUser } from "@/lib/api-auth";
 
-// POST /api/user/avatar — загрузить фото профиля
+// POST /api/user/avatar — загрузить фото профиля (только себе)
 export async function POST(req: NextRequest) {
   try {
-    const { response } = await requireUser(req);
+    const { user: authUser, response } = await requireUser(req);
     if (response) return response;
+    const userId = authUser!.id;
 
     const formData = await req.formData();
     const file = formData.get("file") as File | null;
-    const userId = formData.get("userId") as string;
 
-    if (!file || !userId) {
-      return NextResponse.json({ error: "file, userId required" }, { status: 400 });
+    if (!file) {
+      return NextResponse.json({ error: "file required" }, { status: 400 });
     }
 
-    // Валидация типа
     const allowedTypes = ["image/jpeg", "image/png", "image/webp", "image/gif", "image/heic", "image/heif"];
     if (file.type && !allowedTypes.includes(file.type)) {
       return NextResponse.json({ error: "Invalid file type" }, { status: 400 });
     }
-    // Макс 5MB
     if (file.size > 5 * 1024 * 1024) {
       return NextResponse.json({ error: "File too large (max 5MB)" }, { status: 400 });
     }
 
-    // Сжимаем через Canvas на клиенте? Нет, тут просто сохраняем
-    // В продакшене — использовать sharp для сжатия
     const ext = file.name.split(".").pop()?.toLowerCase() || "jpg";
     const fileName = `avatar-${userId}-${crypto.randomUUID()}.${ext}`;
     const uploadDir = path.join(process.cwd(), "public", "uploads", "avatars");
@@ -40,7 +36,6 @@ export async function POST(req: NextRequest) {
 
     const url = `/uploads/avatars/${fileName}`;
 
-    // Обновляем пользователя
     await db.user.update({
       where: { id: userId },
       data: { avatarUrl: url },

@@ -1,10 +1,12 @@
 "use client";
 
-import { useTrip, useExpenses, useFoods, useChecklist } from "@/hooks/use-trip";
+import { useTrip, useExpenses, useFoods, useChecklist, useCurrentTripId } from "@/hooks/use-trip";
 import { motion, AnimatePresence } from "framer-motion";
 import { Trophy, Camera, MapPin, Wallet, BookOpen, UtensilsCrossed, Flame, Plane, Star, Loader2, AlertCircle } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
+import { currencySymbol } from "@/lib/currencies";
+import { useTripStore } from "@/lib/trip-store";
 
 interface Achievement {
   id: string;
@@ -33,15 +35,6 @@ interface AchievementContext {
   checklistTotal: number;
   currency: string;
   tripStatus: string;
-}
-
-// P1 #5: currency symbol helper
-function currencySymbol(code: string): string {
-  const map: Record<string, string> = {
-    USD: "$", EUR: "€", GBP: "£", CNY: "¥", JPY: "¥", KRW: "₩",
-    RUB: "₽", KZT: "₸", THB: "฿", UAH: "₴",
-  };
-  return map[code] || "$";
 }
 
 const ACHIEVEMENTS: Achievement[] = [
@@ -141,7 +134,7 @@ const ACHIEVEMENTS: Achievement[] = [
   {
     id: "halfway",
     title: "Половина пути",
-    description: "Пройти половину дней поездки",
+    description: "Середина поездки по календарю",
     icon: Plane,
     color: "#6366f1",
     emoji: "✈️",
@@ -152,7 +145,7 @@ const ACHIEVEMENTS: Achievement[] = [
   {
     id: "finisher",
     title: "Финишер",
-    description: "Дожить до последнего дня поездки",
+    description: "Последний день поездки по календарю",
     icon: Trophy,
     color: "#eab308",
     emoji: "🏆",
@@ -174,22 +167,43 @@ const ACHIEVEMENTS: Achievement[] = [
 ];
 
 export function Achievements() {
-  const { data: trip, error: tripError } = useTrip();
-  const { data: expenses, error: expensesError } = useExpenses();
-  // P0 #1: wire useFoods — live triedFoods/totalFoods (was hardcoded 0/16)
-  const { data: foods } = useFoods();
-  // P0 #2: wire useChecklist — live checklistDone/checklistTotal (was hardcoded 0/15)
-  const { data: checklist } = useChecklist();
-  // P2 #9: mobile tap-expand
+  const tripId = useCurrentTripId();
+  const { setTripSwitcherOpen } = useTripStore();
+  const { data: trip, error: tripError, isLoading: tripLoading, refetch: refetchTrip } = useTrip();
+  const { data: expenses, error: expensesError, refetch: refetchExpenses } = useExpenses();
+  const { data: foods, isLoading: foodsLoading } = useFoods();
+  const { data: checklist, isLoading: checklistLoading } = useChecklist();
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
-  // P0 #3: empty/loading/error states (was `if (!trip) return null` — blank under shell!)
+  if (!tripId) {
+    return (
+      <div className="space-y-4 animate-fade-up pb-20">
+        <div className="rounded-3xl p-5 bg-gradient-to-br from-amber-500 via-orange-500 to-rose-500 text-white shadow-xl text-center">
+          <div className="text-5xl mb-3">🏆</div>
+          <h1 className="text-xl font-bold">Нет активной поездки</h1>
+          <p className="text-white/80 text-sm mt-1">Создай или выбери поездку</p>
+          <button
+            type="button"
+            onClick={() => setTripSwitcherOpen(true)}
+            className="mt-4 rounded-xl bg-white/20 backdrop-blur px-4 py-3 text-sm font-medium active:scale-95 min-h-11"
+          >
+            Мои поездки →
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   if (tripError) {
     return (
       <div className="py-16 text-center text-muted-foreground space-y-2">
         <div className="text-3xl">🤔</div>
         <p className="text-sm font-medium">Не удалось загрузить поездку</p>
-        <button onClick={() => window.location.reload()} className="mt-2 text-xs px-3 py-1.5 rounded-lg bg-primary text-primary-foreground">
+        <button
+          type="button"
+          onClick={() => refetchTrip()}
+          className="mt-2 text-xs px-3 py-2 rounded-lg bg-primary text-primary-foreground min-h-11"
+        >
           Обновить
         </button>
       </div>
@@ -200,13 +214,17 @@ export function Achievements() {
       <div className="py-16 text-center text-muted-foreground space-y-2">
         <AlertCircle className="size-8 mx-auto text-red-500" />
         <p className="text-sm font-medium">Не удалось загрузить данные</p>
-        <button onClick={() => window.location.reload()} className="mt-2 text-xs px-3 py-1.5 rounded-lg bg-primary text-primary-foreground">
+        <button
+          type="button"
+          onClick={() => refetchExpenses()}
+          className="mt-2 text-xs px-3 py-2 rounded-lg bg-primary text-primary-foreground min-h-11"
+        >
           Обновить
         </button>
       </div>
     );
   }
-  if (!trip) {
+  if (tripLoading || !trip || foodsLoading || checklistLoading) {
     return (
       <div className="py-20 text-center text-muted-foreground flex items-center justify-center gap-2">
         <Loader2 className="size-4 animate-spin" /> Загрузка достижений…

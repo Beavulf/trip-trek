@@ -1,12 +1,12 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { CheckCircle2, MapPin, Plus, Star, X } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import type { WishlistItem } from "./types";
 import { loadWishlist, saveWishlist, migrateLegacyWishlist } from "@/lib/wishlist";
-import { getTripId } from "@/hooks/use-trip";
+import { useCurrentTripId } from "@/hooks/use-trip";
 
 const CATS = [
   { key: "restaurant", emoji: "🍽️", label: "Ресторан" },
@@ -16,22 +16,22 @@ const CATS = [
 ];
 
 export function WishlistView() {
-  // P1 #5: wishlist изолирован по tripId.
-  // P1 #6: единый helper load/save — раньше писали в LS напрямую в 2 местах (WishlistView + NearbyCard).
-  const tripId = getTripId();
+  const tripId = useCurrentTripId();
   const [name, setName] = useState("");
   const [category, setCategory] = useState("restaurant");
   const [address, setAddress] = useState("");
   const [note, setNote] = useState("");
   const [adding, setAdding] = useState(false);
-  // Lazy initializer: мигрируем старый ключ если есть, потом грузим scoped
-  const [items, setItems] = useState<WishlistItem[]>(() => {
-    if (typeof window === "undefined") return [];
-    // P1 #5: one-time migration from legacy "triptrek-wishlist" key
+  const [items, setItems] = useState<WishlistItem[]>([]);
+
+  useEffect(() => {
+    if (!tripId) {
+      setItems([]);
+      return;
+    }
     const migrated = migrateLegacyWishlist(tripId);
-    if (migrated) return migrated;
-    return loadWishlist(tripId);
-  });
+    setItems(migrated ?? loadWishlist(tripId));
+  }, [tripId]);
 
   const save = (newItems: WishlistItem[]) => {
     setItems(newItems);
@@ -106,7 +106,7 @@ export function WishlistView() {
                 key={c.key}
                 onClick={() => setCategory(c.key)}
                 className={cn(
-                  "min-h-[36px] flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors",
+                  "min-h-11 flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors",
                   category === c.key ? "bg-primary text-primary-foreground" : "bg-muted hover:bg-accent"
                 )}
               >
@@ -129,13 +129,13 @@ export function WishlistView() {
           <div className="flex gap-2">
             <button
               onClick={() => setAdding(false)}
-              className="flex-1 min-h-[40px] rounded-lg bg-secondary py-2.5 text-sm font-medium"
+              className="flex-1 min-h-11 rounded-lg bg-secondary py-2.5 text-sm font-medium"
             >
               Отмена
             </button>
             <button
               onClick={addItem}
-              className="flex-1 min-h-[40px] rounded-lg bg-primary text-primary-foreground py-2.5 text-sm font-medium flex items-center justify-center gap-1"
+              className="flex-1 min-h-11 rounded-lg bg-primary text-primary-foreground py-2.5 text-sm font-medium flex items-center justify-center gap-1"
             >
               <Plus className="size-4" /> Добавить
             </button>
@@ -165,7 +165,7 @@ export function WishlistView() {
                   onClick={() => toggleVisited(item.id)}
                   aria-label={item.visited ? "Снять отметку «посещено»" : "Отметить как посещённое"}
                   className={cn(
-                    "size-6 rounded-full border-2 grid place-items-center shrink-0 mt-0.5",
+                    "size-11 rounded-full border-2 grid place-items-center shrink-0 mt-0.5",
                     item.visited ? "bg-green-500 border-green-500" : "border-input"
                   )}
                 >
@@ -210,7 +210,7 @@ export function WishlistView() {
                 <button
                   onClick={() => deleteItem(item.id)}
                   aria-label="Удалить из списка"
-                  className="size-7 rounded-lg hover:bg-red-500/10 hover:text-red-500 grid place-items-center text-muted-foreground shrink-0"
+                  className="size-11 rounded-lg hover:bg-red-500/10 hover:text-red-500 grid place-items-center text-muted-foreground shrink-0"
                 >
                   <X className="size-3.5" />
                 </button>

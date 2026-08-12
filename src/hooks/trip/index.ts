@@ -1,4 +1,4 @@
-export { getTripId, setTripId } from "./trip-id";
+export { getTripId, setTripId, useCurrentTripId } from "./trip-id";
 export * from "./use-trip";
 export * from "./use-days";
 export * from "./use-places";

@@ -2,10 +2,10 @@
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import type { Day } from "@/lib/types";
-import { getTripId } from "./trip-id";
+import { getTripId, useCurrentTripId } from "./trip-id";
 
 export function useDays() {
-  const tripId = getTripId();
+  const tripId = useCurrentTripId();
   return useQuery<Day[]>({
     queryKey: ["days", tripId],
     queryFn: async () => {
@@ -16,7 +16,6 @@ export function useDays() {
       return Array.isArray(data) ? data : [];
     },
     enabled: !!tripId,
-    placeholderData: [],
   });
 }
 

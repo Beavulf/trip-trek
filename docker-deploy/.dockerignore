@@ -1,12 +1,20 @@
-# Файлы которые НЕ нужно копировать в Docker образ
+# Keep image context lean (context = repo root)
 node_modules
 .next
 .git
 .env
 .env.local
+.env*.local
 *.log
 db/
 tmp/
 skills/
-docker-deploy/
 .claude/
+docs/
+agent-transcripts/
+**/*.md
+!README.md
+
+# docker-deploy: keep entrypoint for the image; skip the rest
+docker-deploy/*
+!docker-deploy/entrypoint.sh

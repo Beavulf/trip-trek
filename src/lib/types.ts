@@ -1,3 +1,5 @@
+import { KNOWN_CITIES } from "./city-coords";
+
 export interface Participant {
   id: string;
   name: string;
@@ -167,9 +169,11 @@ export const EXPENSE_CATEGORIES: Record<string, { label: string; emoji: string; 
   other: { label: "Прочее", emoji: "💸", color: "#64748b" },
 };
 
-export const CITIES = [
-  { key: "guangzhou", name: "Гуанчжоу", color: "#f97316", lat: 23.1291, lng: 113.2644 },
-  { key: "shenzhen", name: "Шэньчжэнь", color: "#06b6d4", lat: 22.5431, lng: 114.0579 },
-  { key: "hongkong", name: "Гонконг", color: "#ec4899", lat: 22.3193, lng: 114.1694 },
-  { key: "macau", name: "Макао", color: "#8b5cf6", lat: 22.1987, lng: 113.5439 },
-];
+/** All known cities (not China-only). Source: city-coords.KNOWN_CITIES */
+export const CITIES = Object.values(KNOWN_CITIES).map((c) => ({
+  key: c.key,
+  name: c.name,
+  color: c.color ?? "#0ea5e9",
+  lat: c.lat,
+  lng: c.lng,
+}));

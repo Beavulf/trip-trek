@@ -2,12 +2,12 @@
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import type { JournalEntry } from "@/lib/types";
-import { getTripId } from "./trip-id";
+import { getTripId, useCurrentTripId } from "./trip-id";
 
 // P0 #2: enabled: !!tripId, без tripId → []
 // P1 #7: throw on !ok, placeholderData: []
 export function useJournal(dayId?: string) {
-  const tripId = getTripId();
+  const tripId = useCurrentTripId();
   const params = new URLSearchParams();
   if (tripId) params.set("tripId", tripId);
   if (dayId) params.set("dayId", dayId);
@@ -21,7 +21,6 @@ export function useJournal(dayId?: string) {
       return Array.isArray(data) ? data : [];
     },
     enabled: !!tripId,
-    placeholderData: [],
   });
 }
 

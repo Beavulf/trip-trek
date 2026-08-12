@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { getTripId } from "./trip-id";
+import { getTripId, useCurrentTripId } from "./trip-id";
 
 // === Board (сообщения) ===
 export interface BoardMessage {
@@ -16,7 +16,7 @@ export interface BoardMessage {
 // P0 #2: enabled !!tripId, placeholderData: []
 // P1 #8: throw on !ok
 export function useBoard() {
-  const tripId = getTripId();
+  const tripId = useCurrentTripId();
   return useQuery<BoardMessage[]>({
     queryKey: ["board", tripId],
     queryFn: async () => {
@@ -27,7 +27,6 @@ export function useBoard() {
       return Array.isArray(data) ? data : [];
     },
     enabled: !!tripId,
-    placeholderData: [],
   });
 }
 
@@ -35,11 +34,11 @@ export function useBoard() {
 export function useAddBoardMessage() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ content, userId }: { content: string; userId?: string }) => {
+    mutationFn: async ({ content }: { content: string }) => {
       const r = await fetch("/api/board", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ content, userId, tripId: getTripId() }),
+        body: JSON.stringify({ content, tripId: getTripId() }),
       });
       const body = await r.json().catch(() => ({}));
       if (!r.ok) {

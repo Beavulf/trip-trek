@@ -9,6 +9,7 @@ import { Loader2, ChevronLeft, LogOut } from "lucide-react";
 import { toast } from "sonner";
 import { PremiumModal } from "@/components/trip/premium-modal";
 import { getTripId, setTripId } from "@/hooks/use-trip";
+import { useTripStore } from "@/lib/trip-store";
 import type { UserProfile } from "./types";
 import { ProfileHeader, PremiumActiveCard, PremiumCTA } from "./ProfileHeader";
 import { ProfileStats, FreemiumLimits } from "./ProfileStats";
@@ -40,7 +41,6 @@ export function ProfilePage() {
     try {
       const fd = new FormData();
       fd.append("file", file);
-      fd.append("userId", userId);
       const r = await fetch("/api/user/avatar", { method: "POST", body: fd });
       if (!r.ok) throw new Error("upload failed");
       toast.success("Фото обновлено 📸");
@@ -53,10 +53,10 @@ export function ProfilePage() {
     }
   };
 
-  const { data: profile, isLoading } = useQuery<UserProfile>({
+  const { data: profile, isLoading, isError, refetch } = useQuery<UserProfile>({
     queryKey: ["user-profile", userId],
     queryFn: async () => {
-      const r = await fetch(`/api/user?userId=${userId}`);
+      const r = await fetch("/api/user");
       if (!r.ok) throw new Error("fetch profile");
       return r.json();
     },
@@ -81,7 +81,7 @@ export function ProfilePage() {
       const r = await fetch("/api/user", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userId, name, emoji, color }),
+        body: JSON.stringify({ name, emoji, color }),
       });
       if (!r.ok) throw new Error("update failed");
       toast.success("Профиль обновлён ✨");
@@ -137,21 +137,35 @@ export function ProfilePage() {
         backgroundImage: "radial-gradient(circle at 30% 0%, var(--primary) 0%, transparent 50%), radial-gradient(circle at 70% 100%, #8b5cf6 0%, transparent 50%)",
       }} />
 
-      <header className="sticky top-0 z-40 glass-strong border-b border-border/80">
+      <header className="sticky top-0 z-40 glass-strong border-b border-border/80 pt-[env(safe-area-inset-top)]">
         <div className="mx-auto max-w-2xl px-4 h-14 flex items-center justify-between">
           <button
+            type="button"
             onClick={() => router.push("/")}
-            className="size-9 rounded-full grid place-items-center bg-secondary border border-border hover:bg-accent transition-colors"
+            aria-label="Назад"
+            className="size-11 rounded-full grid place-items-center bg-secondary border border-border hover:bg-accent transition-colors"
           >
             <ChevronLeft className="size-5" />
           </button>
           <h1 className="font-bold text-base">Профиль</h1>
-          <div className="w-9" />
+          <div className="w-11" />
         </div>
       </header>
 
       <main className="mx-auto max-w-2xl px-4 py-4 pb-24 space-y-4 relative">
-        {isLoading || !profile ? (
+        {isError ? (
+          <div className="py-16 text-center space-y-3">
+            <div className="text-4xl">🤔</div>
+            <p className="text-sm font-medium">Не удалось загрузить профиль</p>
+            <button
+              type="button"
+              onClick={() => refetch()}
+              className="inline-flex min-h-11 items-center justify-center rounded-xl bg-primary px-4 text-sm font-medium text-primary-foreground"
+            >
+              Повторить
+            </button>
+          </div>
+        ) : isLoading || !profile ? (
           <div className="flex items-center justify-center py-20">
             <Loader2 className="size-8 animate-spin text-muted-foreground" />
           </div>
@@ -195,7 +209,10 @@ export function ProfilePage() {
             <TripsList
               profile={profile}
               onOpenTrip={openTrip}
-              onCreateTrip={() => router.push("/")}
+              onCreateTrip={() => {
+                router.push("/");
+                useTripStore.getState().setTripSwitcherOpen(true);
+              }}
             />
 
             <ProfileSettings profile={profile} setPremiumOpen={setPremiumOpen} />

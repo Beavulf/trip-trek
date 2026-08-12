@@ -15,7 +15,7 @@ export async function GET(req: NextRequest) {
     const url = `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json&accept-language=ru&zoom=18`;
     const res = await fetch(url, {
       headers: {
-        "User-Agent": "TripTrekChina/1.0 (travel app)",
+        "User-Agent": "TripTrek/1.0 (travel app)",
       },
       next: { revalidate: 0 },
     });

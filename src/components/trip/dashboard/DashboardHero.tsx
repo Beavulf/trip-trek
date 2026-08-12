@@ -44,8 +44,8 @@ export function DashboardHero({ trip, currentDay, cityEmoji }: DashboardHeroProp
             })()}
           </div>
           {trip.settings.inviteCode && (
-            <div className="text-[10px] text-white/60 font-mono">
-              Код: {trip.settings.inviteCode.slice(0, 8)}
+            <div className="text-[10px] text-white/70 font-mono break-all max-w-[55%] text-right">
+              Код: {trip.settings.inviteCode}
             </div>
           )}
         </div>

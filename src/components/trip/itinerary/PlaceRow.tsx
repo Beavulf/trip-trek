@@ -26,12 +26,16 @@ export function PlaceRow({ place, accentColor, onOpen }: PlaceRowProps) {
   const meta = CATEGORY_META[place.category];
   const visited = place.status === "visited";
 
-  const toggle = (e: React.MouseEvent) => {
+  const toggle = async (e: React.MouseEvent) => {
     e.stopPropagation();
-    update.mutate({ id: place.id, status: visited ? "planned" : "visited" });
-    toast(visited ? "Отмечено как запланировано" : "Посещено! 🎉", {
-      description: place.name,
-    });
+    try {
+      await update.mutateAsync({ id: place.id, status: visited ? "planned" : "visited" });
+      toast(visited ? "Отмечено как запланировано" : "Посещено! 🎉", {
+        description: place.name,
+      });
+    } catch {
+      toast.error("Не удалось обновить статус");
+    }
   };
 
   return (
@@ -49,7 +53,11 @@ export function PlaceRow({ place, accentColor, onOpen }: PlaceRowProps) {
         className="absolute left-0 top-0 bottom-0 w-1"
         style={{ background: visited ? "#22c55e" : meta?.color ?? accentColor }}
       />
-      <button onClick={toggle} className="shrink-0 ml-1">
+      <button
+        onClick={toggle}
+        className="shrink-0 ml-1 size-11 grid place-items-center rounded-xl"
+        aria-label={visited ? "Отметить как запланированное" : "Отметить посещённым"}
+      >
         {visited ? (
           <CheckCircle2 className="size-6 text-green-500" />
         ) : (

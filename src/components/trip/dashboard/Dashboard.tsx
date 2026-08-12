@@ -1,8 +1,8 @@
 "use client";
 
-import { useTrip } from "@/hooks/use-trip";
+import { useTrip, useCurrentTripId } from "@/hooks/use-trip";
 import { useTripStore } from "@/lib/trip-store";
-import { CATEGORY_META, type TripSummary } from "@/lib/types";
+import { CATEGORY_META } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { CalendarDays, CheckCircle2, ChevronRight, Circle, MapPin } from "lucide-react";
 import { DashboardHero, timeLabel } from "./DashboardHero";
@@ -27,11 +27,50 @@ const CITY_EMOJI: Record<string, string> = {
 };
 
 export function Dashboard() {
-  const { data: trip, isLoading } = useTrip();
+  const tripId = useCurrentTripId();
+  const { data: trip, isLoading, isError, refetch } = useTrip();
   const { setActiveTab, setSelectedDay } = useTripStore();
 
-  if (isLoading || !trip) {
+  if (!tripId) {
+    return (
+      <div className="py-16 text-center space-y-3 animate-fade-up">
+        <div className="text-4xl">🧭</div>
+        <p className="text-sm font-medium">Нет активной поездки</p>
+        <p className="text-xs text-muted-foreground max-w-xs mx-auto">
+          Создай поездку или выбери существующую
+        </p>
+        <button
+          type="button"
+          onClick={() => useTripStore.getState().setTripSwitcherOpen(true)}
+          className="mt-2 inline-flex min-h-11 items-center justify-center rounded-xl bg-primary px-4 text-sm font-medium text-primary-foreground"
+        >
+          Мои поездки →
+        </button>
+      </div>
+    );
+  }
+
+  if (isLoading && !trip) {
     return <DashboardSkeleton />;
+  }
+
+  if (isError || !trip) {
+    return (
+      <div className="py-16 text-center space-y-3 animate-fade-up">
+        <div className="text-4xl">🤔</div>
+        <p className="text-sm font-medium">Не удалось загрузить обзор</p>
+        <p className="text-xs text-muted-foreground max-w-xs mx-auto">
+          Поездка недоступна или произошла ошибка сети.
+        </p>
+        <button
+          type="button"
+          onClick={() => refetch()}
+          className="mt-1 inline-flex items-center gap-1.5 text-xs px-3 py-2 rounded-lg bg-primary text-primary-foreground min-h-[44px]"
+        >
+          Повторить
+        </button>
+      </div>
+    );
   }
 
   const currentDay = trip.days.find((d) => d.dayNumber === trip.currentDayNumber);
@@ -88,7 +127,7 @@ export function Dashboard() {
           </button>
         </div>
 
-        <div className="flex gap-2 overflow-x-auto no-scrollbar pb-1">
+        <div className="chip-rail no-scrollbar gap-2">
           {trip.days.map((d) => {
             const visited = d.places.filter((p) => p.status === "visited").length;
             const isCurrent = d.dayNumber === trip.currentDayNumber;

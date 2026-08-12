@@ -22,12 +22,10 @@ export function PushToggle() {
 
   const checkStatus = async () => {
     try {
-      // Permission должен быть granted
       if (Notification.permission !== "granted") {
         setEnabled(false);
         return;
       }
-      // Проверяем подписку
       const reg = await navigator.serviceWorker.ready;
       const sub = await reg.pushManager.getSubscription();
       setEnabled(!!sub);
@@ -43,11 +41,14 @@ export function PushToggle() {
       });
       return;
     }
+    if (!userId) {
+      toast.error("Войдите чтобы включить уведомления");
+      return;
+    }
 
     setLoading(true);
     try {
       if (enabled) {
-        // ВЫКЛЮЧАЕМ — удаляем все подписки
         try {
           const reg = await navigator.serviceWorker.ready;
           const sub = await reg.pushManager.getSubscription();
@@ -60,17 +61,13 @@ export function PushToggle() {
         } catch (e) {
           console.warn("SW unsubscribe error:", e);
         }
-        // Также удаляем все подписки пользователя с сервера
-        await fetch(`/api/push/subscribe?userId=${userId}`, { method: "DELETE" }).catch(() => {});
+        await fetch(`/api/push/subscribe?all=1`, { method: "DELETE" }).catch(() => {});
         setEnabled(false);
         toast.success("Уведомления отключены");
       } else {
-        // ВКЛЮЧАЕМ
-        // Сначала регистрируем SW если ещё не зарегистрирован
         await navigator.serviceWorker.register("/sw.js");
         await navigator.serviceWorker.ready;
 
-        // Запрашиваем permission
         const perm = await Notification.requestPermission();
         if (perm !== "granted") {
           toast.error("Разрешение не дано", {
@@ -79,7 +76,6 @@ export function PushToggle() {
           return;
         }
 
-        // Получаем VAPID ключ
         const vapidRes = await fetch("/api/push/vapid-public-key");
         const { publicKey } = await vapidRes.json();
         if (!publicKey) {
@@ -87,21 +83,20 @@ export function PushToggle() {
           return;
         }
 
-        // Подписываемся
         const reg = await navigator.serviceWorker.ready;
         const subscription = await reg.pushManager.subscribe({
           userVisibleOnly: true,
           applicationServerKey: urlBase64ToUint8Array(publicKey) as BufferSource,
         });
 
-        await fetch("/api/push/subscribe", {
+        const r = await fetch("/api/push/subscribe", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            userId,
             subscription: subscription.toJSON(),
           }),
         });
+        if (!r.ok) throw new Error("subscribe failed");
 
         setEnabled(true);
         toast.success("Уведомления включены 🔔", {
@@ -110,8 +105,8 @@ export function PushToggle() {
       }
     } catch (e) {
       console.error("Push error:", e);
-      toast.error("Ошибка", {
-        description: "Попробуй перезагрузить страницу и снова",
+      toast.error("Не удалось изменить уведомления", {
+        description: "Попробуй ещё раз",
       });
     } finally {
       setLoading(false);
@@ -120,17 +115,22 @@ export function PushToggle() {
 
   return (
     <button
+      type="button"
       onClick={toggle}
       disabled={loading}
+      aria-label={enabled ? "Отключить уведомления" : "Включить уведомления"}
+      aria-pressed={enabled}
       className={cn(
-        "w-10 h-6 rounded-full relative transition-colors shrink-0",
+        "min-h-11 min-w-11 px-1 rounded-full relative transition-colors shrink-0 flex items-center",
         enabled ? "bg-primary" : "bg-muted"
       )}
     >
-      <div className={cn(
-        "absolute top-0.5 size-5 rounded-full bg-white shadow transition-transform",
-        enabled ? "translate-x-4" : "translate-x-0.5"
-      )} />
+      <div
+        className={cn(
+          "size-5 rounded-full bg-white shadow transition-transform mx-0.5",
+          enabled ? "translate-x-5" : "translate-x-0"
+        )}
+      />
     </button>
   );
 }

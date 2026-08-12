@@ -29,7 +29,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   const body = await req.json();
   const { amount, category, description, paidById, dayId, tripId, splitWith, excludeSelf, settlementKey } = body;
-  const { response } = await requireTripMember(req, tripId);
+  const { user, response } = await requireTripMember(req, tripId);
   if (response) return response;
   if (!category || !description || !paidById || !tripId) {
     return NextResponse.json({ error: "category, description, paidById, tripId required" }, { status: 400 });
@@ -98,6 +98,9 @@ export async function POST(req: NextRequest) {
     category: expense.category,
     description: expense.description,
     paidByName: expense.paidBy?.name || "Кто-то",
+    // author for toast text + anti double-toast on the client
+    userId: user!.id,
+    userName: user!.name || expense.paidBy?.name || "Кто-то",
   });
 
   return NextResponse.json(expense);
@@ -109,11 +112,21 @@ export async function DELETE(req: NextRequest) {
   const id = searchParams.get("id");
   if (!id) return NextResponse.json({ error: "id required" }, { status: 400 });
 
-  const expense = await db.expense.findUnique({ where: { id }, select: { tripId: true } });
+  const expense = await db.expense.findUnique({
+    where: { id },
+    select: { tripId: true, paidById: true },
+  });
   if (!expense) return NextResponse.json({ error: "not found" }, { status: 404 });
 
-  const { response } = await requireTripMember(req, expense.tripId);
+  const { user, membership, response } = await requireTripMember(req, expense.tripId);
   if (response) return response;
+
+  // Только плательщик или owner поездки
+  const isPayer = expense.paidById === user!.id;
+  const isOwner = membership!.role === "owner";
+  if (!isPayer && !isOwner) {
+    return NextResponse.json({ error: "Можно удалять только свои траты" }, { status: 403 });
+  }
 
   await db.expense.delete({ where: { id } });
 

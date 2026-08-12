@@ -2,13 +2,14 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { requireUser } from "@/lib/api-auth";
 
-// POST /api/user/upgrade — активировать Premium
+// POST /api/user/upgrade — активировать Premium себе
 export async function POST(req: NextRequest) {
-  const { response } = await requireUser(req);
+  const { user: authUser, response } = await requireUser(req);
   if (response) return response;
-  const body = await req.json();
-  const { userId, plan } = body;
-  if (!userId) return NextResponse.json({ error: "userId required" }, { status: 400 });
+  const userId = authUser!.id;
+
+  const body = await req.json().catch(() => ({}));
+  const { plan } = body;
   if (plan !== "trip" && plan !== "yearly") {
     return NextResponse.json({ error: "invalid plan type" }, { status: 400 });
   }
@@ -16,17 +17,11 @@ export async function POST(req: NextRequest) {
   const user = await db.user.findUnique({ where: { id: userId } });
   if (!user) return NextResponse.json({ error: "user not found" }, { status: 404 });
 
-  // Устанавливаем план и дату истечения
   const now = new Date();
-  let planExpiry: Date;
-
-  if (plan === "trip") {
-    // Premium на 1 поездку = 30 дней (хватит на планирование + поездку)
-    planExpiry = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
-  } else {
-    // Premium на 1 год
-    planExpiry = new Date(now.getTime() + 365 * 24 * 60 * 60 * 1000);
-  }
+  const planExpiry =
+    plan === "trip"
+      ? new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000)
+      : new Date(now.getTime() + 365 * 24 * 60 * 60 * 1000);
 
   const updated = await db.user.update({
     where: { id: userId },

@@ -18,11 +18,16 @@ export function InviteFriends({ open, onOpenChange }: { open: boolean; onOpenCha
   if (!open || typeof document === "undefined") return null;
 
   const inviteCode = trip?.settings.inviteCode || trip?.trip?.inviteCode || "";
-  const inviteUrl = typeof window !== "undefined"
-    ? `${window.location.origin}/join?code=${inviteCode}`
-    : `/join?code=${inviteCode}`;
+  const inviteUrl =
+    typeof window !== "undefined"
+      ? `${window.location.origin}/join?code=${encodeURIComponent(inviteCode)}`
+      : `/join?code=${encodeURIComponent(inviteCode)}`;
 
   const copyLink = () => {
+    if (!inviteCode) {
+      toast.error("Код ещё загружается");
+      return;
+    }
     navigator.clipboard.writeText(inviteUrl);
     setCopied(true);
     toast.success("Ссылка скопирована! 📋");
@@ -30,6 +35,10 @@ export function InviteFriends({ open, onOpenChange }: { open: boolean; onOpenCha
   };
 
   const share = async () => {
+    if (!inviteCode) {
+      toast.error("Код ещё загружается");
+      return;
+    }
     if (navigator.share) {
       try {
         await navigator.share({
@@ -78,6 +87,12 @@ export function InviteFriends({ open, onOpenChange }: { open: boolean; onOpenCha
           </div>
 
           <div className="p-5 space-y-4">
+            {!inviteCode ? (
+              <div className="py-10 text-center text-sm text-muted-foreground">
+                Загружаем код приглашения…
+              </div>
+            ) : (
+              <>
             {/* QR-код */}
             <div className="flex justify-center">
               <div className="bg-white p-4 rounded-2xl shadow-lg">
@@ -144,6 +159,8 @@ export function InviteFriends({ open, onOpenChange }: { open: boolean; onOpenCha
             <div className="text-[11px] text-muted-foreground text-center">
               Друг откроет ссылку → увидит поездку → зарегистрируется → присоединится
             </div>
+              </>
+            )}
           </div>
         </motion.div>
       </motion.div>

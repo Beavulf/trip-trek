@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { requireUser, requireTripMember } from "@/lib/api-auth";
 
-// Freemium лимиты
 const FREE_LIMITS = {
-  maxTrips: 1,        // Free: 1 поездка
-  maxMembers: 5,      // Free: 5 участников
+  maxTrips: 1,
+  maxMembers: 5,
 };
 
 const PREMIUM_LIMITS = {
@@ -12,24 +12,24 @@ const PREMIUM_LIMITS = {
   maxMembers: Infinity,
 };
 
-// GET /api/limits?userId=... — проверить лимиты пользователя
+function isUserPremium(user: { plan: string; planExpiry: Date | null }) {
+  return user.plan === "premium" && (!user.planExpiry || user.planExpiry > new Date());
+}
+
+// GET /api/limits — лимиты текущего пользователя (сессия)
 export async function GET(req: NextRequest) {
-  const { searchParams } = new URL(req.url);
-  const userId = searchParams.get("userId");
-  if (!userId) return NextResponse.json({ error: "userId required" }, { status: 400 });
+  const { user, response } = await requireUser(req);
+  if (response) return response;
 
-  const user = await db.user.findUnique({ where: { id: userId } });
-  if (!user) return NextResponse.json({ error: "User not found" }, { status: 404 });
+  const dbUser = await db.user.findUnique({ where: { id: user!.id } });
+  if (!dbUser) return NextResponse.json({ error: "User not found" }, { status: 404 });
 
-  const isPremium = user.plan === "premium" && (!user.planExpiry || user.planExpiry > new Date());
-  const limits = isPremium ? PREMIUM_LIMITS : FREE_LIMITS;
+  const premium = isUserPremium(dbUser);
+  const limits = premium ? PREMIUM_LIMITS : FREE_LIMITS;
+  const tripCount = await db.tripMember.count({ where: { userId: user!.id, role: "owner" } });
 
-  // Считаем поездки
-  const tripCount = await db.tripMember.count({ where: { userId, role: "owner" } });
-
-  // Для каждой поездки — кол-во участников
   const trips = await db.tripMember.findMany({
-    where: { userId, role: "owner" },
+    where: { userId: user!.id, role: "owner" },
     include: { trip: { select: { members: true } } },
   });
   const tripLimits = trips.map((m) => ({
@@ -40,9 +40,9 @@ export async function GET(req: NextRequest) {
   }));
 
   return NextResponse.json({
-    plan: isPremium ? "premium" : "free",
-    isPremium,
-    planExpiry: user.planExpiry,
+    plan: premium ? "premium" : "free",
+    isPremium: premium,
+    planExpiry: dbUser.planExpiry,
     limits: {
       maxTrips: limits.maxTrips === Infinity ? null : limits.maxTrips,
       maxMembers: limits.maxMembers === Infinity ? null : limits.maxMembers,
@@ -55,45 +55,51 @@ export async function GET(req: NextRequest) {
   });
 }
 
-// POST /api/limits — создать поездку (с проверкой лимитов)
+// POST /api/limits — создать поездку с проверкой лимитов (owner = session)
 export async function POST(req: NextRequest) {
+  const { user, response } = await requireUser(req);
+  if (response) return response;
+
   const body = await req.json();
-  const { userId, title, destination, startDate, totalDays, totalBudget, displayName, emoji, color } = body;
+  const { title, destination, startDate, totalDays, totalBudget, displayName, emoji, color, coverEmoji, coverColor } = body;
 
-  if (!userId || !title) {
-    return NextResponse.json({ error: "userId, title required" }, { status: 400 });
+  if (!title) {
+    return NextResponse.json({ error: "title required" }, { status: 400 });
   }
 
-  const user = await db.user.findUnique({ where: { id: userId } });
-  if (!user) return NextResponse.json({ error: "User not found" }, { status: 404 });
+  const dbUser = await db.user.findUnique({ where: { id: user!.id } });
+  if (!dbUser) return NextResponse.json({ error: "User not found" }, { status: 404 });
 
-  const isPremium = user.plan === "premium" && (!user.planExpiry || user.planExpiry > new Date());
-  const maxTrips = isPremium ? Infinity : FREE_LIMITS.maxTrips;
+  const premium = isUserPremium(dbUser);
+  const maxTrips = premium ? Infinity : FREE_LIMITS.maxTrips;
 
-  // Проверка лимита поездок
-  const tripCount = await db.tripMember.count({ where: { userId, role: "owner" } });
+  const tripCount = await db.tripMember.count({ where: { userId: user!.id, role: "owner" } });
   if (tripCount >= maxTrips) {
-    return NextResponse.json({
-      error: "Лимит поездок исчерпан",
-      upgrade: true,
-      current: tripCount,
-      max: maxTrips === Infinity ? null : maxTrips,
-    }, { status: 403 });
+    return NextResponse.json(
+      {
+        error: "Лимит поездок исчерпан",
+        upgrade: true,
+        current: tripCount,
+        max: maxTrips === Infinity ? null : maxTrips,
+      },
+      { status: 403 }
+    );
   }
 
-  // Создаём поездку
   const trip = await db.trip.create({
     data: {
       title,
-      destination: destination || "China",
+      destination: destination || "Unknown",
       startDate: new Date(startDate || Date.now()),
       totalDays: totalDays || 12,
       totalBudget: totalBudget || 1100,
+      coverEmoji: coverEmoji || emoji || "🌏",
+      coverColor: coverColor || color || "#f97316",
       members: {
         create: {
-          userId,
+          userId: user!.id,
           role: "owner",
-          displayName: displayName || "Я",
+          displayName: displayName || user!.name || "Я",
           emoji: emoji || "👤",
           color: color || "#f97316",
         },
@@ -105,29 +111,35 @@ export async function POST(req: NextRequest) {
   return NextResponse.json(trip);
 }
 
-// PATCH /api/limits — проверить лимит участников при приглашении
+// PATCH /api/limits — лимит участников при приглашении
 export async function PATCH(req: NextRequest) {
-  const body = await req.json();
-  const { tripId, inviterUserId } = body;
+  const { user, response } = await requireUser(req);
+  if (response) return response;
 
+  const body = await req.json();
+  const { tripId } = body;
   if (!tripId) return NextResponse.json({ error: "tripId required" }, { status: 400 });
 
-  // Кто приглашает — проверяем его план
-  const inviter = inviterUserId ? await db.user.findUnique({ where: { id: inviterUserId } }) : null;
-  const isPremium = inviter?.plan === "premium" && (!inviter?.planExpiry || inviter.planExpiry > new Date());
-  const maxMembers = isPremium ? Infinity : FREE_LIMITS.maxMembers;
+  const { response: memberResp } = await requireTripMember(req, tripId);
+  if (memberResp) return memberResp;
 
-  // Считаем участников
+  const dbUser = await db.user.findUnique({ where: { id: user!.id } });
+  const premium = dbUser ? isUserPremium(dbUser) : false;
+  const maxMembers = premium ? Infinity : FREE_LIMITS.maxMembers;
+
   const memberCount = await db.tripMember.count({ where: { tripId } });
 
   if (memberCount >= maxMembers) {
-    return NextResponse.json({
-      canInvite: false,
-      error: `Лимит участников (${maxMembers}) исчерпан. Перейди на Premium.`,
-      upgrade: true,
-      current: memberCount,
-      max: maxMembers === Infinity ? null : maxMembers,
-    }, { status: 403 });
+    return NextResponse.json(
+      {
+        canInvite: false,
+        error: `Лимит участников (${maxMembers}) исчерпан. Перейди на Premium.`,
+        upgrade: true,
+        current: memberCount,
+        max: maxMembers === Infinity ? null : maxMembers,
+      },
+      { status: 403 }
+    );
   }
 
   return NextResponse.json({

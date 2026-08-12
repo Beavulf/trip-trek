@@ -1,4 +1,4 @@
-// TripTrek China — Custom Next.js + Socket.io Server
+// TripTrek — Custom Next.js + Socket.io Server
 // Entry point — connects modular server components
 //
 // Architecture:
@@ -52,9 +52,9 @@ app.prepare().then(() => {
   // Setup socket event handlers
   setupSocketHandlers(io, rooms);
 
-  // Start HTTP + WS on same port
-  server.listen(port, () => {
-    console.log(`> Ready on http://localhost:${port}`);
-    console.log(`> WebSocket on ws://localhost:${port}/socket.io/`);
+  // Start HTTP + WS on all interfaces (Docker / LAN)
+  server.listen(port, "0.0.0.0", () => {
+    console.log(`> Ready on http://0.0.0.0:${port}`);
+    console.log(`> WebSocket on ws://0.0.0.0:${port}/socket.io/`);
   });
 });

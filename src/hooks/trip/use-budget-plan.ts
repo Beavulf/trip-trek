@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { getTripId } from "./trip-id";
+import { getTripId, useCurrentTripId } from "./trip-id";
 
 // === Budget Plan ===
 export interface BudgetPlan {
@@ -11,7 +11,7 @@ export interface BudgetPlan {
 }
 
 export function useBudgetPlan() {
-  const tripId = getTripId();
+  const tripId = useCurrentTripId();
   return useQuery<BudgetPlan[]>({
     queryKey: ["budget-plan", tripId],
     queryFn: async () => {
@@ -22,7 +22,6 @@ export function useBudgetPlan() {
       return Array.isArray(data) ? data : [];
     },
     enabled: !!tripId,
-    placeholderData: [],
   });
 }
 

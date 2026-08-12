@@ -1,25 +1,29 @@
 "use client";
 
 import { usePushNotifications } from "@/hooks/use-push";
-import { Bell, BellOff, Loader2, Check, X, BellRing } from "lucide-react";
+import { Bell, BellOff, Loader2, Check, BellRing } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
-import { getTripId } from "@/hooks/use-trip";
+import { useCurrentTripId } from "@/hooks/use-trip";
 
 export function PushSettings() {
-  // P0 #4: use current tripId (was "default-trip"); tripId param is for future per-trip filtering
-  const currentTripId = getTripId();
+  const currentTripId = useCurrentTripId();
   const { permission, subscribed, loading, subscribe, unsubscribe } = usePushNotifications(currentTripId);
+  const noTrip = !currentTripId;
 
   const handleToggle = async () => {
+    if (noTrip) {
+      toast.error("Сначала выберите поездку");
+      return;
+    }
     if (subscribed) {
       const result = await unsubscribe();
       if (result.success) toast.success("Уведомления отключены");
     } else {
       const result = await subscribe();
       if (result.success) {
-        toast.success("Push-уведомления включены! 🔔", {
-          description: "Будешь получать уведомления когда друзья добавляют фото, отмечают места и пишут в дневник",
+        toast.success("Подписка сохранена", {
+          description: "Полноценный push (VAPID) ещё в разработке — пока работает локально в браузере",
         });
       } else {
         toast.error("Не удалось включить уведомления", {
@@ -37,7 +41,7 @@ export function PushSettings() {
         </h2>
         <button
           onClick={handleToggle}
-          disabled={loading}
+          disabled={loading || noTrip}
           className={cn(
             "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors disabled:opacity-50",
             subscribed
@@ -59,35 +63,21 @@ export function PushSettings() {
         </button>
       </div>
 
-      <p className="text-xs text-muted-foreground leading-relaxed">
-        Получай уведомления когда друзья:
+      <p className="text-xs text-amber-700 dark:text-amber-400 leading-relaxed mb-2">
+        Черновик: подписка сохраняется, доставка по событиям поездки ещё не подключена к VAPID.
       </p>
-      <div className="mt-2 space-y-1">
-        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-          <span>📸 Добавили фото</span>
-        </div>
-        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-          <span>📍 Отметили место</span>
-        </div>
-        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-          <span>💸 Добавили трату</span>
-        </div>
-        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-          <span>📔 Написали в дневник</span>
-        </div>
-        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-          <span>💬 Написали в чат</span>
-        </div>
-      </div>
+      <p className="text-xs text-muted-foreground leading-relaxed">
+        Планируемые события: фото, места, траты, дневник, чат.
+      </p>
 
       {permission === "denied" && (
         <div className="mt-3 p-2.5 rounded-lg bg-red-500/10 border border-red-500/30 text-xs text-red-600">
-          ⚠️ Уведомления заблокированы в браузере. Разреши их в настройках сайта.
+          Уведомления заблокированы в браузере. Разреши их в настройках сайта.
         </div>
       )}
 
       <p className="text-[10px] text-muted-foreground/70 mt-3">
-        Уведомления приходят даже когда приложение закрыто. Нужен HTTPS для работы Push API.
+        Для Push API нужен HTTPS. Без поездки кнопка недоступна.
       </p>
     </div>
   );

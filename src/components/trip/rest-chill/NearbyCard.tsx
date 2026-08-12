@@ -8,11 +8,11 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import type { WishlistItem } from "./types";
 import { loadWishlist, saveWishlist, wishlistDedupeKey, migrateLegacyWishlist } from "@/lib/wishlist";
-import { getTripId } from "@/hooks/use-trip";
+import { useCurrentTripId } from "@/hooks/use-trip";
 
 export function NearbyCard({ place }: { place: NearbyPlace }) {
   const [added, setAdded] = useState(false);
-  const tripId = getTripId();
+  const tripId = useCurrentTripId();
 
   const addToWishlist = () => {
     // P1 #6: единый helper load/save (раньше писали в LS напрямую)
@@ -42,6 +42,8 @@ export function NearbyCard({ place }: { place: NearbyPlace }) {
       note: place.cuisine || undefined,
       visited: false,
       rating: null,
+      lat: place.lat,
+      lng: place.lng,
     };
     saveWishlist([newItem, ...items], tripId);
     setAdded(true);
@@ -89,7 +91,7 @@ export function NearbyCard({ place }: { place: NearbyPlace }) {
             disabled={added}
             aria-label={added ? "Уже в списке желаний" : "Добавить в список желаний"}
             className={cn(
-              "mt-2 w-full min-h-[36px] rounded-lg py-1.5 text-xs font-medium flex items-center justify-center gap-1 transition-colors",
+              "mt-2 w-full min-h-11 rounded-lg py-1.5 text-xs font-medium flex items-center justify-center gap-1 transition-colors",
               added
                 ? "bg-green-500/10 text-green-600"
                 : "bg-amber-500/10 text-amber-600 hover:bg-amber-500/20 active:scale-95"

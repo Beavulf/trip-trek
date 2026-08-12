@@ -1,18 +1,23 @@
 "use client";
 
-import { usePhotos, useDeletePhoto, useTrip } from "@/hooks/use-trip";
+import { usePhotos, useDeletePhoto, useTrip, useCurrentTripId } from "@/hooks/use-trip";
 import { useTripStore } from "@/lib/trip-store";
+import { useAuth } from "@/hooks/use-auth";
 import { motion, AnimatePresence } from "framer-motion";
-import { Images, X, Trash2, MapPin, Calendar, User, Loader2 } from "lucide-react";
+import { Images, X, Trash2, MapPin, Calendar, User } from "lucide-react";
 import { useState, useMemo, useEffect } from "react";
 import { toast } from "sonner";
-import { cn } from "@/lib/utils";
 
 export function Gallery() {
-  const { data: photos, isLoading } = usePhotos();
-  const { data: trip } = useTrip();
+  const tripId = useCurrentTripId();
+  const { data: photos, isLoading, isError, refetch } = usePhotos();
+  const { data: trip, isLoading: tripLoading, isError: tripError, refetch: refetchTrip } = useTrip();
   const del = useDeletePhoto();
-  const { setActiveTab } = useTripStore();
+  const { setTripSwitcherOpen } = useTripStore();
+  const { data: session } = useAuth();
+  const currentUserId = (session?.user as { id?: string } | undefined)?.id || "";
+  const myRole = trip?.participants?.find((p) => p.id === currentUserId)?.role;
+  const canDeleteAny = myRole === "owner";
   const [lightbox, setLightbox] = useState<number | null>(null);
   const [filterDay, setFilterDay] = useState<string>("");
   const [filterCity, setFilterCity] = useState<string>("");
@@ -27,7 +32,6 @@ export function Gallery() {
     });
   }, [photos, filterDay, filterCity]);
 
-  // Lightbox keyboard navigation + scroll lock
   useEffect(() => {
     if (lightbox === null) return;
     const handler = (e: KeyboardEvent) => {
@@ -43,26 +47,42 @@ export function Gallery() {
     };
   }, [lightbox, filtered.length]);
 
-  // Нет поездки
-  if (!isLoading && !trip) {
+  if (!tripId) {
     return (
       <div className="space-y-4 animate-fade-up pb-20">
         <div className="rounded-3xl p-5 bg-gradient-to-br from-orange-500 to-rose-500 text-white shadow-xl text-center">
           <div className="text-5xl mb-3">📸</div>
           <h1 className="text-xl font-bold">Нет активной поездки</h1>
-          <p className="text-white/80 text-sm mt-1">Создай или присоединись к поездке</p>
+          <p className="text-white/80 text-sm mt-1">Создай или выбери поездку</p>
           <button
-            onClick={() => setActiveTab("dashboard")}
-            className="mt-4 rounded-xl bg-white/20 backdrop-blur px-4 py-2.5 text-sm font-medium active:scale-95 transition-transform"
+            type="button"
+            onClick={() => setTripSwitcherOpen(true)}
+            className="mt-4 rounded-xl bg-white/20 backdrop-blur px-4 py-3 text-sm font-medium active:scale-95 min-h-11"
           >
-            На главную →
+            Мои поездки →
           </button>
         </div>
       </div>
     );
   }
 
-  if (isLoading) {
+  if (tripError || isError) {
+    return (
+      <div className="py-16 text-center text-muted-foreground space-y-2">
+        <div className="text-3xl">🤔</div>
+        <p className="text-sm font-medium">Не удалось загрузить галерею</p>
+        <button
+          type="button"
+          onClick={() => { refetch(); refetchTrip(); }}
+          className="mt-2 text-xs px-3 py-2 rounded-lg bg-primary text-primary-foreground min-h-11"
+        >
+          Обновить
+        </button>
+      </div>
+    );
+  }
+
+  if (isLoading || tripLoading) {
     return (
       <div className="space-y-3 animate-fade-up">
         <div className="flex items-center justify-between">
@@ -84,6 +104,9 @@ export function Gallery() {
 
   const hasFilters = filterDay || filterCity;
   const totalPhotos = photos?.length ?? 0;
+  const activePhoto = lightbox !== null ? filtered[lightbox] : null;
+  const canDeleteActive =
+    !!activePhoto && (canDeleteAny || activePhoto.userId === currentUserId);
 
   const handleDelete = (photoId: string) => {
     del.mutate(photoId, {
@@ -92,7 +115,7 @@ export function Gallery() {
         setLightbox(null);
         setConfirmDelete(null);
       },
-      onError: () => toast.error("Не удалось удалить"),
+      onError: (err) => toast.error(err instanceof Error ? err.message : "Не удалось удалить"),
     });
   };
 
@@ -107,12 +130,11 @@ export function Gallery() {
         </span>
       </div>
 
-      {/* Фильтры */}
-      <div className="flex gap-2 overflow-x-auto no-scrollbar">
+      <div className="chip-rail no-scrollbar gap-2">
         <select
           value={filterCity}
           onChange={(e) => setFilterCity(e.target.value)}
-          className="rounded-lg border border-input bg-card px-2 py-1.5 text-xs min-h-[36px]"
+          className="rounded-lg border border-input bg-card px-2 py-1.5 text-xs min-h-11"
         >
           <option value="">Все города</option>
           {[...new Set(trip?.days.map((d) => d.cityKey))].map((c) => (
@@ -122,7 +144,7 @@ export function Gallery() {
         <select
           value={filterDay}
           onChange={(e) => setFilterDay(e.target.value)}
-          className="rounded-lg border border-input bg-card px-2 py-1.5 text-xs min-h-[36px]"
+          className="rounded-lg border border-input bg-card px-2 py-1.5 text-xs min-h-11"
         >
           <option value="">Все дни</option>
           {trip?.days.map((d) => (
@@ -131,8 +153,9 @@ export function Gallery() {
         </select>
         {hasFilters && (
           <button
+            type="button"
             onClick={() => { setFilterDay(""); setFilterCity(""); }}
-            className="text-xs text-primary font-medium px-2 active:scale-95 transition-transform"
+            className="text-xs text-primary font-medium px-3 min-h-11 active:scale-95 transition-transform"
           >
             Сбросить
           </button>
@@ -157,8 +180,9 @@ export function Gallery() {
           </p>
           {hasFilters && (
             <button
+              type="button"
               onClick={() => { setFilterDay(""); setFilterCity(""); }}
-              className="mt-3 rounded-lg bg-secondary border border-border px-3 py-2 text-xs font-medium active:scale-95 transition-transform"
+              className="mt-3 rounded-lg bg-secondary border border-border px-3 py-2 text-xs font-medium active:scale-95 min-h-11"
             >
               Сбросить фильтры
             </button>
@@ -180,10 +204,22 @@ export function Gallery() {
                 <img
                   src={photo.thumbUrl || photo.url}
                   alt={photo.caption || "Фото"}
-                  className="w-full block"
+                  className="w-full block bg-muted min-h-[120px] object-cover"
                   loading="lazy"
+                  onError={(e) => {
+                    const el = e.currentTarget;
+                    if (photo.url && el.src !== photo.url && !el.src.endsWith(photo.url)) {
+                      el.src = photo.url;
+                      return;
+                    }
+                    el.style.display = "none";
+                    const fallback = el.nextElementSibling as HTMLElement | null;
+                    if (fallback) fallback.hidden = false;
+                  }}
                 />
-                {/* Meta всегда видна на mobile */}
+                <div hidden className="w-full min-h-[120px] grid place-items-center text-muted-foreground text-xs p-4">
+                  Не удалось показать фото
+                </div>
                 <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent flex flex-col justify-end p-2">
                   <div className="text-white text-[10px] flex items-center gap-1">
                     <MapPin className="size-2.5" /> День {photo.day?.dayNumber}
@@ -205,9 +241,8 @@ export function Gallery() {
         </div>
       )}
 
-      {/* Lightbox */}
       <AnimatePresence>
-        {lightbox !== null && filtered[lightbox] && (
+        {lightbox !== null && activePhoto && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -216,80 +251,87 @@ export function Gallery() {
             className="fixed inset-0 z-50 bg-black/90 grid place-items-center p-4"
           >
             <button
+              type="button"
               onClick={() => setLightbox(null)}
-              className="absolute top-4 right-4 size-10 min-h-[44px] rounded-full bg-white/10 text-white grid place-items-center hover:bg-white/20 active:scale-90 transition-transform z-10"
+              className="absolute top-4 right-4 size-11 rounded-full bg-white/10 text-white grid place-items-center hover:bg-white/20 active:scale-90 transition-transform z-10"
             >
               <X className="size-5" />
             </button>
 
-            {/* Навигация — крупные touch targets */}
             {lightbox > 0 && (
               <button
+                type="button"
                 onClick={(e) => { e.stopPropagation(); setLightbox(lightbox - 1); }}
-                className="absolute left-2 sm:left-4 top-1/2 -translate-y-1/2 size-12 min-h-[44px] min-w-[44px] rounded-full bg-white/10 text-white grid place-items-center hover:bg-white/20 active:scale-90 transition-transform text-2xl z-10"
+                className="absolute left-2 sm:left-4 top-1/2 -translate-y-1/2 size-12 rounded-full bg-white/10 text-white grid place-items-center hover:bg-white/20 active:scale-90 transition-transform text-2xl z-10"
               >
                 ‹
               </button>
             )}
             {lightbox < filtered.length - 1 && (
               <button
+                type="button"
                 onClick={(e) => { e.stopPropagation(); setLightbox(lightbox + 1); }}
-                className="absolute right-2 sm:right-4 top-1/2 -translate-y-1/2 size-12 min-h-[44px] min-w-[44px] rounded-full bg-white/10 text-white grid place-items-center hover:bg-white/20 active:scale-90 transition-transform text-2xl z-10"
+                className="absolute right-2 sm:right-4 top-1/2 -translate-y-1/2 size-12 rounded-full bg-white/10 text-white grid place-items-center hover:bg-white/20 active:scale-90 transition-transform text-2xl z-10"
               >
                 ›
               </button>
             )}
 
             <motion.div
-              key={filtered[lightbox].id}
+              key={activePhoto.id}
               initial={{ scale: 0.9, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               onClick={(e) => e.stopPropagation()}
               className="max-w-3xl w-full"
             >
-              <img src={filtered[lightbox].url} alt={filtered[lightbox].caption || "Фото"} className="w-full max-h-[75vh] object-contain rounded-lg" />
+              <img src={activePhoto.url} alt={activePhoto.caption || "Фото"} className="w-full max-h-[75vh] object-contain rounded-lg" />
               <div className="mt-3 flex items-center justify-between text-white/90 text-sm gap-2">
                 <div className="space-y-1 min-w-0 flex-1">
-                  {filtered[lightbox].caption && <div className="font-medium">{filtered[lightbox].caption}</div>}
+                  {activePhoto.caption && <div className="font-medium">{activePhoto.caption}</div>}
                   <div className="flex items-center gap-3 text-xs text-white/70 flex-wrap">
-                    <span className="flex items-center gap-1"><Calendar className="size-3" /> День {filtered[lightbox].day?.dayNumber}</span>
-                    <span className="flex items-center gap-1"><MapPin className="size-3" /> {filtered[lightbox].day?.city}</span>
-                    {filtered[lightbox].user && (
-                      <span className="flex items-center gap-1"><User className="size-3" /> {filtered[lightbox].user?.name}</span>
+                    <span className="flex items-center gap-1"><Calendar className="size-3" /> День {activePhoto.day?.dayNumber}</span>
+                    <span className="flex items-center gap-1"><MapPin className="size-3" /> {activePhoto.day?.city}</span>
+                    {activePhoto.user && (
+                      <span className="flex items-center gap-1"><User className="size-3" /> {activePhoto.user?.name}</span>
                     )}
                   </div>
-                  {filtered[lightbox].address && (
+                  {activePhoto.address && (
                     <div className="flex items-start gap-1 text-xs text-cyan-300/90 mt-1">
                       <MapPin className="size-3 mt-0.5 shrink-0" />
-                      <span>{filtered[lightbox].address}</span>
+                      <span>{activePhoto.address}</span>
                     </div>
                   )}
                 </div>
-                {/* Delete with confirm */}
-                {confirmDelete === filtered[lightbox].id ? (
-                  <div className="flex items-center gap-1 shrink-0">
+                {canDeleteActive && (
+                  confirmDelete === activePhoto.id ? (
+                    <div className="flex items-center gap-1 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => handleDelete(activePhoto.id)}
+                        disabled={del.isPending}
+                        className="btn-confirm-yes"
+                      >
+                        {del.isPending ? "…" : "Удалить"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setConfirmDelete(null)}
+                        className="btn-confirm-no bg-white/15 text-white"
+                      >
+                        Отмена
+                      </button>
+                    </div>
+                  ) : (
                     <button
-                      onClick={() => handleDelete(filtered[lightbox].id)}
-                      disabled={del.isPending}
-                      className="text-xs bg-red-500 text-white px-2.5 py-1.5 rounded-lg font-medium"
+                      type="button"
+                      onClick={() => setConfirmDelete(activePhoto.id)}
+                      className="btn-icon-touch rounded-full bg-white/10 hover:bg-red-500/80 text-white shrink-0"
+                      title="Удалить фото"
+                      aria-label="Удалить фото"
                     >
-                      {del.isPending ? "…" : "Удалить"}
+                      <Trash2 className="size-4" />
                     </button>
-                    <button
-                      onClick={() => setConfirmDelete(null)}
-                      className="text-xs bg-white/10 px-2.5 py-1.5 rounded-lg"
-                    >
-                      Отмена
-                    </button>
-                  </div>
-                ) : (
-                  <button
-                    onClick={() => setConfirmDelete(filtered[lightbox].id)}
-                    className="size-9 min-h-[44px] min-w-[44px] rounded-full bg-white/10 hover:bg-red-500/80 grid place-items-center shrink-0 transition-colors"
-                    title="Удалить фото"
-                  >
-                    <Trash2 className="size-4" />
-                  </button>
+                  )
                 )}
               </div>
             </motion.div>

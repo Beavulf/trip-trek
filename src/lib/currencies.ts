@@ -29,3 +29,35 @@ export const CURRENCIES = [
 ] as const;
 
 export const CURRENCY_CODES = CURRENCIES.map((c) => c.code);
+
+/** Символ валюты для UI (бюджет, награды, поиск). */
+export function currencySymbol(code: string | undefined | null): string {
+  const map: Record<string, string> = {
+    USD: "$",
+    EUR: "€",
+    GBP: "£",
+    CNY: "¥",
+    JPY: "¥",
+    KRW: "₩",
+    HKD: "HK$",
+    MOP: "MOP$",
+    THB: "฿",
+    VND: "₫",
+    SGD: "S$",
+    RUB: "₽",
+    BYN: "Br",
+    UAH: "₴",
+    KZT: "₸",
+    TRY: "₺",
+    AED: "د.إ",
+    INR: "₹",
+    IDR: "Rp",
+    MYR: "RM",
+    PHP: "₱",
+    AUD: "A$",
+    CAD: "C$",
+    CHF: "CHF",
+  };
+  return map[code || ""] || (code ? `${code} ` : "$");
+}
+

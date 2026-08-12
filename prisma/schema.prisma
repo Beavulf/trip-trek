@@ -47,7 +47,7 @@ model PushSubscription {
 model Trip {
   id          String    @id @default(cuid())
   title       String
-  destination String    @default("China")
+  destination String    @default("Unknown")
   startDate   DateTime
   endDate     DateTime?
   totalDays   Int       @default(12)

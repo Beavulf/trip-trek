@@ -1,20 +1,25 @@
 "use client";
 
 import { useFoods, useUpdateFood, useUploadFoodPhoto, useAddFood, useDeleteFood, type FoodItem } from "@/hooks/use-trip";
-import { useDays, useTrip } from "@/hooks/use-trip";
+import { useDays, useTrip, useCurrentTripId } from "@/hooks/use-trip";
 import { motion, AnimatePresence } from "framer-motion";
-import { UtensilsCrossed, Star, MapPin, DollarSign, CheckCircle2, Circle, Loader2, Camera, X, Plus, Trash2 } from "lucide-react";
+import { UtensilsCrossed, Star, MapPin, CheckCircle2, Circle, Loader2, Camera, X, Plus, Trash2 } from "lucide-react";
 import { useState, useMemo, useRef } from "react";
 import { createPortal } from "react-dom";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { useBodyScrollLock } from "@/hooks/use-body-scroll-lock";
+import { useTripStore } from "@/lib/trip-store";
+import { currencySymbol } from "@/lib/currencies";
 
 export function FoodGuide() {
+  const tripId = useCurrentTripId();
   const [cityFilter, setCityFilter] = useState<string>("all");
   const [showTried, setShowTried] = useState<"all" | "tried" | "todo">("all");
-  const { data: foods, isLoading, error: foodsError } = useFoods();
-  const { data: trip, error: tripError } = useTrip();
+  const { data: foods, isLoading, error: foodsError, refetch: refetchFoods } = useFoods();
+  const { data: trip, error: tripError, refetch: refetchTrip } = useTrip();
+  const { setTripSwitcherOpen } = useTripStore();
+  const priceSym = currencySymbol(trip?.settings?.currency || "USD");
 
   // Динамический список городов из еды (не захардкоженный China)
   const foodCities = useMemo(() => {
@@ -53,13 +58,35 @@ export function FoodGuide() {
     return Array.from(map.entries());
   }, [filtered]);
 
-  // P0 #4: error states
+  if (!tripId) {
+    return (
+      <div className="space-y-4 animate-fade-up pb-20">
+        <div className="rounded-3xl p-5 bg-gradient-to-br from-orange-500 via-rose-500 to-pink-500 text-white shadow-xl text-center">
+          <div className="text-5xl mb-3">🍜</div>
+          <h1 className="text-xl font-bold">Нет активной поездки</h1>
+          <p className="text-white/80 text-sm mt-1">Создай или выбери поездку</p>
+          <button
+            type="button"
+            onClick={() => setTripSwitcherOpen(true)}
+            className="mt-4 rounded-xl bg-white/20 backdrop-blur px-4 py-3 text-sm font-medium active:scale-95 min-h-11"
+          >
+            Мои поездки →
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   if (tripError) {
     return (
       <div className="py-16 text-center text-muted-foreground space-y-2">
         <div className="text-3xl">🤔</div>
         <p className="text-sm font-medium">Не удалось загрузить поездку</p>
-        <button onClick={() => window.location.reload()} className="mt-2 text-xs px-3 py-1.5 rounded-lg bg-primary text-primary-foreground">
+        <button
+          type="button"
+          onClick={() => refetchTrip()}
+          className="mt-2 text-xs px-3 py-2 rounded-lg bg-primary text-primary-foreground min-h-11"
+        >
           Обновить
         </button>
       </div>
@@ -70,9 +97,21 @@ export function FoodGuide() {
       <div className="py-16 text-center text-muted-foreground space-y-2">
         <div className="text-3xl">🍽️</div>
         <p className="text-sm font-medium">Не удалось загрузить блюда</p>
-        <button onClick={() => window.location.reload()} className="mt-2 text-xs px-3 py-1.5 rounded-lg bg-primary text-primary-foreground">
+        <button
+          type="button"
+          onClick={() => refetchFoods()}
+          className="mt-2 text-xs px-3 py-2 rounded-lg bg-primary text-primary-foreground min-h-11"
+        >
           Обновить
         </button>
+      </div>
+    );
+  }
+
+  if (isLoading && !foods) {
+    return (
+      <div className="flex items-center justify-center gap-2 py-20 text-muted-foreground">
+        <Loader2 className="size-5 animate-spin" /> Загрузка блюд…
       </div>
     );
   }
@@ -113,16 +152,22 @@ export function FoodGuide() {
         </div>
       </div>
 
+      {totalCount > 0 && (
+        <p className="text-[11px] text-muted-foreground px-1">
+          «Попробовано» общее для всей компании (последнее изменение побеждает)
+        </p>
+      )}
+
       {/* Фильтры */}
       <div className="space-y-2">
         {/* Города — динамически из еды */}
         {foodCities.length > 0 && (
-          <div className="flex gap-1.5 overflow-x-auto no-scrollbar">
+          <div className="chip-rail no-scrollbar">
             <button
               onClick={() => setCityFilter("all")}
               aria-label="Все города"
               className={cn(
-                "min-h-[36px] px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-colors",
+                "min-h-11 px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-colors",
                 cityFilter === "all" ? "bg-primary text-primary-foreground" : "bg-card border border-border hover:bg-accent"
               )}
             >
@@ -134,7 +179,7 @@ export function FoodGuide() {
                 onClick={() => setCityFilter(c.key)}
                 aria-label={`Фильтр: ${c.name}`}
                 className={cn(
-                  "min-h-[36px] flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-colors",
+                  "min-h-11 flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-colors",
                   cityFilter === c.key ? "text-white" : "bg-card border border-border hover:bg-accent"
                 )}
                 style={cityFilter === c.key ? { background: c.color } : undefined}
@@ -159,7 +204,7 @@ export function FoodGuide() {
               aria-label={`Фильтр: ${s.label}`}
               aria-pressed={showTried === s.key}
               className={cn(
-                "min-h-[40px] flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-medium transition-colors",
+                "min-h-11 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-medium transition-colors",
                 showTried === s.key ? "bg-primary text-primary-foreground" : "bg-card border border-border hover:bg-accent"
               )}
             >
@@ -206,7 +251,7 @@ export function FoodGuide() {
             return (
               <div key={cityKey}>
                 {/* Заголовок города — P2 #10: sticky top fix */}
-                <div className="flex items-center gap-2 mb-2 sticky top-[5.5rem] z-10 py-1 bg-background/80 backdrop-blur-sm rounded-lg">
+                <div className="flex items-center gap-2 mb-2 sticky sticky-under-shell z-10 py-1 bg-background/80 backdrop-blur-sm rounded-lg">
                   <div
                     className="size-7 rounded-lg grid place-items-center text-white text-xs font-bold"
                     style={{ background: city?.color ?? "#f97316" }}
@@ -221,7 +266,7 @@ export function FoodGuide() {
                 <div className="space-y-2">
                   <AnimatePresence>
                     {items.map((food) => (
-                      <FoodCard key={food.id} food={food} cityColor={city?.color ?? "#f97316"} />
+                      <FoodCard key={food.id} food={food} cityColor={city?.color ?? "#f97316"} priceSym={priceSym} />
                     ))}
                   </AnimatePresence>
                 </div>
@@ -234,7 +279,7 @@ export function FoodGuide() {
   );
 }
 
-function FoodCard({ food, cityColor }: { food: FoodItem; cityColor: string }) {
+function FoodCard({ food, cityColor, priceSym }: { food: FoodItem; cityColor: string; priceSym: string }) {
   const update = useUpdateFood();
   const upload = useUploadFoodPhoto();
   const del = useDeleteFood();
@@ -306,7 +351,7 @@ function FoodCard({ food, cityColor }: { food: FoodItem; cityColor: string }) {
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, x: -20 }}
       className={cn(
-        "rounded-2xl border p-3.5 transition-colors relative overflow-hidden",
+        "group rounded-2xl border p-3.5 transition-colors relative overflow-hidden",
         food.tried ? "bg-green-500/5 border-green-500/30" : "bg-card border-border"
       )}
     >
@@ -392,7 +437,7 @@ function FoodCard({ food, cityColor }: { food: FoodItem; cityColor: string }) {
             )}
             {food.price && (
               <span className="flex items-center gap-0.5 text-[11px] text-muted-foreground">
-                <DollarSign className="size-2.5" /> {food.price}
+                <span className="font-medium">{priceSym}</span> {food.price}
               </span>
             )}
           </div>
@@ -430,7 +475,7 @@ function FoodCard({ food, cityColor }: { food: FoodItem; cityColor: string }) {
                   onClick={handleDelete}
                   disabled={del.isPending}
                   aria-label="Подтвердить удаление"
-                  className="min-h-[32px] min-w-[32px] text-[10px] bg-red-500 text-white px-2 py-1 rounded-lg font-medium flex items-center gap-1"
+                  className="btn-confirm-yes"
                 >
                   {del.isPending ? <Loader2 className="size-3 animate-spin" /> : null}
                   {del.isPending ? "…" : "Да"}
@@ -439,7 +484,7 @@ function FoodCard({ food, cityColor }: { food: FoodItem; cityColor: string }) {
                   onClick={() => setConfirmingDelete(false)}
                   disabled={del.isPending}
                   aria-label="Отменить удаление"
-                  className="min-h-[32px] min-w-[32px] text-[10px] bg-secondary px-2 py-1 rounded-lg"
+                  className="btn-confirm-no"
                 >
                   Нет
                 </button>
@@ -448,7 +493,7 @@ function FoodCard({ food, cityColor }: { food: FoodItem; cityColor: string }) {
               <button
                 onClick={() => setConfirmingDelete(true)}
                 aria-label="Удалить блюдо"
-                className="size-8 rounded-lg md:opacity-0 md:group-hover:opacity-100 hover:bg-red-500/10 hover:text-red-500 grid place-items-center transition-opacity text-muted-foreground"
+                className="size-11 rounded-lg hover:bg-red-500/10 hover:text-red-500 grid place-items-center transition-opacity text-muted-foreground"
               >
                 <Trash2 className="size-3.5" />
               </button>
@@ -486,7 +531,9 @@ function FoodCard({ food, cityColor }: { food: FoodItem; cityColor: string }) {
 // Кнопка добавления нового блюда
 function AddFoodButton() {
   const { data: days } = useDays();
+  const { data: trip } = useTrip();
   const addFood = useAddFood();
+  const priceSym = currencySymbol(trip?.settings?.currency || "USD");
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
   const [nameCn, setNameCn] = useState("");
@@ -580,7 +627,7 @@ function AddFoodButton() {
                     aria-label={`Иконка ${e}`}
                     aria-pressed={emoji === e}
                     className={cn(
-                      "min-h-[36px] size-9 rounded-lg text-xl grid place-items-center transition-all",
+                      "min-h-11 size-11 rounded-lg text-xl grid place-items-center transition-all",
                       emoji === e ? "bg-primary/20 ring-2 ring-primary scale-110" : "bg-muted hover:bg-accent"
                     )}
                   >
@@ -639,7 +686,7 @@ function AddFoodButton() {
                 <input
                   value={price}
                   onChange={(e) => setPrice(e.target.value)}
-                  placeholder="$5-10"
+                  placeholder={`напр. ${priceSym}5–10`}
                   className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm"
                 />
               </div>

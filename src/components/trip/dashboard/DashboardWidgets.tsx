@@ -93,7 +93,7 @@ export function DailyTip({ trip }: { trip: TripSummary }) {
   const currentDay = trip.days.find((d) => d.dayNumber === trip.currentDayNumber);
   if (!currentDay) return null;
 
-  // Общие советы для любого города + специфичные для известных
+  // Общие советы для любого города + опциональные tips для известных (не дефолт)
   const cityTips: Record<string, string[]> = {
     guangzhou: [
       "Попробуйте уличную еду на Шансяцзю — чашеобразная лапша и манго саго!",

@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { getTripId } from "./trip-id";
+import { getTripId, useCurrentTripId } from "./trip-id";
 
 // === Phrasebook ===
 export interface Phrase {
@@ -17,7 +17,7 @@ export interface Phrase {
 // P0 #1: enabled !!tripId, placeholderData: []
 // P1 #8: throw on !ok
 export function usePhrases(category?: string, favoriteOnly?: boolean) {
-  const tripId = getTripId();
+  const tripId = useCurrentTripId();
   const params = new URLSearchParams();
   if (tripId) params.set("tripId", tripId);
   if (category && category !== "all") params.set("category", category);
@@ -32,7 +32,6 @@ export function usePhrases(category?: string, favoriteOnly?: boolean) {
       return Array.isArray(data) ? data : [];
     },
     enabled: !!tripId,
-    placeholderData: [],
   });
 }
 

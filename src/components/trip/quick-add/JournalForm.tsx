@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useTrip, useAddJournal } from "@/hooks/use-trip";
 import { Check, Loader2 } from "lucide-react";
 import { toast } from "sonner";
@@ -18,9 +18,18 @@ export function JournalForm({ userId, onDone }: JournalFormProps) {
   const addJournal = useAddJournal();
   const [content, setContent] = useState("");
   const [mood, setMood] = useState<string>("😊");
-  const [dayId, setDayId] = useState(trip?.days.find((d) => d.dayNumber === trip.currentDayNumber)?.id ?? "");
+  const [dayId, setDayId] = useState("");
 
-  // P1 #7: try/catch — не чистим textarea при fail
+  useEffect(() => {
+    if (!trip?.days?.length) return;
+    if (dayId && trip.days.some((d) => d.id === dayId)) return;
+    const today =
+      trip.days.find((d) => d.dayNumber === trip.currentDayNumber)?.id ??
+      trip.days[0]?.id ??
+      "";
+    setDayId(today);
+  }, [trip, dayId]);
+
   const submit = async () => {
     const trimmed = content.trim();
     if (!trimmed) {
@@ -29,6 +38,14 @@ export function JournalForm({ userId, onDone }: JournalFormProps) {
     }
     if (trimmed.length > 5000) {
       toast.error("Слишком длинная запись (макс 5000 символов)");
+      return;
+    }
+    if (!dayId) {
+      toast.error("Выберите день");
+      return;
+    }
+    if (!userId) {
+      toast.error("Войдите, чтобы добавить запись");
       return;
     }
     try {
@@ -46,7 +63,6 @@ export function JournalForm({ userId, onDone }: JournalFormProps) {
       toast.error("Не удалось добавить запись", {
         description: err instanceof Error ? err.message : "Попробуйте ещё раз",
       });
-      // НЕ чистим content — пусть пользователь видит что ввёл
     }
   };
 
@@ -63,11 +79,12 @@ export function JournalForm({ userId, onDone }: JournalFormProps) {
           {MOODS.map((m) => (
             <button
               key={m}
+              type="button"
               onClick={() => setMood(m)}
               aria-label={`Настроение ${m}`}
               aria-pressed={mood === m}
               className={cn(
-                "size-10 rounded-lg text-xl grid place-items-center transition-all min-h-[40px]",
+                "size-11 rounded-lg text-xl grid place-items-center transition-all min-h-11",
                 mood === m ? "bg-primary/20 ring-2 ring-primary scale-110" : "bg-muted hover:bg-accent"
               )}
             >
@@ -83,13 +100,14 @@ export function JournalForm({ userId, onDone }: JournalFormProps) {
         placeholder="Что запомнилось сегодня?"
         rows={4}
         maxLength={5000}
-        className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm resize-none"
+        className="w-full rounded-lg border border-input bg-background px-3 py-2 text-base input-mobile resize-none"
       />
 
       <button
+        type="button"
         onClick={submit}
-        disabled={addJournal.isPending}
-        className="w-full min-h-[44px] rounded-xl bg-primary text-primary-foreground py-3.5 text-base font-medium flex items-center justify-center gap-2 disabled:opacity-50"
+        disabled={addJournal.isPending || !dayId || !userId}
+        className="w-full min-h-11 rounded-xl bg-primary text-primary-foreground py-3.5 text-base font-medium flex items-center justify-center gap-2 disabled:opacity-50"
       >
         {addJournal.isPending ? <Loader2 className="size-4 animate-spin" /> : <Check className="size-4" />}
         Сохранить запись

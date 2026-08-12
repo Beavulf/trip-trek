@@ -77,7 +77,7 @@ export function ParticipantBudgetRow({ participant, spent }: ParticipantBudgetRo
             onBlur={save}
             autoFocus
             placeholder="—"
-            className="w-20 text-sm rounded-lg border border-input bg-background px-2 py-1 text-right"
+            className="w-24 min-h-11 text-base input-mobile rounded-xl border border-input bg-background px-2 py-2 text-right"
           />
         </div>
       ) : (

@@ -4,7 +4,7 @@ import { db } from "../src/lib/db";
 async function reverseGeocode(lat: number, lng: number): Promise<string> {
   const url = `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json&accept-language=ru&zoom=18`;
   const res = await fetch(url, {
-    headers: { "User-Agent": "TripTrekChina/1.0 (travel app)" },
+    headers: { "User-Agent": "TripTrek/1.0 (travel app)" },
   });
   if (!res.ok) throw new Error(`geocode failed ${res.status}`);
   const data = await res.json();

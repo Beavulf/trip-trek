@@ -1,6 +1,6 @@
 "use client";
 
-import { useDays, useUpdatePlace, getTripId } from "@/hooks/use-trip";
+import { useDays, useUpdatePlace, useTrip, useCurrentTripId } from "@/hooks/use-trip";
 import { useTripStore } from "@/lib/trip-store";
 import { CATEGORY_META, type Place, type Day, type Photo } from "@/lib/types";
 import { MapContainer, TileLayer, Marker, Popup, useMap, useMapEvents, ZoomControl } from "react-leaflet";
@@ -14,6 +14,7 @@ import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { AddPlaceSheet, type AddPlaceData } from "./add-place-sheet";
 import { CHILL_CATEGORIES, isChillCategory } from "@/lib/chill-categories";
+import { resolveCityCoords, decodeCustomKey } from "@/lib/city-coords";
 
 // Кастомный пин
 function makeIcon(category: string, status: string, emoji: string) {
@@ -47,8 +48,9 @@ function makePhotoIcon(thumbUrl: string) {
 }
 
 export default function TripMap() {
-  const { data: days, isLoading } = useDays();
-  const { mapCityFilter, setMapCityFilter, mapOnlyUnvisited, setMapOnlyUnvisited, mapOnlyChill, setMapOnlyChill } = useTripStore();
+  const tripId = useCurrentTripId();
+  const { data: days, isLoading, isError, refetch } = useDays();
+  const { mapCityFilter, setMapCityFilter, mapOnlyUnvisited, setMapOnlyUnvisited, mapOnlyChill, setMapOnlyChill, setTripSwitcherOpen, setActiveTab } = useTripStore();
   const [addMode, setAddMode] = useState(false);
   const [addData, setAddData] = useState<AddPlaceData | null>(null);
   const [addOpen, setAddOpen] = useState(false);
@@ -57,16 +59,24 @@ export default function TripMap() {
   const [showPhotos, setShowPhotos] = useState(true);
   const [onlyPhotos, setOnlyPhotos] = useState(false);
   const [fullscreenPhoto, setFullscreenPhoto] = useState<Photo | null>(null);
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const { resolvedTheme } = useTheme();
 
+  const activeFilterCount =
+    (mapCityFilter ? 1 : 0) +
+    (mapOnlyUnvisited ? 1 : 0) +
+    (mapOnlyChill ? 1 : 0) +
+    (onlyPhotos ? 1 : 0);
+
   // Фото с геолокацией для карты (только текущая поездка)
-  const tripId = getTripId();
   const { data: geoPhotos } = useQuery<Photo[]>({
     queryKey: ["photos-geo", tripId],
     queryFn: async () => {
       if (!tripId) return [];
       const r = await fetch(`/api/photos/geo?tripId=${tripId}`);
-      return r.json();
+      if (!r.ok) throw new Error("fetch photos-geo failed");
+      const data = await r.json();
+      return Array.isArray(data) ? data : [];
     },
     enabled: !!tripId,
   });
@@ -108,43 +118,70 @@ export default function TripMap() {
     return res;
   }, [allPlaces, mapCityFilter, mapOnlyUnvisited, mapOnlyChill]);
 
-  // Центр карты: из выбранного города (safe fallback), или из мест поездки
-  const cityCoords: Record<string, { lat: number; lng: number }> = {
-    guangzhou: { lat: 23.1291, lng: 113.2644 },
-    shenzhen: { lat: 22.5431, lng: 114.0579 },
-    hongkong: { lat: 22.3193, lng: 114.1694 },
-    macau: { lat: 22.1987, lng: 113.5439 },
-    tokyo: { lat: 35.6762, lng: 139.6503 },
-    paris: { lat: 48.8566, lng: 2.3522 },
-    bangkok: { lat: 13.7563, lng: 100.5018 },
-    phuket: { lat: 7.8804, lng: 98.3923 },
-  };
+  const { data: tripMeta } = useTrip();
 
-  // Safe center — не крашится на неизвестном cityKey
+  // Центр карты: known city / custom key / places / first day — без China-default
   const center = useMemo(() => {
-    if (mapCityFilter && cityCoords[mapCityFilter]) {
-      return cityCoords[mapCityFilter];
+    if (mapCityFilter) {
+      const known = resolveCityCoords(mapCityFilter);
+      if (known) return { lat: known.lat, lng: known.lng };
+      const custom = decodeCustomKey(mapCityFilter);
+      if (custom) return { lat: custom.lat, lng: custom.lng };
     }
-    // Из мест поездки
     if (allPlaces.length > 0) {
       return { lat: allPlaces[0].place.lat, lng: allPlaces[0].place.lng };
     }
-    // Из первого дня
     if (days && days.length > 0) {
       const d = days[0];
-      if (d.cityKey && cityCoords[d.cityKey]) return cityCoords[d.cityKey];
-      if (d.cityKey?.startsWith("custom-")) {
-        const parts = d.cityKey.split("-");
-        const lat = parseFloat(parts[1]);
-        const lng = parseFloat(parts[2]);
-        if (!isNaN(lat) && !isNaN(lng)) return { lat, lng };
-      }
+      const known = resolveCityCoords(d.cityKey);
+      if (known) return { lat: known.lat, lng: known.lng };
+      const custom = decodeCustomKey(d.cityKey);
+      if (custom) return { lat: custom.lat, lng: custom.lng };
+      const place = d.places?.find((p) => p.lat && p.lng);
+      if (place) return { lat: place.lat, lng: place.lng };
     }
-    // Нейтральный fallback
-    return { lat: 0, lng: 0 };
+    return { lat: 20, lng: 0 }; // нейтральный мировой вид, не Гуанчжоу
   }, [mapCityFilter, allPlaces, days]);
 
+  const isChinaTrip = /china|китай|guangzhou|shenzhen|hongkong|macau|гуанчжоу|шэньчжэнь|гонконг|макао/i.test(
+    `${tripMeta?.settings?.destination ?? ""} ${tripMeta?.settings?.title ?? ""} ${(days || []).map((d) => d.city).join(" ")}`
+  );
   // Empty state: нет поездки или нет дней
+  if (!tripId) {
+    return (
+      <div className="space-y-4 animate-fade-up pb-20">
+        <div className="rounded-3xl p-5 bg-gradient-to-br from-orange-500 to-rose-500 text-white shadow-xl text-center">
+          <div className="text-5xl mb-3">🗺️</div>
+          <h1 className="text-xl font-bold">Нет активной поездки</h1>
+          <p className="text-white/80 text-sm mt-1">Выбери поездку, чтобы открыть карту</p>
+          <button
+            type="button"
+            onClick={() => setTripSwitcherOpen(true)}
+            className="mt-4 rounded-xl bg-white/20 backdrop-blur px-4 py-3 text-sm font-medium active:scale-95 min-h-11"
+          >
+            Мои поездки →
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (isError) {
+    return (
+      <div className="py-16 text-center text-muted-foreground space-y-2">
+        <div className="text-3xl">🤔</div>
+        <p className="text-sm font-medium">Не удалось загрузить карту</p>
+        <button
+          type="button"
+          onClick={() => refetch()}
+          className="mt-2 text-xs px-3 py-2 rounded-lg bg-primary text-primary-foreground min-h-11"
+        >
+          Обновить
+        </button>
+      </div>
+    );
+  }
+
   if (!isLoading && (!days || days.length === 0)) {
     return (
       <div className="space-y-4 animate-fade-up pb-20">
@@ -152,11 +189,12 @@ export default function TripMap() {
           <div className="text-5xl mb-3">🗺️</div>
           <h1 className="text-xl font-bold">Карта пуста</h1>
           <p className="text-white/80 text-sm mt-1">
-            {days?.length === 0 ? "Добавьте дни в маршрут, чтобы увидеть места на карте" : "Нет активной поездки"}
+            Добавьте дни в маршрут, чтобы увидеть места на карте
           </p>
           <button
-            onClick={() => useTripStore.getState().setActiveTab("itinerary")}
-            className="mt-4 rounded-xl bg-white/20 backdrop-blur px-4 py-2.5 text-sm font-medium active:scale-95 transition-transform"
+            type="button"
+            onClick={() => setActiveTab("itinerary")}
+            className="mt-4 rounded-xl bg-white/20 backdrop-blur px-4 py-3 text-sm font-medium active:scale-95 min-h-11"
           >
             К маршруту →
           </button>
@@ -169,9 +207,10 @@ export default function TripMap() {
 
   const handleMapClick = (lat: number, lng: number) => {
     if (!addMode) return;
+    // День выбираем в sheet (не подставляем days[0] молча)
     const dayForPlace = mapCityFilter
       ? days?.find((d) => d.cityKey === mapCityFilter)?.id
-      : days?.[0]?.id;
+      : undefined;
     setAddData({ lat, lng, dayId: dayForPlace });
     setAddOpen(true);
     setAddMode(false);
@@ -193,90 +232,107 @@ export default function TripMap() {
         </div>
       )}
 
-      {/* Фильтры */}
+      {/* Фильтры: на телефоне — компактная панель + sheet */}
       <div className="rounded-2xl bg-card border border-border p-3 space-y-2">
-        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-          <Filter className="size-3.5" /> Фильтры
-        </div>
-        <div className="flex gap-1.5 flex-wrap">
+        <div className="flex items-center gap-2">
           <button
-            onClick={() => setMapCityFilter(null)}
-            className={cn(
-              "px-3 py-1 rounded-full text-xs font-medium transition-colors",
-              !mapCityFilter ? "bg-primary text-primary-foreground" : "bg-secondary hover:bg-accent"
-            )}
+            type="button"
+            onClick={() => setFiltersOpen((v) => !v)}
+            className="sm:hidden flex items-center gap-2 min-h-11 px-3 rounded-xl bg-secondary text-sm font-medium flex-1"
           >
-            Все города
-          </button>
-          {/* Чипы городов из дней поездки, не из хардкода CITIES */}
-          {(days || []).reduce((acc, d) => {
-            if (!acc.find((c) => c.cityKey === d.cityKey)) acc.push(d);
-            return acc;
-          }, [] as Day[]).map((d) => (
-            <button
-              key={d.cityKey}
-              onClick={() => setMapCityFilter(d.cityKey)}
-              className={cn(
-                "flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium transition-colors",
-                mapCityFilter === d.cityKey ? "text-white" : "bg-secondary hover:bg-accent"
-              )}
-              style={mapCityFilter === d.cityKey ? { background: d.accentColor ?? "#f97316" } : undefined}
-            >
-              <span className="size-1.5 rounded-full" style={{ background: d.accentColor ?? "#f97316" }} />
-              {d.city}
-            </button>
-          ))}
-        </div>
-
-        <div className="flex gap-2 flex-wrap">
-          <button
-            onClick={() => setMapOnlyUnvisited(!mapOnlyUnvisited)}
-            className={cn(
-              "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors",
-              mapOnlyUnvisited ? "bg-primary/10 text-primary border border-primary/30" : "bg-secondary hover:bg-accent"
+            <Filter className="size-4" />
+            Фильтры
+            {activeFilterCount > 0 && (
+              <span className="ml-auto min-w-5 h-5 px-1.5 rounded-full bg-primary text-primary-foreground text-[10px] font-bold grid place-items-center">
+                {activeFilterCount}
+              </span>
             )}
-          >
-            <Circle className="size-3" /> Непосещённые
           </button>
-          <button
-            onClick={() => setMapOnlyChill(!mapOnlyChill)}
-            className={cn(
-              "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors",
-              mapOnlyChill ? "bg-amber-500/10 text-amber-600 border border-amber-500/30" : "bg-secondary hover:bg-accent"
-            )}
-          >
-            <Coffee className="size-3" /> Кафе и бары
-          </button>
-          <button
-            onClick={() => setShowPhotos((v) => !v)}
-            className={cn(
-              "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors",
-              showPhotos ? "bg-cyan-500/10 text-cyan-600 border border-cyan-500/30" : "bg-secondary hover:bg-accent"
-            )}
-          >
-            <Camera className="size-3" /> Фото {geoPhotos?.length ? `(${geoPhotos.length})` : ""}
-          </button>
-          {showPhotos && geoPhotos && geoPhotos.length > 0 && (
-            <button
-              onClick={() => setOnlyPhotos((v) => !v)}
-              className={cn(
-                "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors",
-                onlyPhotos ? "bg-cyan-500 text-white" : "bg-secondary hover:bg-accent text-muted-foreground"
-              )}
-            >
-              {onlyPhotos ? "📍 Только фото" : "Только фото"}
-            </button>
-          )}
+          <div className="hidden sm:flex items-center gap-2 text-xs text-muted-foreground flex-1">
+            <Filter className="size-3.5" /> Фильтры
+          </div>
           <button
             onClick={() => setAddMode(!addMode)}
             className={cn(
-              "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ml-auto",
+              "flex items-center gap-1.5 min-h-11 px-3 rounded-xl text-sm font-medium transition-colors shrink-0",
               addMode ? "bg-primary text-primary-foreground" : "bg-secondary hover:bg-accent"
             )}
           >
-            {addMode ? <Hand className="size-3" /> : <Plus className="size-3" />}
-            {addMode ? "Тапайте по карте" : "Добавить место"}
+            {addMode ? <Hand className="size-4" /> : <Plus className="size-4" />}
+            <span className="hidden xs:inline sm:inline">{addMode ? "Тапайте" : "Место"}</span>
           </button>
+        </div>
+
+        <div className={cn("space-y-2", filtersOpen ? "block" : "hidden sm:block")}>
+          <div className="flex gap-1.5 flex-wrap">
+            <button
+              onClick={() => setMapCityFilter(null)}
+              className={cn(
+                "min-h-11 px-3 rounded-full text-sm font-medium transition-colors",
+                !mapCityFilter ? "bg-primary text-primary-foreground" : "bg-secondary hover:bg-accent"
+              )}
+            >
+              Все города
+            </button>
+            {(days || []).reduce((acc, d) => {
+              if (!acc.find((c) => c.cityKey === d.cityKey)) acc.push(d);
+              return acc;
+            }, [] as Day[]).map((d) => (
+              <button
+                key={d.cityKey}
+                onClick={() => setMapCityFilter(d.cityKey)}
+                className={cn(
+                  "flex items-center gap-1.5 min-h-11 px-3 rounded-full text-sm font-medium transition-colors",
+                  mapCityFilter === d.cityKey ? "text-white" : "bg-secondary hover:bg-accent"
+                )}
+                style={mapCityFilter === d.cityKey ? { background: d.accentColor ?? "#f97316" } : undefined}
+              >
+                <span className="size-1.5 rounded-full" style={{ background: d.accentColor ?? "#f97316" }} />
+                {d.city}
+              </button>
+            ))}
+          </div>
+
+          <div className="flex gap-2 flex-wrap">
+            <button
+              onClick={() => setMapOnlyUnvisited(!mapOnlyUnvisited)}
+              className={cn(
+                "flex items-center gap-1.5 min-h-11 px-3 rounded-xl text-sm font-medium transition-colors",
+                mapOnlyUnvisited ? "bg-primary/10 text-primary border border-primary/30" : "bg-secondary hover:bg-accent"
+              )}
+            >
+              <Circle className="size-3.5" /> Непосещённые
+            </button>
+            <button
+              onClick={() => setMapOnlyChill(!mapOnlyChill)}
+              className={cn(
+                "flex items-center gap-1.5 min-h-11 px-3 rounded-xl text-sm font-medium transition-colors",
+                mapOnlyChill ? "bg-amber-500/10 text-amber-600 border border-amber-500/30" : "bg-secondary hover:bg-accent"
+              )}
+            >
+              <Coffee className="size-3.5" /> Кафе и бары
+            </button>
+            <button
+              onClick={() => setShowPhotos((v) => !v)}
+              className={cn(
+                "flex items-center gap-1.5 min-h-11 px-3 rounded-xl text-sm font-medium transition-colors",
+                showPhotos ? "bg-cyan-500/10 text-cyan-600 border border-cyan-500/30" : "bg-secondary hover:bg-accent"
+              )}
+            >
+              <Camera className="size-3.5" /> Фото {geoPhotos?.length ? `(${geoPhotos.length})` : ""}
+            </button>
+            {showPhotos && geoPhotos && geoPhotos.length > 0 && (
+              <button
+                onClick={() => setOnlyPhotos((v) => !v)}
+                className={cn(
+                  "flex items-center gap-1.5 min-h-11 px-3 rounded-xl text-sm font-medium transition-colors",
+                  onlyPhotos ? "bg-cyan-500 text-white" : "bg-secondary hover:bg-accent text-muted-foreground"
+                )}
+              >
+                {onlyPhotos ? "Только фото" : "Только фото"}
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
@@ -293,7 +349,7 @@ export default function TripMap() {
 
       {/* Карта */}
       <div className={cn(
-        "rounded-2xl overflow-hidden border h-[55vh] min-h-[380px] relative",
+        "rounded-2xl overflow-hidden border h-[min(55dvh,480px)] min-h-[240px] sm:min-h-[380px] relative",
         addMode ? "border-primary ring-2 ring-primary/30" : "border-border"
       )}>
         <MapContainer
@@ -397,10 +453,12 @@ export default function TripMap() {
         </div>
       </div>
 
-      {/* Инфо о картах */}
+      {/* Инфо о картах — China tips только для China-поездок */}
       <p className="text-[10px] text-muted-foreground px-1 leading-relaxed">
-        🗺️ Карты: OpenStreetMap (CARTO/Esri) — работают в Китае без VPN. Все метки сохранены.
-        Для лучшей навигации в Китае рекомендуем Amap (高德地图) или Baidu Maps как отдельное приложение.
+        🗺️ Карты: OpenStreetMap (CARTO/Esri).
+        {isChinaTrip
+          ? " В Китае OSM может требовать VPN; для навигации удобны Amap или Baidu Maps."
+          : " Метки сохраняются в поездке; для навигации откройте место во внешнем приложении."}
       </p>
 
       <AddPlaceSheet open={addOpen} onOpenChange={setAddOpen} initial={addData} />
@@ -464,6 +522,17 @@ function PlacePopup({ place, day }: { place: Place; day: Day }) {
   const meta = CATEGORY_META[place.category];
   const visited = place.status === "visited";
 
+  const toggleVisited = async () => {
+    try {
+      await update.mutateAsync({ id: place.id, status: visited ? "planned" : "visited" });
+      toast.success(visited ? "Снято" : "Посещено 🎉", { description: place.name });
+    } catch (err) {
+      toast.error("Не удалось обновить", {
+        description: err instanceof Error ? err.message : "Попробуйте ещё раз",
+      });
+    }
+  };
+
   return (
     <div className="p-1 w-52 font-sans">
       <div className="flex items-center gap-2 mb-1">
@@ -488,17 +557,16 @@ function PlacePopup({ place, day }: { place: Place; day: Day }) {
         ) : null}
       </div>
       <button
-        onClick={() => {
-          update.mutate({ id: place.id, status: visited ? "planned" : "visited" });
-          toast(visited ? "Снято" : "Посещено 🎉", { description: place.name });
-        }}
+        type="button"
+        onClick={toggleVisited}
+        disabled={update.isPending}
         className={cn(
-          "mt-2 w-full rounded-lg py-1.5 text-xs font-medium flex items-center justify-center gap-1 transition-colors",
+          "mt-2 w-full min-h-11 rounded-lg py-2 text-xs font-medium flex items-center justify-center gap-1 transition-colors disabled:opacity-50",
           visited ? "bg-green-500/10 text-green-600" : "bg-primary text-primary-foreground"
         )}
       >
         {visited ? <CheckCircle2 className="size-3" /> : <Circle className="size-3" />}
-        {visited ? "Посещено" : "Отметить"}
+        {update.isPending ? "…" : visited ? "Посещено" : "Отметить"}
       </button>
     </div>
   );

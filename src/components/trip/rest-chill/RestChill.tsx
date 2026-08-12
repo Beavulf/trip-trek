@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { useDays, useTrip } from "@/hooks/use-trip";
+import { useDays, useTrip, useCurrentTripId } from "@/hooks/use-trip";
 import { Coffee, ListPlus, Locate, Search, Star, Loader2, MapPin } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { CHILL_CATEGORIES } from "@/lib/chill-categories";
@@ -14,21 +14,21 @@ import { useTripStore } from "@/lib/trip-store";
 type View = "route" | "wishlist" | "nearby";
 
 export function RestChill() {
-  const { data: days, isLoading: daysLoading, error: daysError } = useDays();
+  const tripId = useCurrentTripId();
+  const { data: days, isLoading: daysLoading, error: daysError, refetch: refetchDays } = useDays();
   const { data: trip } = useTrip();
   const currency = trip?.settings.currency ?? "USD";
   const [filter, setFilter] = useState<string>("all");
   const [query, setQuery] = useState("");
   const [view, setView] = useState<View>("route");
   const [nearbyCat, setNearbyCat] = useState<string>("all");
-  const { setSelectedDay, setActiveTab } = useTripStore();
+  const { setSelectedDay, setActiveTab, setTripSwitcherOpen } = useTripStore();
 
-  // Wishlist count для hero-метрики (P2 #17)
   const wishlistCount = useMemo(() => {
-    if (typeof window === "undefined") return 0;
-    migrateLegacyWishlist(trip?.settings.tripId);
-    return loadWishlist(trip?.settings.tripId).length;
-  }, [trip?.settings.tripId, view]);
+    if (typeof window === "undefined" || !tripId) return 0;
+    migrateLegacyWishlist(tripId);
+    return loadWishlist(tripId).length;
+  }, [tripId, view]);
 
   const places = useMemo(() => {
     if (!days) return [];
@@ -47,15 +47,34 @@ export function RestChill() {
     });
   }, [places, filter, query]);
 
-  // P0 #1: нет trip / ошибка → empty/error, не default-trip
+  if (!tripId) {
+    return (
+      <div className="space-y-4 animate-fade-up pb-20">
+        <div className="rounded-3xl p-5 bg-gradient-to-br from-amber-500 to-orange-600 text-white shadow-xl text-center">
+          <div className="text-5xl mb-3">☕</div>
+          <h1 className="text-xl font-bold">Нет активной поездки</h1>
+          <p className="text-white/80 text-sm mt-1">Создай или выбери поездку</p>
+          <button
+            type="button"
+            onClick={() => setTripSwitcherOpen(true)}
+            className="mt-4 rounded-xl bg-white/20 backdrop-blur px-4 py-3 text-sm font-medium active:scale-95 min-h-11"
+          >
+            Мои поездки →
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   if (daysError) {
     return (
       <div className="py-16 text-center text-muted-foreground space-y-2">
         <div className="text-3xl">🤔</div>
         <p className="text-sm font-medium">Не удалось загрузить маршрут</p>
         <button
-          onClick={() => window.location.reload()}
-          className="mt-2 text-xs px-3 py-1.5 rounded-lg bg-primary text-primary-foreground"
+          type="button"
+          onClick={() => refetchDays()}
+          className="mt-2 text-xs px-3 py-2 rounded-lg bg-primary text-primary-foreground min-h-11"
         >
           Обновить
         </button>
@@ -152,7 +171,7 @@ export function RestChill() {
                 className="w-full rounded-xl border border-input bg-card pl-9 pr-3 py-2.5 text-sm"
               />
             </div>
-            <div className="flex gap-1.5 overflow-x-auto no-scrollbar">
+            <div className="chip-rail no-scrollbar">
               {[
                 { key: "all", label: "Все", emoji: "✨" },
                 { key: "cafe", label: "Кафе", emoji: "☕" },
@@ -163,7 +182,7 @@ export function RestChill() {
                   key={f.key}
                   onClick={() => setFilter(f.key)}
                   className={cn(
-                    "min-h-[36px] flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-colors",
+                    "min-h-11 flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-colors",
                     filter === f.key ? "bg-primary text-primary-foreground" : "bg-card border border-border hover:bg-accent"
                   )}
                 >

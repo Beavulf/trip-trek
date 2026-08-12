@@ -26,10 +26,10 @@ interface TripState {
   setCurrentUserId: (id: string | null) => void;
   selectedDay: number | null;
   setSelectedDay: (d: number | null) => void;
-  // Мульти-поездки
   currentTripId: string;
   setCurrentTripId: (id: string) => void;
-  // фильтр карты
+  tripSwitcherOpen: boolean;
+  setTripSwitcherOpen: (v: boolean) => void;
   mapCityFilter: string | null;
   setMapCityFilter: (c: string | null) => void;
   mapOnlyUnvisited: boolean;
@@ -48,7 +48,16 @@ export const useTripStore = create<TripState>()(
       selectedDay: null,
       setSelectedDay: (d) => set({ selectedDay: d }),
       currentTripId: "",
-      setCurrentTripId: (id) => set({ currentTripId: id }),
+      setCurrentTripId: (id) =>
+        set({
+          currentTripId: id,
+          mapCityFilter: null,
+          mapOnlyUnvisited: false,
+          mapOnlyChill: false,
+          selectedDay: null,
+        }),
+      tripSwitcherOpen: false,
+      setTripSwitcherOpen: (v) => set({ tripSwitcherOpen: v }),
       mapCityFilter: null,
       setMapCityFilter: (c) => set({ mapCityFilter: c }),
       mapOnlyUnvisited: false,
@@ -56,6 +65,17 @@ export const useTripStore = create<TripState>()(
       mapOnlyChill: false,
       setMapOnlyChill: (v) => set({ mapOnlyChill: v }),
     }),
-    { name: "triptrek-store" }
+    {
+      name: "triptrek-store",
+      partialize: (s) => ({
+        activeTab: s.activeTab,
+        currentUserId: s.currentUserId,
+        selectedDay: s.selectedDay,
+        currentTripId: s.currentTripId,
+        mapCityFilter: s.mapCityFilter,
+        mapOnlyUnvisited: s.mapOnlyUnvisited,
+        mapOnlyChill: s.mapOnlyChill,
+      }),
+    }
   )
 );

@@ -7,10 +7,12 @@ import { Loader2, Plane, Users, Calendar, Check, X } from "lucide-react";
 import { toast } from "sonner";
 import { setTripId } from "@/hooks/use-trip";
 import { useAuth as useSession } from "@/hooks/use-auth";
+import { useQueryClient } from "@tanstack/react-query";
 
 export default function JoinPage({ params }: { params: Promise<{ code: string }> }) {
   const router = useRouter();
   const { data: session, status } = useSession();
+  const qc = useQueryClient();
   const [code, setCode] = useState("");
   const [trip, setTrip] = useState<JoinTrip | null>(null);
   const [loading, setLoading] = useState(true);
@@ -38,7 +40,7 @@ export default function JoinPage({ params }: { params: Promise<{ code: string }>
   const join = async () => {
     if (!(session?.user as { id?: string } | undefined)?.id) {
       toast.error("Войдите чтобы присоединиться");
-      router.push("/login");
+      router.push(`/login?callbackUrl=${encodeURIComponent(`/join/${code}`)}`);
       return;
     }
 
@@ -48,7 +50,6 @@ export default function JoinPage({ params }: { params: Promise<{ code: string }>
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          userId: (session!.user as { id: string }).id,
           displayName: session!.user?.name || "Я",
           emoji: "👤",
           color: "#94a3b8",
@@ -59,6 +60,8 @@ export default function JoinPage({ params }: { params: Promise<{ code: string }>
       if (data.error) throw new Error(data.error);
 
       setTripId(data.tripId);
+      qc.invalidateQueries({ queryKey: ["trips"] });
+      qc.invalidateQueries({ queryKey: ["trip"] });
       toast.success("Вы присоединились к поездке! 🎉");
       router.push("/");
       router.refresh();

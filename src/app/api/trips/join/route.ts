@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import bcrypt from "bcryptjs";
 import { requireUser } from "@/lib/api-auth";
 
 // POST /api/trips/join?code=CHINA2024 — присоединиться к поездке по invite-коду
@@ -16,11 +15,8 @@ export async function POST(req: NextRequest) {
   }
 
   const body = await req.json().catch(() => ({}));
-  const { userId, displayName, emoji, color } = body;
-
-  if (!userId) {
-    return NextResponse.json({ error: "userId required" }, { status: 400 });
-  }
+  const userId = user!.id;
+  const { displayName, emoji, color } = body;
 
   // Найти поездку по invite-коду (пробуем как есть и в верхнем регистре)
   const trip = await db.trip.findUnique({

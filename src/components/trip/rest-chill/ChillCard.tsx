@@ -76,7 +76,7 @@ export function ChillCard({ place, day, currency = "USD" }: ChillCardProps) {
               disabled={update.isPending}
               aria-label={visited ? "Снять отметку «отдохнули»" : "Отметить как «отдохнули»"}
               aria-pressed={visited}
-              className="disabled:opacity-50"
+              className="size-11 shrink-0 grid place-items-center rounded-lg disabled:opacity-50"
             >
               {visited ? <CheckCircle2 className="size-5 text-green-500" /> : <Circle className="size-5 text-muted-foreground" />}
             </button>

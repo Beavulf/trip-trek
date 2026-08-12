@@ -5,7 +5,7 @@ import { useTrip, useUploadPhoto } from "@/hooks/use-trip";
 import { Camera, Check, Images, Loader2, X } from "lucide-react";
 import { toast } from "sonner";
 import exifr from "exifr";
-import { cn } from "@/lib/utils";
+import { compressImageForUpload, ImageCompressError } from "@/lib/image-compress";
 import { DayPicker } from "./DayPicker";
 
 type GeoStatus = "idle" | "requesting" | "granted" | "denied";
@@ -24,11 +24,22 @@ export function PhotoForm({ userId, onDone }: PhotoFormProps) {
   const [preview, setPreview] = useState<string | null>(null);
   const [file, setFile] = useState<File | null>(null);
   const [caption, setCaption] = useState("");
-  const [dayId, setDayId] = useState(trip?.days.find((d) => d.dayNumber === trip.currentDayNumber)?.id ?? "");
+  const [dayId, setDayId] = useState("");
   const [geoStatus, setGeoStatus] = useState<GeoStatus>("idle");
   const [geoCoords, setGeoCoords] = useState<{ lat: number; lng: number } | null>(null);
   const [geoAddress, setGeoAddress] = useState<string | null>(null);
   const [processing, setProcessing] = useState(false);
+
+  // Sync day when trip loads (was stuck empty after open)
+  useEffect(() => {
+    if (!trip?.days?.length) return;
+    if (dayId && trip.days.some((d) => d.id === dayId)) return;
+    const today =
+      trip.days.find((d) => d.dayNumber === trip.currentDayNumber)?.id ??
+      trip.days[0]?.id ??
+      "";
+    setDayId(today);
+  }, [trip, dayId]);
 
   const requestGeo = async (): Promise<{ lat: number; lng: number } | null> => {
     if (typeof navigator === "undefined" || !navigator.geolocation) {
@@ -47,95 +58,36 @@ export function PhotoForm({ userId, onDone }: PhotoFormProps) {
           setGeoStatus("denied");
           resolve(null);
         },
-        { enableHighAccuracy: true, timeout: 10000 }
+        { enableHighAccuracy: false, timeout: 8000, maximumAge: 60000 }
       );
-    });
-  };
-
-  // Сжатие фото через Canvas (мобильные фото могут быть 5-10MB)
-  const compressImage = (originalFile: File, maxWidth = 1920, quality = 0.8): Promise<File> => {
-    return new Promise((resolve) => {
-      const img = new Image();
-      const url = URL.createObjectURL(originalFile);
-      img.onload = () => {
-        URL.revokeObjectURL(url);
-        const canvas = document.createElement("canvas");
-        let { width, height } = img;
-        if (width > maxWidth) {
-          height = (height * maxWidth) / width;
-          width = maxWidth;
-        }
-        canvas.width = width;
-        canvas.height = height;
-        const ctx = canvas.getContext("2d");
-        if (!ctx) {
-          resolve(originalFile);
-          return;
-        }
-        ctx.drawImage(img, 0, 0, width, height);
-        canvas.toBlob(
-          (blob) => {
-            if (blob) {
-              const compressed = new File([blob], originalFile.name.replace(/\.[^.]+$/, ".jpg"), {
-                type: "image/jpeg",
-                lastModified: Date.now(),
-              });
-              resolve(compressed);
-            } else {
-              resolve(originalFile);
-            }
-          },
-          "image/jpeg",
-          quality
-        );
-      };
-      img.onerror = () => {
-        URL.revokeObjectURL(url);
-        resolve(originalFile);
-      };
-      img.src = url;
     });
   };
 
   const onFile = async (f: File) => {
     setProcessing(true);
     try {
-      if (f.size > 25 * 1024 * 1024) {
-        toast.error("Фото слишком большое (макс 25MB)");
-        setProcessing(false);
-        return;
-      }
-
       let exifCoords: { lat: number; lng: number } | null = null;
-      let takenAt: Date | null = null;
       try {
-        const exif = await exifr.parse(f, { gps: true });
-        if (exif) {
-          const lat = exif.latitude ?? exif.GPSLatitude;
-          const lng = exif.longitude ?? exif.GPSLongitude;
-          if (lat != null && lng != null && !isNaN(lat) && !isNaN(lng)) {
-            exifCoords = { lat, lng };
-            setGeoCoords(exifCoords);
-            setGeoStatus("granted");
-            toast.success("📍 Координаты из фото", { description: "GPS найден в EXIF" });
-            try {
-              const r = await fetch(`/api/geocode?lat=${lat}&lng=${lng}`);
-              const data = await r.json();
-              if (data.address) setGeoAddress(data.address);
-            } catch {
-              // ignore
-            }
-          }
-          if (exif.DateTimeOriginal) {
-            takenAt = new Date(exif.DateTimeOriginal);
+        // Parse only GPS — lighter than full EXIF dump
+        const exif = await exifr.gps(f);
+        if (exif?.latitude != null && exif?.longitude != null) {
+          exifCoords = { lat: exif.latitude, lng: exif.longitude };
+          setGeoCoords(exifCoords);
+          setGeoStatus("granted");
+          toast.success("📍 Координаты из фото");
+          try {
+            const r = await fetch(`/api/geocode?lat=${exifCoords.lat}&lng=${exifCoords.lng}`);
+            const data = await r.json();
+            if (data.address) setGeoAddress(data.address);
+          } catch {
+            // ignore
           }
         }
       } catch {
-        // EXIF нет или не читается — не критично
+        // EXIF optional
       }
-      void takenAt;
 
-      const compressed = await compressImage(f);
+      const compressed = await compressImageForUpload(f);
 
       if (previewUrlRef.current) {
         URL.revokeObjectURL(previewUrlRef.current);
@@ -146,10 +98,6 @@ export function PhotoForm({ userId, onDone }: PhotoFormProps) {
       setFile(compressed);
 
       if (!exifCoords) {
-        toast.info("📍 В фото нет GPS, запрашиваем текущую геолокацию…", {
-          description: "Разрешите доступ к геолокации",
-          duration: 3000,
-        });
         const coords = await requestGeo();
         if (coords) {
           try {
@@ -163,13 +111,20 @@ export function PhotoForm({ userId, onDone }: PhotoFormProps) {
       }
     } catch (e) {
       console.error("Photo processing error:", e);
-      toast.error("Не удалось обработать фото");
+      const msg =
+        e instanceof ImageCompressError
+          ? e.message
+          : "Недостаточно памяти для обработки. Попробуйте фото меньшего размера или JPEG";
+      toast.error(msg);
+      clearPreview();
     } finally {
       setProcessing(false);
+      // Allow re-selecting the same file
+      if (cameraRef.current) cameraRef.current.value = "";
+      if (galleryRef.current) galleryRef.current.value = "";
     }
   };
 
-  // Cleanup object URL on unmount
   useEffect(() => {
     return () => {
       if (previewUrlRef.current) {
@@ -179,7 +134,10 @@ export function PhotoForm({ userId, onDone }: PhotoFormProps) {
   }, []);
 
   const submit = async () => {
-    if (!file || !dayId) return;
+    if (!file || !dayId) {
+      toast.error(!dayId ? "Выберите день" : "Выберите фото");
+      return;
+    }
     setProcessing(true);
     let coords = geoCoords;
     if (!coords && geoStatus === "idle") {
@@ -207,8 +165,8 @@ export function PhotoForm({ userId, onDone }: PhotoFormProps) {
       setGeoAddress(null);
       setGeoStatus("idle");
       onDone();
-    } catch {
-      toast.error("Не удалось загрузить фото");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Не удалось загрузить фото");
     } finally {
       setProcessing(false);
     }
@@ -231,11 +189,10 @@ export function PhotoForm({ userId, onDone }: PhotoFormProps) {
         <DayPicker value={dayId} onChange={setDayId} />
       </div>
 
-      {/* Скрытые input'ы: камера и галерея */}
       <input
         ref={cameraRef}
         type="file"
-        accept="image/*"
+        accept="image/jpeg,image/png,image/webp,image/*"
         capture="environment"
         className="hidden"
         onChange={(e) => e.target.files?.[0] && onFile(e.target.files[0])}
@@ -243,7 +200,7 @@ export function PhotoForm({ userId, onDone }: PhotoFormProps) {
       <input
         ref={galleryRef}
         type="file"
-        accept="image/*"
+        accept="image/jpeg,image/png,image/webp,image/*"
         className="hidden"
         onChange={(e) => e.target.files?.[0] && onFile(e.target.files[0])}
       />
@@ -260,19 +217,16 @@ export function PhotoForm({ userId, onDone }: PhotoFormProps) {
             </div>
           )}
           <button
+            type="button"
             onClick={clearPreview}
-            className="absolute top-2 right-2 size-7 rounded-full bg-black/60 text-white grid place-items-center z-10"
+            className="absolute top-2 right-2 size-9 rounded-full bg-black/60 text-white grid place-items-center z-10"
           >
             <X className="size-4" />
           </button>
           {geoStatus === "granted" && geoAddress && (
-            <div className="absolute bottom-2 left-2 right-2 bg-black/60 text-white text-[10px] px-2 py-1 rounded-lg flex items-center gap-1">
-              📍 {geoAddress.slice(0, 50)}{geoAddress.length > 50 ? "…" : ""}
-            </div>
-          )}
-          {geoStatus === "granted" && !geoAddress && geoCoords && (
-            <div className="absolute bottom-2 left-2 right-2 bg-black/60 text-white text-[10px] px-2 py-1 rounded-lg flex items-center gap-1">
-              📍 {geoCoords.lat.toFixed(4)}, {geoCoords.lng.toFixed(4)}
+            <div className="absolute bottom-2 left-2 right-2 bg-black/60 text-white text-[10px] px-2 py-1 rounded-lg">
+              📍 {geoAddress.slice(0, 50)}
+              {geoAddress.length > 50 ? "…" : ""}
             </div>
           )}
           {geoStatus === "denied" && (
@@ -282,30 +236,25 @@ export function PhotoForm({ userId, onDone }: PhotoFormProps) {
           )}
         </div>
       ) : processing ? (
-        <div className="grid grid-cols-2 gap-2">
-          <div className="border-2 border-dashed border-primary/30 rounded-2xl py-8 flex flex-col items-center gap-2 text-primary bg-primary/5">
-            <Loader2 className="size-8 animate-spin" />
-            <span className="text-xs font-medium">Обработка…</span>
-          </div>
-          <div className="border-2 border-dashed border-primary/30 rounded-2xl py-8 flex flex-col items-center gap-2 text-primary bg-primary/5">
-            <Loader2 className="size-8 animate-spin" />
-            <span className="text-xs font-medium">Обработка…</span>
-          </div>
+        <div className="border-2 border-dashed border-primary/30 rounded-2xl py-10 flex flex-col items-center gap-2 text-primary bg-primary/5">
+          <Loader2 className="size-8 animate-spin" />
+          <span className="text-xs font-medium">Сжимаем фото…</span>
+          <span className="text-[10px] text-muted-foreground">это экономит память на телефоне</span>
         </div>
       ) : (
         <div className="grid grid-cols-2 gap-2">
-          {/* Снять фото */}
           <button
+            type="button"
             onClick={() => cameraRef.current?.click()}
-            className="border-2 border-dashed border-border rounded-2xl py-8 flex flex-col items-center gap-2 text-muted-foreground hover:border-primary hover:text-primary transition-colors"
+            className="border-2 border-dashed border-border rounded-2xl py-8 flex flex-col items-center gap-2 text-muted-foreground hover:border-primary hover:text-primary transition-colors min-h-[44px]"
           >
             <Camera className="size-8" />
             <span className="text-xs font-medium">Снять фото</span>
           </button>
-          {/* Из галереи */}
           <button
+            type="button"
             onClick={() => galleryRef.current?.click()}
-            className="border-2 border-dashed border-border rounded-2xl py-8 flex flex-col items-center gap-2 text-muted-foreground hover:border-primary hover:text-primary transition-colors"
+            className="border-2 border-dashed border-border rounded-2xl py-8 flex flex-col items-center gap-2 text-muted-foreground hover:border-primary hover:text-primary transition-colors min-h-[44px]"
           >
             <Images className="size-8" />
             <span className="text-xs font-medium">Из галереи</span>
@@ -313,15 +262,9 @@ export function PhotoForm({ userId, onDone }: PhotoFormProps) {
         </div>
       )}
 
-      {/* Статус геолокации при выборе */}
       {geoStatus === "requesting" && (
         <div className="text-[11px] text-muted-foreground flex items-center gap-1.5">
           <Loader2 className="size-3 animate-spin" /> Определяем местоположение…
-        </div>
-      )}
-      {geoStatus === "granted" && geoAddress && (
-        <div className="text-[11px] text-green-600 flex items-center gap-1">
-          📍 Адрес определён: {geoAddress.slice(0, 60)}{geoAddress.length > 60 ? "…" : ""}
         </div>
       )}
 
@@ -329,13 +272,14 @@ export function PhotoForm({ userId, onDone }: PhotoFormProps) {
         value={caption}
         onChange={(e) => setCaption(e.target.value)}
         placeholder="Подпись (необязательно)"
-        className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm"
+        className="w-full rounded-lg border border-input bg-background px-3 py-2.5 text-base input-mobile"
       />
 
       <button
+        type="button"
         onClick={submit}
-        disabled={!file || upload.isPending || processing}
-        className="w-full rounded-xl bg-primary text-primary-foreground py-3.5 text-base font-medium flex items-center justify-center gap-2 disabled:opacity-50"
+        disabled={!file || !dayId || upload.isPending || processing}
+        className="w-full rounded-xl bg-primary text-primary-foreground py-3.5 text-base font-medium flex items-center justify-center gap-2 disabled:opacity-50 min-h-[48px]"
       >
         {upload.isPending || processing ? <Loader2 className="size-4 animate-spin" /> : <Check className="size-4" />}
         {upload.isPending ? "Загрузка…" : processing ? "Обработка…" : "Добавить фото"}

@@ -13,7 +13,7 @@ import {
   MapPin,
   Plus,
 } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
@@ -111,10 +111,9 @@ function AddPlaceForm({
   const [address, setAddress] = useState(initial.address || "");
   const [dayId, setDayId] = useState(initial.dayId || "");
 
-  // Reverse geocoding — запускаем один раз при монтировании (если нет адреса)
-  const [geoDone, setGeoDone] = useState(false);
-  if (!geoDone && !initial.address && initial.lat && initial.lng) {
-    setGeoDone(true);
+  // Reverse geocoding — один раз при монтировании (если нет адреса)
+  useEffect(() => {
+    if (initial.address || !initial.lat || !initial.lng) return;
     geocode.mutate(
       { lat: initial.lat, lng: initial.lng },
       {
@@ -122,7 +121,8 @@ function AddPlaceForm({
         onError: () => setAddress(`${initial.lat.toFixed(4)}, ${initial.lng.toFixed(4)}`),
       }
     );
-  }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- только при открытии sheet
+  }, []);
 
   const submit = async () => {
     if (!name.trim()) {

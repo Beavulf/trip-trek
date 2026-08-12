@@ -1,14 +1,14 @@
 "use client";
 
 import { usePhrases, useTogglePhraseFavorite, useGeneratePhrases, type Phrase } from "@/hooks/use-trip";
-import { useTrip } from "@/hooks/use-trip";
-import { getTripId } from "@/hooks/use-trip";
+import { useTrip, useCurrentTripId } from "@/hooks/use-trip";
 import { motion, AnimatePresence } from "framer-motion";
 import { Languages, Search, Star, Volume2, Loader2, ExternalLink, Download, Sparkles } from "lucide-react";
 import { useState, useMemo } from "react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { detectLanguage, googleTranslateUrl } from "@/lib/language-detect";
+import { useTripStore } from "@/lib/trip-store";
 
 const CATEGORIES: Array<{ key: string; label: string; emoji: string; color: string }> = [
   { key: "all", label: "Все", emoji: "✨", color: "#94a3b8" },
@@ -34,12 +34,14 @@ const LANGUAGES: Array<{ code: string; label: string; emoji: string }> = [
 ];
 
 export function Phrasebook() {
-  const { data: trip, error: tripError } = useTrip();
-  const tripId = getTripId();
+  const { data: trip, error: tripError, refetch: refetchTrip } = useTrip();
+  const tripId = useCurrentTripId();
+  const { setTripSwitcherOpen } = useTripStore();
   const [category, setCategory] = useState<string>("all");
   const [query, setQuery] = useState("");
   const [favOnly, setFavOnly] = useState(false);
-  const { data: phrases, isLoading, error: phrasesError } = usePhrases(category, favOnly);
+  const { data: phrases, isLoading, error: phrasesError, refetch: refetchPhrases } = usePhrases(category, favOnly);
+  const { data: allPhrases } = usePhrases("all", false);
   const generate = useGeneratePhrases();
   const [showGenerate, setShowGenerate] = useState(false);
   const [selectedLang, setSelectedLang] = useState("en");
@@ -55,8 +57,9 @@ export function Phrasebook() {
     );
   }, [phrases, query]);
 
-  const favCount = phrases?.filter((p) => p.favorite).length ?? 0;
-  const totalCount = phrases?.length ?? 0;
+  const favCount = allPhrases?.filter((p) => p.favorite).length ?? 0;
+  const totalCount = allPhrases?.length ?? 0;
+  const listCount = phrases?.length ?? 0;
 
   // P0 #3: generate с try/catch + toast
   const handleGenerate = async () => {
@@ -81,13 +84,35 @@ export function Phrasebook() {
     }
   };
 
-  // P0 #4: error states
+  if (!tripId) {
+    return (
+      <div className="space-y-4 animate-fade-up pb-20">
+        <div className="rounded-3xl p-5 bg-gradient-to-br from-cyan-500 to-blue-600 text-white shadow-xl text-center">
+          <div className="text-5xl mb-3">💬</div>
+          <h1 className="text-xl font-bold">Нет активной поездки</h1>
+          <p className="text-white/80 text-sm mt-1">Создай или выбери поездку</p>
+          <button
+            type="button"
+            onClick={() => setTripSwitcherOpen(true)}
+            className="mt-4 rounded-xl bg-white/20 backdrop-blur px-4 py-3 text-sm font-medium active:scale-95 min-h-11"
+          >
+            Мои поездки →
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   if (tripError) {
     return (
       <div className="py-16 text-center text-muted-foreground space-y-2">
         <div className="text-3xl">🤔</div>
         <p className="text-sm font-medium">Не удалось загрузить поездку</p>
-        <button onClick={() => window.location.reload()} className="mt-2 text-xs px-3 py-1.5 rounded-lg bg-primary text-primary-foreground">
+        <button
+          type="button"
+          onClick={() => refetchTrip()}
+          className="mt-2 text-xs px-3 py-2 rounded-lg bg-primary text-primary-foreground min-h-11"
+        >
           Обновить
         </button>
       </div>
@@ -98,16 +123,28 @@ export function Phrasebook() {
       <div className="py-16 text-center text-muted-foreground space-y-2">
         <div className="text-3xl">💬</div>
         <p className="text-sm font-medium">Не удалось загрузить фразы</p>
-        <button onClick={() => window.location.reload()} className="mt-2 text-xs px-3 py-1.5 rounded-lg bg-primary text-primary-foreground">
+        <button
+          type="button"
+          onClick={() => refetchPhrases()}
+          className="mt-2 text-xs px-3 py-2 rounded-lg bg-primary text-primary-foreground min-h-11"
+        >
           Обновить
         </button>
       </div>
     );
   }
 
+  if (isLoading && !phrases) {
+    return (
+      <div className="flex items-center justify-center gap-2 py-20 text-muted-foreground">
+        <Loader2 className="size-5 animate-spin" /> Загрузка фраз…
+      </div>
+    );
+  }
+
   // P1 #11: нейтральный hero (не 🀄 если не китай)
   // Определяем основной язык пакета по первой фразе
-  const primaryLang = phrases && phrases.length > 0 ? detectLanguage(phrases[0].cn) : null;
+  const primaryLang = allPhrases && allPhrases.length > 0 ? detectLanguage(allPhrases[0].cn) : null;
   const isChinese = primaryLang?.langPrefix === "zh";
   const heroEmoji = isChinese ? "🀄" : primaryLang ? getLangEmoji(primaryLang.langPrefix) : "💬";
 
@@ -182,7 +219,7 @@ export function Phrasebook() {
 
       {/* Категории */}
       {totalCount > 0 && (
-        <div className="flex gap-1.5 overflow-x-auto no-scrollbar pb-1">
+        <div className="chip-rail no-scrollbar">
           {CATEGORIES.map((c) => {
             const active = category === c.key;
             return (
@@ -192,7 +229,7 @@ export function Phrasebook() {
                 aria-label={`Категория: ${c.label}`}
                 aria-pressed={active}
                 className={cn(
-                  "min-h-[36px] flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-all",
+                  "min-h-11 flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-all",
                   active ? "text-white shadow-md" : "bg-card border border-border hover:bg-accent"
                 )}
                 style={active ? { background: c.color } : undefined}
@@ -481,9 +518,9 @@ function PhraseCard({ phrase, categoryMeta, isChinese }: { phrase: Phrase; categ
         <button
           onClick={speak}
           disabled={speaking}
-          aria-label={speaking ? "Останавить воспроизведение" : "Произнести фразу"}
+          aria-label={speaking ? "Остановить воспроизведение" : "Произнести фразу"}
           className={cn(
-            "flex-1 min-h-[40px] rounded-xl inline-flex items-center justify-center gap-2 px-3 transition-all active:scale-95 disabled:opacity-50",
+            "flex-1 min-h-11 rounded-xl inline-flex items-center justify-center gap-2 px-3 transition-all active:scale-95 disabled:opacity-50",
             speaking ? "bg-primary text-primary-foreground animate-pulse" : "bg-primary/10 text-primary hover:bg-primary/20"
           )}
           title="Произнести (TTS телефона)"
@@ -497,7 +534,7 @@ function PhraseCard({ phrase, categoryMeta, isChinese }: { phrase: Phrase; categ
           target="_blank"
           rel="noopener noreferrer"
           aria-label="Открыть в Google Translate"
-          className="flex-1 min-h-[40px] rounded-xl inline-flex items-center justify-center gap-2 px-3 transition-all active:scale-95 bg-blue-500/10 text-blue-500 hover:bg-blue-500/20"
+          className="flex-1 min-h-11 rounded-xl inline-flex items-center justify-center gap-2 px-3 transition-all active:scale-95 bg-blue-500/10 text-blue-500 hover:bg-blue-500/20"
           title="Google Translate (озвучка + перевод)"
         >
           <ExternalLink className="size-4 shrink-0" />
@@ -510,7 +547,7 @@ function PhraseCard({ phrase, categoryMeta, isChinese }: { phrase: Phrase; categ
           aria-label={phrase.favorite ? "Убрать из избранного" : "Добавить в избранное"}
           aria-pressed={phrase.favorite}
           className={cn(
-            "min-h-[40px] size-10 rounded-xl grid place-items-center transition-all active:scale-90 shrink-0 disabled:opacity-50",
+            "min-h-11 size-11 rounded-xl grid place-items-center transition-all active:scale-90 shrink-0 disabled:opacity-50",
             phrase.favorite ? "bg-amber-500 text-white" : "bg-muted text-muted-foreground hover:bg-accent"
           )}
           title="В избранное"

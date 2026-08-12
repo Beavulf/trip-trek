@@ -1,29 +1,54 @@
 "use client";
 
-import { useBoard, useAddBoardMessage, useTogglePinBoard, useDeleteBoardMessage, useTrip, type BoardMessage } from "@/hooks/use-trip";
+import { useBoard, useAddBoardMessage, useTogglePinBoard, useDeleteBoardMessage, useTrip, useCurrentTripId, type BoardMessage } from "@/hooks/use-trip";
 import { motion, AnimatePresence } from "framer-motion";
-import { MessageSquare, Send, Pin, Trash2, Loader2, MessagesSquare, AlertCircle, RotateCw, LogIn } from "lucide-react";
+import { MessageSquare, Send, Pin, Trash2, Loader2, MessagesSquare, AlertCircle, LogIn } from "lucide-react";
 import { useState } from "react";
 import { useAuth as useSession } from "@/hooks/use-auth";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { useTripStore } from "@/lib/trip-store";
 
 export function Board() {
-  const { data: messages, isLoading, error: messagesError } = useBoard();
-  const { data: trip, error: tripError } = useTrip();
+  const tripId = useCurrentTripId();
+  const { data: messages, isLoading, error: messagesError, refetch: refetchMessages } = useBoard();
+  const { data: trip, error: tripError, refetch: refetchTrip } = useTrip();
   const { data: session } = useSession();
+  const { setActiveTab } = useTripStore();
   const add = useAddBoardMessage();
   const [content, setContent] = useState("");
 
   const currentUserId = (session?.user as { id?: string } | undefined)?.id || "";
 
-  // P0 #5: error states
+  if (!tripId) {
+    return (
+      <div className="space-y-4 animate-fade-up pb-20">
+        <div className="rounded-3xl p-5 bg-gradient-to-br from-emerald-500 to-teal-600 text-white shadow-xl text-center">
+          <div className="text-5xl mb-3">💬</div>
+          <h1 className="text-xl font-bold">Нет активной поездки</h1>
+          <p className="text-white/80 text-sm mt-1">Создай или присоединись к поездке</p>
+          <button
+            type="button"
+            onClick={() => setActiveTab("dashboard")}
+            className="mt-4 rounded-xl bg-white/20 backdrop-blur px-4 py-3 text-sm font-medium active:scale-95 min-h-11"
+          >
+            На главную →
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   if (tripError) {
     return (
       <div className="py-16 text-center text-muted-foreground space-y-2">
         <div className="text-3xl">🤔</div>
         <p className="text-sm font-medium">Не удалось загрузить поездку</p>
-        <button onClick={() => window.location.reload()} className="mt-2 text-xs px-3 py-1.5 rounded-lg bg-primary text-primary-foreground">
+        <button
+          type="button"
+          onClick={() => refetchTrip()}
+          className="mt-2 text-xs px-3 py-2 rounded-lg bg-primary text-primary-foreground min-h-11"
+        >
           Обновить
         </button>
       </div>
@@ -34,7 +59,11 @@ export function Board() {
       <div className="py-16 text-center text-muted-foreground space-y-2">
         <AlertCircle className="size-8 mx-auto text-red-500" />
         <p className="text-sm font-medium">Не удалось загрузить сообщения</p>
-        <button onClick={() => window.location.reload()} className="mt-2 text-xs px-3 py-1.5 rounded-lg bg-primary text-primary-foreground">
+        <button
+          type="button"
+          onClick={() => refetchMessages()}
+          className="mt-2 text-xs px-3 py-2 rounded-lg bg-primary text-primary-foreground min-h-11"
+        >
           Обновить
         </button>
       </div>
@@ -54,7 +83,7 @@ export function Board() {
       return;
     }
     try {
-      await add.mutateAsync({ content: trimmed, userId: currentUserId });
+      await add.mutateAsync({ content: trimmed });
       toast.success("Сообщение отправлено 💬");
       setContent("");
     } catch (err) {
@@ -89,7 +118,7 @@ export function Board() {
 
       {/* Форма ввода — P1 #13: disabled if not logged in */}
       {currentUserId ? (
-        <div className="rounded-2xl bg-card border border-border p-3 sticky top-[5.5rem] z-20 backdrop-blur">
+        <div className="rounded-2xl bg-card border border-border p-3 sticky sticky-under-shell z-20 backdrop-blur">
           <div className="flex items-end gap-2">
             <textarea
               value={content}
@@ -103,7 +132,7 @@ export function Board() {
               placeholder="Написать сообщение…"
               rows={1}
               maxLength={4000}
-              className="flex-1 resize-none rounded-xl border border-input bg-background px-3 py-2.5 text-sm outline-none focus:ring-2 ring-primary/30 max-h-32"
+              className="flex-1 resize-none rounded-xl border border-input bg-background px-3 py-2.5 text-base input-mobile outline-none focus:ring-2 ring-primary/30 max-h-32"
             />
             <button
               onClick={submit}
@@ -201,8 +230,7 @@ function MessageCard({ message, currentUserId }: { message: BoardMessage; curren
     }
   };
 
-  // P0 #4: delete button only for author or owner (visible but disabled for others? No — hide for others)
-  const canDelete = isOwn || true; // owner check would need membership role — for simplicity show to all, API enforces
+  const canDelete = isOwn;
 
   return (
     <motion.div
@@ -261,44 +289,47 @@ function MessageCard({ message, currentUserId }: { message: BoardMessage; curren
             aria-label={message.pinned ? "Открепить сообщение" : "Закрепить сообщение"}
             aria-pressed={message.pinned}
             className={cn(
-              "size-9 rounded-lg grid place-items-center transition-colors disabled:opacity-50",
+              "size-11 rounded-lg grid place-items-center transition-colors disabled:opacity-50",
               message.pinned ? "text-amber-500" : "text-muted-foreground hover:bg-accent md:opacity-0 md:group-hover:opacity-100"
             )}
             title={message.pinned ? "Открепить" : "Закрепить"}
           >
             <Pin className="size-4" />
           </button>
-          {/* Delete — P0 #4: confirm flow */}
-          {confirmingDelete ? (
-            <div className="flex items-center gap-1">
+          {canDelete &&
+            (confirmingDelete ? (
+              <div className="flex items-center gap-1">
+                <button
+                  type="button"
+                  onClick={handleDelete}
+                  disabled={del.isPending}
+                  aria-label="Подтвердить удаление"
+                  className="btn-confirm-yes"
+                >
+                  {del.isPending ? <Loader2 className="size-3 animate-spin" /> : null}
+                  {del.isPending ? "…" : "Да"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setConfirmingDelete(false)}
+                  disabled={del.isPending}
+                  aria-label="Отменить удаление"
+                  className="btn-confirm-no"
+                >
+                  Нет
+                </button>
+              </div>
+            ) : (
               <button
-                onClick={handleDelete}
-                disabled={del.isPending}
-                aria-label="Подтвердить удаление"
-                className="min-h-[32px] min-w-[32px] text-[10px] bg-red-500 text-white px-2 py-1 rounded-lg font-medium flex items-center gap-1"
+                type="button"
+                onClick={() => setConfirmingDelete(true)}
+                aria-label="Удалить сообщение"
+                className="size-11 rounded-lg grid place-items-center text-muted-foreground hover:bg-red-500/10 hover:text-red-500 transition-colors md:opacity-0 md:group-hover:opacity-100"
+                title="Удалить"
               >
-                {del.isPending ? <Loader2 className="size-3 animate-spin" /> : null}
-                {del.isPending ? "…" : "Да"}
+                <Trash2 className="size-4" />
               </button>
-              <button
-                onClick={() => setConfirmingDelete(false)}
-                disabled={del.isPending}
-                aria-label="Отменить удаление"
-                className="min-h-[32px] min-w-[32px] text-[10px] bg-secondary px-2 py-1 rounded-lg"
-              >
-                Нет
-              </button>
-            </div>
-          ) : (
-            <button
-              onClick={() => setConfirmingDelete(true)}
-              aria-label="Удалить сообщение"
-              className="size-9 rounded-lg grid place-items-center text-muted-foreground hover:bg-red-500/10 hover:text-red-500 transition-colors md:opacity-0 md:group-hover:opacity-100"
-              title="Удалить"
-            >
-              <Trash2 className="size-4" />
-            </button>
-          )}
+            ))}
         </div>
       </div>
     </motion.div>

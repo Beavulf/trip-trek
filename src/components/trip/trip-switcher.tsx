@@ -6,52 +6,77 @@ import { Plane, Plus, ChevronRight, X, Loader2, Globe, Users, Calendar, ArrowRig
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth as useSession } from "@/hooks/use-auth";
 import { toast } from "sonner";
-import { setTripId, getTripId } from "@/hooks/use-trip";
+import { setTripId, useCurrentTripId } from "@/hooks/use-trip";
 import { useRouter } from "next/navigation";
 import { PremiumModal } from "./premium-modal";
 import { TemplatePicker } from "./template-picker";
 import { createPortal } from "react-dom";
 import { cn } from "@/lib/utils";
+import { useTripStore } from "@/lib/trip-store";
+import { useBodyScrollLock } from "@/hooks/use-body-scroll-lock";
 
 export function TripSwitcher() {
-  const [open, setOpen] = useState(false);
+  const open = useTripStore((s) => s.tripSwitcherOpen);
+  const setOpen = useTripStore((s) => s.setTripSwitcherOpen);
   const [showCreate, setShowCreate] = useState(false);
   const [templateOpen, setTemplateOpen] = useState(false);
   const [premiumOpen, setPremiumOpen] = useState(false);
   const { data: session, status } = useSession();
   const router = useRouter();
   const qc = useQueryClient();
+  useBodyScrollLock(open);
 
   const userId = (session?.user as { id?: string } | undefined)?.id;
 
-  // Список поездок пользователя (или все, если userId неизвестен)
+  // Список поездок — только из сессии (API больше не принимает spoof userId)
   const { data: trips, isLoading } = useQuery({
     queryKey: ["trips", userId],
     queryFn: async () => {
-      const url = userId ? `/api/trips?userId=${userId}` : `/api/trips`;
-      const r = await fetch(url);
+      const r = await fetch("/api/trips");
+      if (!r.ok) throw new Error("fetch trips failed");
       return r.json() as Promise<TripCard[]>;
     },
+    enabled: status === "authenticated",
   });
 
-  const currentTripId = typeof window !== "undefined" ? getTripId() : "";
+  const currentTripId = useCurrentTripId();
   const currentTrip = trips?.find((t) => t.id === currentTripId) || trips?.[0];
 
-  // P0 #4: Если localStorage пустой но поездки есть — автоматически выбираем первую.
-  // Без этого все хуки (useTrip, useExpenses, useBudgetPlan) остаются disabled → «Загрузка…» вечно.
+  // Пустой или устаревший tripId → первая доступная; если поездок нет — очистить id
   useEffect(() => {
-    if (!currentTripId && trips && trips.length > 0) {
-      setTripId(trips[0].id);
-      qc.invalidateQueries({ queryKey: ["trip"] });
-      qc.invalidateQueries({ queryKey: ["expenses"] });
-      qc.invalidateQueries({ queryKey: ["budget-plan"] });
-      qc.invalidateQueries({ queryKey: ["days"] });
+    if (!trips) return;
+    if (trips.length === 0) {
+      if (currentTripId) {
+        setTripId("");
+        qc.invalidateQueries({ queryKey: ["trip"] });
+      }
+      return;
     }
+    const known = trips.some((t) => t.id === currentTripId);
+    if (currentTripId && known) return;
+    setTripId(trips[0].id);
+    qc.invalidateQueries({ queryKey: ["trip"] });
+    qc.invalidateQueries({ queryKey: ["expenses"] });
+    qc.invalidateQueries({ queryKey: ["budget-plan"] });
+    qc.invalidateQueries({ queryKey: ["days"] });
+    qc.invalidateQueries({ queryKey: ["photos"] });
   }, [currentTripId, trips, qc]);
 
   // Создать поездку — через /api/limits с проверкой
   const createTrip = useMutation({
-    mutationFn: async (data: { title: string; destination: string; startDate: string; totalDays: number; totalBudget: number; userId: string; displayName: string; emoji: string; color: string }) => {
+    mutationFn: async (data: {
+      title: string;
+      destination: string;
+      startDate: string;
+      totalDays: number;
+      totalBudget: number;
+      userId: string;
+      displayName: string;
+      emoji: string;
+      color: string;
+      coverEmoji: string;
+      coverColor: string;
+    }) => {
       const r = await fetch("/api/limits", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -86,6 +111,10 @@ export function TripSwitcher() {
 
   // Переключить поездку
   const switchTrip = (tripId: string) => {
+    if (tripId === currentTripId) {
+      setOpen(false);
+      return;
+    }
     setTripId(tripId);
     setOpen(false);
     qc.invalidateQueries({ queryKey: ["trip"] });
@@ -110,9 +139,11 @@ export function TripSwitcher() {
     <>
       {/* Кнопка переключателя */}
       <button
+        type="button"
         onClick={() => setOpen(true)}
-        className="flex items-center gap-1.5 h-8 px-2 rounded-lg bg-secondary border border-border hover:bg-accent transition-colors shrink-0"
+        className="flex items-center gap-1.5 min-h-11 px-2.5 rounded-lg bg-secondary border border-border hover:bg-accent transition-colors shrink-0"
         title="Мои поездки"
+        aria-label="Мои поездки"
       >
         <span className="text-base">{currentTrip?.coverEmoji || "🌏"}</span>
         <span className="text-xs font-medium hidden sm:inline">{currentTrip?.title?.slice(0, 15) || "Поездки"}</span>
@@ -295,7 +326,7 @@ function CreateTripForm({
     }
     onSubmit({
       title: title.trim(),
-      destination: destination.trim() || "China",
+      destination: destination.trim() || "Unknown",
       startDate,
       totalDays: parseInt(totalDays) || 12,
       totalBudget: parseFloat(totalBudget) || 1100,
@@ -303,6 +334,8 @@ function CreateTripForm({
       displayName: userName,
       emoji,
       color,
+      coverEmoji: emoji,
+      coverColor: color,
     });
   };
 
@@ -364,7 +397,7 @@ function CreateTripForm({
           onChange={(e) => setTitle(e.target.value)}
           placeholder="Например: Япония — Токио и Киото"
           autoFocus
-          className="w-full rounded-xl border border-input bg-background px-3 py-2.5 text-sm"
+          className="w-full rounded-xl border border-input bg-background px-3 py-2.5 text-base input-mobile"
         />
       </div>
 
@@ -376,7 +409,7 @@ function CreateTripForm({
           value={destination}
           onChange={(e) => setDestination(e.target.value)}
           placeholder="Japan"
-          className="w-full rounded-xl border border-input bg-background px-3 py-2.5 text-sm"
+          className="w-full rounded-xl border border-input bg-background px-3 py-2.5 text-base input-mobile"
         />
       </div>
 
@@ -448,4 +481,6 @@ interface CreateTripData {
   displayName: string;
   emoji: string;
   color: string;
+  coverEmoji: string;
+  coverColor: string;
 }

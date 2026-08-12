@@ -6,7 +6,12 @@ import { requireTripMember } from "@/lib/api-auth";
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const tripId = searchParams.get("tripId") || "";
-  if (!tripId) return NextResponse.json([]);
+  if (!tripId) {
+    return NextResponse.json({ error: "tripId required" }, { status: 400 });
+  }
+
+  const { response } = await requireTripMember(req, tripId);
+  if (response) return response;
 
   const days = await db.day.findMany({
     where: { tripId },

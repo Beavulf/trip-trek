@@ -17,7 +17,7 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "TripTrek — путешествия с друзьями",
   description: "Планируй путешествия с друзьями: маршрут, карта, бюджет, дневник. Совместное планирование в реальном времени.",
-  keywords: ["China", "travel", "Гуанчжоу", "Шэньчжэнь", "Гонконг", "Макао", "trip"],
+  keywords: ["travel", "trip planner", "путешествия", "маршрут", "бюджет", "друзья"],
   manifest: "/manifest.webmanifest",
   appleWebApp: {
     capable: true,
@@ -37,8 +37,9 @@ export const metadata: Metadata = {
 export const viewport = {
   width: "device-width",
   initialScale: 1,
-  maximumScale: 1,
-  userScalable: false,
+  maximumScale: 5,
+  userScalable: true,
+  viewportFit: "cover" as const,
 };
 
 export default function RootLayout({
@@ -69,7 +70,7 @@ export default function RootLayout({
               description: "!text-muted-foreground",
               actionButton: "!bg-primary !text-primary-foreground",
               cancelButton: "!bg-muted !text-muted-foreground",
-              closeButton: "!bg-transparent !text-muted-foreground hover:!bg-accent hover:!text-red-500 !w-7 !h-7 !min-w-7 !rounded-lg !border-0 !shrink-0 !self-start !mt-0.5",
+              closeButton: "!bg-transparent !text-muted-foreground hover:!bg-accent hover:!text-red-500 !w-11 !h-11 !min-w-11 !rounded-lg !border-0 !shrink-0 !self-start",
             },
           }}
           closeButton

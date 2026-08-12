@@ -2,26 +2,25 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { requireUser } from "@/lib/api-auth";
 
-// POST /api/push/subscribe — сохранить push подписку пользователя
+// POST /api/push/subscribe — сохранить push подписку текущего пользователя
 export async function POST(req: NextRequest) {
   try {
-    const { response } = await requireUser(req);
+    const { user: authUser, response } = await requireUser(req);
     if (response) return response;
+    const userId = authUser!.id;
 
     const body = await req.json();
-    const { userId, subscription } = body;
+    const { subscription } = body;
 
-    if (!userId || !subscription || !subscription.endpoint) {
-      return NextResponse.json({ error: "userId, subscription required" }, { status: 400 });
+    if (!subscription || !subscription.endpoint) {
+      return NextResponse.json({ error: "subscription required" }, { status: 400 });
     }
 
-    // Проверяем не существует ли уже эта подписка
     const existing = await db.pushSubscription.findUnique({
       where: { endpoint: subscription.endpoint },
     });
 
     if (existing) {
-      // Обновляем если сменился пользователь
       if (existing.userId !== userId) {
         await db.pushSubscription.update({
           where: { endpoint: subscription.endpoint },
@@ -47,17 +46,17 @@ export async function POST(req: NextRequest) {
   }
 }
 
-// DELETE /api/push/subscribe — удалить подписку
+// DELETE /api/push/subscribe — удалить свою подписку
 export async function DELETE(req: NextRequest) {
-  const { response } = await requireUser(req);
+  const { user: authUser, response } = await requireUser(req);
   if (response) return response;
+  const userId = authUser!.id;
 
   const { searchParams } = new URL(req.url);
   const endpoint = searchParams.get("endpoint");
-  const userId = searchParams.get("userId");
+  const all = searchParams.get("all");
 
-  // Удаление по userId — удаляем ВСЕ подписки пользователя
-  if (userId) {
+  if (all === "1" || all === "true") {
     try {
       await db.pushSubscription.deleteMany({ where: { userId } });
       return NextResponse.json({ ok: true });
@@ -67,13 +66,15 @@ export async function DELETE(req: NextRequest) {
   }
 
   if (!endpoint) {
-    return NextResponse.json({ error: "endpoint or userId required" }, { status: 400 });
+    return NextResponse.json({ error: "endpoint or all=1 required" }, { status: 400 });
   }
 
   try {
-    await db.pushSubscription.delete({
-      where: { endpoint },
-    });
+    const sub = await db.pushSubscription.findUnique({ where: { endpoint } });
+    if (sub && sub.userId !== userId) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+    await db.pushSubscription.delete({ where: { endpoint } });
     return NextResponse.json({ ok: true });
   } catch {
     return NextResponse.json({ ok: true, notFound: true });

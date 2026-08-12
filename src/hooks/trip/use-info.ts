@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { getTripId } from "./trip-id";
+import { getTripId, useCurrentTripId } from "./trip-id";
 
 // === Info ===
 export interface InfoItem {
@@ -16,7 +16,7 @@ export interface InfoItem {
 // P0 #1: enabled !!tripId, placeholderData: []
 // P1 #8: throw on !ok
 export function useInfo(type?: string) {
-  const tripId = getTripId();
+  const tripId = useCurrentTripId();
   const params = new URLSearchParams();
   if (tripId) params.set("tripId", tripId);
   if (type) params.set("type", type);
@@ -30,7 +30,6 @@ export function useInfo(type?: string) {
       return Array.isArray(data) ? data : [];
     },
     enabled: !!tripId,
-    placeholderData: [],
   });
 }
 

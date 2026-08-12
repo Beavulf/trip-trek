@@ -57,9 +57,7 @@ export function TemplatePicker({ open, onOpenChange, userId }: TemplatePickerPro
       qc.invalidateQueries({ queryKey: ["trips"] });
       qc.invalidateQueries({ queryKey: ["trip"] });
       qc.invalidateQueries({ queryKey: ["days"] });
-      toast.success(data.message || "Поездка создана! 🎉", {
-        description: `${data.id}`,
-      });
+      toast.success(data.message || "Поездка создана! 🎉");
       onOpenChange(false);
       setSelectedTemplate(null);
       setCustomTitle("");
@@ -69,9 +67,13 @@ export function TemplatePicker({ open, onOpenChange, userId }: TemplatePickerPro
 
   if (!open || typeof document === "undefined") return null;
 
-  const handleCreate = (templateId: string) => {
+  const handleSelect = (templateId: string) => {
     setSelectedTemplate(templateId);
-    createFromTemplate.mutate(templateId);
+  };
+
+  const handleCreate = () => {
+    if (!selectedTemplate) return;
+    createFromTemplate.mutate(selectedTemplate);
   };
 
   return createPortal(
@@ -101,7 +103,7 @@ export function TemplatePicker({ open, onOpenChange, userId }: TemplatePickerPro
             <h2 className="font-bold text-lg flex items-center gap-2">
               <Sparkles className="size-5" /> Шаблоны поездок
             </h2>
-            <button onClick={() => onOpenChange(false)} className="size-8 rounded-full bg-white/20 hover:bg-white/30 grid place-items-center">
+            <button onClick={() => onOpenChange(false)} className="size-10 rounded-full bg-white/20 hover:bg-white/30 grid place-items-center" aria-label="Закрыть">
               <X className="size-4" />
             </button>
           </div>
@@ -116,15 +118,32 @@ export function TemplatePicker({ open, onOpenChange, userId }: TemplatePickerPro
               <motion.div
                 initial={{ opacity: 0, height: 0 }}
                 animate={{ opacity: 1, height: "auto" }}
-                className="mb-2"
+                className="mb-2 space-y-2"
               >
                 <input
                   value={customTitle}
                   onChange={(e) => setCustomTitle(e.target.value)}
                   placeholder="Своё название (необязательно)"
-                  className="w-full rounded-xl border border-input bg-background px-3 py-2.5 text-sm"
+                  className="w-full rounded-xl border border-input bg-background px-3 py-2.5 text-base input-mobile"
                   autoFocus
                 />
+                <button
+                  type="button"
+                  onClick={handleCreate}
+                  disabled={createFromTemplate.isPending}
+                  className="w-full min-h-11 rounded-xl bg-primary text-primary-foreground py-2.5 text-sm font-medium flex items-center justify-center gap-2 disabled:opacity-50"
+                >
+                  {createFromTemplate.isPending ? (
+                    <>
+                      <Loader2 className="size-4 animate-spin" />
+                      Создаём…
+                    </>
+                  ) : (
+                    <>
+                      <Check className="size-4" /> Создать поездку
+                    </>
+                  )}
+                </button>
               </motion.div>
             )}
 
@@ -132,7 +151,7 @@ export function TemplatePicker({ open, onOpenChange, userId }: TemplatePickerPro
             <div className="space-y-3">
               {TRIP_TEMPLATES.map((template, i) => {
                 const isSelected = selectedTemplate === template.id;
-                const isLoading = createFromTemplate.isPending && isSelected;
+                const placesCount = template.days.reduce((n, d) => n + d.places.length, 0);
                 return (
                   <motion.div
                     key={template.id}
@@ -157,11 +176,7 @@ export function TemplatePicker({ open, onOpenChange, userId }: TemplatePickerPro
                       <span className="text-5xl relative z-10 drop-shadow-lg">{template.coverEmoji}</span>
                       {isSelected && (
                         <div className="absolute top-2 right-2 size-7 rounded-full bg-white grid place-items-center shadow-lg">
-                          {isLoading ? (
-                            <Loader2 className="size-4 animate-spin text-primary" />
-                          ) : (
-                            <Check className="size-4 text-green-600" />
-                          )}
+                          <Check className="size-4 text-green-600" />
                         </div>
                       )}
                     </div>
@@ -180,36 +195,31 @@ export function TemplatePicker({ open, onOpenChange, userId }: TemplatePickerPro
                           <Wallet className="size-3" /> ${template.totalBudget}
                         </span>
                         <span className="flex items-center gap-1">
-                          <MapPin className="size-3" /> {template.days.length} мест
+                          <MapPin className="size-3" /> {placesCount} мест
                         </span>
                         <span className="flex items-center gap-1">
                           <Plane className="size-3" /> {template.foods.length} блюд
                         </span>
                       </div>
 
-                      {/* Create button */}
                       <button
-                        onClick={() => handleCreate(template.id)}
+                        type="button"
+                        onClick={() => handleSelect(template.id)}
                         disabled={createFromTemplate.isPending}
                         className={cn(
-                          "w-full rounded-xl py-2.5 text-sm font-medium flex items-center justify-center gap-2 transition-all disabled:opacity-50",
+                          "w-full min-h-11 rounded-xl py-2.5 text-sm font-medium flex items-center justify-center gap-2 transition-all disabled:opacity-50",
                           isSelected
-                            ? "bg-primary text-primary-foreground"
+                            ? "bg-primary/15 text-primary border border-primary/30"
                             : "bg-secondary border border-border hover:bg-accent"
                         )}
                       >
-                        {isLoading ? (
+                        {isSelected ? (
                           <>
-                            <Loader2 className="size-4 animate-spin" />
-                            Создаём…
-                          </>
-                        ) : isSelected ? (
-                          <>
-                            <Check className="size-4" /> Создать
+                            <Check className="size-4" /> Выбран
                           </>
                         ) : (
                           <>
-                            <Sparkles className="size-4" /> Использовать шаблон
+                            <Sparkles className="size-4" /> Выбрать шаблон
                           </>
                         )}
                       </button>

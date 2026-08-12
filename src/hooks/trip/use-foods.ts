@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { getTripId } from "./trip-id";
+import { getTripId, useCurrentTripId } from "./trip-id";
 
 // === Food Guide ===
 export interface FoodItem {
@@ -22,7 +22,7 @@ export interface FoodItem {
 // P0 #2: enabled !!tripId, placeholderData: []
 // P1 #5: throw on !ok
 export function useFoods(city?: string) {
-  const tripId = getTripId();
+  const tripId = useCurrentTripId();
   const params = new URLSearchParams();
   if (tripId) params.set("tripId", tripId);
   if (city && city !== "all") params.set("city", city);
@@ -36,7 +36,6 @@ export function useFoods(city?: string) {
       return Array.isArray(data) ? data : [];
     },
     enabled: !!tripId,
-    placeholderData: [],
   });
 }
 

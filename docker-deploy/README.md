@@ -57,9 +57,9 @@ openssl rand -base64 32
 ```
 
 ### NEXTAUTH_URL
-URL твоего приложения:
+URL приложения (куки / редиректы):
 - Локально: `http://localhost:3000`
-- С доменом: `https://triptrek.example.com`
+- С телефона в той же Wi‑Fi: можно оставить localhost; открывай `http://<LAN-IP>:3000`
 
 ### VAPID ключи (для push-уведомлений)
 ```bash

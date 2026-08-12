@@ -9,27 +9,28 @@ export interface NotificationConfig {
 export const NOTIFICATION_MAP: Record<string, NotificationConfig> = {
   "place:visited": {
     emoji: "📍",
-    message: (d) => `${d.userName} отметил(а): ${d.placeName}`,
+    message: (d) => `${d.userName || "Кто-то"} отметил(а): ${d.placeName}`,
   },
   "place:created": {
     emoji: "📍",
-    message: (d) => `${d.userName} добавил(а) место: ${d.placeName}`,
+    message: (d) => `${d.userName || "Кто-то"} добавил(а) место: ${d.placeName}`,
   },
   "photo:added": {
     emoji: "📸",
-    message: (d) => `${d.userName} добавил(а) фото`,
+    message: (d) => `${d.userName || "Кто-то"} добавил(а) фото`,
   },
   "expense:added": {
     emoji: "💸",
-    message: (d) => `${d.userName} добавил(а) трату: $${d.amount} — ${d.description}`,
+    message: (d) =>
+      `${d.userName || d.paidByName || "Кто-то"} добавил(а) трату: $${d.amount} — ${d.description}`,
   },
   "journal:added": {
     emoji: "📔",
-    message: (d) => `${d.userName} написал(а) в дневник ${d.mood || ""}`,
+    message: (d) => `${d.userName || "Кто-то"} написал(а) в дневник ${d.mood || ""}`.trim(),
   },
   "board:added": {
     emoji: "💬",
-    message: (d) => `${d.userName}: ${String(d.content || "").slice(0, 50)}`,
+    message: (d) => `${d.userName || "Кто-то"}: ${String(d.content || "").slice(0, 50)}`,
   },
 };
 
@@ -71,7 +72,8 @@ export const SOCKET_EVENTS: Record<string, SocketEventConfig> = {
     broadcastEvent: "expense:added",
     notification: {
       emoji: "💸",
-      message: (d) => `${d.userName} добавил(а) трату: $${d.amount} — ${d.description}`,
+      message: (d) =>
+        `${d.userName || d.paidByName || "Кто-то"} добавил(а) трату: $${d.amount} — ${d.description}`,
     },
   },
   "expense:deleted": {

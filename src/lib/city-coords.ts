@@ -24,6 +24,8 @@ export const KNOWN_CITIES: Record<string, CityCoord> = {
   bangkok: { key: "bangkok", name: "Бангкок", lat: 13.7563, lng: 100.5018, timezone: "Asia/Bangkok", color: "#7c3aed" },
   phuket: { key: "phuket", name: "Пхукет", lat: 7.8804, lng: 98.3923, timezone: "Asia/Bangkok", color: "#0891b2" },
   seoul: { key: "seoul", name: "Сеул", lat: 37.5665, lng: 126.9780, timezone: "Asia/Seoul", color: "#3b82f6" },
+  singapore: { key: "singapore", name: "Сингапур", lat: 1.3521, lng: 103.8198, timezone: "Asia/Singapore", color: "#ef4444" },
+  dubai: { key: "dubai", name: "Дубай", lat: 25.2048, lng: 55.2708, timezone: "Asia/Dubai", color: "#14b8a6" },
   // Europe
   paris: { key: "paris", name: "Париж", lat: 48.8566, lng: 2.3522, timezone: "Europe/Paris", color: "#3b82f6" },
   amsterdam: { key: "amsterdam", name: "Амстердам", lat: 52.3676, lng: 4.9041, timezone: "Europe/Amsterdam", color: "#f59e0b" },

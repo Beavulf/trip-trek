@@ -4,20 +4,65 @@ import { useState, useRef } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { Share2, Download, X, Loader2, Image as ImageIcon, Copy, Check } from "lucide-react";
-import { useTrip } from "@/hooks/use-trip";
+import { useTrip, useCurrentTripId } from "@/hooks/use-trip";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { useBodyScrollLock } from "@/hooks/use-body-scroll-lock";
+import { useTripStore } from "@/lib/trip-store";
 
 export function ShareCard({ open, onOpenChange }: { open: boolean; onOpenChange: (v: boolean) => void }) {
   useBodyScrollLock(open);
+  const tripId = useCurrentTripId();
   const { data: trip } = useTrip();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [generating, setGenerating] = useState(false);
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
 
-  if (!open || typeof document === "undefined" || !trip) return null;
+  if (!open || typeof document === "undefined") return null;
+
+  if (!tripId || !trip) {
+    return createPortal(
+      <AnimatePresence>
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          onClick={() => onOpenChange(false)}
+          className="fixed inset-0 z-[200] bg-black/80 backdrop-blur-sm flex items-end sm:items-center justify-center sm:p-4"
+        >
+          <motion.div
+            initial={{ y: "100%" }}
+            animate={{ y: 0 }}
+            onClick={(e) => e.stopPropagation()}
+            className="bg-card w-full sm:max-w-md rounded-t-3xl sm:rounded-3xl p-6 pb-[calc(1.5rem+env(safe-area-inset-bottom))] text-center space-y-3"
+          >
+            <div className="text-4xl">🧭</div>
+            <p className="text-sm font-medium">Нет активной поездки</p>
+            <p className="text-xs text-muted-foreground">Создай или выбери поездку, чтобы поделиться карточкой</p>
+            <button
+              type="button"
+              onClick={() => {
+                onOpenChange(false);
+                useTripStore.getState().setTripSwitcherOpen(true);
+              }}
+              className="w-full min-h-11 rounded-xl bg-primary text-primary-foreground text-sm font-medium"
+            >
+              Мои поездки →
+            </button>
+            <button
+              type="button"
+              onClick={() => onOpenChange(false)}
+              className="w-full min-h-11 text-sm text-muted-foreground"
+            >
+              Закрыть
+            </button>
+          </motion.div>
+        </motion.div>
+      </AnimatePresence>,
+      document.body
+    );
+  }
 
   const generateCard = async () => {
     setGenerating(true);
@@ -34,7 +79,7 @@ export function ShareCard({ open, onOpenChange }: { open: boolean; onOpenChange:
 
       // Фон градиент
       const grad = ctx.createLinearGradient(0, 0, 1080, 1920);
-      grad.addColorStop(0, trip.settings.title?.includes("China") ? "#f97316" : "#6366f1");
+      grad.addColorStop(0, trip.settings.coverColor || "#0ea5e9");
       grad.addColorStop(0.5, "#ec4899");
       grad.addColorStop(1, "#1c1917");
       ctx.fillStyle = grad;
@@ -218,9 +263,15 @@ export function ShareCard({ open, onOpenChange }: { open: boolean; onOpenChange:
   };
 
   const copyLink = () => {
-    navigator.clipboard.writeText(window.location.origin);
+    const code = trip.settings.inviteCode || trip.trip?.inviteCode || "";
+    if (!code) {
+      toast.error("Код приглашения ещё не готов");
+      return;
+    }
+    const url = `${window.location.origin}/join?code=${encodeURIComponent(code)}`;
+    navigator.clipboard.writeText(url);
     setCopied(true);
-    toast.success("Ссылка скопирована! 📋");
+    toast.success("Ссылка-приглашение скопирована! 📋");
     setTimeout(() => setCopied(false), 2000);
   };
 
@@ -239,7 +290,7 @@ export function ShareCard({ open, onOpenChange }: { open: boolean; onOpenChange:
           exit={{ y: "100%", opacity: 0 }}
           transition={{ type: "spring", stiffness: 320, damping: 32 }}
           onClick={(e) => e.stopPropagation()}
-          className="bg-card w-full sm:max-w-md max-h-[95vh] rounded-t-3xl sm:rounded-3xl overflow-y-auto"
+          className="bg-card w-full sm:max-w-md max-h-[95vh] rounded-t-3xl sm:rounded-3xl overflow-y-auto pb-[env(safe-area-inset-bottom)]"
         >
           {/* Handle */}
           <div className="sm:hidden flex justify-center pt-2.5 pb-1">
@@ -251,7 +302,12 @@ export function ShareCard({ open, onOpenChange }: { open: boolean; onOpenChange:
             <h2 className="font-bold text-base flex items-center gap-2">
               <ImageIcon className="size-4" /> Карточка поездки
             </h2>
-            <button onClick={() => { onOpenChange(false); setImageUrl(null); }} className="size-8 rounded-full hover:bg-accent grid place-items-center">
+            <button
+              type="button"
+              onClick={() => { onOpenChange(false); setImageUrl(null); }}
+              aria-label="Закрыть"
+              className="size-11 rounded-full hover:bg-accent grid place-items-center"
+            >
               <X className="size-4" />
             </button>
           </div>
@@ -277,7 +333,7 @@ export function ShareCard({ open, onOpenChange }: { open: boolean; onOpenChange:
               <button
                 onClick={generateCard}
                 disabled={generating}
-                className="w-full rounded-xl bg-primary text-primary-foreground py-3.5 font-medium flex items-center justify-center gap-2 disabled:opacity-50"
+                className="w-full min-h-11 rounded-xl bg-primary text-primary-foreground py-3.5 font-medium flex items-center justify-center gap-2 disabled:opacity-50"
               >
                 {generating ? <Loader2 className="size-5 animate-spin" /> : <ImageIcon className="size-5" />}
                 {generating ? "Создание…" : "Создать карточку"}
@@ -302,7 +358,7 @@ export function ShareCard({ open, onOpenChange }: { open: boolean; onOpenChange:
             {/* Ссылка */}
             <button
               onClick={copyLink}
-              className="w-full flex items-center justify-center gap-2 py-2.5 text-xs text-muted-foreground hover:text-foreground"
+              className="w-full flex items-center justify-center gap-2 py-3 text-xs text-muted-foreground hover:text-foreground min-h-11"
             >
               {copied ? <Check className="size-3 text-green-500" /> : <Copy className="size-3" />}
               {copied ? "Скопировано!" : "Копировать ссылку"}

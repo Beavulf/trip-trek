@@ -1,7 +1,5 @@
-# TripTrek — Production Docker Configuration
-# Запуск: docker-compose up -d --build
-# Остановка: docker-compose down
-# Логи: docker-compose logs -f
+# TripTrek — Production Docker Compose
+# cd docker-deploy && docker compose up -d --build
 
 services:
   triptrek:
@@ -11,23 +9,31 @@ services:
     container_name: triptrek-app
     ports:
       - "3000:3000"
+    env_file:
+      - .env
     environment:
       - DATABASE_URL=file:/app/data/triptrek.db
       - NEXTAUTH_SECRET=${NEXTAUTH_SECRET}
       - NEXTAUTH_URL=${NEXTAUTH_URL:-http://localhost:3000}
-      - VAPID_PUBLIC_KEY=${VAPID_PUBLIC_KEY}
-      - VAPID_PRIVATE_KEY=${VAPID_PRIVATE_KEY}
+      - VAPID_PUBLIC_KEY=${VAPID_PUBLIC_KEY:-}
+      - VAPID_PRIVATE_KEY=${VAPID_PRIVATE_KEY:-}
+      - WS_ALLOWED_ORIGINS=${WS_ALLOWED_ORIGINS:-*}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - OPENAI_BASE_URL=${OPENAI_BASE_URL:-}
+      - OPENAI_MODEL=${OPENAI_MODEL:-gpt-4o-mini}
       - NODE_ENV=production
+      - PORT=3000
+      - HOSTNAME=0.0.0.0
     volumes:
       - triptrek-db:/app/data
       - triptrek-uploads:/app/public/uploads
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "wget", "--spider", "-q", "http://localhost:3000/api/health"]
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:3000/api/health"]
       interval: 30s
       timeout: 10s
-      retries: 3
-      start_period: 40s
+      retries: 5
+      start_period: 60s
 
 volumes:
   triptrek-db:

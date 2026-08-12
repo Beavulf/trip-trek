@@ -174,13 +174,16 @@ export function useWebSocket(tripId: string) {
     // Toast + push уведомления
     // P1 #9: anti double-toast — исключаем автора (actor уже видел toast при отправке)
     socket.on("notification", (data: { type: string; message: string; emoji: string; actorUserId?: string | null }) => {
-      // P1 #9: если notification от нас самих — пропускаем toast (уже показали в onSuccess)
+      // Skip toast for the actor — they already got a local success toast.
+      // Also skip broken payloads ("undefined добавил…").
       const currentUserId = typeof window !== "undefined" ? localStorage.getItem("triptrek-current-user-id") : null;
       if (data.actorUserId && currentUserId && data.actorUserId === currentUserId) {
-        return; // Пропускаем — автор уже видел toast
+        return;
+      }
+      if (!data.message || data.message.startsWith("undefined ")) {
+        return;
       }
 
-      // Показываем toast
       import("sonner").then(({ toast }) => {
         toast.success(data.message, {
           icon: data.emoji,

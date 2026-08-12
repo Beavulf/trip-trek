@@ -80,7 +80,7 @@ export function NearbyView({ category, onCategoryChange }: NearbyViewProps) {
   return (
     <div className="space-y-3">
       {/* Категории */}
-      <div className="flex gap-1.5 overflow-x-auto no-scrollbar">
+      <div className="chip-rail no-scrollbar">
         {[
           { key: "all", label: "Все", emoji: "✨" },
           { key: "cafe", label: "Кафе", emoji: "☕" },
@@ -91,7 +91,7 @@ export function NearbyView({ category, onCategoryChange }: NearbyViewProps) {
             key={f.key}
             onClick={() => onCategoryChange(f.key)}
             className={cn(
-              "min-h-[36px] flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-colors",
+              "min-h-11 flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-colors",
               category === f.key ? "bg-primary text-primary-foreground" : "bg-card border border-border hover:bg-accent"
             )}
           >

@@ -9,6 +9,7 @@ import { useBodyScrollLock } from "@/hooks/use-body-scroll-lock";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { CityAutocomplete } from "../city-autocomplete";
+import { encodeCustomKey } from "@/lib/city-coords";
 
 const COLORS = ["#f97316", "#06b6d4", "#8b5cf6", "#ec4899", "#10b981", "#f59e0b", "#ef4444", "#3b82f6"];
 
@@ -26,7 +27,7 @@ export function AddDayButton() {
     const cityName = selectedCity?.name || city.trim() || "Новый город";
     await addDay.mutateAsync({
       city: cityName,
-      cityKey: selectedCity ? `custom-${selectedCity.lat}-${selectedCity.lng}` : "custom",
+      cityKey: selectedCity ? encodeCustomKey(selectedCity.lat, selectedCity.lng) : "custom",
       title: title.trim() || undefined,
       accentColor: color,
     });

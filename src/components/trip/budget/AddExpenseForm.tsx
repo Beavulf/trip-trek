@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { motion } from "framer-motion";
 import { Wallet, Plus, Users, Check, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -130,13 +129,8 @@ export function AddExpenseForm({ onDone }: AddExpenseFormProps) {
   const perPersonUSD = amountUSD > 0 ? (amountUSD / splitCount).toFixed(2) : "0";
 
   return (
-    <motion.div
-      initial={{ height: 0, opacity: 0 }}
-      animate={{ height: "auto", opacity: 1 }}
-      exit={{ height: 0, opacity: 0 }}
-      className="overflow-hidden"
-    >
-      <div className="bg-muted/40 rounded-xl p-3 space-y-2.5 mb-2">
+    <div className="space-y-2.5">
+      <div className="bg-muted/40 rounded-xl p-3 space-y-2.5">
         {/* Сумма + валюта */}
         <div className="grid grid-cols-[1fr_auto] gap-2">
           <input
@@ -298,6 +292,6 @@ export function AddExpenseForm({ onDone }: AddExpenseFormProps) {
           Добавить трату
         </button>
       </div>
-    </motion.div>
+    </div>
   );
 }

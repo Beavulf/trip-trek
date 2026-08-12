@@ -4,8 +4,10 @@ import { useState } from "react";
 import { Trash2, Users, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import { useDeleteExpense } from "@/hooks/use-trip";
+import { useDeleteExpense, useTrip } from "@/hooks/use-trip";
+import { useAuth } from "@/hooks/use-auth";
 import { EXPENSE_CATEGORIES, type Expense, type Participant } from "@/lib/types";
+import { currencySymbol } from "@/lib/currencies";
 
 interface ExpenseRowProps {
   expense: Expense;
@@ -13,6 +15,12 @@ interface ExpenseRowProps {
 }
 
 export function ExpenseRow({ expense, participants }: ExpenseRowProps) {
+  const { data: trip } = useTrip();
+  const { data: session } = useAuth();
+  const currentUserId = (session?.user as { id?: string } | undefined)?.id || "";
+  const myRole = participants.find((p) => p.id === currentUserId)?.role;
+  const canDelete = expense.paidById === currentUserId || myRole === "owner";
+  const sym = currencySymbol(trip?.settings.currency);
   const del = useDeleteExpense();
   const [confirming, setConfirming] = useState(false);
   const isSettlement = expense.category === "settlement";
@@ -43,7 +51,10 @@ export function ExpenseRow({ expense, participants }: ExpenseRowProps) {
   };
 
   return (
-    <div className="flex items-start gap-2.5 p-2.5 rounded-xl hover:bg-accent/50 transition-colors">
+    <div className={cn(
+      "flex items-start gap-2.5 p-2.5 rounded-xl hover:bg-accent/50 transition-colors",
+      isSettlement && "bg-green-500/5 border border-green-500/20"
+    )}>
       {/* Иконка категории */}
       <div
         className={cn("size-9 rounded-xl grid place-items-center text-base shrink-0 mt-0.5", isSettlement ? "bg-green-600/15" : "")}
@@ -57,7 +68,7 @@ export function ExpenseRow({ expense, participants }: ExpenseRowProps) {
         {/* Описание + сумма */}
         <div className="flex items-center justify-between gap-2">
           <span className="text-sm font-medium truncate">{expense.description}</span>
-          <span className="font-semibold text-sm shrink-0">${expense.amount.toFixed(2)}</span>
+          <span className="font-semibold text-sm shrink-0 tabular-nums">{sym}{expense.amount.toFixed(2)}</span>
         </div>
 
         {/* Мета: кто заплатил + категория + день */}
@@ -95,32 +106,39 @@ export function ExpenseRow({ expense, participants }: ExpenseRowProps) {
         <div className="text-[9px] text-muted-foreground/60 mt-1">{timeStr}</div>
       </div>
 
-      {/* Удаление */}
+      {/* Удаление — только плательщик или owner */}
+      {canDelete && (
       <div className="shrink-0">
         {confirming ? (
           <div className="flex items-center gap-1">
             <button
               onClick={handleDelete}
               disabled={del.isPending}
-              className="text-[10px] bg-red-500 text-white px-2 py-1 rounded-lg font-medium flex items-center gap-1"
+              className="min-h-11 min-w-11 text-xs bg-red-500 text-white px-3 rounded-xl font-medium flex items-center justify-center gap-1"
             >
-              {del.isPending ? <Loader2 className="size-3 animate-spin" /> : null}
+              {del.isPending ? <Loader2 className="size-3.5 animate-spin" /> : null}
               {del.isPending ? "…" : "Да"}
             </button>
-            <button onClick={() => setConfirming(false)} disabled={del.isPending} className="text-[10px] bg-secondary px-2 py-1 rounded-lg">
+            <button
+              onClick={() => setConfirming(false)}
+              disabled={del.isPending}
+              className="min-h-11 min-w-11 text-xs bg-secondary px-3 rounded-xl"
+            >
               Нет
             </button>
           </div>
         ) : (
           <button
             onClick={() => setConfirming(true)}
-            className="size-7 rounded-lg hover:bg-red-500/10 hover:text-red-500 grid place-items-center transition-colors text-muted-foreground"
+            className="size-11 rounded-xl hover:bg-red-500/10 hover:text-red-500 grid place-items-center transition-colors text-muted-foreground"
             title="Удалить"
+            aria-label="Удалить трату"
           >
-            <Trash2 className="size-3.5" />
+            <Trash2 className="size-4" />
           </button>
         )}
       </div>
+      )}
     </div>
   );
 }

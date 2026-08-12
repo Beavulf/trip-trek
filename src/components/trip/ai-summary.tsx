@@ -8,6 +8,7 @@ import ReactMarkdown from "react-markdown";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { getTripId } from "@/hooks/use-trip";
+import { currencySymbol } from "@/lib/currencies";
 
 type SummaryType = "summary" | "day" | "tips";
 
@@ -16,16 +17,6 @@ const TYPES: Array<{ key: SummaryType; label: string; desc: string; icon: typeof
   { key: "day", label: "Итог дня", desc: "Атмосферный итог сегодняшнего дня", icon: Calendar, color: "#06b6d4" },
   { key: "tips", label: "Советы", desc: "Практичные советы на оставшуюся поездку", icon: Lightbulb, color: "#8b5cf6" },
 ];
-
-// P1 #8: валюта → символ (как на сервере)
-function currencySymbol(code: string | undefined): string {
-  if (!code) return "$";
-  const map: Record<string, string> = {
-    USD: "$", EUR: "€", GBP: "£", CNY: "¥", JPY: "¥", KRW: "₩",
-    RUB: "₽", KZT: "₸", THB: "฿", UAH: "₴", HKD: "HK$",
-  };
-  return map[code] || "$";
-}
 
 export function AISummary() {
   const { data: trip, error: tripError } = useTrip();

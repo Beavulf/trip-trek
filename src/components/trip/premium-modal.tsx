@@ -3,10 +3,9 @@
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { Crown, X, Check, Sparkles, Users, Plane, Zap, Loader2 } from "lucide-react";
-import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { useState } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth as useSession } from "@/hooks/use-auth";
 import { useBodyScrollLock } from "@/hooks/use-body-scroll-lock";
 
@@ -17,12 +16,12 @@ export function PremiumModal({ open, onOpenChange }: { open: boolean; onOpenChan
   const qc = useQueryClient();
   const [loading, setLoading] = useState<"trip" | "yearly" | null>(null);
 
-  // Проверить текущий план
   const { data: limits } = useQuery({
     queryKey: ["limits", userId],
     queryFn: async () => {
       if (!userId) return null;
-      const r = await fetch(`/api/limits?userId=${userId}`);
+      const r = await fetch("/api/limits");
+      if (!r.ok) throw new Error("limits failed");
       return r.json();
     },
     enabled: !!userId && open,
@@ -40,7 +39,7 @@ export function PremiumModal({ open, onOpenChange }: { open: boolean; onOpenChan
       const r = await fetch("/api/user/upgrade", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userId, plan }),
+        body: JSON.stringify({ plan }),
       });
       if (!r.ok) throw new Error("upgrade failed");
       const data = await r.json();
@@ -93,7 +92,7 @@ export function PremiumModal({ open, onOpenChange }: { open: boolean; onOpenChan
             <h2 className="font-bold text-lg flex items-center gap-2">
               <Crown className="size-5" /> Premium
             </h2>
-            <button onClick={() => onOpenChange(false)} className="size-8 rounded-full bg-white/20 hover:bg-white/30 grid place-items-center">
+            <button type="button" onClick={() => onOpenChange(false)} aria-label="Закрыть" className="size-11 rounded-full bg-white/20 hover:bg-white/30 grid place-items-center">
               <X className="size-4" />
             </button>
           </div>

@@ -11,7 +11,7 @@ import {
   useDeleteInfo,
   type InfoItem,
 } from "@/hooks/use-trip";
-import { useTrip } from "@/hooks/use-trip";
+import { useTrip, useCurrentTripId } from "@/hooks/use-trip";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   CheckCircle2,
@@ -32,6 +32,7 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { DataBackup } from "./data-backup";
 import { PushSettings } from "./push-settings";
+import { useTripStore } from "@/lib/trip-store";
 
 const CHECKLIST_CATS: Record<string, { label: string; emoji: string; color: string }> = {
   documents: { label: "Документы", emoji: "📄", color: "#ef4444" },
@@ -39,6 +40,7 @@ const CHECKLIST_CATS: Record<string, { label: string; emoji: string; color: stri
   preparation: { label: "Подготовка", emoji: "🎒", color: "#f59e0b" },
   packing_there: { label: "Сборы туда", emoji: "🧳", color: "#8b5cf6" },
   packing_back: { label: "Сборы обратно", emoji: "↩️", color: "#06b6d4" },
+  other: { label: "Другое", emoji: "📌", color: "#94a3b8" },
 };
 
 // P1 #7: InfoItem types — neutral labels (not China-centric)
@@ -50,15 +52,39 @@ const INFO_TYPES: Record<string, { label: string; emoji: string; color: string }
 };
 
 export function InfoPanel() {
-  const { data: trip, error: tripError } = useTrip();
+  const tripId = useCurrentTripId();
+  const { data: trip, error: tripError, refetch: refetchTrip } = useTrip();
+  const { setTripSwitcherOpen } = useTripStore();
 
-  // P0 #6: error state
+  if (!tripId) {
+    return (
+      <div className="space-y-4 animate-fade-up pb-20">
+        <div className="rounded-3xl p-5 bg-gradient-to-br from-sky-500 to-cyan-600 text-white shadow-xl text-center">
+          <div className="text-5xl mb-3">📋</div>
+          <h1 className="text-xl font-bold">Нет активной поездки</h1>
+          <p className="text-white/80 text-sm mt-1">Создай или выбери поездку</p>
+          <button
+            type="button"
+            onClick={() => setTripSwitcherOpen(true)}
+            className="mt-4 rounded-xl bg-white/20 backdrop-blur px-4 py-3 text-sm font-medium active:scale-95 min-h-11"
+          >
+            Мои поездки →
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   if (tripError) {
     return (
       <div className="py-16 text-center text-muted-foreground space-y-2">
         <div className="text-3xl">🤔</div>
         <p className="text-sm font-medium">Не удалось загрузить поездку</p>
-        <button onClick={() => window.location.reload()} className="mt-2 text-xs px-3 py-1.5 rounded-lg bg-primary text-primary-foreground">
+        <button
+          type="button"
+          onClick={() => refetchTrip()}
+          className="mt-2 text-xs px-3 py-2 rounded-lg bg-primary text-primary-foreground min-h-11"
+        >
           Обновить
         </button>
       </div>
@@ -95,36 +121,44 @@ export function InfoPanel() {
 }
 
 function ChecklistView() {
-  const { data: items, isLoading, error: itemsError } = useChecklist();
+  const { data: items, isLoading, error: itemsError, refetch } = useChecklist();
   const toggle = useToggleChecklist();
   const del = useDeleteChecklist();
   const [newItem, setNewItem] = useState("");
   const [newCat, setNewCat] = useState("preparation");
+  const [togglingId, setTogglingId] = useState<string | null>(null);
   const add = useAddChecklist();
 
-  // P0 #6: error state
   if (itemsError) {
     return (
       <div className="rounded-2xl border-2 border-red-500/20 bg-red-500/5 p-4 text-center space-y-2">
         <AlertCircle className="size-6 mx-auto text-red-500" />
         <p className="text-sm text-red-500">Не удалось загрузить чек-лист</p>
-        <button onClick={() => window.location.reload()} className="text-xs px-3 py-1.5 rounded-lg bg-primary text-primary-foreground">
+        <button
+          type="button"
+          onClick={() => refetch()}
+          className="text-xs px-3 py-2 rounded-lg bg-primary text-primary-foreground min-h-11"
+        >
           Обновить
         </button>
       </div>
     );
   }
 
-  if (isLoading) return <Skeleton />;
+  if (isLoading || !items) return <Skeleton />;
 
-  const grouped = Object.keys(CHECKLIST_CATS).map((cat) => ({
+  const knownKeys = Object.keys(CHECKLIST_CATS);
+  const grouped = knownKeys.map((cat) => ({
     cat,
     meta: CHECKLIST_CATS[cat],
-    items: (items ?? []).filter((i) => i.category === cat),
+    items:
+      cat === "other"
+        ? items.filter((i) => i.category === "other" || !knownKeys.includes(i.category))
+        : items.filter((i) => i.category === cat),
   }));
 
-  const done = (items ?? []).filter((i) => i.done).length;
-  const total = (items ?? []).length;
+  const done = items.filter((i) => i.done).length;
+  const total = items.length;
   const pct = total ? Math.round((done / total) * 100) : 0;
 
   // P1 #8: submit with try/catch — toast onSuccess only
@@ -220,10 +254,20 @@ function ChecklistView() {
                   <ChecklistRow
                     key={item.id}
                     item={item}
-                    onToggle={() => toggle.mutate(
-                      { id: item.id, done: !item.done },
-                      { onError: (err) => toast.error("Не удалось обновить", { description: err instanceof Error ? err.message : "" }) }
-                    )}
+                    togglePending={togglingId === item.id || (toggle.isPending && togglingId === item.id)}
+                    onToggle={() => {
+                      setTogglingId(item.id);
+                      toggle.mutate(
+                        { id: item.id, done: !item.done },
+                        {
+                          onSettled: () => setTogglingId(null),
+                          onError: (err) =>
+                            toast.error("Не удалось обновить", {
+                              description: err instanceof Error ? err.message : "",
+                            }),
+                        }
+                      );
+                    }}
                     onDelete={async (id) => {
                       try {
                         await del.mutateAsync(id);
@@ -244,7 +288,17 @@ function ChecklistView() {
 }
 
 // P1 #9: confirm delete on checklist items
-function ChecklistRow({ item, onToggle, onDelete }: { item: ChecklistItem; onToggle: () => void; onDelete: (id: string) => Promise<void> }) {
+function ChecklistRow({
+  item,
+  onToggle,
+  onDelete,
+  togglePending,
+}: {
+  item: ChecklistItem;
+  onToggle: () => void;
+  onDelete: (id: string) => Promise<void>;
+  togglePending?: boolean;
+}) {
   const update = useToggleChecklist();
   const [editing, setEditing] = useState(false);
   const [text, setText] = useState(item.text);
@@ -272,10 +326,11 @@ function ChecklistRow({ item, onToggle, onDelete }: { item: ChecklistItem; onTog
       className="flex items-center gap-2.5 p-2 rounded-lg hover:bg-accent group"
     >
       <button
+        type="button"
         onClick={onToggle}
-        disabled={update.isPending}
+        disabled={!!togglePending || update.isPending}
         aria-label={item.done ? "Снять отметку" : "Отметить как выполненное"}
-        className="shrink-0 size-9 grid place-items-center disabled:opacity-50"
+        className="shrink-0 size-11 grid place-items-center disabled:opacity-50"
       >
         {item.done ? (
           <CheckCircle2 className="size-5 text-green-500" />
@@ -318,14 +373,14 @@ function ChecklistRow({ item, onToggle, onDelete }: { item: ChecklistItem; onTog
                 onClick={async () => { await onDelete(item.id); setConfirmingDelete(false); }}
                 disabled={update.isPending}
                 aria-label="Подтвердить удаление"
-                className="min-h-[32px] min-w-[32px] text-[10px] bg-red-500 text-white px-2 py-1 rounded-lg font-medium"
+                className="btn-confirm-yes"
               >
                 Да
               </button>
               <button
                 onClick={() => setConfirmingDelete(false)}
                 aria-label="Отменить удаление"
-                className="min-h-[32px] min-w-[32px] text-[10px] bg-secondary px-2 py-1 rounded-lg"
+                className="btn-confirm-no"
               >
                 Нет
               </button>
@@ -334,7 +389,7 @@ function ChecklistRow({ item, onToggle, onDelete }: { item: ChecklistItem; onTog
             <button
               onClick={() => setConfirmingDelete(true)}
               aria-label="Удалить пункт"
-              className="size-9 shrink-0 rounded-md hover:bg-red-500/10 hover:text-red-500 grid place-items-center text-muted-foreground transition-opacity md:opacity-0 md:group-hover:opacity-100"
+              className="size-11 shrink-0 rounded-xl hover:bg-red-500/10 hover:text-red-500 grid place-items-center text-muted-foreground transition-opacity md:opacity-0 md:group-hover:opacity-100"
             >
               <Trash2 className="size-3.5" />
             </button>
@@ -424,7 +479,7 @@ function InfoView() {
                 value={type}
                 onChange={(e) => setType(e.target.value)}
                 aria-label="Тип записи"
-                className="w-full min-h-[40px] rounded-lg border border-input bg-background px-3 py-2 text-sm"
+                className="w-full min-h-11 rounded-lg border border-input bg-background px-3 py-2 text-sm"
               >
                 {Object.entries(INFO_TYPES).map(([k, v]) => (
                   <option key={k} value={k}>{v.emoji} {v.label}</option>
@@ -435,7 +490,7 @@ function InfoView() {
                 onChange={(e) => setTitle(e.target.value)}
                 placeholder="Заголовок (например, Экстренный номер)"
                 maxLength={200}
-                className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm"
+                className="w-full min-h-11 rounded-lg border border-input bg-background px-3 py-2 text-sm"
               />
               <textarea
                 value={content}
@@ -443,12 +498,12 @@ function InfoView() {
                 placeholder="Текст…"
                 rows={2}
                 maxLength={2000}
-                className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm resize-none"
+                className="w-full min-h-11 rounded-lg border border-input bg-background px-3 py-2 text-sm resize-none"
               />
               <button
                 onClick={handleAdd}
                 disabled={add.isPending}
-                className="w-full min-h-[40px] rounded-lg bg-primary text-primary-foreground py-2 text-sm font-medium disabled:opacity-50"
+                className="w-full min-h-11 rounded-lg bg-primary text-primary-foreground py-2 text-sm font-medium disabled:opacity-50"
               >
                 {add.isPending ? <Loader2 className="size-4 animate-spin mx-auto" /> : "Добавить запись"}
               </button>
@@ -501,14 +556,14 @@ function InfoItemCard({ item, onDelete }: { item: InfoItem; onDelete: () => Prom
             <button
               onClick={async () => { await onDelete(); setConfirmingDelete(false); }}
               aria-label="Подтвердить удаление"
-              className="min-h-[32px] text-[10px] bg-red-500 text-white px-2 py-1 rounded-lg font-medium"
+              className="btn-confirm-yes"
             >
               Да
             </button>
             <button
               onClick={() => setConfirmingDelete(false)}
               aria-label="Отменить удаление"
-              className="min-h-[32px] text-[10px] bg-secondary px-2 py-1 rounded-lg"
+              className="btn-confirm-no"
             >
               Нет
             </button>
@@ -517,7 +572,7 @@ function InfoItemCard({ item, onDelete }: { item: InfoItem; onDelete: () => Prom
           <button
             onClick={() => setConfirmingDelete(true)}
             aria-label="Удалить запись"
-            className="size-8 shrink-0 rounded-md hover:bg-red-500/10 hover:text-red-500 grid place-items-center text-muted-foreground transition-opacity md:opacity-0 md:group-hover:opacity-100"
+            className="size-11 shrink-0 rounded-xl hover:bg-red-500/10 hover:text-red-500 grid place-items-center text-muted-foreground transition-opacity md:opacity-0 md:group-hover:opacity-100"
           >
             <Trash2 className="size-3.5" />
           </button>

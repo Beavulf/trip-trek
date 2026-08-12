@@ -72,7 +72,8 @@ export function PWAUpdateNotification() {
           animate={{ opacity: 1, y: 0, scale: 1 }}
           exit={{ opacity: 0, y: 50, scale: 0.9 }}
           transition={{ type: "spring", stiffness: 320, damping: 28 }}
-          className="fixed bottom-4 left-4 right-4 z-[300] mx-auto max-w-sm"
+          className="fixed left-4 right-4 z-[300] mx-auto max-w-sm"
+          style={{ bottom: "calc(5.5rem + env(safe-area-inset-bottom, 0px))" }}
         >
           <div className="bg-card border border-primary/30 rounded-2xl shadow-2xl p-4 flex items-center gap-3">
             <div className="size-10 rounded-xl bg-primary/10 grid place-items-center shrink-0">

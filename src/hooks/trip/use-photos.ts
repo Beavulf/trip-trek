@@ -2,10 +2,10 @@
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import type { Photo } from "@/lib/types";
-import { getTripId } from "./trip-id";
+import { getTripId, useCurrentTripId } from "./trip-id";
 
 export function usePhotos(dayId?: string, placeId?: string) {
-  const tripId = getTripId();
+  const tripId = useCurrentTripId();
   const params = new URLSearchParams();
   if (tripId) params.set("tripId", tripId);
   if (dayId) params.set("dayId", dayId);
@@ -15,7 +15,9 @@ export function usePhotos(dayId?: string, placeId?: string) {
     queryFn: async () => {
       if (!tripId) return [];
       const r = await fetch(`/api/photos?${params}`);
-      return r.json();
+      if (!r.ok) throw new Error("fetch photos");
+      const data = await r.json();
+      return Array.isArray(data) ? data : [];
     },
     enabled: !!tripId,
   });
@@ -27,11 +29,15 @@ export function useUploadPhoto() {
     mutationFn: async (formData: FormData) => {
       formData.append("tripId", getTripId());
       const r = await fetch("/api/photos", { method: "POST", body: formData });
-      if (!r.ok) throw new Error("upload failed");
+      if (!r.ok) {
+        const err = await r.json().catch(() => ({}));
+        throw new Error(err.error || "upload failed");
+      }
       return r.json();
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["photos"] });
+      qc.invalidateQueries({ queryKey: ["photos-geo"] });
       qc.invalidateQueries({ queryKey: ["days"] });
       qc.invalidateQueries({ queryKey: ["trip"] });
     },
@@ -50,6 +56,7 @@ export function useDeletePhoto() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["photos"] });
+      qc.invalidateQueries({ queryKey: ["photos-geo"] });
       qc.invalidateQueries({ queryKey: ["days"] });
       qc.invalidateQueries({ queryKey: ["trip"] });
     },

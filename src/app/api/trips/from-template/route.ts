@@ -1,15 +1,20 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { TRIP_TEMPLATES } from "@/lib/trip-templates";
+import { requireUser } from "@/lib/api-auth";
 
-// POST /api/trips/from-template — создать поездку из шаблона
+// POST /api/trips/from-template — создать поездку из шаблона (owner = session)
 export async function POST(req: NextRequest) {
   try {
-    const body = await req.json();
-    const { templateId, userId, displayName, emoji, color, customTitle } = body;
+    const { user: sessionUser, response } = await requireUser(req);
+    if (response) return response;
 
-    if (!templateId || !userId) {
-      return NextResponse.json({ error: "templateId, userId required" }, { status: 400 });
+    const body = await req.json();
+    const { templateId, displayName, emoji, color, customTitle } = body;
+    const userId = sessionUser!.id;
+
+    if (!templateId) {
+      return NextResponse.json({ error: "templateId required" }, { status: 400 });
     }
 
     const template = TRIP_TEMPLATES.find((t) => t.id === templateId);
@@ -17,7 +22,6 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "template not found" }, { status: 404 });
     }
 
-    // Check limits
     const user = await db.user.findUnique({ where: { id: userId } });
     if (!user) return NextResponse.json({ error: "user not found" }, { status: 404 });
 

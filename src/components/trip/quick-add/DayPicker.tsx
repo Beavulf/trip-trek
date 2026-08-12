@@ -5,13 +5,18 @@ import type { Day } from "@/lib/types";
 
 export function DayPicker({ value, onChange }: { value: string; onChange: (id: string) => void }) {
   const { data: trip } = useTrip();
-  if (!trip) return null;
-  const currentDay = trip.days.find((d) => d.dayNumber === trip.currentDayNumber);
+  if (!trip?.days?.length) {
+    return (
+      <div className="rounded-lg border border-dashed border-border px-3 py-2.5 text-sm text-muted-foreground">
+        Нет дней в маршруте
+      </div>
+    );
+  }
   return (
     <select
       value={value}
       onChange={(e) => onChange(e.target.value)}
-      className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm"
+      className="w-full rounded-lg border border-input bg-background px-3 py-2.5 text-base input-mobile min-h-11"
     >
       {trip.days.map((d: Day) => (
         <option key={d.id} value={d.id}>

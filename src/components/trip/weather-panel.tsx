@@ -167,7 +167,7 @@ export function WeatherPanel() {
               <p className="text-xs text-white/70">{error.message}</p>
               <button
                 onClick={() => refetch()}
-                className="mt-1 inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-white/20 hover:bg-white/30"
+                className="mt-1 inline-flex items-center gap-1.5 text-xs px-3 py-2 rounded-lg bg-white/20 hover:bg-white/30 min-h-11"
               >
                 <RotateCw className="size-3.5" /> Повторить
               </button>
@@ -179,7 +179,7 @@ export function WeatherPanel() {
               <p className="text-xs text-white/70">Выберите город через автодополнение в Маршруте</p>
               <button
                 onClick={() => setActiveTab("itinerary")}
-                className="mt-1 inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-white/20 hover:bg-white/30"
+                className="mt-1 inline-flex items-center gap-1.5 text-xs px-3 py-2 rounded-lg bg-white/20 hover:bg-white/30 min-h-11"
               >
                 <MapPin className="size-3.5" /> Перейти в Маршрут
               </button>
@@ -218,14 +218,14 @@ export function WeatherPanel() {
       </motion.div>
 
       {/* Выбор города — из дней поездки */}
-      <div className="flex gap-1.5 overflow-x-auto no-scrollbar pb-1 px-1">
+      <div className="chip-rail no-scrollbar pb-1 px-1">
         {cities.map((c) => (
           <button
             key={c.key}
             onClick={() => setSelectedKey(c.key)}
             aria-label={`Погода: ${c.name}${!c.hasCoords ? " (нет координат)" : ""}`}
             className={cn(
-              "min-h-[36px] flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-all shrink-0",
+              "min-h-11 flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-all shrink-0",
               (currentCity?.key === c.key) ? "text-white shadow-md" : "bg-card border border-border hover:bg-accent"
             )}
             style={currentCity?.key === c.key ? { background: c.color } : undefined}

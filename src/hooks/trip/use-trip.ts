@@ -2,11 +2,11 @@
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import type { TripSummary } from "@/lib/types";
-import { getTripId } from "./trip-id";
+import { getTripId, useCurrentTripId } from "./trip-id";
 
 // Сводка поездки
 export function useTrip() {
-  const tripId = getTripId();
+  const tripId = useCurrentTripId();
   return useQuery<TripSummary>({
     queryKey: ["trip", tripId],
     queryFn: async () => {

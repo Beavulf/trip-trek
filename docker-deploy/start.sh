@@ -1,68 +1,55 @@
 #!/bin/bash
-# ============================================
-# TripTrek — Быстрый запуск Docker
-# ============================================
-
+# TripTrek — quick Docker start
 set -e
+cd "$(dirname "$0")"
 
-echo "🚀 TripTrek Docker Setup"
+echo "TripTrek Docker Setup"
 echo ""
 
-# Проверяем .env
 if [ ! -f .env ]; then
-    echo "📝 Создаю .env из примера..."
-    cp .env.example .env
-
-    # Генерируем NEXTAUTH_SECRET
-    SECRET=$(openssl rand -base64 32 2>/dev/null || echo "change-this-secret")
+  echo "Creating .env from .env.example…"
+  cp .env.example .env
+  SECRET=$(openssl rand -base64 32 2>/dev/null || echo "change-this-secret-$(date +%s)")
+  if command -v sed >/dev/null 2>&1; then
     sed -i.bak "s|NEXTAUTH_SECRET=.*|NEXTAUTH_SECRET=$SECRET|g" .env && rm -f .env.bak
-
-    echo "✅ .env создан с автоматически сгенерированным секретом"
-    echo "⚠️  Отредактируй NEXTAUTH_URL если нужен домен!"
-    echo ""
+  fi
+  echo "Created .env (NEXTAUTH_URL=http://localhost:3000)"
+  echo ""
 fi
 
-# Проверяем Docker
-if ! command -v docker &> /dev/null; then
-    echo "❌ Docker не установлен!"
-    echo "   Установка: https://docs.docker.com/get-docker/"
-    exit 1
+if ! command -v docker >/dev/null 2>&1; then
+  echo "Docker is not installed: https://docs.docker.com/get-docker/"
+  exit 1
 fi
 
-if ! docker compose version &> /dev/null && ! command -v docker-compose &> /dev/null; then
-    echo "❌ Docker Compose не установлен!"
-    echo "   Установка: https://docs.docker.com/compose/install/"
-    exit 1
-fi
-
-# Определяем команду compose
-if docker compose version &> /dev/null; then
-    COMPOSE="docker compose"
+if docker compose version >/dev/null 2>&1; then
+  COMPOSE="docker compose"
+elif command -v docker-compose >/dev/null 2>&1; then
+  COMPOSE="docker-compose"
 else
-    COMPOSE="docker-compose"
+  echo "Docker Compose is not installed"
+  exit 1
 fi
 
-echo "🔨 Собираю и запускаю..."
-echo ""
-
+echo "Building and starting…"
 $COMPOSE up -d --build
 
 echo ""
-echo "⏳ Жду запуска (40 секунд)..."
-sleep 40
+echo "Waiting for health (up to ~90s)…"
+ok=0
+for i in $(seq 1 30); do
+  if curl -fsS http://127.0.0.1:3000/api/health >/dev/null 2>&1; then
+    ok=1
+    break
+  fi
+  sleep 3
+done
 
-# Проверяем health
-if curl -s http://localhost:3000/api/health | grep -q "ok\|200" 2>/dev/null; then
-    echo ""
-    echo "✅ TripTrek запущен и работает!"
-    echo "🌐 Открой: http://localhost:3000"
-    echo ""
-    echo "📋 Логи: $COMPOSE logs -f"
-    echo "🛑 Стоп:  $COMPOSE down"
+if [ "$ok" = 1 ]; then
+  echo "TripTrek is up: http://localhost:3000"
+  echo "Phone (same Wi‑Fi): http://<LAN-IP>:3000"
+  echo "Logs: $COMPOSE logs -f"
 else
-    echo ""
-    echo "⏳ Сервер ещё запускается. Подожди 30 секунд и проверь:"
-    echo "   curl http://localhost:3000/api/health"
-    echo ""
-    echo "📋 Логи: $COMPOSE logs -f"
+  echo "Still starting — check: curl http://localhost:3000/api/health"
+  echo "Logs: $COMPOSE logs -f"
 fi
