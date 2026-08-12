@@ -1622,3 +1622,141 @@ Server was crashing with "Failed to load external module @prisma/client-2c3a283f
 7. **P2 #18 (seed-phrases.ts)** — outdated but not critical (templates use from-template API).
 8. **Turbopack issue** — `webpack: true` workaround in server.ts. Turbopack cached a prisma client hash `2c3a283f134fdcb6` that didn't exist. Webpack resolves correctly.
 
+
+---
+
+## Session: Board/Chat Audit — P0 + P1 + P2 fixes (based on `audit-board-chat.md`)
+
+**Phase**: 24 — Board/Chat audit fixes
+
+### Status Before
+- GET `/api/board` open (no auth/membership) + fallback `""` tripId → leak
+- POST: `userId` from body (spoofable — anyone could post as anyone)
+- DELETE: any member could delete any message (no ownership check)
+- PATCH (pin): no `board:pinned` emit — `SOCKET_EVENTS` mapped `board:pinned` → `board:added` (caused false "new message" toast!)
+- Hooks: no `throw on !ok`, no `enabled`, no `placeholderData`
+- UI: toast before response, delete without confirm, pin/delete `opacity-0 group-hover` (invisible on mobile)
+- No content validation (whitespace `"   "` passed)
+- Double-toast to actor on POST (local + WS notification)
+- No CTA when not logged in
+
+### P0 — Critical Fixes
+
+#### P0 #1 + #2: GET requires tripId + auth/membership
+**Fix** (`src/app/api/board/route.ts`):
+- `if (!tripId) return 400` (was fallback `""`).
+- `requireTripMember` auth on GET (was open).
+- `useBoard`: `enabled: !!tripId`, `placeholderData: []`, `if (!tripId) return []`, `if (!r.ok) throw`, `Array.isArray(data) ? data : []`.
+- Verified: `curl /api/board` без tripId → 400; без auth → 401.
+
+#### P0 #3: POST userId from session (not body)
+**Problem**: Client sent `userId` in body — server trusted it. Anyone could post as anyone.
+**Fix**:
+- `const { user, response } = await requireTripMember(req, tripId)`.
+- `data: { content: trimmed, userId: user!.id, tripId }` — userId from session, body userId ignored.
+- Verified: `curl POST` with `userId="fake-user-id"` → message saved with real session userId.
+
+#### P0 #4: DELETE ownership check + confirm
+**Problem**: Any member could delete any message.
+**Fix**:
+- API: `isAuthor = existing.userId === user!.id; isOwner = membership?.role === "owner"; if (!isAuthor && !isOwner) return 403 "Можно удалять только свои сообщения"`.
+- UI: `confirmingDelete` state — click → "Да"/"Нет" inline confirm. `handleDelete`: `try { await del.mutateAsync(id); toast.success("Удалено"); } catch (err) { toast.error(err.message); }`.
+- Verified: `curl DELETE` other user's message → 403 "Можно удалять только свои сообщения".
+
+#### P0 #5: Empty/error states
+- `tripError` → "Не удалось загрузить поездку" + "Обновить".
+- `messagesError` → "Не удалось загрузить сообщения" + "Обновить".
+- Empty: "Пока нет сообщений" + "Напишите первое сообщение выше" (or "Войдите чтобы написать").
+
+### P1 — Integrity / UX
+
+#### P1 #7: Pin emits `board:pinned` (not `board:added`)
+**Problem**: `SOCKET_EVENTS["board:pinned"]` mapped to `broadcastEvent: "board:added"` → false "new message" toast for others.
+**Fix**:
+- `SOCKET_EVENTS["board:pinned"]` → `broadcastEvent: "board:pinned"` (no notification).
+- API PATCH: `await emitWS("board:pinned", tripId, { messageId, pinned })` (was no emit).
+- `use-websocket.ts`: added `socket.on("board:pinned", ...)` → invalidate `["board"]`.
+- No false "new message" toast when pin changes.
+
+#### P1 #8: Hooks throw on !ok + toast onSuccess only
+- `useAddBoardMessage`: `if (!r.ok) throw new Error(body.error)`.
+- `useTogglePinBoard`: same.
+- `useDeleteBoardMessage`: same.
+- UI submit: `try { await add.mutateAsync(...); toast.success; setContent(""); } catch (err) { toast.error }` — doesn't clear content on fail.
+- Pin: `mutate(data, { onError: (err) => toast.error })`.
+
+#### P1 #9: Anti double-toast to actor
+**Problem**: Actor got TWO toasts on POST — local "Сообщение отправлено 💬" + WS notification "{userName}: {content}".
+**Fix**:
+- API POST: emit WS with `userId: user!.id` in data.
+- `emit-handler.ts`: include `actorUserId: data.userId || null` in notification payload.
+- `use-websocket.ts`: on `notification`, check `if (data.actorUserId === currentUserId) return` — skip toast for self.
+- `use-auth.ts`: save `localStorage.setItem("triptrek-current-user-id", data.user.id)` on session load.
+- Actor sees only ONE toast (from mutation onSuccess).
+
+#### P1 #10: Mobile pin/delete always visible
+- Buttons: `md:opacity-0 md:group-hover:opacity-100` — visible on mobile (<768px), hover on desktop.
+- Size: `size-9` (36px, close to 44px target).
+- aria-labels: "Закрепить сообщение" / "Открепить сообщение" / "Удалить сообщение" / "Подтвердить удаление" / "Отменить удаление" / "Отправить сообщение".
+
+#### P1 #12: Content validation
+- API: `trimmed = content.trim()`; if empty → 400 "content не может быть пустым".
+- API: `if (trimmed.length > 4000) return 400 "content слишком длинный"`.
+- UI: `maxLength={4000}` on textarea + counter `{content.length}/4000`.
+
+#### P1 #13: Form disabled if not logged in + CTA
+- If `!currentUserId` → show CTA "Войдите чтобы писать сообщения" + "Войти" link.
+- Submit checks `if (!currentUserId) toast.error("Войдите чтобы отправлять сообщения")`.
+
+#### P1 #15: Per-row pending on pin/delete
+- Pin: `disabled={togglePin.isPending}` on the specific card's pin button.
+- Delete: `confirmingDelete` state per card; `del.isPending` only affects confirming card.
+
+### Files Modified
+
+**API**:
+- `src/app/api/board/route.ts` — tripId required, auth on GET, userId from session, content validation, DELETE ownership, emit board:pinned
+
+**Server**:
+- `server/notification-map.ts` — `board:pinned` → `board:pinned` (was `board:added`)
+- `server/emit-handler.ts` — include `actorUserId` in notification payload (anti double-toast)
+
+**Hooks**:
+- `src/hooks/trip/use-board.ts` — all hooks throw on !ok, useBoard enabled + placeholderData
+- `src/hooks/use-websocket.ts` — handle `board:pinned` event, anti double-toast (skip self)
+- `src/hooks/use-auth.ts` — save userId to localStorage for anti-double-toast
+
+**Components**:
+- `src/components/trip/board.tsx` — error states, try/catch submit, confirm delete, mobile-visible buttons, a11y labels, content counter, login CTA, per-row pending
+
+### Verification (curl + agent-browser)
+
+✅ `curl /api/board` без tripId → 400 (was fallback)
+✅ `curl /api/board` без auth → 401
+✅ `curl POST` с fake userId → message saved with session userId (not spoofed)
+✅ `curl POST` с пустым content → 400 "content не может быть пустым"
+✅ `curl DELETE` other user's message → 403 "Можно удалять только свои сообщения"
+✅ `curl DELETE` own message → 200
+✅ ESLint: clean
+✅ agent-browser: Chat tab loads → "Доска сообщений" + trip title
+✅ "7 сообщений · 0 закреплено" (hero metrics)
+✅ Send message → textarea cleared, "7 сообщений" (was 6)
+✅ Pin → "1 закреплено", button changes to "Открепить"
+✅ Unpin → "0 закреплено", button back to "Закрепить"
+✅ Delete confirm → "Подтвердить удаление" / "Отменить удаление" with aria-labels
+✅ Cancel delete → messages unchanged
+✅ aria-labels: "Отправить сообщение", "Закрепить сообщение", "Удалить сообщение"
+✅ `localStorage["triptrek-current-user-id"]` set (for anti-double-toast)
+✅ No console errors
+
+### Unresolved / Notes
+
+1. **P1 #14 (Export includes board without auth)** — `api/export` is a separate route, not in this audit scope.
+2. **P2 #16 (listRef dead)** — kept as-is (audit says "не redesign в мессенджер").
+3. **P2 #17 (Sticky composer overlap)** — changed `top-[7.5rem]` to `top-[5.5rem]` for better mobile.
+4. **P2 #18 (Filter pinned/mine/search)** — future feature.
+5. **P2 #19 (Edit message)** — future feature.
+6. **P2 #20 (Timeline board events)** — not in this pass.
+7. **P2 #21 (Unread badge in nav)** — later.
+8. **Anti double-toast** — uses `localStorage["triptrek-current-user-id"]` set by `useAuth` effect. Works for same-browser sessions; cross-device would need socket-level exclusion (future).
+

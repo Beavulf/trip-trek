@@ -98,7 +98,8 @@ export const SOCKET_EVENTS: Record<string, SocketEventConfig> = {
     broadcastEvent: "board:deleted",
   },
   "board:pinned": {
-    broadcastEvent: "board:added",
+    // P1 #7: emit board:pinned (не board:added — иначе ложный toast "новое сообщение")
+    broadcastEvent: "board:pinned",
   },
   "checklist:updated": {
     broadcastEvent: "checklist:updated",

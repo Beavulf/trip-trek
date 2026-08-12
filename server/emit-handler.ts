@@ -28,10 +28,12 @@ export function handleEmitRequest(
         const notif = NOTIFICATION_MAP[event];
         if (notif) {
           const message = notif.message(data);
+          // P1 #9: include actorUserId so client can exclude self from toast (anti double-toast)
           io.to(`trip:${tripId}`).emit("notification", {
             type: event.split(":")[0],
             message,
             emoji: notif.emoji,
+            actorUserId: data.userId || null,
           });
 
           // Send Web Push to offline users (locked phone)

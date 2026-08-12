@@ -1,6 +1,7 @@
 "use client";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useEffect } from "react";
 
 interface AuthUser {
   id: string;
@@ -40,6 +41,15 @@ export function useAuth(): {
     refetchOnWindowFocus: true, // обновлять при фокусе окна
     refetchOnMount: true,
   });
+
+  // P1 #9: сохраняем userId в localStorage для anti-double-toast в use-websocket
+  useEffect(() => {
+    if (data?.user?.id) {
+      localStorage.setItem("triptrek-current-user-id", data.user.id);
+    } else {
+      localStorage.removeItem("triptrek-current-user-id");
+    }
+  }, [data?.user?.id]);
 
   // Если ошибка — не считаем разлогиненным, показываем loading
   let status: "loading" | "authenticated" | "unauthenticated" = "loading";

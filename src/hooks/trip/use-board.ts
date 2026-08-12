@@ -13,16 +13,25 @@ export interface BoardMessage {
   createdAt: string;
 }
 
+// P0 #2: enabled !!tripId, placeholderData: []
+// P1 #8: throw on !ok
 export function useBoard() {
+  const tripId = getTripId();
   return useQuery<BoardMessage[]>({
-    queryKey: ["board", getTripId()],
+    queryKey: ["board", tripId],
     queryFn: async () => {
-      const r = await fetch(`/api/board?tripId=${getTripId()}`);
-      return r.json();
+      if (!tripId) return [];
+      const r = await fetch(`/api/board?tripId=${tripId}`);
+      if (!r.ok) throw new Error("fetch board failed");
+      const data = await r.json();
+      return Array.isArray(data) ? data : [];
     },
+    enabled: !!tripId,
+    placeholderData: [],
   });
 }
 
+// P1 #8: throw on !ok — UI ловит в try/catch
 export function useAddBoardMessage() {
   const qc = useQueryClient();
   return useMutation({
@@ -32,7 +41,11 @@ export function useAddBoardMessage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ content, userId, tripId: getTripId() }),
       });
-      return r.json();
+      const body = await r.json().catch(() => ({}));
+      if (!r.ok) {
+        throw new Error(body?.error || `Ошибка ${r.status}`);
+      }
+      return body;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["board"] }),
   });
@@ -47,7 +60,11 @@ export function useTogglePinBoard() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ id, pinned }),
       });
-      return r.json();
+      const body = await r.json().catch(() => ({}));
+      if (!r.ok) {
+        throw new Error(body?.error || `Ошибка ${r.status}`);
+      }
+      return body;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["board"] }),
   });
@@ -57,7 +74,12 @@ export function useDeleteBoardMessage() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (id: string) => {
-      await fetch(`/api/board?id=${id}`, { method: "DELETE" });
+      const r = await fetch(`/api/board?id=${id}`, { method: "DELETE" });
+      const body = await r.json().catch(() => ({}));
+      if (!r.ok) {
+        throw new Error(body?.error || `Ошибка ${r.status}`);
+      }
+      return body;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["board"] }),
   });

@@ -113,13 +113,22 @@ export function useWebSocket(tripId: string) {
       }
     });
 
-    socket.on("board:added", (data: { tripId: string }) => {
+    socket.on("board:added", (data: { tripId: string; userId?: string }) => {
+      if (data.tripId === tripId) {
+        qc.invalidateQueries({ queryKey: ["board"] });
+        // P1 #9: anti double-toast — actor уже видел toast при отправке
+        // Toast для других показывается через notification (emit-handler)
+      }
+    });
+
+    socket.on("board:deleted", (data: { tripId: string }) => {
       if (data.tripId === tripId) {
         qc.invalidateQueries({ queryKey: ["board"] });
       }
     });
 
-    socket.on("board:deleted", (data: { tripId: string }) => {
+    // P1 #7: pin sync — invalidate board (без notification "новое сообщение")
+    socket.on("board:pinned", (data: { tripId: string }) => {
       if (data.tripId === tripId) {
         qc.invalidateQueries({ queryKey: ["board"] });
       }
@@ -163,7 +172,14 @@ export function useWebSocket(tripId: string) {
     });
 
     // Toast + push уведомления
-    socket.on("notification", (data: { type: string; message: string; emoji: string }) => {
+    // P1 #9: anti double-toast — исключаем автора (actor уже видел toast при отправке)
+    socket.on("notification", (data: { type: string; message: string; emoji: string; actorUserId?: string | null }) => {
+      // P1 #9: если notification от нас самих — пропускаем toast (уже показали в onSuccess)
+      const currentUserId = typeof window !== "undefined" ? localStorage.getItem("triptrek-current-user-id") : null;
+      if (data.actorUserId && currentUserId && data.actorUserId === currentUserId) {
+        return; // Пропускаем — автор уже видел toast
+      }
+
       // Показываем toast
       import("sonner").then(({ toast }) => {
         toast.success(data.message, {
