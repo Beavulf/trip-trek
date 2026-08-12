@@ -15,10 +15,9 @@ import { useBodyScrollLock } from "@/hooks/use-body-scroll-lock";
 interface TemplatePickerProps {
   open: boolean;
   onOpenChange: (v: boolean) => void;
-  userId: string;
 }
 
-export function TemplatePicker({ open, onOpenChange, userId }: TemplatePickerProps) {
+export function TemplatePicker({ open, onOpenChange }: TemplatePickerProps) {
   useBodyScrollLock(open);
   const router = useRouter();
   const qc = useQueryClient();
@@ -32,7 +31,6 @@ export function TemplatePicker({ open, onOpenChange, userId }: TemplatePickerPro
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           templateId,
-          userId,
           customTitle: customTitle.trim() || undefined,
         }),
       });

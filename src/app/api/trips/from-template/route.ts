@@ -27,19 +27,18 @@ export async function POST(req: NextRequest) {
 
     const isPremium = user.plan === "premium" && (!user.planExpiry || user.planExpiry > new Date());
     const maxTrips = isPremium ? Infinity : 1;
-    const tripCount = await db.tripMember.count({ where: { userId, role: "owner" } });
-    if (tripCount >= maxTrips) {
-      return NextResponse.json({
-        error: "Лимит поездок исчерпан. Перейдите на Premium.",
-        upgrade: true,
-      }, { status: 403 });
-    }
 
     // Create trip with all template data
     const startDate = new Date();
     const endDate = new Date(startDate.getTime() + template.totalDays * 24 * 60 * 60 * 1000);
 
-    const trip = await db.trip.create({
+    // Лимит + create в одной транзакции (меньше гонки double-click)
+    const trip = await db.$transaction(async (tx) => {
+      const tripCount = await tx.tripMember.count({ where: { userId, role: "owner" } });
+      if (tripCount >= maxTrips) {
+        throw new Error("LIMIT_REACHED");
+      }
+      return tx.trip.create({
       data: {
         title: customTitle || template.title,
         destination: template.destination,
@@ -72,6 +71,7 @@ export async function POST(req: NextRequest) {
         },
       },
       include: { days: true, members: true },
+    });
     });
 
     // Create places for each day
@@ -136,6 +136,12 @@ export async function POST(req: NextRequest) {
       message: `Поездка "${trip.title}" создана из шаблона!`,
     });
   } catch (e) {
+    if (e instanceof Error && e.message === "LIMIT_REACHED") {
+      return NextResponse.json({
+        error: "Лимит поездок исчерпан. Перейдите на Premium.",
+        upgrade: true,
+      }, { status: 403 });
+    }
     console.error("Create from template error:", e);
     return NextResponse.json({ error: "Failed to create trip from template" }, { status: 500 });
   }

@@ -15,7 +15,12 @@ export function useCurrency() {
     queryKey: ["currency"],
     queryFn: async () => {
       const r = await fetch("/api/currency");
-      return r.json();
+      if (!r.ok) throw new Error("fetch currency failed");
+      const data = await r.json();
+      if (!data?.rates || typeof data.rates !== "object") {
+        throw new Error("invalid currency payload");
+      }
+      return data as CurrencyRates;
     },
     staleTime: 60 * 60 * 1000, // 1 час
   });

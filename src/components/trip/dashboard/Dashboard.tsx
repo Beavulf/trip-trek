@@ -4,6 +4,7 @@ import { useTrip, useCurrentTripId } from "@/hooks/use-trip";
 import { useTripStore } from "@/lib/trip-store";
 import { CATEGORY_META } from "@/lib/types";
 import { cn } from "@/lib/utils";
+import { currencySymbol } from "@/lib/currencies";
 import { CalendarDays, CheckCircle2, ChevronRight, Circle, MapPin } from "lucide-react";
 import { DashboardHero, timeLabel } from "./DashboardHero";
 import { DashboardStats } from "./DashboardStats";
@@ -76,6 +77,7 @@ export function Dashboard() {
   const currentDay = trip.days.find((d) => d.dayNumber === trip.currentDayNumber);
   const currentCityKey = currentDay?.cityKey ?? "";
   const cityEmoji = CITY_EMOJI[currentCityKey] ?? "🏙️";
+  const sym = currencySymbol(trip.settings.currency);
 
   // Обратный отсчёт / прогресс по времени
   const now = new Date();
@@ -120,8 +122,9 @@ export function Dashboard() {
             <CalendarDays className="size-4" /> Маршрут по дням
           </h2>
           <button
+            type="button"
             onClick={() => setActiveTab("itinerary")}
-            className="text-xs text-primary flex items-center gap-1 hover:underline"
+            className="text-xs text-primary flex items-center gap-1 hover:underline min-h-11 px-2"
           >
             Все дни <ChevronRight className="size-3" />
           </button>
@@ -207,7 +210,7 @@ export function Dashboard() {
                     </div>
                     <div className="text-[11px] text-muted-foreground flex items-center gap-2">
                       <span>{timeLabel(p.timeOfDay)}</span>
-                      {p.budget ? <span>· ${p.budget}</span> : null}
+                      {p.budget ? <span>· {sym}{p.budget}</span> : null}
                     </div>
                   </div>
                 </div>

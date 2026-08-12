@@ -1,13 +1,13 @@
 "use client";
 
-import { useAISummary, useTrip } from "@/hooks/use-trip";
+import { useAISummary, useTrip, useCurrentTripId } from "@/hooks/use-trip";
+import { useTripStore } from "@/lib/trip-store";
 import { motion, AnimatePresence } from "framer-motion";
 import { Sparkles, Calendar, Lightbulb, BookHeart, Loader2, RefreshCw, Copy, Check, AlertCircle } from "lucide-react";
 import { useState } from "react";
 import ReactMarkdown from "react-markdown";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import { getTripId } from "@/hooks/use-trip";
 import { currencySymbol } from "@/lib/currencies";
 
 type SummaryType = "summary" | "day" | "tips";
@@ -19,29 +19,21 @@ const TYPES: Array<{ key: SummaryType; label: string; desc: string; icon: typeof
 ];
 
 export function AISummary() {
-  const { data: trip, error: tripError } = useTrip();
+  const tripId = useCurrentTripId();
+  // key сбрасывает локальный state + mutation при смене поездки
+  return <AISummaryInner key={tripId || "none"} tripId={tripId} />;
+}
+
+function AISummaryInner({ tripId }: { tripId: string }) {
+  const { data: trip, error: tripError, isLoading, refetch } = useTrip();
+  const { setTripSwitcherOpen } = useTripStore();
   const ai = useAISummary();
-  const tripId = trip?.settings.tripId || getTripId();
-  // P1 #10: сброс content при смене tripId — используем key wrapper компонента.
-  // Это правильный React-паттерн: внутренний компонент полностью перемонтируется при смене tripId.
-  return <AISummaryInner key={tripId} trip={trip} tripError={tripError} ai={ai} tripId={tripId} />;
-}
-
-interface AISummaryInnerProps {
-  trip: ReturnType<typeof useTrip>["data"];
-  tripError: ReturnType<typeof useTrip>["error"];
-  ai: ReturnType<typeof useAISummary>;
-  tripId: string;
-}
-
-function AISummaryInner({ trip, tripError, ai, tripId }: AISummaryInnerProps) {
   const [activeType, setActiveType] = useState<SummaryType | null>(null);
   const [content, setContent] = useState<string>("");
   const [generated, setGenerated] = useState<boolean>(false);
   const [copied, setCopied] = useState(false);
 
   const generate = async (type: SummaryType) => {
-    // P1 #5: без tripId — не зовём API
     if (!tripId) {
       toast.error("Не выбрана поездка");
       return;
@@ -52,16 +44,14 @@ function AISummaryInner({ trip, tripError, ai, tripId }: AISummaryInnerProps) {
     try {
       const res = await ai.mutateAsync({ type });
       setContent(res.content);
-      setGenerated(res.generated !== false); // true если реальный AI
+      setGenerated(res.generated !== false);
     } catch (e) {
-      // НЕ сбрасываем activeType — оставляем для error state с кнопкой «Повторить»
       toast.error("Не удалось сгенерировать", {
         description: e instanceof Error ? e.message : "Попробуйте позже",
       });
     }
   };
 
-  // P1 #11: clipboard try/catch (mobile HTTP / permissions)
   const copy = async () => {
     if (!content) return;
     try {
@@ -70,7 +60,6 @@ function AISummaryInner({ trip, tripError, ai, tripId }: AISummaryInnerProps) {
       toast.success("Скопировано в буфер");
       setTimeout(() => setCopied(false), 2000);
     } catch {
-      // Fallback для mobile HTTP где clipboard API может не работать
       try {
         const textarea = document.createElement("textarea");
         textarea.value = content;
@@ -89,8 +78,7 @@ function AISummaryInner({ trip, tripError, ai, tripId }: AISummaryInnerProps) {
     }
   };
 
-  // P1 #5: нет поездки → empty CTA
-  if (tripError || (!trip && !tripId)) {
+  if (!tripId) {
     return (
       <div className="space-y-4 animate-fade-up pb-20">
         <Hero />
@@ -98,14 +86,40 @@ function AISummaryInner({ trip, tripError, ai, tripId }: AISummaryInnerProps) {
           <div className="text-4xl">🤔</div>
           <p className="text-sm font-medium">Не выбрана поездка</p>
           <p className="text-xs text-muted-foreground max-w-xs mx-auto">
-            Выберите поездку в шапке, чтобы AI мог проанализировать ваши места, записи и траты.
+            Выберите поездку, чтобы собрать итог по местам, записям и тратам.
           </p>
+          <button
+            type="button"
+            onClick={() => setTripSwitcherOpen(true)}
+            className="mt-2 inline-flex min-h-11 items-center rounded-xl bg-primary text-primary-foreground px-4 py-2 text-sm font-medium"
+          >
+            Мои поездки →
+          </button>
         </div>
       </div>
     );
   }
 
-  if (!trip) {
+  if (tripError) {
+    return (
+      <div className="space-y-4 animate-fade-up pb-20">
+        <Hero />
+        <div className="rounded-2xl border-2 border-dashed border-border py-12 text-center space-y-2">
+          <div className="text-4xl">🤔</div>
+          <p className="text-sm font-medium">Не удалось загрузить поездку</p>
+          <button
+            type="button"
+            onClick={() => refetch()}
+            className="mt-2 inline-flex min-h-11 items-center rounded-xl bg-primary text-primary-foreground px-4 py-2 text-sm font-medium"
+          >
+            Обновить
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (isLoading || !trip) {
     return (
       <div className="py-20 text-center text-muted-foreground flex items-center justify-center gap-2">
         <Loader2 className="size-4 animate-spin" /> Загрузка…
@@ -119,7 +133,6 @@ function AISummaryInner({ trip, tripError, ai, tripId }: AISummaryInnerProps) {
     <div className="space-y-4 animate-fade-up pb-20">
       <Hero tripTitle={trip.settings.title} />
 
-      {/* Типы генерации — P1 #5: disabled если нет tripId */}
       <div className="grid sm:grid-cols-3 gap-3">
         {TYPES.map((t) => {
           const Icon = t.icon;
@@ -128,6 +141,7 @@ function AISummaryInner({ trip, tripError, ai, tripId }: AISummaryInnerProps) {
           return (
             <button
               key={t.key}
+              type="button"
               onClick={() => generate(t.key)}
               disabled={ai.isPending}
               aria-label={`Сгенерировать: ${t.label}`}
@@ -159,7 +173,6 @@ function AISummaryInner({ trip, tripError, ai, tripId }: AISummaryInnerProps) {
         })}
       </div>
 
-      {/* Результат */}
       <AnimatePresence mode="wait">
         {content && (
           <motion.div
@@ -169,33 +182,34 @@ function AISummaryInner({ trip, tripError, ai, tripId }: AISummaryInnerProps) {
             exit={{ opacity: 0, y: -8 }}
             className="rounded-2xl bg-card border border-border overflow-hidden"
           >
-            {/* header результата */}
             <div className="flex items-center justify-between px-4 py-3 border-b border-border bg-gradient-to-r from-primary/5 to-transparent">
               <div className="flex items-center gap-2 min-w-0">
                 <Sparkles className="size-4 text-primary shrink-0" />
                 <span className="font-semibold text-sm truncate">
                   {TYPES.find((t) => t.key === activeType)?.label}
                 </span>
-                {/* P1 #12: provenance — бейдж «AI-сгенерировано» только когда реально AI */}
-                {generated && (
-                  <span className="text-xs text-muted-foreground shrink-0 hidden sm:inline">· AI-сгенерировано</span>
+                {generated ? (
+                  <span className="text-xs text-muted-foreground shrink-0 hidden sm:inline">· AI</span>
+                ) : (
+                  <span className="text-xs text-muted-foreground shrink-0 hidden sm:inline">· черновик</span>
                 )}
               </div>
               <div className="flex items-center gap-1 shrink-0">
-                {/* P2 #13: copy/refresh hit ≥44px (size-9 = 36px, min-h-[36px] on wrapper) */}
                 <button
+                  type="button"
                   onClick={copy}
                   aria-label="Копировать текст"
-                  className="size-9 rounded-lg hover:bg-accent grid place-items-center text-muted-foreground hover:text-foreground transition-colors"
+                  className="size-11 rounded-lg hover:bg-accent grid place-items-center text-muted-foreground hover:text-foreground transition-colors"
                   title="Копировать"
                 >
                   {copied ? <Check className="size-4 text-green-500" /> : <Copy className="size-4" />}
                 </button>
                 <button
+                  type="button"
                   onClick={() => activeType && generate(activeType)}
                   disabled={ai.isPending}
                   aria-label="Обновить генерацию"
-                  className="size-9 rounded-lg hover:bg-accent grid place-items-center text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50"
+                  className="size-11 rounded-lg hover:bg-accent grid place-items-center text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50"
                   title="Обновить"
                 >
                   {ai.isPending ? <Loader2 className="size-4 animate-spin" /> : <RefreshCw className="size-4" />}
@@ -203,7 +217,6 @@ function AISummaryInner({ trip, tripError, ai, tripId }: AISummaryInnerProps) {
               </div>
             </div>
 
-            {/* контент */}
             <div className="p-4 sm:p-5 prose prose-sm dark:prose-invert max-w-none
               prose-headings:font-bold prose-headings:mt-3 prose-headings:mb-1.5
               prose-h1:text-xl prose-h2:text-lg prose-h3:text-base
@@ -219,7 +232,6 @@ function AISummaryInner({ trip, tripError, ai, tripId }: AISummaryInnerProps) {
         )}
       </AnimatePresence>
 
-      {/* Error state (P0 #3 — SDK упал, не маскируем) */}
       {ai.isError && !content && (
         <div className="rounded-2xl bg-red-500/5 border border-red-500/20 p-4 text-center space-y-2">
           <AlertCircle className="size-8 mx-auto text-red-500" />
@@ -229,9 +241,10 @@ function AISummaryInner({ trip, tripError, ai, tripId }: AISummaryInnerProps) {
           </p>
           {activeType && (
             <button
+              type="button"
               onClick={() => generate(activeType)}
               disabled={ai.isPending}
-              className="mt-2 inline-flex items-center gap-1.5 text-xs px-3 py-2 rounded-lg bg-primary text-primary-foreground"
+              className="mt-2 inline-flex items-center gap-1.5 text-xs px-3 py-2 min-h-11 rounded-lg bg-primary text-primary-foreground"
             >
               <RefreshCw className="size-3.5" /> Повторить
             </button>
@@ -239,7 +252,6 @@ function AISummaryInner({ trip, tripError, ai, tripId }: AISummaryInnerProps) {
         </div>
       )}
 
-      {/* Empty state когда ничего не сгенерировано */}
       {!content && !ai.isPending && !ai.isError && (
         <div className="rounded-2xl border-2 border-dashed border-border py-12 text-center">
           <motion.div
@@ -251,18 +263,16 @@ function AISummaryInner({ trip, tripError, ai, tripId }: AISummaryInnerProps) {
           </motion.div>
           <p className="text-sm font-medium">Выберите тип итога выше</p>
           <p className="text-xs text-muted-foreground mt-1 max-w-xs mx-auto">
-            {/* P1 #7: честный copy — photos/captions + journals + members включены в промпт */}
-            AI проанализирует дни, места, записи дневника, траты и фото — и создаст красивый текст
+            Соберём текст по дням, местам, дневнику и тратам. Если AI недоступен — будет локальный черновик.
           </p>
         </div>
       )}
 
-      {/* Loading state */}
       {ai.isPending && !content && (
         <div className="rounded-2xl bg-card border border-border p-6 space-y-3">
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <Loader2 className="size-4 animate-spin" />
-            Нейросеть анализирует вашу поездку…
+            Собираем итог поездки…
           </div>
           <div className="space-y-2">
             {[0, 1, 2, 3].map((i) => (
@@ -278,10 +288,10 @@ function AISummaryInner({ trip, tripError, ai, tripId }: AISummaryInnerProps) {
         </div>
       )}
 
-      {/* Подсказка — P1 #8: валюта из trip.settings.currency; P2 #19: spent без settlement */}
       {trip && content && (
         <p className="text-xs text-muted-foreground text-center px-4">
-          ✨ Сгенерировано на основе {trip.visitedPlaces} посещённых мест, {trip.totalPhotos} фото, {trip.totalJournals} записей и {sym}{trip.totalSpent.toFixed(0)} трат
+          ✨ На основе {trip.visitedPlaces} посещённых мест, {trip.totalPhotos} фото, {trip.totalJournals} записей и {sym}{trip.totalSpent.toFixed(0)} трат
+          {!generated ? " · локальный черновик" : ""}
         </p>
       )}
     </div>
@@ -298,7 +308,7 @@ function Hero({ tripTitle }: { tripTitle?: string }) {
         </div>
         <h1 className="text-2xl font-bold">Магия воспоминаний</h1>
         <p className="text-white/80 text-sm mt-1">
-          Нейросеть создаст красивые итоги вашей поездки
+          Красивые итоги поездки по вашим данным
           {tripTitle && <span className="text-white/60"> · {tripTitle}</span>}
         </p>
       </div>

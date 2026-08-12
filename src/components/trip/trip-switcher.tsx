@@ -293,7 +293,7 @@ export function TripSwitcher() {
       )}
 
       <PremiumModal open={premiumOpen} onOpenChange={setPremiumOpen} />
-      <TemplatePicker open={templateOpen} onOpenChange={setTemplateOpen} userId={userId || ""} />
+      <TemplatePicker open={templateOpen} onOpenChange={setTemplateOpen} />
     </>
   );
 }

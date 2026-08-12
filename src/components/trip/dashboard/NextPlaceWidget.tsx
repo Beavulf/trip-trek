@@ -44,13 +44,22 @@ export function NextPlaceWidget({ trip, onGoToItinerary }: { trip: TripSummary; 
           >
             {noPlaces ? "🗺️" : "🎉"}
           </div>
-          <div>
+          <div className="flex-1 min-w-0">
             <h3 className="font-semibold text-sm">
               {noPlaces ? "Нет мест в маршруте" : "Все места посещены!"}
             </h3>
             <p className="text-xs text-muted-foreground">
               {noPlaces ? "Добавьте места, чтобы начать планировать" : "Поздравляем с завершением маршрута"}
             </p>
+            {noPlaces && (
+              <button
+                type="button"
+                onClick={onGoToItinerary}
+                className="mt-2 inline-flex min-h-11 items-center rounded-lg bg-primary text-primary-foreground px-3 text-xs font-medium"
+              >
+                К маршруту →
+              </button>
+            )}
           </div>
         </div>
       </motion.div>

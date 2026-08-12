@@ -10,9 +10,15 @@ export function DatesEditor({ startStr, endStr, onDone }: { startStr: string; en
   const [end, setEnd] = useState(endStr);
 
   const save = async () => {
-    await update.mutateAsync({ startDate: start, endDate: end || undefined });
-    toast.success("Даты обновлены");
-    onDone();
+    try {
+      await update.mutateAsync({ startDate: start, endDate: end || undefined });
+      toast.success("Даты обновлены");
+      onDone();
+    } catch (err) {
+      toast.error("Не удалось сохранить даты", {
+        description: err instanceof Error ? err.message : "Только владелец поездки",
+      });
+    }
   };
 
   return (
@@ -24,7 +30,7 @@ export function DatesEditor({ startStr, endStr, onDone }: { startStr: string; en
             type="date"
             value={start}
             onChange={(e) => setStart(e.target.value)}
-            className="w-full text-xs rounded-lg border border-input bg-background px-2 py-1.5"
+            className="w-full min-h-11 text-xs rounded-lg border border-input bg-background px-2 py-2"
           />
         </div>
         <div>
@@ -33,18 +39,19 @@ export function DatesEditor({ startStr, endStr, onDone }: { startStr: string; en
             type="date"
             value={end}
             onChange={(e) => setEnd(e.target.value)}
-            className="w-full text-xs rounded-lg border border-input bg-background px-2 py-1.5"
+            className="w-full min-h-11 text-xs rounded-lg border border-input bg-background px-2 py-2"
           />
         </div>
       </div>
       <div className="flex gap-2">
-        <button onClick={onDone} className="flex-1 rounded-lg bg-secondary py-1.5 text-xs font-medium">
+        <button type="button" onClick={onDone} className="flex-1 min-h-11 rounded-lg bg-secondary py-2 text-xs font-medium">
           Отмена
         </button>
         <button
+          type="button"
           onClick={save}
           disabled={update.isPending}
-          className="flex-1 rounded-lg bg-primary text-primary-foreground py-1.5 text-xs font-medium"
+          className="flex-1 min-h-11 rounded-lg bg-primary text-primary-foreground py-2 text-xs font-medium disabled:opacity-50"
         >
           {update.isPending ? "…" : "Сохранить"}
         </button>

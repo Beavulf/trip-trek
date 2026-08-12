@@ -1,29 +1,34 @@
 "use client";
 
 import { usePushNotifications } from "@/hooks/use-push";
-import { Bell, BellOff, Loader2, Check, BellRing } from "lucide-react";
+import { Bell, Loader2, Check, BellRing } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
-import { useCurrentTripId } from "@/hooks/use-trip";
+import { useAuth } from "@/hooks/use-auth";
 
 export function PushSettings() {
-  const currentTripId = useCurrentTripId();
-  const { permission, subscribed, loading, subscribe, unsubscribe } = usePushNotifications(currentTripId);
-  const noTrip = !currentTripId;
+  const { data: session } = useAuth();
+  const userId = (session?.user as { id?: string } | undefined)?.id || "";
+  const { permission, subscribed, loading, supported, subscribe, unsubscribe } = usePushNotifications();
 
   const handleToggle = async () => {
-    if (noTrip) {
-      toast.error("Сначала выберите поездку");
+    if (!userId) {
+      toast.error("Войдите чтобы включить уведомления");
+      return;
+    }
+    if (!supported) {
+      toast.error("Push не поддерживается в этом браузере");
       return;
     }
     if (subscribed) {
       const result = await unsubscribe();
       if (result.success) toast.success("Уведомления отключены");
+      else toast.error("Не удалось отключить");
     } else {
       const result = await subscribe();
       if (result.success) {
-        toast.success("Подписка сохранена", {
-          description: "Полноценный push (VAPID) ещё в разработке — пока работает локально в браузере",
+        toast.success("Уведомления включены 🔔", {
+          description: "Push работает даже при закрытом приложении (нужен HTTPS)",
         });
       } else {
         toast.error("Не удалось включить уведомления", {
@@ -35,15 +40,16 @@ export function PushSettings() {
 
   return (
     <div className="rounded-2xl bg-card border border-border p-4">
-      <div className="flex items-center justify-between mb-3">
+      <div className="flex items-center justify-between gap-2 mb-3">
         <h2 className="font-semibold text-sm flex items-center gap-2">
           <BellRing className="size-4" /> Push-уведомления
         </h2>
         <button
+          type="button"
           onClick={handleToggle}
-          disabled={loading || noTrip}
+          disabled={loading || !userId || !supported}
           className={cn(
-            "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors disabled:opacity-50",
+            "min-h-11 flex items-center gap-1.5 px-3 rounded-lg text-xs font-medium transition-colors disabled:opacity-50",
             subscribed
               ? "bg-green-500/10 text-green-600 border border-green-500/30"
               : "bg-primary text-primary-foreground"
@@ -63,12 +69,13 @@ export function PushSettings() {
         </button>
       </div>
 
-      <p className="text-xs text-amber-700 dark:text-amber-400 leading-relaxed mb-2">
-        Черновик: подписка сохраняется, доставка по событиям поездки ещё не подключена к VAPID.
-      </p>
       <p className="text-xs text-muted-foreground leading-relaxed">
-        Планируемые события: фото, места, траты, дневник, чат.
+        Подписка через VAPID (как в профиле). События поездки: фото, места, траты, дневник, чат — когда сервер их шлёт.
       </p>
+
+      {!userId && (
+        <p className="mt-2 text-xs text-amber-700 dark:text-amber-400">Нужен вход в аккаунт.</p>
+      )}
 
       {permission === "denied" && (
         <div className="mt-3 p-2.5 rounded-lg bg-red-500/10 border border-red-500/30 text-xs text-red-600">
@@ -77,7 +84,7 @@ export function PushSettings() {
       )}
 
       <p className="text-[10px] text-muted-foreground/70 mt-3">
-        Для Push API нужен HTTPS. Без поездки кнопка недоступна.
+        Для Push API нужен HTTPS (или localhost).
       </p>
     </div>
   );

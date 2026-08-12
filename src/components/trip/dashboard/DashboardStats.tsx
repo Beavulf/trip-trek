@@ -18,8 +18,10 @@ import {
 } from "lucide-react";
 import { useWeather } from "@/hooks/use-trip";
 import { useTripStore } from "@/lib/trip-store";
+import { useAuth } from "@/hooks/use-auth";
 import { type TripSummary } from "@/lib/types";
 import { cn } from "@/lib/utils";
+import { currencySymbol } from "@/lib/currencies";
 import { DatesEditor } from "./DatesEditor";
 
 interface DashboardStatsProps {
@@ -38,6 +40,11 @@ export function DashboardStats({
   currentCityKey,
 }: DashboardStatsProps) {
   const { setActiveTab } = useTripStore();
+  const { data: session } = useAuth();
+  const currentUserId = (session?.user as { id?: string } | undefined)?.id || "";
+  const sym = currencySymbol(trip.settings.currency);
+  const budget = trip.settings.totalBudget;
+  const budgetPct = budget > 0 ? Math.min(100, (trip.totalSpent / budget) * 100) : 0;
 
   return (
     <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
@@ -49,10 +56,12 @@ export function DashboardStats({
         totalDays={trip.settings.totalDays}
         startDate={trip.settings.startDate}
         endDate={trip.settings.endDate}
+        isOwner={!!trip.participants?.find((p) => p.role === "owner" && p.id === currentUserId)}
       />
 
       {/* Бюджет */}
       <button
+        type="button"
         onClick={() => setActiveTab("budget")}
         className="col-span-2 lg:col-span-1 rounded-2xl bg-card border border-border p-4 text-left hover:shadow-lg transition-shadow group"
       >
@@ -63,17 +72,17 @@ export function DashboardStats({
           <TrendingDown className="size-4 text-muted-foreground group-hover:translate-x-1 transition-transform" />
         </div>
         <div className="flex items-end gap-2">
-          <span className="text-2xl font-bold">${trip.totalSpent.toFixed(0)}</span>
-          <span className="text-sm text-muted-foreground mb-1">/ ${trip.settings.totalBudget}</span>
+          <span className="text-2xl font-bold">{sym}{trip.totalSpent.toFixed(0)}</span>
+          <span className="text-sm text-muted-foreground mb-1">/ {sym}{budget}</span>
         </div>
         <div className="mt-2 h-2 rounded-full bg-muted overflow-hidden">
           <div
             className="h-full rounded-full bg-gradient-to-r from-orange-500 to-rose-500"
-            style={{ width: `${Math.min(100, (trip.totalSpent / trip.settings.totalBudget) * 100)}%` }}
+            style={{ width: `${budgetPct}%` }}
           />
         </div>
         <div className="text-xs text-muted-foreground mt-1.5">
-          Остаток: ${trip.remainingBudget.toFixed(0)}
+          Остаток: {sym}{trip.remainingBudget.toFixed(0)}
         </div>
       </button>
 
@@ -127,7 +136,7 @@ function StatCard({ icon, value, label, color, onClick }: { icon: React.ReactNod
 }
 
 function WeatherWidget({ cityKey }: { cityKey: string }) {
-  const { data: weather, isLoading } = useWeather(cityKey);
+  const { data: weather, isLoading, isError, refetch } = useWeather(cityKey);
   const noCity = !cityKey;
   return (
     <div className="rounded-2xl bg-card border border-border p-4">
@@ -136,8 +145,19 @@ function WeatherWidget({ cityKey }: { cityKey: string }) {
       </div>
       {noCity ? (
         <div className="text-xs text-muted-foreground py-1">Добавьте дни в маршрут</div>
+      ) : isError ? (
+        <div className="space-y-1">
+          <div className="text-xs text-muted-foreground">Не удалось загрузить</div>
+          <button
+            type="button"
+            onClick={() => refetch()}
+            className="text-xs text-primary font-medium min-h-11 px-1"
+          >
+            Обновить
+          </button>
+        </div>
       ) : isLoading || !weather ? (
-        <div className="text-2xl">…</div>
+        <div className="text-2xl text-muted-foreground animate-pulse">…</div>
       ) : (
         <div>
           <div className="flex items-center gap-2">
@@ -167,6 +187,7 @@ function CountdownCard({
   totalDays,
   startDate,
   endDate,
+  isOwner,
 }: {
   isBefore: boolean;
   isAfter: boolean;
@@ -175,6 +196,7 @@ function CountdownCard({
   totalDays: number;
   startDate: string;
   endDate: string | null;
+  isOwner: boolean;
 }) {
   const [showEditor, setShowEditor] = useState(false);
   let icon = <Clock className="size-5" />;
@@ -206,13 +228,17 @@ function CountdownCard({
         className="absolute -top-3 -right-3 size-16 rounded-full opacity-10 blur-xl"
         style={{ background: color }}
       />
-      <button
-        onClick={() => setShowEditor((v) => !v)}
-        className="absolute top-2 right-2 size-6 rounded-md hover:bg-accent grid place-items-center text-muted-foreground z-10"
-        title="Изменить даты"
-      >
-        <Settings2 className="size-3.5" />
-      </button>
+      {isOwner && (
+        <button
+          type="button"
+          onClick={() => setShowEditor((v) => !v)}
+          className="absolute top-2 right-2 size-11 rounded-md hover:bg-accent grid place-items-center text-muted-foreground z-10"
+          title="Изменить даты"
+          aria-label="Изменить даты"
+        >
+          <Settings2 className="size-3.5" />
+        </button>
+      )}
       <div className="flex items-center gap-2 text-sm text-muted-foreground mb-2">
         <span style={{ color }}>{icon}</span> {label}
       </div>
@@ -220,9 +246,8 @@ function CountdownCard({
         <span className="text-3xl font-bold leading-none" style={{ color }}>{value}</span>
         <span className="text-xs text-muted-foreground">{sub}</span>
       </div>
-      {/* мини-таймлайн */}
       <div className="mt-3 flex gap-0.5">
-        {Array.from({ length: totalDays }).map((_, i) => (
+        {Array.from({ length: Math.max(0, totalDays) }).map((_, i) => (
           <div
             key={i}
             className={cn(
@@ -233,7 +258,7 @@ function CountdownCard({
         ))}
       </div>
 
-      {showEditor && <DatesEditor startStr={startStr} endStr={endStr} onDone={() => setShowEditor(false)} />}
+      {showEditor && isOwner && <DatesEditor startStr={startStr} endStr={endStr} onDone={() => setShowEditor(false)} />}
     </div>
   );
 }

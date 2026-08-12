@@ -4,7 +4,7 @@ import { requireUser } from "@/lib/api-auth";
 
 // POST /api/trips/join?code=CHINA2024 — присоединиться к поездке по invite-коду
 export async function POST(req: NextRequest) {
-  const { response } = await requireUser(req);
+  const { user, response } = await requireUser(req);
   if (response) return response;
 
   const { searchParams } = new URL(req.url);

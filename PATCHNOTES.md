@@ -1,5 +1,36 @@
 # TripTrek — Patch notes
 
+## v0.2.14 — Invite, Templates, Currency, Push
+
+### Критичное
+- Join по коду снова работает (`user` из session)
+- Push в Инфо = тот же VAPID путь, что в профиле (не заглушка)
+
+### Invite / Templates
+- Empty/error CTA; hit targets ≥44px; clipboard try/catch
+- Template: без client `userId`; лимит в транзакции
+
+### Currency / Push
+- Курсы: throw on !ok + retry UI
+- PushSettings: user-scoped, honest copy, min-h-11
+
+## v0.2.13 — Главная, AI-итоги, Бэкап
+
+### Бэкап / импорт
+- Импорт только для owner; новые id (без cross-trip upsert)
+- Транзакция; paidBy только из участников поездки
+- Confirm перед выбором файла; без `reload`; честный copy (фото/дневник не импортятся)
+
+### AI-итоги
+- Empty → CTA «Мои поездки»; ошибка trip → refetch
+- Mutation внутри trip key (нет утечки pending между поездками)
+- Честный copy: черновик vs AI
+
+### Dashboard
+- Валюта из settings; progress без NaN при budget=0
+- Погода: ошибка + retry (не вечные «…»)
+- Даты: только owner; toast при ошибке сохранения
+
 ## v0.2.12 — Галерея, Карта, Бюджет
 
 ### Безопасность
