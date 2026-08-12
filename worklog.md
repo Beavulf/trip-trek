@@ -1895,3 +1895,110 @@ Server was crashing with "Failed to load external module @prisma/client-2c3a283f
 5. **P2 #20 (Dashboard DailyTip China)** — out of Info scope.
 6. **Orphan seeds** — `seed-info.ts`/`seed-packing.ts` without tripId — not critical (templates use from-template API).
 
+
+---
+
+## Session: Achievements Audit — P0 + P1 + P2 fixes (based on `audit-achievements-nagrady.md`)
+
+**Phase**: 26 — Achievements audit fixes
+
+### Status Before
+- `triedFoods: 0`, `totalFoods: 16` hardcoded → Гурман/Шеф-критик NEVER unlockable
+- `checklistDone: 0`, `checklistTotal: 15` hardcoded → "Готов к поездке" NEVER unlockable
+- `if (!trip) return null` — blank under shell (no skeleton/error/empty)
+- Spent included settlement expenses (Budget excludes them)
+- Spent hardcoded `$500` (currency ignored)
+- Copy "бейджи" looked like personal (actually shared trip badges)
+- "Финишер" copy said "Завершить все дни" (calendar-based, misleading)
+- No tap-expand on mobile (descriptions truncated)
+- No a11y (cards not buttons, progress not aria)
+
+### P0 — Critical Fixes
+
+#### P0 #1: Wire useFoods() — live triedFoods/totalFoods
+**Fix** (`src/components/trip/achievements.tsx`):
+- `const { data: foods } = useFoods();`
+- `triedFoods = foods?.filter((f) => f.tried).length ?? 0` (was `0` hardcoded)
+- `totalFoods = foods?.length ?? 0` (was `16` hardcoded)
+- Verified: China trip → Гурман/Шеф-критик now UNLOCKED (were never unlockable before)
+
+#### P0 #2: Wire useChecklist() — live checklistDone/checklistTotal
+**Fix**:
+- `const { data: checklist } = useChecklist();`
+- `checklistDone = checklist?.filter((i) => i.done).length ?? 0` (was `0`)
+- `checklistTotal = checklist?.length ?? 0` (was `15`)
+- `check: (c) => c.checklistTotal > 0 && c.checklistDone === c.checklistTotal` (if total===0 → not unlock, no /0)
+- Verified: China trip → "3 / 15" (live checklist data, was 0/15 stub)
+
+#### P0 #3: Empty/loading/error states
+**Fix**:
+- `tripError` → "Не удалось загрузить поездку" + "Обновить"
+- `expensesError` → "Не удалось загрузить данные" + "Обновить"
+- `!trip` → Loader2 spinner "Загрузка достижений…" (was `return null` — blank!)
+- No more false "0/12" under shell
+
+### P1 — Integrity / UX
+
+#### P1 #4: Honest day criteria
+**Fix**:
+- "Финишер" description: "Дожить до последнего дня поездки" (was "Завершить все дни поездки" — misleading)
+- "Половина пути" description: "Пройти половину дней поездки" (unchanged, but honest — calendar-based)
+- `check: (c) => c.totalDays > 0 && c.currentDay >= c.totalDays` (guard against 0 days)
+
+#### P1 #5: Spent excludes settlement + currency
+**Fix**:
+- `realExpenses = expenses?.filter((e) => e.category !== "settlement")` (was all expenses)
+- `totalSpent = realExpenses.reduce(...)` (was sum including settlement)
+- `currencySymbol(trip.settings.currency)` — maps USD→$, EUR→€, etc.
+- "Шопоголик" description: `Потратить ${sym}500` (was hardcoded `$500`)
+
+#### P1 #6: Copy "бейджи поездки (общие)"
+- Hero subtitle: "Бейджи поездки (общие для всех участников)" (was just "Получено бейджей")
+
+#### P1 #8: Adaptive food threshold
+- `check: (c) => c.totalFoods > 0 && c.triedFoods >= Math.min(5, c.totalFoods)` — if trip has <5 foods, target = totalFoods
+- `progress: (c) => ({ current: Math.min(c.triedFoods, Math.min(5, c.totalFoods)), target: Math.min(5, Math.max(1, c.totalFoods)) })`
+- Verified: Europe trip (3 foods) → "2 / 3" (target adapted to 3, not 5)
+- Same for "Шеф-критик": `Math.min(12, c.totalFoods)`
+
+### P2 — Polish
+
+#### P2 #9: Mobile tap-expand descriptions
+- `expandedId` state — click card → expands description (no line-clamp)
+- `aria-expanded={expanded}` on button
+- Like Profile achievements
+
+#### P2 #12: a11y — cards as button, aria on progress
+- Cards wrapped in `<button>` with `aria-label="${title}: ${desc}"`
+- Progress bar: `role="progressbar" aria-valuenow={current} aria-valuemin={0} aria-valuemax={target}`
+
+### Files Modified
+
+**Components**:
+- `src/components/trip/achievements.tsx` — useFoods + useChecklist wired, error/loading states, settlement filter, currency symbol, adaptive thresholds, honest copy, tap-expand, a11y
+
+### Verification (agent-browser)
+
+✅ Europe trip → "4 / 12" badges, "Бейджи поездки (общие для всех участников) · Европа: Париж..."
+✅ "Гурман: Попробовать 5 блюд" progress "2 / 3" (adaptive — 3 foods, target=3 not 5)
+✅ "Шеф-критик" progress "2 / 3" (adaptive)
+✅ "Готов к поездке" progress "0 / 1" (no checklist items, target=1 not /0)
+✅ "Шопоголик: Потратить $500" (currency symbol from trip)
+✅ "Финишер: Дожить до последнего дня поездки" (honest copy)
+✅ China trip → "4 / 12" — Гурман + Шеф-критик UNLOCKED (were never unlockable with stub!)
+✅ China checklist → "3 / 15" (live data, was 0/15 stub)
+✅ Tap-expand works: click Гурман → [expanded=true]
+✅ aria-labels on all cards
+✅ role="progressbar" on progress bars
+✅ ESLint: clean
+✅ No console errors
+
+### Unresolved / Notes
+
+1. **P1 #7 (Stale trip switch)** — `useTrip`/`useExpenses`/`useFoods`/`useChecklist` all use `getTripId()` in queryKey + `enabled`. Works after switch.
+2. **P2 #10 (Toast/celebration on unlock)** — future feature (sessionStorage per trip).
+3. **P2 #11 (Dual naming; unused Icon)** — "Дневникед" kept (quirky name); Icon import unused but harmless.
+4. **P2 #13 (Prisma Achievement)** — not created (audit says "не плодить без ТЗ").
+5. **P2 #14 (Profile grid)** — not touched (separate audit).
+6. **China bias indirect** — no more hardcoded 16/15. Live counts from useFoods/useChecklist.
+

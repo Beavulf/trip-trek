@@ -1,8 +1,9 @@
 "use client";
 
-import { useTrip, useExpenses } from "@/hooks/use-trip";
-import { motion } from "framer-motion";
-import { Trophy, Camera, MapPin, Wallet, BookOpen, UtensilsCrossed, Flame, Plane, Star } from "lucide-react";
+import { useTrip, useExpenses, useFoods, useChecklist } from "@/hooks/use-trip";
+import { motion, AnimatePresence } from "framer-motion";
+import { Trophy, Camera, MapPin, Wallet, BookOpen, UtensilsCrossed, Flame, Plane, Star, Loader2, AlertCircle } from "lucide-react";
+import { useState } from "react";
 import { cn } from "@/lib/utils";
 
 interface Achievement {
@@ -14,6 +15,8 @@ interface Achievement {
   emoji: string;
   check: (ctx: AchievementContext) => boolean;
   progress?: (ctx: AchievementContext) => { current: number; target: number };
+  // P1 #8: adaptive threshold — if trip has fewer items, lower the target
+  adaptiveTarget?: (ctx: AchievementContext) => number | null;
 }
 
 interface AchievementContext {
@@ -28,6 +31,17 @@ interface AchievementContext {
   totalDays: number;
   checklistDone: number;
   checklistTotal: number;
+  currency: string;
+  tripStatus: string;
+}
+
+// P1 #5: currency symbol helper
+function currencySymbol(code: string): string {
+  const map: Record<string, string> = {
+    USD: "$", EUR: "€", GBP: "£", CNY: "¥", JPY: "¥", KRW: "₩",
+    RUB: "₽", KZT: "₸", THB: "฿", UAH: "₴",
+  };
+  return map[code] || "$";
 }
 
 const ACHIEVEMENTS: Achievement[] = [
@@ -98,8 +112,9 @@ const ACHIEVEMENTS: Achievement[] = [
     icon: UtensilsCrossed,
     color: "#f97316",
     emoji: "🍜",
-    check: (c) => c.triedFoods >= 5,
-    progress: (c) => ({ current: Math.min(c.triedFoods, 5), target: 5 }),
+    // P1 #8: adaptive — if trip has <5 foods, target = totalFoods
+    check: (c) => c.totalFoods > 0 && c.triedFoods >= Math.min(5, c.totalFoods),
+    progress: (c) => ({ current: Math.min(c.triedFoods, Math.min(5, c.totalFoods)), target: Math.min(5, Math.max(1, c.totalFoods)) }),
   },
   {
     id: "food-master",
@@ -108,8 +123,9 @@ const ACHIEVEMENTS: Achievement[] = [
     icon: UtensilsCrossed,
     color: "#ef4444",
     emoji: "👨‍🍳",
-    check: (c) => c.triedFoods >= 12,
-    progress: (c) => ({ current: Math.min(c.triedFoods, 12), target: 12 }),
+    // P1 #8: adaptive — if trip has <12 foods, target = totalFoods
+    check: (c) => c.totalFoods > 0 && c.triedFoods >= Math.min(12, c.totalFoods),
+    progress: (c) => ({ current: Math.min(c.triedFoods, Math.min(12, c.totalFoods)), target: Math.min(12, Math.max(1, c.totalFoods)) }),
   },
   {
     id: "ready",
@@ -118,8 +134,9 @@ const ACHIEVEMENTS: Achievement[] = [
     icon: Star,
     color: "#f59e0b",
     emoji: "✅",
+    // P0 #2: live checklist; if total===0 → not unlock (no /0)
     check: (c) => c.checklistTotal > 0 && c.checklistDone === c.checklistTotal,
-    progress: (c) => ({ current: c.checklistDone, target: c.checklistTotal }),
+    progress: (c) => ({ current: c.checklistDone, target: c.checklistTotal || 1 }),
   },
   {
     id: "halfway",
@@ -128,50 +145,103 @@ const ACHIEVEMENTS: Achievement[] = [
     icon: Plane,
     color: "#6366f1",
     emoji: "✈️",
-    check: (c) => c.currentDay >= Math.ceil(c.totalDays / 2),
-    progress: (c) => ({ current: c.currentDay, target: Math.ceil(c.totalDays / 2) }),
+    // P1 #4: honest criteria — currentDay from shared formula (calendar-based, but honest copy)
+    check: (c) => c.totalDays > 0 && c.currentDay >= Math.ceil(c.totalDays / 2),
+    progress: (c) => ({ current: Math.min(c.currentDay, Math.ceil(c.totalDays / 2)), target: Math.ceil(c.totalDays / 2) || 1 }),
   },
   {
     id: "finisher",
     title: "Финишер",
-    description: "Завершить все дни поездки",
+    description: "Дожить до последнего дня поездки",
     icon: Trophy,
     color: "#eab308",
     emoji: "🏆",
-    check: (c) => c.currentDay >= c.totalDays,
-    progress: (c) => ({ current: c.currentDay, target: c.totalDays }),
+    // P1 #4: honest — last day reached (calendar), not "completed"
+    check: (c) => c.totalDays > 0 && c.currentDay >= c.totalDays,
+    progress: (c) => ({ current: Math.min(c.currentDay, c.totalDays), target: c.totalDays || 1 }),
   },
   {
     id: "big-spender",
     title: "Шопоголик",
-    description: "Потратить $500",
+    description: "Потратить 500",
     icon: Wallet,
     color: "#84cc16",
     emoji: "💸",
+    // P1 #5: spent excludes settlement; currency-aware description
     check: (c) => c.totalSpent >= 500,
     progress: (c) => ({ current: Math.min(Math.round(c.totalSpent), 500), target: 500 }),
   },
 ];
 
 export function Achievements() {
-  const { data: trip } = useTrip();
-  const { data: expenses } = useExpenses();
+  const { data: trip, error: tripError } = useTrip();
+  const { data: expenses, error: expensesError } = useExpenses();
+  // P0 #1: wire useFoods — live triedFoods/totalFoods (was hardcoded 0/16)
+  const { data: foods } = useFoods();
+  // P0 #2: wire useChecklist — live checklistDone/checklistTotal (was hardcoded 0/15)
+  const { data: checklist } = useChecklist();
+  // P2 #9: mobile tap-expand
+  const [expandedId, setExpandedId] = useState<string | null>(null);
 
-  if (!trip) return null;
+  // P0 #3: empty/loading/error states (was `if (!trip) return null` — blank under shell!)
+  if (tripError) {
+    return (
+      <div className="py-16 text-center text-muted-foreground space-y-2">
+        <div className="text-3xl">🤔</div>
+        <p className="text-sm font-medium">Не удалось загрузить поездку</p>
+        <button onClick={() => window.location.reload()} className="mt-2 text-xs px-3 py-1.5 rounded-lg bg-primary text-primary-foreground">
+          Обновить
+        </button>
+      </div>
+    );
+  }
+  if (expensesError) {
+    return (
+      <div className="py-16 text-center text-muted-foreground space-y-2">
+        <AlertCircle className="size-8 mx-auto text-red-500" />
+        <p className="text-sm font-medium">Не удалось загрузить данные</p>
+        <button onClick={() => window.location.reload()} className="mt-2 text-xs px-3 py-1.5 rounded-lg bg-primary text-primary-foreground">
+          Обновить
+        </button>
+      </div>
+    );
+  }
+  if (!trip) {
+    return (
+      <div className="py-20 text-center text-muted-foreground flex items-center justify-center gap-2">
+        <Loader2 className="size-4 animate-spin" /> Загрузка достижений…
+      </div>
+    );
+  }
 
-  // Для упрощения triedFoods/checklist — заглушки (можно расширить)
+  // P0 #1: live foods data (was triedFoods: 0, totalFoods: 16 hardcoded)
+  const triedFoods = foods?.filter((f) => f.tried).length ?? 0;
+  const totalFoods = foods?.length ?? 0;
+
+  // P0 #2: live checklist data (was checklistDone: 0, checklistTotal: 15 hardcoded)
+  const checklistDone = checklist?.filter((i) => i.done).length ?? 0;
+  const checklistTotal = checklist?.length ?? 0;
+
+  // P1 #5: spent excludes settlement (was all expenses including settlement)
+  const realExpenses = expenses?.filter((e) => e.category !== "settlement") ?? [];
+  const totalSpent = realExpenses.reduce((s, e) => s + e.amount, 0);
+
+  const sym = currencySymbol(trip.settings.currency);
+
   const ctx: AchievementContext = {
     visitedPlaces: trip.visitedPlaces,
     totalPlaces: trip.totalPlaces,
     totalPhotos: trip.totalPhotos,
     totalJournals: trip.totalJournals,
-    totalSpent: expenses?.reduce((s, e) => s + e.amount, 0) ?? 0,
-    triedFoods: 0, // TODO: подключить useFoods если нужно
-    totalFoods: 16,
+    totalSpent,
+    triedFoods,
+    totalFoods,
     currentDay: trip.currentDayNumber,
     totalDays: trip.settings.totalDays,
-    checklistDone: 0,
-    checklistTotal: 15,
+    checklistDone,
+    checklistTotal,
+    currency: trip.settings.currency,
+    tripStatus: trip.trip?.status ?? "planning",
   };
 
   const unlocked = ACHIEVEMENTS.filter((a) => a.check(ctx));
@@ -188,12 +258,16 @@ export function Achievements() {
           <div className="flex items-center gap-2 text-white/80 text-sm mb-1">
             <Trophy className="size-4" /> Достижения
           </div>
-          <h1 className="text-2xl font-bold">{totalScore} / {totalPossible}</h1>
-          <p className="text-white/80 text-sm mt-1">Получено бейджей</p>
+          <h1 className="text-2xl font-bold tabular-nums">{totalScore} / {totalPossible}</h1>
+          {/* P1 #6: honest copy — badges are shared for the trip */}
+          <p className="text-white/80 text-sm mt-1">
+            Бейджи поездки (общие для всех участников)
+            {trip.settings.title && <span className="text-white/60"> · {trip.settings.title}</span>}
+          </p>
           <div className="mt-3 h-2 rounded-full bg-white/20 overflow-hidden max-w-[240px]">
             <motion.div
               initial={{ width: 0 }}
-              animate={{ width: `${(totalScore / totalPossible) * 100}%` }}
+              animate={{ width: `${totalPossible > 0 ? (totalScore / totalPossible) * 100 : 0}%` }}
               transition={{ duration: 0.8 }}
               className="h-full rounded-full bg-white"
             />
@@ -209,7 +283,16 @@ export function Achievements() {
           </h2>
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
             {unlocked.map((a, i) => (
-              <AchievementCard key={a.id} achievement={a} unlocked={true} index={i} ctx={ctx} />
+              <AchievementCard
+                key={a.id}
+                achievement={a}
+                unlocked={true}
+                index={i}
+                ctx={ctx}
+                sym={sym}
+                expanded={expandedId === a.id}
+                onToggle={() => setExpandedId(expandedId === a.id ? null : a.id)}
+              />
             ))}
           </div>
         </div>
@@ -223,7 +306,16 @@ export function Achievements() {
           </h2>
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
             {locked.map((a, i) => (
-              <AchievementCard key={a.id} achievement={a} unlocked={false} index={i} ctx={ctx} />
+              <AchievementCard
+                key={a.id}
+                achievement={a}
+                unlocked={false}
+                index={i}
+                ctx={ctx}
+                sym={sym}
+                expanded={expandedId === a.id}
+                onToggle={() => setExpandedId(expandedId === a.id ? null : a.id)}
+              />
             ))}
           </div>
         </div>
@@ -232,22 +324,28 @@ export function Achievements() {
   );
 }
 
-function AchievementCard({ achievement, unlocked, index, ctx }: {
+function AchievementCard({ achievement, unlocked, index, ctx, sym, expanded, onToggle }: {
   achievement: Achievement;
   unlocked: boolean;
   index: number;
   ctx: AchievementContext;
+  sym: string;
+  expanded: boolean;
+  onToggle: () => void;
 }) {
-  const Icon = achievement.icon;
   const progress = achievement.progress?.(ctx);
-  const pct = progress ? Math.min(100, Math.round((progress.current / progress.target) * 100)) : 0;
+  const pct = progress && progress.target > 0 ? Math.min(100, Math.round((progress.current / progress.target) * 100)) : 0;
+
+  // P1 #5: currency-aware description for big-spender
+  const desc = achievement.id === "big-spender"
+    ? `Потратить ${sym}500`
+    : achievement.description;
 
   return (
     <motion.div
       initial={{ opacity: 0, scale: 0.9 }}
       animate={{ opacity: 1, scale: 1 }}
       transition={{ delay: index * 0.05, type: "spring", stiffness: 300, damping: 25 }}
-      whileHover={{ scale: 1.03 }}
       className={cn(
         "rounded-2xl border p-3 text-center relative overflow-hidden transition-colors",
         unlocked
@@ -262,26 +360,37 @@ function AchievementCard({ achievement, unlocked, index, ctx }: {
         />
       )}
       <div className="relative">
-        {/* Иконка/эмодзи */}
-        <div
-          className={cn(
-            "size-12 mx-auto rounded-xl grid place-items-center text-2xl mb-2 transition-transform",
-            unlocked ? "scale-100" : "grayscale opacity-50"
-          )}
-          style={{ background: `${achievement.color}22` }}
+        {/* P2 #12: card as button for a11y; P2 #9: tap-expand */}
+        <button
+          onClick={onToggle}
+          aria-label={`${achievement.title}: ${desc}`}
+          aria-expanded={expanded}
+          className="w-full"
         >
-          {achievement.emoji}
-        </div>
-        {/* Название */}
-        <div className="font-semibold text-xs leading-tight mb-0.5">{achievement.title}</div>
-        {/* Описание */}
-        <div className="text-[10px] text-muted-foreground leading-tight mb-2 line-clamp-2">
-          {achievement.description}
-        </div>
+          {/* Иконка/эмодзи */}
+          <div
+            className={cn(
+              "size-12 mx-auto rounded-xl grid place-items-center text-2xl mb-2 transition-transform",
+              unlocked ? "scale-100" : "grayscale opacity-50"
+            )}
+            style={{ background: `${achievement.color}22` }}
+          >
+            {achievement.emoji}
+          </div>
+          {/* Название */}
+          <div className="font-semibold text-xs leading-tight mb-0.5">{achievement.title}</div>
+          {/* Описание — P2 #9: expand on tap (like Profile) */}
+          <div className={cn(
+            "text-[10px] text-muted-foreground leading-tight mb-2",
+            expanded ? "" : "line-clamp-2"
+          )}>
+            {desc}
+          </div>
+        </button>
         {/* Прогресс (если не получено) */}
         {!unlocked && progress && (
           <div>
-            <div className="h-1 rounded-full bg-muted overflow-hidden mb-1">
+            <div className="h-1 rounded-full bg-muted overflow-hidden mb-1" role="progressbar" aria-valuenow={progress.current} aria-valuemin={0} aria-valuemax={progress.target}>
               <motion.div
                 initial={{ width: 0 }}
                 animate={{ width: `${pct}%` }}
@@ -290,7 +399,7 @@ function AchievementCard({ achievement, unlocked, index, ctx }: {
                 style={{ background: achievement.color }}
               />
             </div>
-            <div className="text-[9px] text-muted-foreground">
+            <div className="text-[9px] text-muted-foreground tabular-nums">
               {progress.current} / {progress.target}
             </div>
           </div>
