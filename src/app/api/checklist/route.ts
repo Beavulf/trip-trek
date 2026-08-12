@@ -4,11 +4,16 @@ import { emitWS } from "@/lib/ws-emit";
 import { requireTripMember } from "@/lib/api-auth";
 
 // GET /api/checklist?tripId=...
+// P0 #1: tripId required (was leak when empty); P0 #2: auth + membership
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const tripId = searchParams.get("tripId");
+  if (!tripId) return NextResponse.json({ error: "tripId required" }, { status: 400 });
+  const { response } = await requireTripMember(req, tripId);
+  if (response) return response;
+
   const items = await db.checklistItem.findMany({
-    where: tripId ? { tripId } : undefined,
+    where: { tripId },
     orderBy: [{ category: "asc" }, { order: "asc" }],
   });
   return NextResponse.json(items);

@@ -4,9 +4,12 @@ import { usePushNotifications } from "@/hooks/use-push";
 import { Bell, BellOff, Loader2, Check, X, BellRing } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { getTripId } from "@/hooks/use-trip";
 
 export function PushSettings() {
-  const { permission, subscribed, loading, subscribe, unsubscribe } = usePushNotifications("");
+  // P0 #4: use current tripId (was "default-trip"); tripId param is for future per-trip filtering
+  const currentTripId = getTripId();
+  const { permission, subscribed, loading, subscribe, unsubscribe } = usePushNotifications(currentTripId);
 
   const handleToggle = async () => {
     if (subscribed) {

@@ -12,16 +12,25 @@ export interface ChecklistItem {
   order: number;
 }
 
+// P0 #1: enabled !!tripId, placeholderData: []
+// P1 #8: throw on !ok
 export function useChecklist() {
+  const tripId = getTripId();
   return useQuery<ChecklistItem[]>({
-    queryKey: ["checklist", getTripId()],
+    queryKey: ["checklist", tripId],
     queryFn: async () => {
-      const r = await fetch(`/api/checklist?tripId=${getTripId()}`);
-      return r.json();
+      if (!tripId) return [];
+      const r = await fetch(`/api/checklist?tripId=${tripId}`);
+      if (!r.ok) throw new Error("fetch checklist failed");
+      const data = await r.json();
+      return Array.isArray(data) ? data : [];
     },
+    enabled: !!tripId,
+    placeholderData: [],
   });
 }
 
+// P1 #8: throw on !ok
 export function useToggleChecklist() {
   const qc = useQueryClient();
   return useMutation({
@@ -31,7 +40,11 @@ export function useToggleChecklist() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ id, ...data }),
       });
-      return r.json();
+      const body = await r.json().catch(() => ({}));
+      if (!r.ok) {
+        throw new Error(body?.error || `Ошибка ${r.status}`);
+      }
+      return body;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["checklist"] }),
   });
@@ -46,11 +59,11 @@ export function useAddChecklist() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ text, category, tripId: getTripId() }),
       });
+      const body = await r.json().catch(() => ({}));
       if (!r.ok) {
-        const err = await r.json().catch(() => ({}));
-        throw new Error(err.error || "add checklist failed");
+        throw new Error(body?.error || `Ошибка ${r.status}`);
       }
-      return r.json();
+      return body;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["checklist"] }),
   });
@@ -60,7 +73,12 @@ export function useDeleteChecklist() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (id: string) => {
-      await fetch(`/api/checklist?id=${id}`, { method: "DELETE" });
+      const r = await fetch(`/api/checklist?id=${id}`, { method: "DELETE" });
+      const body = await r.json().catch(() => ({}));
+      if (!r.ok) {
+        throw new Error(body?.error || `Ошибка ${r.status}`);
+      }
+      return body;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["checklist"] }),
   });

@@ -4,12 +4,16 @@ import { emitWS } from "@/lib/ws-emit";
 import { requireTripMember } from "@/lib/api-auth";
 
 // GET /api/info?tripId=...&type=...
+// P0 #1: tripId required (was leak when empty); P0 #2: auth + membership
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const tripId = searchParams.get("tripId");
+  if (!tripId) return NextResponse.json({ error: "tripId required" }, { status: 400 });
+  const { response } = await requireTripMember(req, tripId);
+  if (response) return response;
+
   const type = searchParams.get("type");
-  const where: Record<string, unknown> = {};
-  if (tripId) where.tripId = tripId;
+  const where: Record<string, unknown> = { tripId };
   if (type) where.type = type;
 
   const items = await db.infoItem.findMany({

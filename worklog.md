@@ -1760,3 +1760,138 @@ Server was crashing with "Failed to load external module @prisma/client-2c3a283f
 7. **P2 #21 (Unread badge in nav)** — later.
 8. **Anti double-toast** — uses `localStorage["triptrek-current-user-id"]` set by `useAuth` effect. Works for same-browser sessions; cross-device would need socket-level exclusion (future).
 
+
+---
+
+## Session: Info Audit — P0 + P1 + P2 fixes (based on `audit-info-info.md`)
+
+**Phase**: 25 — Info audit fixes
+
+### Status Before
+- `GET /api/checklist` и `GET /api/info` без tripId → вся БД (leak)
+- `GET /api/export` и `POST /api/import` открыты (no auth)
+- DataBackup сломан: export без `?tripId=` → 400; import ждал `app === "TripTrek China"` (export не шлёт `app` → всегда fail); filename `triptrek-china-…`
+- PushSettings: `usePushNotifications("default-trip")` — хардкод
+- `useAddInfo` без tripId в body → всегда 400 → Info UI сразу мёртв
+- InfoItem API+hooks живые, но НЕТ UI (FIX E5)
+- Checklist: toggle/delete без `!r.ok`, toast до ответа, delete без confirm
+- Import destination hardcoded "China"
+
+### P0 — Critical Fixes
+
+#### P0 #1: GET requires tripId + enabled
+**Fix** (`src/app/api/checklist/route.ts` + `src/app/api/info/route.ts`):
+- `if (!tripId) return 400` (was `if (tripId) where.tripId` → leak).
+- `requireTripMember` auth on GET (was open).
+- `useChecklist`/`useInfo`: `enabled: !!tripId`, `placeholderData: []`, `if (!tripId) return []`, `if (!r.ok) throw`, `Array.isArray(data) ? data : []`.
+
+#### P0 #2: Auth on export/import
+**Fix** (`src/app/api/export/route.ts` + `src/app/api/import/route.ts`):
+- Export: `requireTripMember(req, tripId)` (was open).
+- Import: `requireTripMember(req, tripId)` (was open — anyone could import into any trip).
+
+#### P0 #3: DataBackup fix
+**Fix** (`src/components/trip/data-backup.tsx`):
+- Export: `fetch('/api/export?tripId=${tripId}')` (was `/api/export` → 400).
+- Export filename: `triptrek-backup-YYYY-MM-DD.json` (was `triptrek-china-…`).
+- Import marker: `app === "TripTrek"` (was `"TripTrek China"`; export now sends `app: "TripTrek"`).
+- Import: `fetch('/api/import?tripId=${tripId}')` — imports into current trip.
+- API export: added `app: "TripTrek"` to response.
+- API import: `destination: "Unknown"` fallback (was hardcoded "China").
+
+#### P0 #4: PushSettings — no default-trip
+**Fix** (`src/components/trip/push-settings.tsx`):
+- `const currentTripId = getTripId(); usePushNotifications(currentTripId)` (was `"default-trip"`).
+
+#### P0 #5: useAddInfo with tripId in body
+**Fix** (`src/hooks/trip/use-info.ts`):
+- `body: JSON.stringify({ ...data, tripId: getTripId() })` (was `JSON.stringify(data)` → no tripId → always 400).
+- `if (!r.ok) throw new Error(body.error)`.
+- Verified: `curl POST /api/info` → 200 with created item.
+
+#### P0 #6: Empty/error states
+- `tripError` → "Не удалось загрузить поездку" + "Обновить".
+- `itemsError` (checklist/info) → error card.
+- Checklist empty: "Чек-лист пуст" + "Добавьте первый пункт выше".
+- Info empty: "Справка пуста" + "Добавьте контакты, транспорт, советы".
+
+### P1 — Integrity / UX
+
+#### P1 #7: InfoItem minimal UI (FIX E5)
+**Fix** (`src/components/trip/info-panel.tsx`):
+- New `InfoView` component: list by type (contact/transport/food/tip), add form (type picker + title + content), delete with confirm.
+- `INFO_TYPES` dict with neutral labels: "Контакты", "Транспорт", "Еда", "Советы" (not China-centric).
+- `useInfo`, `useAddInfo`, `useDeleteInfo` hooks used.
+- WS sync: `info:updated` → invalidate `["info"]`.
+
+#### P1 #8: Hooks throw on !ok + toast onSuccess only
+- `useToggleChecklist`, `useDeleteChecklist`: `if (!r.ok) throw`.
+- `useAddInfo`, `useUpdateInfo`, `useDeleteInfo`: `if (!r.ok) throw`.
+- UI: toggle/delete with `try { await mutateAsync; toast.success } catch (err) { toast.error }`.
+
+#### P1 #9: Delete confirm on checklist + info items
+- ChecklistRow: `confirmingDelete` state — "Да"/"Нет" inline.
+- InfoItemCard: same confirm pattern.
+
+#### P1 #10: Anti double-submit
+- Toggle/edit/delete buttons: `disabled={update.isPending || del.isPending}`.
+
+#### P1 #11: China bias removed
+- Import: `destination: "Unknown"` fallback (was "China").
+- Backup filename: `triptrek-backup-` (was `triptrek-china-`).
+- Info types: neutral labels (no China city hardcode).
+
+### P2 — Polish
+
+#### P2 #16: Collapse empty categories
+- Checklist: `grouped.filter((g) => g.items.length > 0)` — empty categories not shown.
+- Info: same filter.
+
+#### a11y labels
+- "Категория чек-листа", "Добавить пункт в чек-лист", "Тип записи", "Добавить запись в справку", "Экспортировать данные поездки", "Импортировать данные из JSON", "Удалить пункт", "Редактировать пункт", etc.
+
+### Files Modified
+
+**API**:
+- `src/app/api/checklist/route.ts` — tripId required + auth on GET
+- `src/app/api/info/route.ts` — tripId required + auth on GET
+- `src/app/api/export/route.ts` — auth + `app: "TripTrek"` marker
+- `src/app/api/import/route.ts` — auth + neutral destination + marker validation
+
+**Hooks**:
+- `src/hooks/trip/use-checklist.ts` — throw on !ok, enabled, placeholderData
+- `src/hooks/trip/use-info.ts` — tripId in body, throw on !ok, enabled, placeholderData
+
+**Components**:
+- `src/components/trip/info-panel.tsx` — error states, InfoView UI (new!), confirm delete, try/catch, a11y, collapse empty
+- `src/components/trip/data-backup.tsx` — export with tripId, neutral filename, import marker "TripTrek", aria-labels
+- `src/components/trip/push-settings.tsx` — use current tripId (was "default-trip")
+
+### Verification (curl + agent-browser)
+
+✅ `curl /api/checklist` без tripId → 400 (was leak)
+✅ `curl /api/checklist` без auth → 401
+✅ `curl /api/info` без tripId → 400
+✅ `curl /api/export` без tripId → 400
+✅ `curl /api/export` без auth → 401
+✅ `curl /api/export?tripId=...` → 200, `app: "TripTrek"`, trip title "Европа: Париж..."
+✅ `curl POST /api/info` с tripId → 200 (was always 400 — missing tripId in body)
+✅ ESLint: clean
+✅ agent-browser: Info tab loads → "Инфо и подготовка" + trip title
+✅ Checklist empty: "Чек-лист пуст"
+✅ Info UI: "Справка поездки" + "Контакты" type + "Добавить запись в справку"
+✅ Add info form: type picker + title + content + "Добавить запись"
+✅ Push: "Push-уведомления" (no "default-trip")
+✅ Backup: "Экспорт" + "Импорт" with aria-labels
+✅ aria-labels: "Категория чек-листа", "Тип записи", "Экспортировать данные поездки", etc.
+✅ No console errors
+
+### Unresolved / Notes
+
+1. **P1 #15 (Push copy vs stub)** — push uses VAPID (real Web Push), not stub. Copy is honest.
+2. **P2 #17 (Achievements checklist stub)** — separate audit.
+3. **P2 #18 (Dead `checklist:toggled`)** — not touched (audit says "не трогать").
+4. **P2 #19 (Don't split info-panel)** — kept as single file.
+5. **P2 #20 (Dashboard DailyTip China)** — out of Info scope.
+6. **Orphan seeds** — `seed-info.ts`/`seed-packing.ts` without tripId — not critical (templates use from-template API).
+

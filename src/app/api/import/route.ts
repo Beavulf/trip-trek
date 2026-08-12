@@ -1,12 +1,23 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { requireTripMember } from "@/lib/api-auth";
 
-// POST /api/import — импорт данных поездки из JSON
+// POST /api/import?tripId=... — импорт данных поездки из JSON
+// P0 #2: auth + membership; P1 #11: neutral destination (was hardcoded "China")
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const tripId = body.trip?.id || body.tripId;
+    // P0 #3: import into current trip (from query param or body)
+    const tripId = new URL(req.url).searchParams.get("tripId") || body.trip?.id || body.tripId;
     if (!tripId) return NextResponse.json({ error: "tripId required" }, { status: 400 });
+    // P0 #2: auth + membership — must be member of the trip you're importing into
+    const { response } = await requireTripMember(req, tripId);
+    if (response) return response;
+
+    // P0 #3: validate marker — must be TripTrek export
+    if (body.app && body.app !== "TripTrek") {
+      return NextResponse.json({ error: "Это не файл TripTrek" }, { status: 400 });
+    }
 
     // Upsert trip
     if (body.trip) {
@@ -15,7 +26,7 @@ export async function POST(req: NextRequest) {
         create: {
           id: tripId,
           title: body.trip.title || "Imported Trip",
-          destination: body.trip.destination || "China",
+          destination: body.trip.destination || "Unknown",
           startDate: new Date(body.trip.startDate || Date.now()),
           endDate: body.trip.endDate ? new Date(body.trip.endDate) : null,
           totalDays: body.trip.totalDays || 12,
