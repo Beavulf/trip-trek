@@ -148,8 +148,19 @@ export default function TripMap() {
     `${tripMeta?.settings?.destination ?? ""} ${tripMeta?.settings?.title ?? ""} ${(days || []).map((d) => d.city).join(" ")}`
   );
 
-  // Consume the "focus this place" signal from the Gallery lightbox: fly to it,
-  // then clear after a short delay so re-triggering with the same coords works.
+  // Consume the "focus this place" signal from the Gallery lightbox.
+  // Rendered as a separate <FlyTo> keyed by coordinates so it fires once on
+  // a new target and never refires when the target is cleared (unlike folding
+  // the signal into the persistent overview `center` fallback). Re-triggering
+  // with the same coords is handled by giving each target its own instance.
+  const flyToKey = mapFocusTarget
+    ? `focus-${mapFocusTarget.lat}-${mapFocusTarget.lng}`
+    : "overview";
+
+  // Clear the target after one tick once the dedicated <FlyTo> has consumed it.
+  // Safe because the target no longer folds into the persistent `center`
+  // prop; clearing only unmounts the focused <FlyTo> (its key swaps to
+  // "overview"), so there is no revert-flight to the overview center.
   useEffect(() => {
     if (!mapFocusTarget) return;
     const t = setTimeout(() => setMapFocusTarget(null), 50);
@@ -376,7 +387,10 @@ export default function TripMap() {
             url={TILE_LAYERS[tileLayer].url}
           />
           <ZoomControl position="bottomright" />
-          <FlyTo center={mapFocusTarget ?? center} />
+          <FlyTo center={center} key={`overview-${mapCityFilter ?? "all"}`} />
+          {mapFocusTarget && (
+            <FlyTo center={mapFocusTarget} key={flyToKey} />
+          )}
           {addMode && <MapClickHandler onClick={handleMapClick} />}
           {/* Места — скрываются в режиме "Только фото" */}
           {!onlyPhotos && filtered.map(({ place, day }) => (
