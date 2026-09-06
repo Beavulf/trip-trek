@@ -12,6 +12,7 @@ RUN npm install -g bun
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 ENV NEXT_TELEMETRY_DISABLED=1
+RUN bunx prisma generate
 RUN bun run build
 
 # ---- Production ----
