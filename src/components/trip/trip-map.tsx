@@ -51,7 +51,7 @@ function makePhotoIcon(thumbUrl: string) {
 export default function TripMap() {
   const tripId = useCurrentTripId();
   const { data: days, isLoading, isError, refetch } = useDays();
-  const { mapCityFilter, setMapCityFilter, mapOnlyUnvisited, setMapOnlyUnvisited, mapOnlyChill, setMapOnlyChill, setTripSwitcherOpen, setActiveTab } = useTripStore();
+  const { mapCityFilter, setMapCityFilter, mapOnlyUnvisited, setMapOnlyUnvisited, mapOnlyChill, setMapOnlyChill, setTripSwitcherOpen, setActiveTab, mapFocusTarget, setMapFocusTarget } = useTripStore();
   const [addMode, setAddMode] = useState(false);
   const [addData, setAddData] = useState<AddPlaceData | null>(null);
   const [addOpen, setAddOpen] = useState(false);
@@ -147,6 +147,14 @@ export default function TripMap() {
   const isChinaTrip = /china|китай|guangzhou|shenzhen|hongkong|macau|гуанчжоу|шэньчжэнь|гонконг|макао/i.test(
     `${tripMeta?.settings?.destination ?? ""} ${tripMeta?.settings?.title ?? ""} ${(days || []).map((d) => d.city).join(" ")}`
   );
+
+  // Consume the "focus this place" signal from the Gallery lightbox: fly to it,
+  // then clear after a short delay so re-triggering with the same coords works.
+  useEffect(() => {
+    if (!mapFocusTarget) return;
+    const t = setTimeout(() => setMapFocusTarget(null), 50);
+    return () => clearTimeout(t);
+  }, [mapFocusTarget, setMapFocusTarget]);
   // Empty state: нет поездки или нет дней
   if (!tripId) {
     return (
@@ -368,7 +376,7 @@ export default function TripMap() {
             url={TILE_LAYERS[tileLayer].url}
           />
           <ZoomControl position="bottomright" />
-          <FlyTo center={center} />
+          <FlyTo center={mapFocusTarget ?? center} />
           {addMode && <MapClickHandler onClick={handleMapClick} />}
           {/* Места — скрываются в режиме "Только фото" */}
           {!onlyPhotos && filtered.map(({ place, day }) => (
