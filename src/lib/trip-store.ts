@@ -36,6 +36,10 @@ interface TripState {
   setMapOnlyUnvisited: (v: boolean) => void;
   mapOnlyChill: boolean;
   setMapOnlyChill: (v: boolean) => void;
+  mapFocusTarget: { lat: number; lng: number; placeId: string | null } | null;
+  setMapFocusTarget: (
+    t: { lat: number; lng: number; placeId: string | null } | null,
+  ) => void;
 }
 
 export const useTripStore = create<TripState>()(
@@ -64,6 +68,8 @@ export const useTripStore = create<TripState>()(
       setMapOnlyUnvisited: (v) => set({ mapOnlyUnvisited: v }),
       mapOnlyChill: false,
       setMapOnlyChill: (v) => set({ mapOnlyChill: v }),
+      mapFocusTarget: null,
+      setMapFocusTarget: (t) => set({ mapFocusTarget: t }),
     }),
     {
       name: "triptrek-store",
