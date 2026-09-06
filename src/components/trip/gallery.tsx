@@ -3,10 +3,14 @@
 import { usePhotos, useDeletePhoto, useTrip, useCurrentTripId } from "@/hooks/use-trip";
 import { useTripStore } from "@/lib/trip-store";
 import { useAuth } from "@/hooks/use-auth";
-import { motion, AnimatePresence } from "framer-motion";
-import { Images, X, Trash2, MapPin, Calendar, User } from "lucide-react";
-import { useState, useMemo, useEffect } from "react";
+import { motion } from "framer-motion";
+import { Images, MapPin } from "lucide-react";
+import { useState, useMemo } from "react";
 import { toast } from "sonner";
+import type { Photo } from "@/lib/types";
+import type { ReactNode } from "react";
+import { PhotoLightbox } from "./photo-lightbox";
+import { cn } from "@/lib/utils";
 
 export function Gallery() {
   const tripId = useCurrentTripId();
@@ -14,6 +18,8 @@ export function Gallery() {
   const { data: trip, isLoading: tripLoading, isError: tripError, refetch: refetchTrip } = useTrip();
   const del = useDeletePhoto();
   const { setTripSwitcherOpen } = useTripStore();
+  const setActiveTab = useTripStore((s) => s.setActiveTab);
+  const setMapFocusTarget = useTripStore((s) => s.setMapFocusTarget);
   const { data: session } = useAuth();
   const currentUserId = (session?.user as { id?: string } | undefined)?.id || "";
   const myRole = trip?.participants?.find((p) => p.id === currentUserId)?.role;
@@ -21,7 +27,6 @@ export function Gallery() {
   const [lightbox, setLightbox] = useState<number | null>(null);
   const [filterDay, setFilterDay] = useState<string>("");
   const [filterCity, setFilterCity] = useState<string>("");
-  const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
 
   const filtered = useMemo(() => {
     if (!photos) return [];
@@ -31,21 +36,6 @@ export function Gallery() {
       return true;
     });
   }, [photos, filterDay, filterCity]);
-
-  useEffect(() => {
-    if (lightbox === null) return;
-    const handler = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setLightbox(null);
-      if (e.key === "ArrowLeft" && lightbox > 0) setLightbox(lightbox - 1);
-      if (e.key === "ArrowRight" && lightbox < filtered.length - 1) setLightbox(lightbox + 1);
-    };
-    window.addEventListener("keydown", handler);
-    document.body.style.overflow = "hidden";
-    return () => {
-      window.removeEventListener("keydown", handler);
-      document.body.style.overflow = "";
-    };
-  }, [lightbox, filtered.length]);
 
   if (!tripId) {
     return (
@@ -104,19 +94,23 @@ export function Gallery() {
 
   const hasFilters = filterDay || filterCity;
   const totalPhotos = photos?.length ?? 0;
-  const activePhoto = lightbox !== null ? filtered[lightbox] : null;
-  const canDeleteActive =
-    !!activePhoto && (canDeleteAny || activePhoto.userId === currentUserId);
 
   const handleDelete = (photoId: string) => {
     del.mutate(photoId, {
       onSuccess: () => {
         toast.success("Фото удалено");
         setLightbox(null);
-        setConfirmDelete(null);
       },
-      onError: (err) => toast.error(err instanceof Error ? err.message : "Не удалось удалить"),
+      onError: (err) =>
+        toast.error(err instanceof Error ? err.message : "Не удалось удалить"),
     });
+  };
+
+  const onMapClick = (photo: Photo) => {
+    if (photo.lat == null || photo.lng == null) return;
+    setMapFocusTarget({ lat: photo.lat, lng: photo.lng, placeId: photo.placeId });
+    setActiveTab("map");
+    setLightbox(null);
   };
 
   return (
@@ -130,31 +124,42 @@ export function Gallery() {
         </span>
       </div>
 
-      <div className="chip-rail no-scrollbar gap-2">
-        <select
-          value={filterCity}
-          onChange={(e) => setFilterCity(e.target.value)}
-          className="rounded-lg border border-input bg-card px-2 py-1.5 text-xs min-h-11"
-        >
-          <option value="">Все города</option>
-          {[...new Set(trip?.days.map((d) => d.cityKey))].map((c) => (
-            <option key={c} value={c}>{trip?.days.find((d) => d.cityKey === c)?.city}</option>
+      <div className="space-y-2">
+        <div className="chip-rail no-scrollbar gap-1.5">
+          <Chip active={filterCity === ""} onClick={() => { setFilterCity(""); setLightbox(null); }}>Все города</Chip>
+          {[...new Set(trip?.days.map((d) => d.cityKey) ?? [])].map((c) => (
+            <Chip
+              key={c}
+              active={filterCity === c}
+              onClick={() => { setFilterCity(filterCity === c ? "" : c); setLightbox(null); }}
+            >
+              {trip?.days.find((d) => d.cityKey === c)?.city ?? c}
+            </Chip>
           ))}
-        </select>
-        <select
-          value={filterDay}
-          onChange={(e) => setFilterDay(e.target.value)}
-          className="rounded-lg border border-input bg-card px-2 py-1.5 text-xs min-h-11"
-        >
-          <option value="">Все дни</option>
+        </div>
+        <div className="chip-rail no-scrollbar gap-1.5">
+          <Chip active={filterDay === ""} onClick={() => { setFilterDay(""); setLightbox(null); }}>Все дни</Chip>
           {trip?.days.map((d) => (
-            <option key={d.id} value={d.dayNumber}>День {d.dayNumber}</option>
+            <Chip
+              key={d.id}
+              active={filterDay === String(d.dayNumber)}
+              onClick={() => {
+                setFilterDay(filterDay === String(d.dayNumber) ? "" : String(d.dayNumber));
+                setLightbox(null);
+              }}
+            >
+              День {d.dayNumber}
+            </Chip>
           ))}
-        </select>
+        </div>
         {hasFilters && (
           <button
             type="button"
-            onClick={() => { setFilterDay(""); setFilterCity(""); }}
+            onClick={() => {
+              setFilterDay("");
+              setFilterCity("");
+              setLightbox(null);
+            }}
             className="text-xs text-primary font-medium px-3 min-h-11 active:scale-95 transition-transform"
           >
             Сбросить
@@ -195,11 +200,10 @@ export function Gallery() {
             return (
               <motion.button
                 key={photo.id}
-                layoutId={`photo-${photo.id}`}
-                initial={{ opacity: 0, scale: 0.95 }}
-                animate={{ opacity: 1, scale: 1 }}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
                 onClick={() => setLightbox(i)}
-                className="masonry-item relative group rounded-xl overflow-hidden bg-muted block w-full"
+                className="masonry-item relative rounded-xl overflow-hidden bg-muted block w-full"
               >
                 <img
                   src={photo.thumbUrl || photo.url}
@@ -220,15 +224,17 @@ export function Gallery() {
                 <div hidden className="w-full min-h-[120px] grid place-items-center text-muted-foreground text-xs p-4">
                   Не удалось показать фото
                 </div>
-                <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent flex flex-col justify-end p-2">
+                <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent p-2 flex flex-col gap-0.5 pointer-events-none">
                   <div className="text-white text-[10px] flex items-center gap-1">
                     <MapPin className="size-2.5" /> День {photo.day?.dayNumber}
                   </div>
-                  {photo.caption && <div className="text-white text-xs mt-0.5 line-clamp-1">{photo.caption}</div>}
+                  {photo.caption && (
+                    <div className="text-white text-xs line-clamp-1">{photo.caption}</div>
+                  )}
                 </div>
                 {uploader && (
                   <div
-                    className="absolute top-1.5 right-1.5 size-5 rounded-full grid place-items-center text-[10px] border border-white/50"
+                    className="absolute top-1.5 right-1.5 size-6 rounded-full grid place-items-center text-[10px] border border-white/50"
                     style={{ background: uploader.color }}
                     title={uploader.name}
                   >
@@ -241,103 +247,42 @@ export function Gallery() {
         </div>
       )}
 
-      <AnimatePresence>
-        {lightbox !== null && activePhoto && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            onClick={() => setLightbox(null)}
-            className="fixed inset-0 z-50 bg-black/90 grid place-items-center p-4"
-          >
-            <button
-              type="button"
-              onClick={() => setLightbox(null)}
-              className="absolute top-4 right-4 size-11 rounded-full bg-white/10 text-white grid place-items-center hover:bg-white/20 active:scale-90 transition-transform z-10"
-            >
-              <X className="size-5" />
-            </button>
-
-            {lightbox > 0 && (
-              <button
-                type="button"
-                onClick={(e) => { e.stopPropagation(); setLightbox(lightbox - 1); }}
-                className="absolute left-2 sm:left-4 top-1/2 -translate-y-1/2 size-12 rounded-full bg-white/10 text-white grid place-items-center hover:bg-white/20 active:scale-90 transition-transform text-2xl z-10"
-              >
-                ‹
-              </button>
-            )}
-            {lightbox < filtered.length - 1 && (
-              <button
-                type="button"
-                onClick={(e) => { e.stopPropagation(); setLightbox(lightbox + 1); }}
-                className="absolute right-2 sm:right-4 top-1/2 -translate-y-1/2 size-12 rounded-full bg-white/10 text-white grid place-items-center hover:bg-white/20 active:scale-90 transition-transform text-2xl z-10"
-              >
-                ›
-              </button>
-            )}
-
-            <motion.div
-              key={activePhoto.id}
-              initial={{ scale: 0.9, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              onClick={(e) => e.stopPropagation()}
-              className="max-w-3xl w-full"
-            >
-              <img src={activePhoto.url} alt={activePhoto.caption || "Фото"} className="w-full max-h-[75vh] object-contain rounded-lg" />
-              <div className="mt-3 flex items-center justify-between text-white/90 text-sm gap-2">
-                <div className="space-y-1 min-w-0 flex-1">
-                  {activePhoto.caption && <div className="font-medium">{activePhoto.caption}</div>}
-                  <div className="flex items-center gap-3 text-xs text-white/70 flex-wrap">
-                    <span className="flex items-center gap-1"><Calendar className="size-3" /> День {activePhoto.day?.dayNumber}</span>
-                    <span className="flex items-center gap-1"><MapPin className="size-3" /> {activePhoto.day?.city}</span>
-                    {activePhoto.user && (
-                      <span className="flex items-center gap-1"><User className="size-3" /> {activePhoto.user?.name}</span>
-                    )}
-                  </div>
-                  {activePhoto.address && (
-                    <div className="flex items-start gap-1 text-xs text-cyan-300/90 mt-1">
-                      <MapPin className="size-3 mt-0.5 shrink-0" />
-                      <span>{activePhoto.address}</span>
-                    </div>
-                  )}
-                </div>
-                {canDeleteActive && (
-                  confirmDelete === activePhoto.id ? (
-                    <div className="flex items-center gap-1 shrink-0">
-                      <button
-                        type="button"
-                        onClick={() => handleDelete(activePhoto.id)}
-                        disabled={del.isPending}
-                        className="btn-confirm-yes"
-                      >
-                        {del.isPending ? "…" : "Удалить"}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setConfirmDelete(null)}
-                        className="btn-confirm-no bg-white/15 text-white"
-                      >
-                        Отмена
-                      </button>
-                    </div>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={() => setConfirmDelete(activePhoto.id)}
-                      className="btn-icon-touch rounded-full bg-white/10 hover:bg-red-500/80 text-white shrink-0"
-                      title="Удалить фото"
-                      aria-label="Удалить фото"
-                    >
-                      <Trash2 className="size-4" />
-                    </button>
-                  )
-                )}
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      <PhotoLightbox
+        open={lightbox !== null}
+        index={lightbox ?? 0}
+        photos={filtered}
+        onIndexChange={(i) => setLightbox(i)}
+        onClose={() => setLightbox(null)}
+        onMapClick={onMapClick}
+        onDelete={handleDelete}
+        canDelete={(p) => canDeleteAny || p.userId === currentUserId}
+        pendingDelete={del.isPending}
+      />
     </div>
+  );
+}
+
+function Chip({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        "rounded-full px-3 py-1.5 text-xs font-medium min-h-11 active:scale-95 transition-transform whitespace-nowrap",
+        active
+          ? "bg-primary text-primary-foreground border border-primary"
+          : "bg-card border border-border text-foreground",
+      )}
+    >
+      {children}
+    </button>
   );
 }
