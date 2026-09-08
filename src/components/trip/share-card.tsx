@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { Share2, Download, X, Loader2, Image as ImageIcon, Copy, Check } from "lucide-react";
@@ -9,15 +9,86 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { useBodyScrollLock } from "@/hooks/use-body-scroll-lock";
 import { useTripStore } from "@/lib/trip-store";
+import { CARD_VARIANTS, type CardData, type CardVariantId } from "./share-card-art";
 
 export function ShareCard({ open, onOpenChange }: { open: boolean; onOpenChange: (v: boolean) => void }) {
   useBodyScrollLock(open);
   const tripId = useCurrentTripId();
   const { data: trip } = useTrip();
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [variantId, setVariantId] = useState<CardVariantId>("story");
   const [generating, setGenerating] = useState(false);
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+
+  const variant = CARD_VARIANTS.find((v) => v.id === variantId) ?? CARD_VARIANTS[0];
+
+  // Собираем данные поездки для отрисовки
+  const buildData = (): CardData | null => {
+    if (!trip) return null;
+    const cities: { name: string; days: number }[] = [];
+    for (const d of trip.days ?? []) {
+      const last = cities[cities.length - 1];
+      if (last && last.name === d.city) last.days++;
+      else cities.push({ name: d.city, days: 1 });
+    }
+    const fmt = (iso?: string | null) =>
+      iso ? new Date(iso).toLocaleDateString("ru-RU", { day: "numeric", month: "short" }).replace(".", "") : "";
+    const start = trip.settings.startDate;
+    const end = trip.settings.endDate;
+    const dateLabel =
+      start && end
+        ? `${fmt(start)} — ${fmt(end)} ${new Date(end).getFullYear()}`
+        : start
+          ? `с ${fmt(start)}`
+          : "скоро в путь";
+    return {
+      title: trip.settings.title || "TripTrek",
+      emoji: (trip.trip as { coverEmoji?: string } | undefined)?.coverEmoji || "🌏",
+      accent: (trip.trip as { coverColor?: string } | undefined)?.coverColor || "#f97316",
+      destination: (trip.trip as { destination?: string } | undefined)?.destination || "",
+      cities,
+      dateLabel,
+      totalDays: trip.settings.totalDays,
+      visited: trip.visitedPlaces,
+      totalPlaces: trip.totalPlaces,
+      photos: trip.totalPhotos,
+      spent: trip.totalSpent,
+      members: trip.participants.map((p) => ({ emoji: p.emoji, color: p.color, name: p.name })),
+      // dayProgress может быть отрицательным у ещё не начавшейся поездки — для карточки зажимаем
+      progress: Math.max(0, Math.min(100, trip.dayProgress || 0)),
+      inviteCode: trip.settings.inviteCode || trip.trip?.inviteCode || "",
+    };
+  };
+
+  const generate = (id: CardVariantId) => {
+    const v = CARD_VARIANTS.find((x) => x.id === id) ?? CARD_VARIANTS[0];
+    const canvas = canvasRef.current;
+    const data = buildData();
+    if (!canvas || !data) return;
+    setGenerating(true);
+    try {
+      canvas.width = v.width;
+      canvas.height = v.height;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return;
+      ctx.clearRect(0, 0, v.width, v.height);
+      v.render(ctx, data);
+      setImageUrl(canvas.toDataURL("image/png"));
+    } catch {
+      toast.error("Не удалось создать карточку");
+    } finally {
+      setGenerating(false);
+    }
+  };
+
+  // Автогенерация при открытии и смене варианта
+  useEffect(() => {
+    if (!open || !trip || !tripId) return;
+    const t = setTimeout(() => generate(variantId), 60);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, tripId, variantId, trip]);
 
   if (!open || typeof document === "undefined") return null;
 
@@ -64,179 +135,10 @@ export function ShareCard({ open, onOpenChange }: { open: boolean; onOpenChange:
     );
   }
 
-  const generateCard = async () => {
-    setGenerating(true);
-    try {
-      const canvas = canvasRef.current;
-      if (!canvas) return;
-
-      const ctx = canvas.getContext("2d");
-      if (!ctx) return;
-
-      // Размер — 1080×1920 (Instagram story) или 1080×1080 (square)
-      canvas.width = 1080;
-      canvas.height = 1920;
-
-      // Фон градиент
-      const grad = ctx.createLinearGradient(0, 0, 1080, 1920);
-      grad.addColorStop(0, trip.settings.coverColor || "#0ea5e9");
-      grad.addColorStop(0.5, "#ec4899");
-      grad.addColorStop(1, "#1c1917");
-      ctx.fillStyle = grad;
-      ctx.fillRect(0, 0, 1080, 1920);
-
-      // Декоративные круги
-      ctx.fillStyle = "rgba(255,255,255,0.05)";
-      ctx.beginPath();
-      ctx.arc(900, 200, 200, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.beginPath();
-      ctx.arc(200, 1700, 250, 0, Math.PI * 2);
-      ctx.fill();
-
-      // Emoji поездки
-      const tripEmoji = (trip.trip as { coverEmoji?: string })?.coverEmoji || "🌏";
-      ctx.font = "120px sans-serif";
-      ctx.textAlign = "center";
-      ctx.fillText(tripEmoji, 540, 200);
-
-      // Заголовок
-      ctx.fillStyle = "white";
-      ctx.font = "bold 56px system-ui, sans-serif";
-      ctx.textAlign = "center";
-      const title = trip.settings.title || "TripTrek";
-      wrapText(ctx, title, 540, 340, 900, 64);
-
-      // Подзаголовок
-      ctx.font = "32px system-ui, sans-serif";
-      ctx.fillStyle = "rgba(255,255,255,0.7)";
-      ctx.fillText(`${trip.settings.totalDays} дней в пути`, 540, 480);
-
-      // Разделитель
-      ctx.strokeStyle = "rgba(255,255,255,0.2)";
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.moveTo(100, 560);
-      ctx.lineTo(980, 560);
-      ctx.stroke();
-
-      // Статистика — карточки
-      const stats = [
-        { icon: "📍", value: `${trip.visitedPlaces}/${trip.totalPlaces}`, label: "мест" },
-        { icon: "📸", value: `${trip.totalPhotos}`, label: "фото" },
-        { icon: "📔", value: `${trip.totalJournals}`, label: "записей" },
-        { icon: "💰", value: `$${trip.totalSpent.toFixed(0)}`, label: "потрачено" },
-      ];
-
-      const cardWidth = 420;
-      const cardHeight = 200;
-      const cardGap = 40;
-      const startX = (1080 - cardWidth * 2 - cardGap) / 2;
-      const startY = 640;
-
-      stats.forEach((stat, i) => {
-        const col = i % 2;
-        const row = Math.floor(i / 2);
-        const x = startX + col * (cardWidth + cardGap);
-        const y = startY + row * (cardHeight + cardGap);
-
-        // Карточка
-        ctx.fillStyle = "rgba(255,255,255,0.1)";
-        roundRect(ctx, x, y, cardWidth, cardHeight, 24);
-        ctx.fill();
-
-        // Иконка
-        ctx.font = "48px sans-serif";
-        ctx.textAlign = "center";
-        ctx.fillText(stat.icon, x + cardWidth / 2, y + 80);
-
-        // Значение
-        ctx.font = "bold 44px system-ui, sans-serif";
-        ctx.fillStyle = "white";
-        ctx.fillText(stat.value, x + cardWidth / 2, y + 145);
-
-        // Лейбл
-        ctx.font = "24px system-ui, sans-serif";
-        ctx.fillStyle = "rgba(255,255,255,0.6)";
-        ctx.fillText(stat.label, x + cardWidth / 2, y + 175);
-      });
-
-      // Участники
-      const members = trip.participants.slice(0, 5);
-      ctx.font = "28px system-ui, sans-serif";
-      ctx.fillStyle = "rgba(255,255,255,0.7)";
-      ctx.textAlign = "center";
-      ctx.fillText("Участники:", 540, 1130);
-
-      // Аватары участников
-      const avatarSize = 80;
-      const avatarGap = 20;
-      const totalAvatarWidth = members.length * (avatarSize + avatarGap) - avatarGap;
-      const avatarStartX = (1080 - totalAvatarWidth) / 2;
-
-      members.forEach((m, i) => {
-        const x = avatarStartX + i * (avatarSize + avatarGap);
-        const y = 1180;
-
-        // Круг
-        ctx.fillStyle = m.color;
-        ctx.beginPath();
-        ctx.arc(x + avatarSize / 2, y + avatarSize / 2, avatarSize / 2, 0, Math.PI * 2);
-        ctx.fill();
-
-        // Emoji
-        ctx.font = "40px sans-serif";
-        ctx.textAlign = "center";
-        ctx.textBaseline = "middle";
-        ctx.fillText(m.emoji, x + avatarSize / 2, y + avatarSize / 2 + 4);
-      });
-      ctx.textBaseline = "alphabetic";
-
-      // Прогресс-бар
-      const progressY = 1400;
-      ctx.font = "28px system-ui, sans-serif";
-      ctx.fillStyle = "rgba(255,255,255,0.7)";
-      ctx.textAlign = "center";
-      ctx.fillText(`Прогресс: ${trip.dayProgress}%`, 540, progressY);
-
-      // Бар
-      const barX = 140;
-      const barY = progressY + 30;
-      const barWidth = 800;
-      const barHeight = 24;
-
-      ctx.fillStyle = "rgba(255,255,255,0.15)";
-      roundRect(ctx, barX, barY, barWidth, barHeight, 12);
-      ctx.fill();
-
-      ctx.fillStyle = "white";
-      roundRect(ctx, barX, barY, barWidth * (trip.dayProgress / 100), barHeight, 12);
-      ctx.fill();
-
-      // Логотип
-      ctx.font = "bold 36px system-ui, sans-serif";
-      ctx.fillStyle = "rgba(255,255,255,0.5)";
-      ctx.textAlign = "center";
-      ctx.fillText("TripTrek", 540, 1700);
-
-      ctx.font = "24px system-ui, sans-serif";
-      ctx.fillStyle = "rgba(255,255,255,0.3)";
-      ctx.fillText("Совместное путешествие", 540, 1740);
-
-      // Конверт в PNG
-      const dataUrl = canvas.toDataURL("image/png");
-      setImageUrl(dataUrl);
-    } catch {
-      toast.error("Не удалось создать карточку");
-    } finally {
-      setGenerating(false);
-    }
-  };
-
   const download = () => {
     if (!imageUrl) return;
     const link = document.createElement("a");
-    link.download = `triptrek-${Date.now()}.png`;
+    link.download = `triptrek-${variantId}-${Date.now()}.png`;
     link.href = imageUrl;
     link.click();
     toast.success("Карточка скачана! 📸");
@@ -252,7 +154,7 @@ export function ShareCard({ open, onOpenChange }: { open: boolean; onOpenChange:
         await navigator.share({
           files: [file],
           title: trip.settings.title,
-          text: "Смотри статистику нашей поездки! 🌏",
+          text: "Смотри карточку нашей поездки! 🌏",
         });
       } else {
         download();
@@ -313,15 +215,40 @@ export function ShareCard({ open, onOpenChange }: { open: boolean; onOpenChange:
           </div>
 
           <div className="p-4 space-y-4">
+            {/* Выбор варианта */}
+            <div className="chip-rail flex gap-2 overflow-x-auto -mx-1 px-1 pb-1">
+              {CARD_VARIANTS.map((v) => (
+                <button
+                  key={v.id}
+                  type="button"
+                  onClick={() => setVariantId(v.id)}
+                  className={cn(
+                    "shrink-0 min-h-11 px-3.5 rounded-xl border text-left transition-colors flex items-center gap-2",
+                    v.id === variantId
+                      ? "bg-primary text-primary-foreground border-primary"
+                      : "bg-secondary/60 border-border hover:bg-accent"
+                  )}
+                >
+                  <span className="text-base leading-none">{v.emoji}</span>
+                  <span className="flex flex-col items-start leading-tight">
+                    <span className="text-sm font-medium">{v.label}</span>
+                    <span className={cn("text-[10px]", v.id === variantId ? "text-primary-foreground/70" : "text-muted-foreground")}>
+                      {v.tag}
+                    </span>
+                  </span>
+                </button>
+              ))}
+            </div>
+
             {/* Превью */}
-            {!imageUrl ? (
+            {generating || !imageUrl ? (
               <div className="text-center py-12">
-                <div className="text-5xl mb-3">{(trip.trip as { coverEmoji?: string })?.coverEmoji || "🌏"}</div>
-                <p className="text-sm text-muted-foreground">Создай красивую карточку со статистикой поездки</p>
+                <Loader2 className="size-6 animate-spin text-muted-foreground mx-auto mb-3" />
+                <p className="text-sm text-muted-foreground">Рисуем карточку «{variant.label}»…</p>
               </div>
             ) : (
               <div className="rounded-2xl overflow-hidden border border-border">
-                <img src={imageUrl} alt="Trip card" className="w-full block" />
+                <img src={imageUrl} alt={`Карточка поездки — ${variant.label}`} className="w-full block" />
               </div>
             )}
 
@@ -329,39 +256,33 @@ export function ShareCard({ open, onOpenChange }: { open: boolean; onOpenChange:
             <canvas ref={canvasRef} className="hidden" />
 
             {/* Кнопки */}
-            {!imageUrl ? (
+            <div className="grid grid-cols-2 gap-2">
               <button
-                onClick={generateCard}
-                disabled={generating}
-                className="w-full min-h-11 rounded-xl bg-primary text-primary-foreground py-3.5 font-medium flex items-center justify-center gap-2 disabled:opacity-50"
+                type="button"
+                onClick={download}
+                disabled={!imageUrl}
+                className="min-h-11 rounded-xl bg-secondary hover:bg-accent py-3 font-medium flex items-center justify-center gap-2 disabled:opacity-50"
               >
-                {generating ? <Loader2 className="size-5 animate-spin" /> : <ImageIcon className="size-5" />}
-                {generating ? "Создание…" : "Создать карточку"}
+                <Download className="size-4" /> Скачать
               </button>
-            ) : (
-              <div className="grid grid-cols-2 gap-2">
-                <button
-                  onClick={download}
-                  className="rounded-xl bg-secondary hover:bg-accent py-3 font-medium flex items-center justify-center gap-2"
-                >
-                  <Download className="size-4" /> Скачать
-                </button>
-                <button
-                  onClick={share}
-                  className="rounded-xl bg-primary text-primary-foreground py-3 font-medium flex items-center justify-center gap-2"
-                >
-                  <Share2 className="size-4" /> Поделиться
-                </button>
-              </div>
-            )}
+              <button
+                type="button"
+                onClick={share}
+                disabled={!imageUrl}
+                className="min-h-11 rounded-xl bg-primary text-primary-foreground py-3 font-medium flex items-center justify-center gap-2 disabled:opacity-50"
+              >
+                <Share2 className="size-4" /> Поделиться
+              </button>
+            </div>
 
             {/* Ссылка */}
             <button
+              type="button"
               onClick={copyLink}
               className="w-full flex items-center justify-center gap-2 py-3 text-xs text-muted-foreground hover:text-foreground min-h-11"
             >
               {copied ? <Check className="size-3 text-green-500" /> : <Copy className="size-3" />}
-              {copied ? "Скопировано!" : "Копировать ссылку"}
+              {copied ? "Скопировано!" : "Копировать ссылку-приглашение"}
             </button>
           </div>
         </motion.div>
@@ -369,38 +290,4 @@ export function ShareCard({ open, onOpenChange }: { open: boolean; onOpenChange:
     </AnimatePresence>,
     document.body
   );
-}
-
-// Helpers для Canvas
-function wrapText(ctx: CanvasRenderingContext2D, text: string, x: number, y: number, maxWidth: number, lineHeight: number) {
-  const words = text.split(" ");
-  let line = "";
-  let lineCount = 0;
-
-  for (const word of words) {
-    const testLine = line + word + " ";
-    const metrics = ctx.measureText(testLine);
-    if (metrics.width > maxWidth && line) {
-      ctx.fillText(line, x, y + lineCount * lineHeight);
-      line = word + " ";
-      lineCount++;
-    } else {
-      line = testLine;
-    }
-  }
-  ctx.fillText(line, x, y + lineCount * lineHeight);
-}
-
-function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {
-  ctx.beginPath();
-  ctx.moveTo(x + r, y);
-  ctx.lineTo(x + w - r, y);
-  ctx.quadraticCurveTo(x + w, y, x + w, y + r);
-  ctx.lineTo(x + w, y + h - r);
-  ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
-  ctx.lineTo(x + r, y + h);
-  ctx.quadraticCurveTo(x, y + h, x, y + h - r);
-  ctx.lineTo(x, y + r);
-  ctx.quadraticCurveTo(x, y, x + r, y);
-  ctx.closePath();
 }
