@@ -19,6 +19,28 @@ interface AuthUser {
 }
 
 /**
+ * Get the JWT signing secret.
+ * In production, throws if NEXTAUTH_SECRET is not set (no insecure fallback).
+ * In dev/test, falls back to "fallback-dev-secret" with a warning.
+ */
+export function getJwtSecret(): string {
+  const secret = process.env.NEXTAUTH_SECRET;
+  if (!secret) {
+    if (process.env.NODE_ENV === "production") {
+      throw new Error(
+        "NEXTAUTH_SECRET is required in production. Generate one with: openssl rand -hex 32"
+      );
+    }
+    console.warn(
+      "[triptrek] NEXTAUTH_SECRET is not set — using insecure fallback secret. " +
+        "Set NEXTAUTH_SECRET for production deployments."
+    );
+    return "fallback-dev-secret";
+  }
+  return secret;
+}
+
+/**
  * Extract user from request cookie (JWT)
  * Returns null if not authenticated
  */
@@ -27,7 +49,7 @@ export async function getUserFromRequest(req: NextRequest): Promise<AuthUser | n
     const token = req.cookies.get("next-auth.session-token")?.value;
     if (!token) return null;
 
-    const secret = process.env.NEXTAUTH_SECRET || "fallback-dev-secret";
+    const secret = getJwtSecret();
     const decoded = jwt.verify(token, secret) as AuthUser;
 
     if (!decoded?.id) return null;

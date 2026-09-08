@@ -1,18 +1,27 @@
 import { NextRequest, NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import { db } from "@/lib/db";
+import { rateLimitMiddleware } from "@/lib/rate-limit";
 
 // POST /api/auth/register — регистрация
 export async function POST(req: NextRequest) {
   try {
+    // P0: rate limiting — 3 registrations per hour per IP
+    const rateLimit = rateLimitMiddleware(req, "register", 3, 60 * 60_000);
+    if (rateLimit) return rateLimit;
+
     const { email, password, name, tripId, inviteCode } = await req.json();
 
     if (!email || !password || !name) {
       return NextResponse.json({ error: "email, password, name обязательны" }, { status: 400 });
     }
 
-    if (password.length < 4) {
-      return NextResponse.json({ error: "Пароль минимум 4 символа" }, { status: 400 });
+    // P0: password must be at least 8 chars with at least one letter and one digit
+    if (typeof password !== "string" || password.length < 8) {
+      return NextResponse.json({ error: "Пароль минимум 8 символов" }, { status: 400 });
+    }
+    if (!/[a-z]/i.test(password) || !/\d/.test(password)) {
+      return NextResponse.json({ error: "Пароль должен содержать буквы и цифры" }, { status: 400 });
     }
 
     const existing = await db.user.findUnique({ where: { email } });

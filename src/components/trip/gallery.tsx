@@ -203,12 +203,12 @@ export function Gallery() {
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 onClick={() => setLightbox(i)}
-                className="masonry-item relative rounded-xl overflow-hidden bg-muted block w-full"
+                className="masonry-item relative rounded-xl overflow-hidden bg-muted block w-full cursor-pointer"
               >
                 <img
                   src={photo.thumbUrl || photo.url}
                   alt={photo.caption || "Фото"}
-                  className="w-full block bg-muted min-h-[120px] object-cover"
+                  className="w-full block bg-muted min-h-[120px] object-cover pointer-events-none"
                   loading="lazy"
                   onError={(e) => {
                     const el = e.currentTarget;
@@ -216,7 +216,7 @@ export function Gallery() {
                       el.src = photo.url;
                       return;
                     }
-                    el.style.display = "none";
+                    el.style.visibility = "hidden";
                     const fallback = el.nextElementSibling as HTMLElement | null;
                     if (fallback) fallback.hidden = false;
                   }}

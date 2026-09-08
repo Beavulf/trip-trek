@@ -101,7 +101,7 @@ export function TemplatePicker({ open, onOpenChange }: TemplatePickerProps) {
             <h2 className="font-bold text-lg flex items-center gap-2">
               <Sparkles className="size-5" /> Шаблоны поездок
             </h2>
-            <button onClick={() => onOpenChange(false)} className="size-10 rounded-full bg-white/20 hover:bg-white/30 grid place-items-center" aria-label="Закрыть">
+            <button onClick={() => onOpenChange(false)} className="size-11 rounded-full bg-white/20 hover:bg-white/30 grid place-items-center" aria-label="Закрыть">
               <X className="size-4" />
             </button>
           </div>

@@ -1,10 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { requireUser } from "@/lib/api-auth";
+import { rateLimitMiddleware } from "@/lib/rate-limit";
 
 // POST /api/push/subscribe — сохранить push подписку текущего пользователя
 export async function POST(req: NextRequest) {
   try {
+    // P0: rate limiting — 30 subscriptions per hour per IP
+    const rateLimit = rateLimitMiddleware(req, "push-subscribe", 30, 60 * 60_000);
+    if (rateLimit) return rateLimit;
+
     const { user: authUser, response } = await requireUser(req);
     if (response) return response;
     const userId = authUser!.id;

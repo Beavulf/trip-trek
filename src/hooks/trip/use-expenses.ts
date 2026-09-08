@@ -22,7 +22,7 @@ export function useExpenses() {
 export function useAddExpense() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (data: { amount: number; category: string; description: string; paidById: string; dayId?: string; splitWith?: string[]; excludeSelf?: boolean; settlementKey?: string }) => {
+    mutationFn: async (data: { amount: number; category: string; description: string; paidById: string; dayId?: string; splitWith?: string[]; excludeSelf?: boolean; settlementKey?: string; originalAmount?: number; originalCurrency?: string }) => {
       const r = await fetch("/api/expenses", {
         method: "POST",
         headers: { "Content-Type": "application/json" },

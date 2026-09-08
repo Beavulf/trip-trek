@@ -24,10 +24,13 @@ export function AddDayButton() {
   useBodyScrollLock(open);
 
   const submit = async () => {
-    const cityName = selectedCity?.name || city.trim() || "Новый город";
+    if (!selectedCity) {
+      toast.error("Выбери город из списка — иначе не получится добавлять места в этот день");
+      return;
+    }
     await addDay.mutateAsync({
-      city: cityName,
-      cityKey: selectedCity ? encodeCustomKey(selectedCity.lat, selectedCity.lng) : "custom",
+      city: selectedCity.name,
+      cityKey: encodeCustomKey(selectedCity.lat, selectedCity.lng),
       title: title.trim() || undefined,
       accentColor: color,
     });
@@ -105,7 +108,7 @@ export function AddDayButton() {
                     key={c}
                     onClick={() => setColor(c)}
                     className={cn(
-                      "size-9 rounded-full transition-all",
+                      "size-11 rounded-full transition-all",
                       color === c ? "ring-2 ring-offset-2 ring-foreground scale-110" : "opacity-60 hover:opacity-100"
                     )}
                     style={{ background: c }}

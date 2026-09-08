@@ -508,7 +508,7 @@ function FoodCard({ food, cityColor, priceSym }: { food: FoodItem; cityColor: st
           className="fixed inset-0 z-[200] bg-black/95 flex flex-col items-center justify-center p-4"
           onClick={() => setLightbox(false)}
         >
-          <button className="absolute top-4 right-4 size-10 rounded-full bg-white/10 text-white grid place-items-center hover:bg-white/20 z-10" aria-label="Закрыть">
+          <button className="absolute top-4 right-4 size-11 rounded-full bg-white/10 text-white grid place-items-center hover:bg-white/20 z-10" aria-label="Закрыть">
             <X className="size-5" />
           </button>
           <img

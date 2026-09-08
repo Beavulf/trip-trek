@@ -99,6 +99,9 @@ export function AddExpenseForm({ onDone }: AddExpenseFormProps) {
         dayId: dayId || undefined,
         splitWith: splitWithArr,
         excludeSelf,
+        // Сохраняем оригинальную сумму и валюту, чтобы показать «изначально 100 ¥» в истории трат.
+        originalAmount: amountNum,
+        originalCurrency: currencyCode,
       });
 
       // Подсказка — только после реального успеха
@@ -294,7 +297,7 @@ export function AddExpenseForm({ onDone }: AddExpenseFormProps) {
         <button
           onClick={submit}
           disabled={add.isPending}
-          className="w-full rounded-lg bg-primary text-primary-foreground py-2.5 text-sm font-medium flex items-center justify-center gap-2 active:scale-98 transition-transform"
+          className="w-full rounded-lg bg-primary text-primary-foreground py-2.5 min-h-11 text-sm font-medium flex items-center justify-center gap-2 active:scale-98 transition-transform"
         >
           {add.isPending ? <Loader2 className="size-4 animate-spin" /> : <Plus className="size-4" />}
           Добавить трату

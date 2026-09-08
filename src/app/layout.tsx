@@ -66,11 +66,10 @@ export default function RootLayout({
           toastOptions={{
             duration: 5000,
             classNames: {
-              toast: "!rounded-xl !border !border-border !bg-card !text-card-foreground",
+              toast: "!rounded-xl !border !border-border !bg-card !text-card-foreground !p-0 !min-h-[50px]",
               description: "!text-muted-foreground",
               actionButton: "!bg-primary !text-primary-foreground",
               cancelButton: "!bg-muted !text-muted-foreground",
-              closeButton: "!bg-transparent !text-muted-foreground hover:!bg-accent hover:!text-red-500 !w-11 !h-11 !min-w-11 !rounded-lg !border-0 !shrink-0 !self-start",
             },
           }}
           closeButton

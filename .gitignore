@@ -63,3 +63,6 @@ screenshot-*.png
 db/*.db
 public/uploads/**
 !.gitkeep
+
+# local DB (moved from db/ to prisma/db/)
+prisma/db/

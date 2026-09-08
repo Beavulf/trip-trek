@@ -28,7 +28,7 @@ export async function GET(req: NextRequest) {
 // POST /api/expenses — добавить трату
 export async function POST(req: NextRequest) {
   const body = await req.json();
-  const { amount, category, description, paidById, dayId, tripId, splitWith, excludeSelf, settlementKey } = body;
+  const { amount, category, description, paidById, dayId, tripId, splitWith, excludeSelf, settlementKey, originalAmount, originalCurrency } = body;
   const { user, response } = await requireTripMember(req, tripId);
   if (response) return response;
   if (!category || !description || !paidById || !tripId) {
@@ -85,6 +85,8 @@ export async function POST(req: NextRequest) {
       splitWith: splitArr.join(","),
       excludeSelf: !!excludeSelf,
       settlementKey: settlementKey || null,
+      originalAmount: typeof originalAmount === "number" ? originalAmount : null,
+      originalCurrency: typeof originalCurrency === "string" && originalCurrency ? originalCurrency : null,
     },
     include: {
       paidBy: { select: { id: true, name: true, emoji: true, color: true } },

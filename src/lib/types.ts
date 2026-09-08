@@ -69,6 +69,8 @@ export interface Expense {
   day: { dayNumber: number; city: string } | null;
   splitWith?: string;
   excludeSelf?: boolean;
+  originalAmount?: number | null;
+  originalCurrency?: string | null;
   createdAt: string;
 }
 

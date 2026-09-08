@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import jwt from "jsonwebtoken";
+import { getJwtSecret } from "@/lib/api-auth";
 
 // GET /api/auth/custom-session — кастомная сессия (читает наш JWT)
 export async function GET(req: NextRequest) {
@@ -10,7 +11,7 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    const secret = process.env.NEXTAUTH_SECRET || "fallback-dev-secret";
+    const secret = getJwtSecret();
     const decoded = jwt.verify(token, secret) as {
       id: string;
       name: string;

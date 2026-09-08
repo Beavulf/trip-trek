@@ -58,9 +58,10 @@ export async function GET(req: NextRequest) {
   const placeProgress = places.length > 0 ? Math.round((visitedPlaces / places.length) * 100) : 0;
 
   // Формируем participants-совместимый формат
+  const isReplacementOnly = (s: string) => /^[\uFFFD\s]*$/.test(s);
   const participants = members.map((m) => ({
     id: m.userId,
-    name: m.displayName,
+    name: isReplacementOnly(m.displayName) ? m.user.name : m.displayName,
     color: m.color,
     emoji: m.emoji,
     role: m.user.name === m.displayName ? undefined : m.user.name,

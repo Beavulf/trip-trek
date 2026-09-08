@@ -2,10 +2,16 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
+import { getJwtSecret } from "@/lib/api-auth";
+import { rateLimitMiddleware } from "@/lib/rate-limit";
 
 // POST /api/auth/custom-login — кастомный логин (обходит NextAuth v4 + Turbopack баг)
 export async function POST(req: NextRequest) {
   try {
+    // P0: rate limiting — 5 login attempts per 15 min per IP
+    const rateLimit = rateLimitMiddleware(req, "login", 5, 15 * 60_000);
+    if (rateLimit) return rateLimit;
+
     const body = await req.json();
     const { email, password } = body;
 
@@ -24,7 +30,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Генерируем JWT токен (совместимый с NextAuth)
-    const secret = process.env.NEXTAUTH_SECRET || "fallback-dev-secret";
+    const secret = getJwtSecret();
     const token = jwt.sign(
       {
         id: user.id,
@@ -49,7 +55,7 @@ export async function POST(req: NextRequest) {
     });
     response.cookies.set("next-auth.session-token", token, {
       httpOnly: true,
-      secure: false,
+      secure: process.env.NODE_ENV === "production",
       sameSite: "lax",
       path: "/",
       maxAge: 30 * 24 * 60 * 60,

@@ -73,8 +73,7 @@ export function DayCard({ day, onOpenPlace, onAddPlace }: DayCardProps) {
               {day.places.map((place) => (
                 <PlaceRow key={place.id} place={place} accentColor={day.accentColor ?? "#f97316"} onOpen={() => onOpenPlace(place)} />
               ))}
-              {/* Empty day CTA */}
-              {day.places.length === 0 && onAddPlace && (
+              {onAddPlace && (
                 <button
                   onClick={() => onAddPlace(day.id)}
                   className="w-full flex items-center justify-center gap-1.5 py-3 rounded-xl border-2 border-dashed border-border hover:border-primary hover:text-primary transition-colors active:scale-95"

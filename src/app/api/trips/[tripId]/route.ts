@@ -1,15 +1,20 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { emitWS } from "@/lib/ws-emit";
-import { requireTripMember } from "@/lib/api-auth";
+import { requireTripMember, requireTripOwner } from "@/lib/api-auth";
 
-// GET /api/trips/[id] — детали поездки
+// GET /api/trips/[id] — детали поездки (только для участников).
+// P0: раньше был без авторизации и отдавал user-записи участников вместе с хешами паролей.
+const SAFE_USER_FIELDS = { id: true, name: true, emoji: true, color: true, avatarUrl: true, plan: true } as const;
+
 export async function GET(req: NextRequest, { params }: { params: Promise<{ tripId: string }> }) {
   const { tripId } = await params;
+  const { response } = await requireTripMember(req, tripId);
+  if (response) return response;
   const trip = await db.trip.findUnique({
     where: { id: tripId },
     include: {
-      members: { include: { user: true } },
+      members: { include: { user: { select: SAFE_USER_FIELDS } } },
       _count: { select: { places: true, photos: true, expenses: true, journals: true, days: true } },
     },
   });
@@ -17,10 +22,11 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ trip
   return NextResponse.json(trip);
 }
 
-// PATCH /api/trips/[id] — обновить поездку
+// PATCH /api/trips/[id] — обновить поездку. Только владелец:
+// название, даты, валюта и статус — настройки поездки, участник не должен их менять.
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ tripId: string }> }) {
   const { tripId } = await params;
-  const { response } = await requireTripMember(req, tripId);
+  const { response } = await requireTripOwner(req, tripId);
   if (response) return response;
   const body = await req.json();
   const allowed = ["title", "destination", "startDate", "endDate", "totalDays", "totalBudget", "currency", "status", "coverColor", "coverEmoji"];
@@ -42,7 +48,8 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ tr
 // DELETE /api/trips/[id]
 export async function DELETE(req: NextRequest, { params }: { params: Promise<{ tripId: string }> }) {
   const { tripId } = await params;
-  const { response } = await requireTripMember(req, tripId);
+  // Only the trip owner can delete the entire trip
+  const { response } = await requireTripOwner(req, tripId);
   if (response) return response;
   await db.trip.delete({ where: { id: tripId } });
   return NextResponse.json({ ok: true });

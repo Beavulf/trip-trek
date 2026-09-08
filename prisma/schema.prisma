@@ -172,6 +172,11 @@ model Expense {
   dayId         String?
   splitWith     String   @default("")  // comma-separated userIds (пусто = личная трата)
   excludeSelf   Boolean  @default(false) // true = плательщик не участвует в делении
+  // Исходная сумма и валюта, как пользователь её ввёл (до конвертации в валюту поездки).
+  // amount всегда хранится в валюте поездки. originalAmount/originalCurrency хранят то,
+  // что ввёл пользователь — чтобы можно было показать «изначально 100 ¥» под конвертированной суммой.
+  originalAmount   Float?
+  originalCurrency String?
   // settlementKey — детерминированный ключ для идемпотентности переводов (P0 #3).
   // Формат: "settle-{fromId}-{toId}-{YYYY-MM-DDTHH}". В течение часа повторный клик
   // даёт тот же ключ → второй клик не дублирует расчёт, баланс не ломается.

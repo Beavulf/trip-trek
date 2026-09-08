@@ -12,12 +12,14 @@ import {
   X,
   MapPin,
   Plus,
+  Map as MapIcon,
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
 import { useBodyScrollLock } from "@/hooks/use-body-scroll-lock";
+import { MapPicker } from "./map-picker";
 
 export interface AddPlaceData {
   lat: number;
@@ -110,10 +112,17 @@ function AddPlaceForm({
   const [description, setDescription] = useState("");
   const [address, setAddress] = useState(initial.address || "");
   const [dayId, setDayId] = useState(initial.dayId || "");
+  const [lat, setLat] = useState(initial.lat);
+  const [lng, setLng] = useState(initial.lng);
+  const [mapOpen, setMapOpen] = useState(false);
+  // Флаг — уже геокодировали текущую точку (пусто при mount → форсим геокодирование при первом открытии)
+  const [geocodedFor, setGeocodedFor] = useState<string>("");
 
-  // Reverse geocoding — один раз при монтировании (если нет адреса)
+  // Reverse geocoding при первоначальном монтировании, если адреса нет
   useEffect(() => {
     if (initial.address || !initial.lat || !initial.lng) return;
+    const key = `${initial.lat.toFixed(4)}-${initial.lng.toFixed(4)}`;
+    if (geocodedFor === key) return;
     geocode.mutate(
       { lat: initial.lat, lng: initial.lng },
       {
@@ -121,6 +130,7 @@ function AddPlaceForm({
         onError: () => setAddress(`${initial.lat.toFixed(4)}, ${initial.lng.toFixed(4)}`),
       }
     );
+    setGeocodedFor(key);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- только при открытии sheet
   }, []);
 
@@ -138,8 +148,8 @@ function AddPlaceForm({
         name: name.trim(),
         description: description.trim() || undefined,
         category,
-        lat: initial.lat,
-        lng: initial.lng,
+        lat,
+        lng,
         dayId,
         timeOfDay: timeOfDay || undefined,
         budget: budget ? parseFloat(budget) : undefined,
@@ -162,7 +172,7 @@ function AddPlaceForm({
         {geocode.isPending ? (
           <span className="flex items-center gap-1"><Loader2 className="size-3 animate-spin" /> Определяем адрес…</span>
         ) : (
-          <span className="truncate">{address || `${initial.lat.toFixed(4)}, ${initial.lng.toFixed(4)}`}</span>
+          <span className="truncate">{address || `${lat.toFixed(4)}, ${lng.toFixed(4)}`}</span>
         )}
       </div>
 
@@ -235,15 +245,26 @@ function AddPlaceForm({
         </div>
       </div>
 
-      {/* адрес (редактируемый) */}
+      {/* адрес (редактируемый) + кнопка карты */}
       <div>
         <label className="text-xs text-muted-foreground mb-1 block flex items-center gap-1"><MapPin className="size-3" /> Адрес</label>
-        <input
-          value={address}
-          onChange={(e) => setAddress(e.target.value)}
-          placeholder="Адрес места"
-          className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm"
-        />
+        <div className="flex gap-1.5">
+          <input
+            value={address}
+            onChange={(e) => setAddress(e.target.value)}
+            placeholder="Адрес места"
+            className="flex-1 min-w-0 rounded-lg border border-input bg-background px-3 py-2 text-sm"
+          />
+          <button
+            type="button"
+            onClick={() => setMapOpen(true)}
+            className="shrink-0 size-11 rounded-lg bg-secondary border border-border hover:bg-accent grid place-items-center"
+            title="Выбрать на карте"
+            aria-label="Выбрать на карте"
+          >
+            <MapIcon className="size-4" />
+          </button>
+        </div>
       </div>
 
       {/* описание */}
@@ -261,19 +282,31 @@ function AddPlaceForm({
       <div className="flex gap-2 pt-1">
         <button
           onClick={onCancel}
-          className="flex-1 rounded-lg bg-secondary py-2.5 text-sm font-medium"
+          className="flex-1 rounded-lg bg-secondary py-2.5 min-h-11 text-sm font-medium"
         >
           Отмена
         </button>
         <button
           onClick={submit}
           disabled={create.isPending || !name.trim() || !dayId}
-          className="flex-1 rounded-lg bg-primary text-primary-foreground py-2.5 font-medium flex items-center justify-center gap-2 disabled:opacity-50"
+          className="flex-1 rounded-lg bg-primary text-primary-foreground py-2.5 min-h-11 font-medium flex items-center justify-center gap-2 disabled:opacity-50"
         >
           {create.isPending ? <Loader2 className="size-4 animate-spin" /> : <Check className="size-4" />}
           {create.isPending ? "…" : "Добавить"}
         </button>
       </div>
+
+      <MapPicker
+        open={mapOpen}
+        onOpenChange={setMapOpen}
+        initialLat={lat}
+        initialLng={lng}
+        onPick={(r) => {
+          setLat(r.lat);
+          setLng(r.lng);
+          setAddress(r.address);
+        }}
+      />
     </div>
   );
 }

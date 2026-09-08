@@ -17,7 +17,7 @@ import { WeatherPanel } from "@/components/trip/weather-panel";
 import { FoodGuide } from "@/components/trip/food-guide";
 import { Achievements } from "@/components/trip/achievements";
 import { Board } from "@/components/trip/board";
-import { AnimatePresence, motion } from "framer-motion";
+import { motion } from "framer-motion";
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 import { Loader2 } from "lucide-react";
@@ -67,14 +67,15 @@ export default function Home() {
 
   return (
     <AppShell>
-      <AnimatePresence mode="wait">
-        <motion.div
-          key={activeTab}
-          initial={{ opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: -4 }}
-          transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
-        >
+      {/* Без AnimatePresence mode="wait": при быстрых переключениях вкладок exit-анимация
+          тяжёлой вкладки (карта/галерея) может застрять и заблокировать появление новой.
+          Оставляем только enter-анимацию — key меняет контент мгновенно. */}
+      <motion.div
+        key={activeTab}
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+      >
           {activeTab === "dashboard" && <Dashboard />}
           {activeTab === "timeline" && <Timeline />}
           {activeTab === "itinerary" && <Itinerary />}
@@ -90,8 +91,7 @@ export default function Home() {
           {activeTab === "board" && <Board />}
           {activeTab === "achievements" && <Achievements />}
           {activeTab === "info" && <InfoPanel />}
-        </motion.div>
-      </AnimatePresence>
+      </motion.div>
     </AppShell>
   );
 }

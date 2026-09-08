@@ -5,9 +5,10 @@ import { requireTripMember } from "@/lib/api-auth";
 
 // PATCH /api/trips/[tripId]/members/[memberId] — обновить бюджет участника
 // memberId может быть как memberId так и userId (найдём по tripId+userId)
+// P0: менять участника может только он сам или владелец поездки
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ tripId: string; memberId: string }> }) {
   const { tripId, memberId } = await params;
-  const { response } = await requireTripMember(req, tripId);
+  const { user, membership, response } = await requireTripMember(req, tripId);
   if (response) return response;
   const body = await req.json();
   const data: Record<string, unknown> = {};
@@ -23,6 +24,12 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ tr
   }
   if (!member) {
     return NextResponse.json({ error: "Member not found" }, { status: 404 });
+  }
+  if (member.tripId !== tripId) {
+    return NextResponse.json({ error: "Member not found" }, { status: 404 });
+  }
+  if (member.userId !== user!.id && membership!.role !== "owner") {
+    return NextResponse.json({ error: "Можно менять только свой профиль участника" }, { status: 403 });
   }
 
   const updated = await db.tripMember.update({ where: { id: member.id }, data });

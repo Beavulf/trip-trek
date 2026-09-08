@@ -71,6 +71,13 @@ export function ExpenseRow({ expense, participants }: ExpenseRowProps) {
           <span className="font-semibold text-sm shrink-0 tabular-nums">{sym}{expense.amount.toFixed(2)}</span>
         </div>
 
+        {/* Изначальная сумма в исходной валюте (если конвертировали из другой) */}
+        {expense.originalAmount != null && expense.originalCurrency && expense.originalCurrency !== trip?.settings.currency && (
+          <div className="text-[10px] text-muted-foreground/80 tabular-nums -mt-0.5">
+            ≈ {expense.originalAmount.toFixed(2)} {expense.originalCurrency}
+          </div>
+        )}
+
         {/* Мета: кто заплатил + категория + день */}
         <div className="text-[11px] text-muted-foreground flex items-center gap-1.5 mt-0.5 flex-wrap">
           {paidBy && (

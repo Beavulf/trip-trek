@@ -13,8 +13,14 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   });
   if (!existing) return NextResponse.json({ error: "not found" }, { status: 404 });
 
-  const { membership, response } = await requireTripMember(req, existing.tripId);
+  const { user, membership, response } = await requireTripMember(req, existing.tripId);
   if (response) return response;
+
+  // P0: бюджет/имя участника меняет только он сам или владелец поездки
+  const target = await db.tripMember.findUnique({ where: { id }, select: { userId: true } });
+  if (target && target.userId !== user!.id && membership!.role !== "owner") {
+    return NextResponse.json({ error: "Можно менять только свой профиль участника" }, { status: 403 });
+  }
 
   const data: Record<string, unknown> = {};
   if (typeof body.budget === "number" || body.budget === null) data.budget = body.budget;
