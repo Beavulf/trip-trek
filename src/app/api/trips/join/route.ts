@@ -18,7 +18,8 @@ export async function POST(req: NextRequest) {
   const userId = user!.id;
   const { displayName, emoji, color } = body;
 
-  // Найти поездку по invite-коду (пробуем как есть и в верхнем регистре)
+  // Найти поездку по invite-коду: как есть → верхний регистр → нижний
+  // (иначе код из lower-case в БД не находится по UPPERCASE-варианту и наоборот)
   const trip = await db.trip.findUnique({
     where: { inviteCode: code },
     include: {
@@ -26,6 +27,11 @@ export async function POST(req: NextRequest) {
     },
   }) || await db.trip.findUnique({
     where: { inviteCode: code.toUpperCase() },
+    include: {
+      members: { select: { userId: true, role: true } },
+    },
+  }) || await db.trip.findUnique({
+    where: { inviteCode: code.toLowerCase() },
     include: {
       members: { select: { userId: true, role: true } },
     },
@@ -98,6 +104,20 @@ export async function GET(req: NextRequest) {
     },
   }) || await db.trip.findUnique({
     where: { inviteCode: code.toUpperCase() },
+    select: {
+      id: true,
+      title: true,
+      destination: true,
+      coverColor: true,
+      coverEmoji: true,
+      startDate: true,
+      totalDays: true,
+      members: {
+        select: { displayName: true, emoji: true, color: true },
+      },
+    },
+  }) || await db.trip.findUnique({
+    where: { inviteCode: code.toLowerCase() },
     select: {
       id: true,
       title: true,
