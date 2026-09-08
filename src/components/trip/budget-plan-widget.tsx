@@ -77,9 +77,9 @@ export function BudgetPlanWidget() {
 
           return (
             <div key={cat} className="group">
-              <div className="flex items-center gap-2 mb-1">
-                <span className="text-base">{meta.emoji}</span>
-                <span className="text-xs font-medium flex-1">{meta.label}</span>
+              <div className="flex items-center gap-2 mb-1.5">
+                <span className="text-base shrink-0">{meta.emoji}</span>
+                <span className="text-sm font-medium flex-1 truncate">{meta.label}</span>
                 {isEditing ? (
                   <div className="flex items-center gap-1">
                     <input
@@ -92,11 +92,11 @@ export function BudgetPlanWidget() {
                         if (e.key === "Escape") setEditingCat(null);
                       }}
                       autoFocus
-                      className="w-16 min-h-11 text-xs rounded border border-input bg-background px-2 py-1 text-right"
+                      className="w-20 min-h-11 text-sm rounded-lg border-2 border-primary bg-background px-2 py-1 text-right tabular-nums"
                     />
                     <button
                       onClick={() => saveEdit(cat)}
-                      className="size-11 rounded bg-primary text-primary-foreground grid place-items-center shrink-0 active:scale-95 transition-transform"
+                      className="size-11 rounded-lg bg-primary text-primary-foreground grid place-items-center shrink-0 active:scale-95 transition-transform"
                       title="Сохранить"
                       aria-label="Сохранить"
                     >
@@ -104,7 +104,7 @@ export function BudgetPlanWidget() {
                     </button>
                     <button
                       onClick={() => setEditingCat(null)}
-                      className="size-11 rounded bg-secondary border border-border grid place-items-center shrink-0 active:scale-95 transition-transform"
+                      className="size-11 rounded-lg bg-secondary border border-border grid place-items-center shrink-0 active:scale-95 transition-transform"
                       title="Отменить"
                       aria-label="Отменить"
                     >
@@ -112,20 +112,20 @@ export function BudgetPlanWidget() {
                     </button>
                   </div>
                 ) : (
+                  /* План — как редактируемое поле: пилюля с пунктирной рамкой и карандашом */
                   <button
                     onClick={() => { setEditVal(String(plan)); setEditingCat(cat); }}
-                    className="min-h-11 px-2 -mx-2 rounded-md text-xs font-semibold hover:bg-accent flex items-center gap-1 active:scale-95 transition-transform"
+                    className="min-h-11 flex items-center gap-1.5 rounded-xl border border-dashed border-foreground/25 bg-muted/70 hover:bg-accent px-3 active:scale-95 transition-transform"
                     aria-label={`Изменить план для категории ${meta.label}`}
                   >
-                    <span>{sym}{plan}</span>
-                    <Pencil className="size-3 text-muted-foreground" />
+                    <Pencil className="size-3.5 text-primary shrink-0" />
+                    <span className={cn("text-sm font-bold tabular-nums", over ? "text-red-600" : "text-foreground")}>
+                      {sym}{plan}
+                    </span>
                   </button>
                 )}
-                <span className={cn("text-xs", over ? "text-red-500 font-semibold" : "text-muted-foreground")}>
-                  / {sym}{spent.toFixed(0)}
-                </span>
               </div>
-              <div className="h-1.5 rounded-full bg-muted overflow-hidden">
+              <div className="h-2 rounded-full bg-muted overflow-hidden">
                 <motion.div
                   initial={{ width: 0 }}
                   animate={{ width: `${pct}%` }}
@@ -136,8 +136,13 @@ export function BudgetPlanWidget() {
                   )}
                 />
               </div>
+              <div className="flex justify-end mt-1">
+                <span className={cn("text-[11px] tabular-nums", over ? "text-red-500 font-medium" : "text-muted-foreground")}>
+                  потрачено {sym}{spent.toFixed(0)}
+                </span>
+              </div>
               {over && (
-                <div className="text-[10px] text-red-500 mt-0.5">
+                <div className="text-[11px] text-red-500 -mt-0.5 text-right font-medium">
                   Перерасход на {sym}{(spent - plan).toFixed(0)}
                 </div>
               )}
@@ -147,7 +152,7 @@ export function BudgetPlanWidget() {
       </div>
 
       <p className="text-[11px] text-muted-foreground mt-3 text-center">
-        ✏️ Тапни по сумме, чтобы изменить план
+        ✏️ Сумма в пунктирной рамке — тапни, чтобы изменить план
       </p>
       <p className="text-[10px] text-muted-foreground/70 mt-1 text-center">
         Зелёный — норма, жёлтый — близко к лимиту, красный — перерасход
