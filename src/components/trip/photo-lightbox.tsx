@@ -1,7 +1,13 @@
 "use client";
 
+// Стили YARL обязательны: без styles.css контейнер лайтбокса рисуется
+// position:static в потоке страницы — просмотр фото «не работает».
+import "yet-another-react-lightbox/styles.css";
+import "yet-another-react-lightbox/plugins/captions.css";
+import "yet-another-react-lightbox/plugins/counter.css";
 import { Lightbox } from "yet-another-react-lightbox";
 import Captions from "yet-another-react-lightbox/plugins/captions";
+import Counter from "yet-another-react-lightbox/plugins/counter";
 import Zoom from "yet-another-react-lightbox/plugins/zoom";
 import { MapPin, Trash2 } from "lucide-react";
 import { useState } from "react";
@@ -129,9 +135,11 @@ export function PhotoLightbox({
         click: () => setConfirmDeleteId(null),
       }}
       slides={slides}
-      plugins={[Captions, Zoom]}
+      plugins={[Captions, Counter, Zoom]}
       carousel={{ finite: false, preload: 1 }}
-      controller={{ closeOnBackdropClick: true }}
+      // Мобильные удобства: свайп-навигация у YARL из коробки,
+  // закрытие — кнопкой, тапом по фону или свайпом вниз
+      controller={{ closeOnBackdropClick: true, closeOnPullDown: true }}
       captions={{ showToggle: false }}
       zoom={{ scrollToZoom: true, pinchZoomV4: true }}
       toolbar={{
