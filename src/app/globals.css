@@ -543,3 +543,16 @@
   width: 16px !important;
   height: 16px !important;
 }
+
+/* === YARL lightbox: счётчик фото по центру сверху ===
+   По умолчанию .yarl__counter живёт в левом верхнем углу и перекрывает
+   название слайда (.yarl__slide_title). Счётчик центрируем, названию
+   оставляем левую половину (справа — тулбар с кнопками). */
+.yarl__container .yarl__counter {
+  left: 50% !important;
+  right: auto !important;
+  transform: translateX(-50%) !important;
+}
+.yarl__container .yarl__slide_title {
+  max-width: 42% !important;
+}
