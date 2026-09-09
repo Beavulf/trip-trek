@@ -40,6 +40,8 @@ export const viewport = {
   maximumScale: 5,
   userScalable: true,
   viewportFit: "cover" as const,
+  // Клавиатура сжимает layout-вьюпорт: композер чата поднимается над ней (Android)
+  interactiveWidget: "resizes-content" as const,
 };
 
 export default function RootLayout({

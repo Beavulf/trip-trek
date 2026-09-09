@@ -21,6 +21,12 @@ export function setupSocketHandlers(io: IOServer, rooms: TripRooms): void {
       console.log(`[WS] ${socket.id} left trip:${tripId}`);
     });
 
+    // «Печатает…» в чате: ретрансляция в комнату БЕЗ отправителя (socket.to)
+    socket.on("board:typing", (data: { tripId?: string; userName?: string }) => {
+      if (!data.tripId) return;
+      socket.to(`trip:${data.tripId}`).emit("board:typing", { userName: data.userName || "Кто-то" });
+    });
+
     // Register all event handlers from SOCKET_EVENTS config
     for (const [eventName, config] of Object.entries(SOCKET_EVENTS)) {
       socket.on(eventName, (data: Record<string, unknown> & { tripId?: string }) => {

@@ -18,6 +18,7 @@ type WSEvent =
   | "board:added"
   | "board:deleted"
   | "board:pinned"
+  | "board:updated"
   | "checklist:updated"
   | "food:updated"
   | "phrase:updated"

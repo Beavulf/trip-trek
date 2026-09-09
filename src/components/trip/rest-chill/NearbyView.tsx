@@ -11,13 +11,21 @@ import { NearbyCard } from "./NearbyCard";
 import { getTripId } from "@/hooks/use-trip";
 import { wishlistDedupeKey } from "@/lib/wishlist";
 
+const RADII = [
+  { value: 500, label: "500 м" },
+  { value: 1500, label: "1.5 км" },
+  { value: 3000, label: "3 км" },
+];
+
 interface NearbyViewProps {
   category: string;
   onCategoryChange: (c: string) => void;
+  radius: number;
+  onRadiusChange: (r: number) => void;
   onGoToWishlist?: () => void;
 }
 
-export function NearbyView({ category, onCategoryChange, onGoToWishlist }: NearbyViewProps) {
+export function NearbyView({ category, onCategoryChange, radius, onRadiusChange, onGoToWishlist }: NearbyViewProps) {
   const tripId = getTripId();
   // P1 #14: сбрасываем cachedGeo при смене trip — не хотим «GZ кэш» в новой поездке
   useEffect(() => {
@@ -30,10 +38,11 @@ export function NearbyView({ category, onCategoryChange, onGoToWishlist }: Nearb
   const [geo, setGeo] = useState<GeoState>(cachedGeo.value);
 
   const enabled = geo.status === "ready";
-  const { data, isLoading, error, refetch } = useNearby(
+  const { data, isLoading, error, refetch, isFetching } = useNearby(
     geo.status === "ready" ? geo.lat : null,
     geo.status === "ready" ? geo.lng : null,
     category,
+    radius,
     enabled
   );
 
@@ -64,7 +73,7 @@ export function NearbyView({ category, onCategoryChange, onGoToWishlist }: Nearb
     );
   };
 
-  // Дедупликация мест по lat+lng+name (на случай если Overpass вернул дубли)
+  // Дедупликация по lat+lng+name (Overpass иногда дублирует) + сортировка по дистанции
   const dedupedPlaces = (() => {
     const places = data?.places ?? [];
     const seen = new Set<string>();
@@ -75,7 +84,7 @@ export function NearbyView({ category, onCategoryChange, onGoToWishlist }: Nearb
       seen.add(key);
       result.push(p);
     }
-    return result;
+    return result.sort((a, b) => a.distance - b.distance);
   })();
 
   return (
@@ -101,6 +110,32 @@ export function NearbyView({ category, onCategoryChange, onGoToWishlist }: Nearb
         ))}
       </div>
 
+      {/* Радиус поиска — сегмент-контрол, выбор до включения геолокации */}
+      <div className="flex items-center gap-2">
+        <span className="text-[11px] text-muted-foreground shrink-0">Радиус</span>
+        <div
+          role="radiogroup"
+          aria-label="Радиус поиска"
+          className="flex-1 grid grid-cols-3 gap-1 p-1 bg-card border border-border rounded-xl"
+        >
+          {RADII.map((r) => (
+            <button
+              key={r.value}
+              type="button"
+              role="radio"
+              aria-checked={radius === r.value}
+              onClick={() => onRadiusChange(r.value)}
+              className={cn(
+                "min-h-9 rounded-lg text-xs font-medium transition-all",
+                radius === r.value ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground hover:bg-accent"
+              )}
+            >
+              {r.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
       {/* Кнопка геолокации */}
       {geo.status !== "ready" && (
         <div className="rounded-2xl border-2 border-dashed border-border bg-card p-4 text-center space-y-2">
@@ -108,9 +143,7 @@ export function NearbyView({ category, onCategoryChange, onGoToWishlist }: Nearb
           {geo.status === "denied" ? (
             <p className="text-sm text-muted-foreground">{geo.message}</p>
           ) : (
-            <p className="text-sm text-muted-foreground">
-              Найдём кафе и рестораны рядом с вами
-            </p>
+            <p className="text-sm text-muted-foreground">Найдём кафе и рестораны рядом с вами</p>
           )}
           <button
             onClick={requestGeo}
@@ -118,9 +151,13 @@ export function NearbyView({ category, onCategoryChange, onGoToWishlist }: Nearb
             className="min-h-[44px] inline-flex items-center gap-2 rounded-xl bg-primary text-primary-foreground px-4 py-2 text-sm font-medium active:scale-95 transition-transform disabled:opacity-50"
           >
             {geo.status === "loading" ? (
-              <><Loader2 className="size-4 animate-spin" /> Определяем местоположение…</>
+              <>
+                <Loader2 className="size-4 animate-spin" /> Определяем местоположение…
+              </>
             ) : (
-              <><Locate className="size-4" /> Найти рядом со мной</>
+              <>
+                <Locate className="size-4" /> Найти рядом со мной
+              </>
             )}
           </button>
         </div>
@@ -129,7 +166,7 @@ export function NearbyView({ category, onCategoryChange, onGoToWishlist }: Nearb
       {geo.status === "ready" && (
         <>
           <p className="text-[11px] text-muted-foreground px-1 flex items-center gap-1">
-            📍 Рядом с вами (радиус 1.5 км) · данные OpenStreetMap
+            📍 Радиус {RADII.find((r) => r.value === radius)?.label ?? "1.5 км"} · данные OpenStreetMap
             <button
               onClick={requestGeo}
               className="ml-auto text-primary hover:underline shrink-0"
@@ -144,12 +181,10 @@ export function NearbyView({ category, onCategoryChange, onGoToWishlist }: Nearb
               <Loader2 className="size-5 animate-spin" /> Ищем места поблизости…
             </div>
           ) : error ? (
-            // P0 #4: теперь ошибка отличается от empty — показываем с кнопкой retry
+            // P0 #4: ошибка отличается от empty — показываем с кнопкой retry
             <div className="text-center py-12 space-y-2">
               <AlertCircle className="size-8 mx-auto text-red-500" />
-              <p className="text-sm text-red-500 max-w-xs mx-auto">
-                Не удалось загрузить: {error.message}
-              </p>
+              <p className="text-sm text-red-500 max-w-xs mx-auto">Не удалось загрузить: {error.message}</p>
               <button
                 onClick={() => refetch()}
                 className="inline-flex items-center gap-1.5 text-xs px-3 py-2 rounded-lg bg-primary text-primary-foreground"
@@ -172,8 +207,13 @@ export function NearbyView({ category, onCategoryChange, onGoToWishlist }: Nearb
             <div className="text-center py-12 text-muted-foreground text-sm space-y-1">
               <div className="text-3xl">🔍</div>
               <p>Поблизости ничего не найдено</p>
-              <p className="text-[11px]">Попробуйте сменить категорию или обновить геолокацию</p>
+              <p className="text-[11px]">Попробуйте увеличить радиус или сменить категорию</p>
             </div>
+          )}
+          {isFetching && !isLoading && (
+            <p className="text-[11px] text-muted-foreground text-center flex items-center justify-center gap-1.5">
+              <Loader2 className="size-3 animate-spin" /> Обновляем…
+            </p>
           )}
         </>
       )}

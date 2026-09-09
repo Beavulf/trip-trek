@@ -205,17 +205,22 @@ model JournalEntry {
   user          User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
 }
 
-// === Сообщение на доске ===
+// === Сообщение в чате ===
 model BoardMessage {
   id            String   @id @default(cuid())
   tripId        String
   content       String
   userId        String?  // был participantId
   pinned        Boolean  @default(false)
+  reactions     String?  // JSON {"👍":["userId",...]}
+  editedAt      DateTime?
+  replyToId     String?
   createdAt     DateTime @default(now())
 
   trip          Trip     @relation(fields: [tripId], references: [id], onDelete: Cascade)
   user          User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  replyTo       BoardMessage?  @relation("BoardReply", fields: [replyToId], references: [id], onDelete: SetNull)
+  replies       BoardMessage[] @relation("BoardReply")
 }
 
 // === Чек-лист ===

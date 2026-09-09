@@ -24,11 +24,11 @@ interface NearbyResponse {
 // Раньше: `return r.json()` без проверки → 500 от сервера парсилось как `{places: [], error: ...}`
 // → UI показывал «ничего не найдено» даже когда сервер упал.
 // Теперь: throw на !ok → React Query кладёт в `error` → UI показывает «Не удалось загрузить: …» с retry.
-export function useNearby(lat: number | null, lng: number | null, category: string, enabled: boolean) {
+export function useNearby(lat: number | null, lng: number | null, category: string, radius = 1500, enabled = true) {
   return useQuery<NearbyResponse>({
-    queryKey: ["nearby", lat, lng, category],
+    queryKey: ["nearby", lat, lng, category, radius],
     queryFn: async () => {
-      const r = await fetch(`/api/nearby?lat=${lat}&lng=${lng}&category=${category}`);
+      const r = await fetch(`/api/nearby?lat=${lat}&lng=${lng}&category=${category}&radius=${radius}`);
       const body = (await r.json().catch(() => ({}))) as NearbyResponse;
       if (!r.ok) {
         // 500 от Overpass / 429 rate limit / 400 bad coords — всё это ошибки, не empty

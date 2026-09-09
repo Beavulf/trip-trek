@@ -140,6 +140,13 @@ export function useWebSocket(tripId: string) {
       }
     });
 
+    // Редактирование / реакции — тихая синхронизация (без тостов и push)
+    socket.on("board:updated", (data: { tripId: string }) => {
+      if (data.tripId === tripId) {
+        qc.invalidateQueries({ queryKey: ["board"] });
+      }
+    });
+
     socket.on("checklist:updated", (data: { tripId: string }) => {
       if (data.tripId === tripId) {
         qc.invalidateQueries({ queryKey: ["checklist"] });

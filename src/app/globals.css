@@ -389,12 +389,131 @@ body.map-fs button[aria-label="Быстрое добавление"] {
   display: none !important;
 }
 
+/* === Чат-док: чат занимает экран целиком под шапкой ===
+   FAB и футер мешают композеру — прячем; нижний паддинг main обнуляем,
+   т.к. высоту дока считает сам чат (100dvh - шапка). */
+body.chat-dock main {
+  padding-bottom: 0 !important;
+}
+body.chat-dock footer,
+body.chat-dock button[aria-label="Быстрое добавление"] {
+  display: none !important;
+}
+
+/* Подсветка сообщения при переходе из рельсы закреплённых или из цитаты */
+.chat-flash {
+  animation: chat-flash-kf 1.8s ease-out both;
+  border-radius: 1rem;
+}
+@keyframes chat-flash-kf {
+  0%,
+  30% {
+    box-shadow: 0 0 0 3px color-mix(in oklch, var(--primary) 55%, transparent);
+    background-color: color-mix(in oklch, var(--primary) 9%, transparent);
+  }
+  100% {
+    box-shadow: 0 0 0 3px transparent;
+    background-color: transparent;
+  }
+}
+
+/* «Печатает…» — три прыгающие точки */
+.chat-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 9999px;
+  background: var(--muted-foreground);
+  display: inline-block;
+  animation: chat-dot-b 1.2s infinite;
+}
+.chat-dot:nth-child(2) {
+  animation-delay: 0.15s;
+}
+.chat-dot:nth-child(3) {
+  animation-delay: 0.3s;
+}
+@keyframes chat-dot-b {
+  0%,
+  60%,
+  100% {
+    transform: translateY(0);
+    opacity: 0.4;
+  }
+  30% {
+    transform: translateY(-3px);
+    opacity: 1;
+  }
+}
+
+/* Инпут чата: растёт сам, скроллбар внутри не нужен (скролл остаётся колесом/пальцем) */
+.chat-input {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.chat-input::-webkit-scrollbar {
+  display: none;
+}
+
 /* Уважение к reduced motion */
 @media (prefers-reduced-motion: reduce) {
   .leaflet-pane-route-today path[stroke-dasharray],
   .locate-dot-core,
   .trip-pin-current .trip-pin-pin {
     animation: none;
+  }
+  /* Живое небо погоды: частицы замирают, градиент остаётся */
+  .wx-drop,
+  .wx-flake,
+  .wx-star,
+  .wx-cloudpuff,
+  .wx-sunglow {
+    animation: none !important;
+  }
+  /* Чат: точки «печатает» и подсветка замирают */
+  .chat-dot {
+    animation: none;
+  }
+  .chat-flash {
+    animation: none;
+    box-shadow: 0 0 0 2px color-mix(in oklch, var(--primary) 45%, transparent);
+  }
+}
+
+/* Погода: живое небо (частицы героя, чистый CSS — без rAF) */
+@keyframes wx-fall {
+  from {
+    transform: translateY(-20px);
+  }
+  to {
+    transform: translateY(360px);
+  }
+}
+@keyframes wx-twinkle {
+  0%,
+  100% {
+    opacity: 0.15;
+  }
+  50% {
+    opacity: 0.9;
+  }
+}
+@keyframes wx-drift {
+  from {
+    transform: translateX(-7%);
+  }
+  to {
+    transform: translateX(7%);
+  }
+}
+@keyframes wx-pulse-soft {
+  0%,
+  100% {
+    opacity: 0.35;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.55;
+    transform: scale(1.08);
   }
 }
 
@@ -601,4 +720,17 @@ body.map-fs button[aria-label="Быстрое добавление"] {
 }
 .yarl__container .yarl__slide_title {
   max-width: 42% !important;
+}
+
+/* === Награды: подсветка только что полученного бейджа ===
+   Три мягких пульса тенью, затем гаснет. Уважает prefers-reduced-motion. */
+@keyframes badge-fresh {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(245, 158, 11, 0); }
+  40% { box-shadow: 0 0 0 7px rgba(245, 158, 11, 0.35); }
+}
+.badge-fresh {
+  animation: badge-fresh 1.4s ease-out 3;
+}
+@media (prefers-reduced-motion: reduce) {
+  .badge-fresh { animation: none; }
 }

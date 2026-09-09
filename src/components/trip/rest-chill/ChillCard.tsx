@@ -1,21 +1,24 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { CheckCircle2, Circle, Clock, MapPin, Navigation, Star, Sunrise, Moon } from "lucide-react";
+import { CheckCircle2, ChevronRight, Circle, Clock, MapPin, Navigation, Share2, Star, Sunrise, Moon } from "lucide-react";
 import { useUpdatePlace } from "@/hooks/use-trip";
 import { useAuth } from "@/hooks/use-auth";
 import { CATEGORY_META, type Day, type Place } from "@/lib/types";
 import { currencySymbol } from "@/lib/currencies";
 import { toast } from "sonner";
-import { cn } from "@/lib/utils";
+import { cn, haptic } from "@/lib/utils";
+import { shareOrCopy, osmDirectionsUrl } from "./share";
 
 interface ChillCardProps {
   place: Place;
   day: Day;
   currency?: string;
+  /** Тап по карточке — открыть полный диалог места (редактирование, фото, карта) */
+  onOpen?: (place: Place) => void;
 }
 
-export function ChillCard({ place, day, currency = "USD" }: ChillCardProps) {
+export function ChillCard({ place, day, currency = "USD", onOpen }: ChillCardProps) {
   const update = useUpdatePlace();
   const { data: session } = useAuth();
   const userName = (session?.user as { name?: string } | undefined)?.name || "Кто-то";
@@ -25,6 +28,7 @@ export function ChillCard({ place, day, currency = "USD" }: ChillCardProps) {
 
   // Visit/rating через mutate с onSuccess/onError; userName — API эмитит WS с именем автора.
   const toggleVisited = () => {
+    haptic();
     const next = visited ? "planned" : "visited";
     update.mutate(
       { id: place.id, status: next, userName },
@@ -55,7 +59,8 @@ export function ChillCard({ place, day, currency = "USD" }: ChillCardProps) {
   };
 
   const sym = currencySymbol(currency);
-  const directionsUrl = `https://www.openstreetmap.org/directions?from=&to=${place.lat}%2C${place.lng}`;
+  const directionsUrl = osmDirectionsUrl(place.lat, place.lng);
+  const share = () => shareOrCopy(`Идём: ${place.name}`, directionsUrl, place.name);
   // Оценка нужна только когда место посещено или уже оценена ранее
   const showRating = visited || (place.rating ?? 0) > 0;
 
@@ -67,7 +72,13 @@ export function ChillCard({ place, day, currency = "USD" }: ChillCardProps) {
         visited ? "bg-green-500/5 border-green-500/30" : "bg-card border-border"
       )}
     >
-      <div className="flex items-start gap-3">
+      {/* Тап по «шапке» карточки — полный диалог места (как в Маршруте) */}
+      <button
+        type="button"
+        onClick={() => onOpen?.(place)}
+        aria-label={`Открыть ${place.name}`}
+        className="flex items-start gap-3 text-left w-full rounded-xl -m-1 p-1 focus-visible:outline-2 focus-visible:outline-primary"
+      >
         <div className="size-12 rounded-xl grid place-items-center text-2xl shrink-0" style={{ background: `${meta?.color}22` }}>
           {meta?.emoji}
         </div>
@@ -81,6 +92,7 @@ export function ChillCard({ place, day, currency = "USD" }: ChillCardProps) {
                 <span className="size-1.5 rounded-full bg-primary animate-pulse" aria-hidden="true" /> Сейчас
               </span>
             )}
+            {onOpen && <ChevronRight className="size-3.5 shrink-0 text-muted-foreground/50 mt-0.5" />}
           </div>
           <div className="text-[11px] text-muted-foreground flex items-center flex-wrap gap-x-2 gap-y-0.5 mt-0.5">
             <span className="flex items-center gap-0.5">
@@ -98,7 +110,7 @@ export function ChillCard({ place, day, currency = "USD" }: ChillCardProps) {
             <p className="text-xs text-muted-foreground mt-1.5 line-clamp-2">{place.description}</p>
           )}
         </div>
-      </div>
+      </button>
 
       {/* Оценка — только когда есть что оценивать: место посещено или уже оценена */}
       {showRating && (
@@ -122,7 +134,7 @@ export function ChillCard({ place, day, currency = "USD" }: ChillCardProps) {
         </div>
       )}
 
-      {/* Ряд действий: очевидная кнопка статуса + навигация */}
+      {/* Ряд действий: очевидная кнопка статуса + шеринг + навигация */}
       <div className="flex items-center gap-2 mt-3 pt-3 border-t border-border/60">
         <button
           onClick={toggleVisited}
@@ -137,6 +149,15 @@ export function ChillCard({ place, day, currency = "USD" }: ChillCardProps) {
         >
           {visited ? <CheckCircle2 className="size-4" /> : <Circle className="size-4 text-muted-foreground" />}
           {visited ? "Отдохнули" : "Отметить"}
+        </button>
+        <button
+          type="button"
+          onClick={share}
+          aria-label={`Поделиться: ${place.name}`}
+          title="Поделиться"
+          className="size-11 shrink-0 grid place-items-center rounded-xl bg-muted text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
+        >
+          <Share2 className="size-4" />
         </button>
         <a
           href={directionsUrl}

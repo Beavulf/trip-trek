@@ -134,8 +134,30 @@ export interface Weather {
   emoji: string;
   max: number;
   min: number;
+  /** День (1) или ночь (0) в городе сейчас */
+  isDay?: boolean;
+  /** UV-индекс сегодня (максимальный за день), 0…11+ */
+  uv?: number | null;
+  /** Восход/закат сегодня, локальное время города: "2026-09-12T06:12" */
+  sunrise?: string | null;
+  sunset?: string | null;
+  /** Часовой пояс города (IANA), например "Asia/Shanghai" */
+  timezone?: string | null;
+  /** Почасовой прогноз на 24 часа от текущего часа (время города) */
+  hours?: WeatherHour[];
   forecast?: WeatherDay[];
   fallback?: boolean;
+}
+
+export interface WeatherHour {
+  /** Локальное время города: "2026-09-12T14:00" */
+  time: string;
+  temp: number;
+  code: number;
+  label: string;
+  emoji: string;
+  precip: number;
+  isDay: boolean;
 }
 
 export interface WeatherDay {

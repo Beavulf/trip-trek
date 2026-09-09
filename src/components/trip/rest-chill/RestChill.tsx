@@ -14,17 +14,26 @@ import {
   MapPin,
   X,
 } from "lucide-react";
-import { motion, useReducedMotion } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { CHILL_CATEGORIES, CHILL_CATEGORY_LABELS } from "@/lib/chill-categories";
 import { plural } from "@/lib/utils";
 import { ChillCard } from "./ChillCard";
 import { NearbyView } from "./NearbyView";
 import { WishlistView } from "./WishlistView";
+import { FateCup, type FateCandidate } from "./FateCup";
 import { loadWishlist, migrateLegacyWishlist } from "@/lib/wishlist";
 import { useTripStore } from "@/lib/trip-store";
+import { PlaceDialog } from "../itinerary/PlaceDialog";
+import type { Place } from "@/lib/types";
 
 type View = "route" | "wishlist" | "nearby";
+type SortMode = "day" | "todo" | "rating";
+
+const SORTS: { key: SortMode; label: string }[] = [
+  { key: "day", label: "По дням" },
+  { key: "todo", label: "Непосещённые" },
+  { key: "rating", label: "По оценке" },
+];
 
 // Приветствие под текущий час — перекликается с timeOfDay у мест.
 function timeGreeting(): { text: string; emoji: string } {
@@ -44,13 +53,15 @@ export function RestChill() {
   const [filter, setFilter] = useState<string>("all");
   const [query, setQuery] = useState("");
   const [view, setView] = useState<View>("route");
+  const [sort, setSort] = useState<SortMode>("day");
   const [nearbyCat, setNearbyCat] = useState<string>("all");
+  const [nearbyRadius, setNearbyRadius] = useState<number>(1500);
   const [hideVisited, setHideVisited] = useState(false);
   // Версия wishlist: saveWishlist диспатчит "triptrek-wishlist-changed" — счётчик в hero и бейдж живые
   const [wishlistVersion, setWishlistVersion] = useState(0);
   const [greeting, setGreeting] = useState<{ text: string; emoji: string } | null>(null);
+  const [dialogPlace, setDialogPlace] = useState<Place | null>(null);
   const { setSelectedDay, setActiveTab, setTripSwitcherOpen } = useTripStore();
-  const reduceMotion = useReducedMotion();
 
   // Час зависит от устройства — считаем только на клиенте, чтобы не ловить hydration mismatch.
   useEffect(() => {
@@ -67,10 +78,12 @@ export function RestChill() {
     return () => window.removeEventListener("triptrek-wishlist-changed", onWishlistChanged);
   }, [tripId]);
 
-  const wishlistCount = useMemo(() => {
-    if (typeof window === "undefined" || !tripId) return 0;
-    return loadWishlist(tripId).length;
-  }, [tripId, view, wishlistVersion]);
+  const wishItems = useMemo(
+    // view/wishlistVersion — сигналы перечитать localStorage (мимо react-hooks/exhaustive-deps намеренно)
+    () => (typeof window === "undefined" || !tripId ? [] : loadWishlist(tripId)),
+    [tripId, view, wishlistVersion]
+  );
+  const wishUnvisited = useMemo(() => wishItems.filter((i) => !i.visited), [wishItems]);
 
   const places = useMemo(() => {
     if (!days) return [];
@@ -90,11 +103,33 @@ export function RestChill() {
     });
   }, [places, filter, query, hideVisited]);
 
+  // Сортировка стабильная: внутри групп сохраняется порядок дней
+  const sortedFiltered = useMemo(() => {
+    const arr = [...filtered];
+    if (sort === "todo") {
+      arr.sort((a, b) => Number(a.place.status === "visited") - Number(b.place.status === "visited"));
+    } else if (sort === "rating") {
+      arr.sort((a, b) => (b.place.rating ?? 0) - (a.place.rating ?? 0));
+    }
+    return arr;
+  }, [filtered, sort]);
+
+  // Кандидаты «Чашки судьбы»: непосещённые из маршрута + из списка «Хочу»
+  const fateCandidates = useMemo<FateCandidate[]>(
+    () => [
+      ...places
+        .filter(({ place }) => place.status !== "visited")
+        .map(({ place, day }) => ({ source: "route" as const, place, day })),
+      ...wishUnvisited.map((item) => ({ source: "wish" as const, item })),
+    ],
+    [places, wishUnvisited]
+  );
+
   if (!tripId) {
     return (
       <div className="space-y-4 animate-fade-up pb-20">
-        <div className="rounded-3xl p-5 bg-gradient-to-br from-amber-500 to-orange-600 text-white shadow-xl text-center">
-          <div className="text-5xl mb-3">☕</div>
+        <div className="rounded-3xl p-5 bg-gradient-to-br from-amber-600 to-orange-600 text-white shadow-xl text-center">
+          <div className="text-5xl mb-3">🍵</div>
           <h1 className="text-xl font-bold">Нет активной поездки</h1>
           <p className="text-white/80 text-sm mt-1">Создай или выбери поездку</p>
           <button
@@ -128,7 +163,7 @@ export function RestChill() {
   if (daysLoading) {
     return (
       <div className="space-y-4 animate-fade-up pb-20" aria-busy="true" aria-label="Загрузка">
-        <div className="rounded-3xl h-44 bg-gradient-to-br from-amber-500/70 to-orange-600/70 animate-pulse" />
+        <div className="rounded-3xl h-44 bg-gradient-to-br from-amber-600/70 to-orange-600/70 animate-pulse" />
         <div className="grid grid-cols-3 gap-2">
           {[0, 1, 2].map((i) => (
             <div key={i} className="h-12 rounded-2xl bg-muted animate-pulse" />
@@ -149,97 +184,85 @@ export function RestChill() {
   const stats = {
     total: places.length,
     visited: places.filter((p) => p.place.status === "visited").length,
-    wishlist: wishlistCount,
+    wishlist: wishItems.length,
   };
   const progressPct = stats.total > 0 ? Math.round((stats.visited / stats.total) * 100) : 0;
   const isFiltering = filter !== "all" || query !== "" || hideVisited;
+  const showSort = places.length >= 4;
 
   return (
     <div className="space-y-4 animate-fade-up pb-20">
-      {/* Живой hero: приветствие по времени суток, тапабельные статы, прогресс, пар */}
-      <div className="rounded-3xl p-5 bg-gradient-to-br from-amber-500 to-orange-600 text-white shadow-xl relative overflow-hidden">
-        <div className="absolute -bottom-6 -right-6 text-[100px] opacity-15 select-none">☕</div>
-        {!reduceMotion && (
-          <div className="absolute right-12 top-10 pointer-events-none" aria-hidden="true">
-            {[0, 1].map((i) => (
-              <motion.span
-                key={i}
-                className="absolute block w-1.5 h-5 rounded-full bg-white/50 blur-[2px]"
-                style={{ left: i * 12, bottom: 0 }}
-                animate={{ y: -22, opacity: [0, 0.45, 0], scaleX: [1, 0.6, 1.3] }}
-                transition={{ duration: 3.2, repeat: Infinity, delay: i * 1.6, ease: "easeOut" }}
-              />
-            ))}
-          </div>
-        )}
-        <div className="relative">
-          <div className="flex items-center gap-2 text-white/80 text-[11px] font-semibold uppercase tracking-wider mb-1">
-            <Coffee className="size-3.5" /> Отдых и перекус
-          </div>
-          <h1 className="text-2xl font-bold">Где присесть и отдохнуть</h1>
-          <p className="text-white/85 text-sm mt-1.5" aria-live="polite">
-            {greeting ? (
-              <>
-                {greeting.emoji} {greeting.text}
-              </>
-            ) : (
-              "Кафе, бары и рестораны"
-            )}
-            {trip?.settings.title && <span className="text-white/60"> · {trip.settings.title}</span>}
-          </p>
-
-          {/* Статы — это кнопки: тап ведёт в соответствующий раздел */}
-          <div className="grid grid-cols-3 gap-2 mt-4">
-            <button
-              type="button"
-              onClick={() => setView("route")}
-              aria-label={`Посещено: ${stats.visited}. Открыть маршрут`}
-              className="rounded-xl bg-white/15 backdrop-blur px-2 py-2 text-center active:scale-95 transition-transform hover:bg-white/20"
-            >
-              <div className="text-xl font-bold tabular-nums leading-tight">{stats.visited}</div>
-              <div className="text-[10px] text-white/75">посещено</div>
-            </button>
-            <button
-              type="button"
-              onClick={() => setView("route")}
-              aria-label={`В маршруте: ${stats.total}. Открыть маршрут`}
-              className="rounded-xl bg-white/15 backdrop-blur px-2 py-2 text-center active:scale-95 transition-transform hover:bg-white/20"
-            >
-              <div className="text-xl font-bold tabular-nums leading-tight">{stats.total}</div>
-              <div className="text-[10px] text-white/75">в маршруте</div>
-            </button>
-            <button
-              type="button"
-              onClick={() => setView("wishlist")}
-              aria-label={`В списке «Хочу»: ${stats.wishlist}. Открыть список`}
-              className="rounded-xl bg-white/15 backdrop-blur px-2 py-2 text-center active:scale-95 transition-transform hover:bg-white/20"
-            >
-              <div className="text-xl font-bold tabular-nums leading-tight flex items-center justify-center gap-1">
-                {stats.wishlist} <span aria-hidden="true" className="text-xs">→</span>
-              </div>
-              <div className="text-[10px] text-white/75">в «Хочу»</div>
-            </button>
-          </div>
-
-          {/* Прогресс «отдыха»: сколько chill-мест маршрута уже посещено */}
-          {stats.total > 0 && (
-            <div
-              className="mt-3 h-1.5 rounded-full bg-white/25 overflow-hidden"
-              role="progressbar"
-              aria-valuenow={progressPct}
-              aria-valuemin={0}
-              aria-valuemax={100}
-              aria-label={`Посещено ${progressPct}% мест отдыха`}
-            >
-              <motion.div
-                className="h-full rounded-full bg-white"
-                initial={{ width: 0 }}
-                animate={{ width: `${progressPct}%` }}
-                transition={{ duration: 0.6, ease: "easeOut" }}
-              />
+      {/* Живой hero: приветствие по времени суток + «Чашка судьбы» (тап — случайное место) */}
+      <div className="rounded-3xl p-5 bg-gradient-to-br from-amber-600 via-orange-600 to-amber-700 text-white shadow-xl relative overflow-hidden">
+        <div className="relative flex items-start gap-2">
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 text-white/80 text-[11px] font-semibold uppercase tracking-wider mb-1">
+              <Coffee className="size-3.5" /> Отдых и перекус
             </div>
-          )}
+            <h1 className="text-2xl font-bold">Где присесть и отдохнуть</h1>
+            <p className="text-white/85 text-sm mt-1.5" aria-live="polite">
+              {greeting ? (
+                <>
+                  {greeting.emoji} {greeting.text}
+                </>
+              ) : (
+                "Кафе, бары и рестораны"
+              )}
+              {trip?.settings.title && <span className="text-white/60"> · {trip.settings.title}</span>}
+            </p>
+          </div>
+          <FateCup
+            candidates={fateCandidates}
+            progressPct={progressPct}
+            currency={currency}
+            onGoWishlist={() => setView("wishlist")}
+            hasAnyPlaces={stats.total + wishItems.length > 0}
+          />
         </div>
+
+        {/* Статы — это кнопки: тап ведёт в соответствующий раздел */}
+        <div className="relative grid grid-cols-3 gap-2 mt-4">
+          <button
+            type="button"
+            onClick={() => setView("route")}
+            aria-label={`Посещено: ${stats.visited}. Открыть маршрут`}
+            className="rounded-xl bg-white/15 backdrop-blur px-2 py-2 text-center active:scale-95 transition-transform hover:bg-white/20"
+          >
+            <div className="text-xl font-bold tabular-nums leading-tight">{stats.visited}</div>
+            <div className="text-[10px] text-white/75">посещено</div>
+          </button>
+          <button
+            type="button"
+            onClick={() => setView("route")}
+            aria-label={`В маршруте: ${stats.total}. Открыть маршрут`}
+            className="rounded-xl bg-white/15 backdrop-blur px-2 py-2 text-center active:scale-95 transition-transform hover:bg-white/20"
+          >
+            <div className="text-xl font-bold tabular-nums leading-tight">{stats.total}</div>
+            <div className="text-[10px] text-white/75">в маршруте</div>
+          </button>
+          <button
+            type="button"
+            onClick={() => setView("wishlist")}
+            aria-label={`В списке «Хочу»: ${stats.wishlist}. Открыть список`}
+            className="rounded-xl bg-white/15 backdrop-blur px-2 py-2 text-center active:scale-95 transition-transform hover:bg-white/20"
+          >
+            <div className="text-xl font-bold tabular-nums leading-tight flex items-center justify-center gap-1">
+              {stats.wishlist} <span aria-hidden="true" className="text-xs">→</span>
+            </div>
+            <div className="text-[10px] text-white/75">в «Хочу»</div>
+          </button>
+        </div>
+
+        {/* Чашка = прогресс, но процент называем словами — она рядом */}
+        {fateCandidates.length > 0 ? (
+          <p className="relative text-white/75 text-[11px] mt-2.5 flex items-center gap-1">
+            <span aria-hidden="true">🫖</span> Не можешь выбрать? Нажми на чашку — подскажет место
+          </p>
+        ) : (
+          stats.total > 0 && (
+            <p className="relative text-white/75 text-[11px] mt-2.5">Всё посещено — стиль отдыха на высоте! 🏆</p>
+          )
+        )}
       </div>
 
       {/* Переключатель разделов: min-h-[44px] для mobile touch target, бейдж-счётчик на «Хочу» */}
@@ -263,9 +286,9 @@ export function RestChill() {
           )}
         >
           <Star className="size-4" /> Хочу
-          {wishlistCount > 0 && view !== "wishlist" && (
+          {wishItems.length > 0 && view !== "wishlist" && (
             <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full bg-primary text-primary-foreground text-[10px] font-bold grid place-items-center">
-              {wishlistCount}
+              {wishItems.length}
             </span>
           )}
         </button>
@@ -346,18 +369,53 @@ export function RestChill() {
                   Скрыть посещённые
                 </button>
               </div>
+              {/* Сортировка появляется, когда мест достаточно для неё */}
+              {showSort && (
+                <div className="flex items-center gap-2">
+                  <span className="text-[11px] text-muted-foreground shrink-0">Сортировка</span>
+                  <div
+                    role="radiogroup"
+                    aria-label="Сортировка списка"
+                    className="flex-1 grid grid-cols-3 gap-1 p-1 bg-card border border-border rounded-xl"
+                  >
+                    {SORTS.map((s) => (
+                      <button
+                        key={s.key}
+                        type="button"
+                        role="radio"
+                        aria-checked={sort === s.key}
+                        onClick={() => setSort(s.key)}
+                        className={cn(
+                          "min-h-9 rounded-lg text-xs font-medium transition-all",
+                          sort === s.key
+                            ? "bg-primary text-primary-foreground shadow-sm"
+                            : "text-muted-foreground hover:bg-accent"
+                        )}
+                      >
+                        {s.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
               {isFiltering && (
                 <p className="text-[11px] text-muted-foreground px-1" aria-live="polite">
-                  Найдено: {filtered.length} {plural(filtered.length, "место", "места", "мест")}
+                  Найдено: {sortedFiltered.length} {plural(sortedFiltered.length, "место", "места", "мест")}
                 </p>
               )}
             </div>
 
             {/* Список */}
-            {filtered.length > 0 ? (
+            {sortedFiltered.length > 0 ? (
               <div className="grid sm:grid-cols-2 gap-3">
-                {filtered.map(({ place, day }) => (
-                  <ChillCard key={place.id} place={place} day={day} currency={currency} />
+                {sortedFiltered.map(({ place, day }) => (
+                  <ChillCard
+                    key={place.id}
+                    place={place}
+                    day={day}
+                    currency={currency}
+                    onOpen={setDialogPlace}
+                  />
                 ))}
               </div>
             ) : (
@@ -380,9 +438,18 @@ export function RestChill() {
         ) : view === "wishlist" ? (
           <WishlistView onGoNearby={() => setView("nearby")} />
         ) : (
-          <NearbyView category={nearbyCat} onCategoryChange={setNearbyCat} onGoToWishlist={() => setView("wishlist")} />
+          <NearbyView
+            category={nearbyCat}
+            onCategoryChange={setNearbyCat}
+            radius={nearbyRadius}
+            onRadiusChange={setNearbyRadius}
+            onGoToWishlist={() => setView("wishlist")}
+          />
         )}
       </div>
+
+      {/* Полный диалог места: редактирование, фото, «на карте» — тот же, что в Маршруте */}
+      <PlaceDialog place={dialogPlace} currency={currency} onClose={() => setDialogPlace(null)} />
     </div>
   );
 }
@@ -436,7 +503,7 @@ function EmptyRouteState({
   if (!hasAnyChill) {
     return (
       <div className="text-center py-12 space-y-2">
-        <div className="text-4xl">☕</div>
+        <div className="text-4xl">🍵</div>
         <p className="text-sm font-medium">Пока нет кафе и баров в маршруте</p>
         <p className="text-xs text-muted-foreground max-w-xs mx-auto">
           Добавьте места с категорией «Кафе», «Бар» или «Ресторан» в Маршруте — они появятся здесь.
