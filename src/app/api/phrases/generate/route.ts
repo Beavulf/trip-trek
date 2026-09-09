@@ -142,29 +142,43 @@ export async function POST(req: NextRequest) {
   const { response } = await requireTripMember(req, tripId);
   if (response) return response;
 
-  const phrases = PHRASES_BY_LANGUAGE[language] || PHRASES_BY_LANGUAGE.en;
-
-  // P1 #12: race guard — проверяем не созданы ли уже фразы для этой поездки
-  // Если два клиента одновременно вызовут generate — второй увидит count > 0 и не создаст дубли
-  const existing = await db.phrase.count({ where: { tripId } });
-  if (existing > 0) {
-    return NextResponse.json({ created: 0, message: "Фразы уже существуют", total: existing });
+  const phrases = PHRASES_BY_LANGUAGE[language];
+  if (!phrases) {
+    // Раньше молча отдавали английский пак — теперь честно отправляем в ИИ-генератор
+    return NextResponse.json({ error: "Готового набора для этого языка нет — используй ИИ-генерацию", fallback: "ai" }, { status: 404 });
   }
 
-  // Создаём фразы
+  // Дедуп по иностранному тексту: пак можно догружать после удаления
+  // и совмещать с другими языками (раньше — жёсткий one-shot на поездку).
+  // Сравниваем без пунктуации/регистра: «多少钱?» и «多少钱？」 — одна фраза.
+  const norm = (s: string) => s.replace(/[\s\p{P}\p{S}]+/gu, "").toLowerCase();
+  const existing = await db.phrase.findMany({ where: { tripId }, select: { cn: true } });
+  const haveForeign = new Set(existing.map((p) => norm(p.cn)));
+  const fresh = phrases.filter((p) => !haveForeign.has(norm(p.cn)));
+  if (fresh.length === 0) {
+    return NextResponse.json({ created: 0, message: "Все фразы этого набора уже в разговорнике", total: existing.length });
+  }
+
+  // order: продолжаем нумерацию внутри каждого раздела
+  const lastOrders = await db.phrase.groupBy({ by: ["category"], where: { tripId }, _max: { order: true } });
+  const orderBase = new Map<string, number>(lastOrders.map((g) => [g.category, (g._max.order ?? 0) + 1]));
+
   const created = await Promise.all(
-    phrases.map((p, i) =>
-      db.phrase.create({
+    fresh.map((p) => {
+      const base = orderBase.get(p.category) ?? 1;
+      orderBase.set(p.category, base + 1);
+      return db.phrase.create({
         data: {
           tripId,
           category: p.category,
           ru: p.ru,
           cn: p.cn,
           pinyin: p.pinyin,
-          order: i,
+          language,
+          order: base,
         },
-      })
-    )
+      });
+    })
   );
 
   // P1 #12: emitWS чтобы другие клиенты увидели новые фразы
