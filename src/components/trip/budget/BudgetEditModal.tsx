@@ -7,6 +7,7 @@ import { Users, X, Check, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { useTrip, useUpdateMember, getTripId } from "@/hooks/use-trip";
 import { useBodyScrollLock } from "@/hooks/use-body-scroll-lock";
+import { currencySymbol } from "@/lib/currencies";
 
 interface BudgetEditModalProps {
   open: boolean;
@@ -33,6 +34,7 @@ export function BudgetEditModal({ open, onOpenChange }: BudgetEditModalProps) {
 
   if (!open || typeof document === "undefined" || !trip) return null;
 
+  const sym = currencySymbol(trip.settings.currency);
   const total = Object.values(budgets).reduce((s, v) => s + (parseFloat(v) || 0), 0);
 
   // P1 #6: используем useUpdateMember hook + try/catch + проверяем r.ok на каждый PATCH.
@@ -114,7 +116,7 @@ export function BudgetEditModal({ open, onOpenChange }: BudgetEditModalProps) {
                   {p.role && <div className="text-[10px] text-muted-foreground">{p.role}</div>}
                 </div>
                 <div className="flex items-center gap-1 shrink-0">
-                  <span className="text-sm text-muted-foreground">$</span>
+                  <span className="text-sm text-muted-foreground">{sym}</span>
                   <input
                     type="number"
                     inputMode="decimal"
@@ -130,7 +132,7 @@ export function BudgetEditModal({ open, onOpenChange }: BudgetEditModalProps) {
             {/* Итого */}
             <div className="flex items-center justify-between p-3 rounded-xl bg-primary/10 border border-primary/20">
               <span className="text-sm font-semibold">Общий бюджет:</span>
-              <span className="text-lg font-bold text-primary">${total.toFixed(0)}</span>
+              <span className="text-lg font-bold text-primary">{sym}{total.toFixed(0)}</span>
             </div>
 
             {/* Кнопка сохранить */}

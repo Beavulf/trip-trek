@@ -1,10 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { motion } from "framer-motion";
-import { Wallet, Pencil, Check, X } from "lucide-react";
+import { Wallet, Pencil, Check, X, Plus, CalendarDays } from "lucide-react";
 import { toast } from "sonner";
-import { cn } from "@/lib/utils";
+import { cn, plural } from "@/lib/utils";
 import { useUpdateTripBudget } from "@/hooks/use-trip";
 
 interface BudgetHeroProps {
@@ -13,6 +13,9 @@ interface BudgetHeroProps {
   budgetPct: number;
   remaining: number;
   currencySymbol?: string;
+  /** Сколько дней поездки осталось (включая сегодня). null — темп не показываем */
+  daysLeft?: number | null;
+  onAddClick?: () => void;
 }
 
 export function BudgetHero({
@@ -21,30 +24,50 @@ export function BudgetHero({
   budgetPct,
   remaining,
   currencySymbol: sym = "$",
+  daysLeft = null,
+  onAddClick,
 }: BudgetHeroProps) {
   const update = useUpdateTripBudget();
   const [editing, setEditing] = useState(false);
   const [val, setVal] = useState(String(totalBudget));
+  // Почему поле закрылось: "cancel" — не сохранять, "save" — уже сохраняем.
+  // Без него blur от клика по ✕ (или Escape) успевает вызвать save раньше onClick.
+  const closeReason = useRef<"cancel" | "save" | null>(null);
+
+  const openEditor = () => {
+    closeReason.current = null;
+    setVal(String(totalBudget));
+    setEditing(true);
+  };
 
   const save = () => {
-    if (update.isPending) return;
+    if (closeReason.current === "save" || update.isPending) return;
     const num = parseFloat(val);
     if (isNaN(num) || num < 0) {
       toast.error("Введите корректную сумму");
       return;
     }
+    closeReason.current = "save";
     update.mutate(num, {
       onSuccess: () => {
         toast.success("Бюджет обновлён");
         setEditing(false);
       },
       onError: (err) => {
+        closeReason.current = null;
         toast.error("Не удалось обновить бюджет", {
           description: err instanceof Error ? err.message : "Попробуйте ещё раз",
         });
       },
     });
   };
+
+  const cancel = () => {
+    closeReason.current = "cancel";
+    setEditing(false);
+  };
+
+  const showPace = daysLeft !== null && daysLeft >= 1 && remaining > 0 && totalBudget > 0;
 
   return (
     <div className="rounded-3xl p-5 bg-gradient-to-br from-orange-500 to-rose-500 text-white shadow-xl relative overflow-hidden">
@@ -55,7 +78,7 @@ export function BudgetHero({
           {!editing && (
             <button
               type="button"
-              onClick={() => { setVal(String(totalBudget)); setEditing(true); }}
+              onClick={openEditor}
               className="ml-auto size-11 rounded-lg bg-white/15 hover:bg-white/25 grid place-items-center transition-colors"
               title="Изменить бюджет"
               aria-label="Изменить бюджет"
@@ -78,17 +101,32 @@ export function BudgetHero({
                 onChange={(e) => setVal(e.target.value)}
                 onKeyDown={(e) => {
                   if (e.key === "Enter") save();
-                  if (e.key === "Escape") setEditing(false);
+                  if (e.key === "Escape") cancel();
                 }}
-                onBlur={() => { if (!update.isPending) save(); }}
+                onBlur={() => {
+                  // Флаг "cancel" одноразовый: если тап по ✕ сорвался и click не пришёл,
+                  // следующий уход из поля снова должен сохранять
+                  if (closeReason.current === "cancel") {
+                    closeReason.current = null;
+                    return;
+                  }
+                  save();
+                }}
                 autoFocus
                 className="w-24 text-2xl font-bold bg-white/15 rounded-lg px-2 py-0.5 outline-none placeholder:text-white/50"
                 placeholder="1100"
               />
-              <button type="button" onClick={save} disabled={update.isPending} className="size-11 rounded-lg bg-white/20 hover:bg-white/30 grid place-items-center disabled:opacity-50">
+              <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={save} disabled={update.isPending} aria-label="Сохранить бюджет" className="size-11 rounded-lg bg-white/20 hover:bg-white/30 grid place-items-center disabled:opacity-50">
                 <Check className="size-4" />
               </button>
-              <button type="button" onClick={() => setEditing(false)} className="size-11 rounded-lg bg-white/20 hover:bg-white/30 grid place-items-center">
+              <button
+                type="button"
+                // pointerdown приходит раньше blur инпута — ставим флаг до того, как blur вызовет save
+                onPointerDown={(e) => { e.preventDefault(); closeReason.current = "cancel"; }}
+                onClick={cancel}
+                aria-label="Отменить"
+                className="size-11 rounded-lg bg-white/20 hover:bg-white/30 grid place-items-center"
+              >
                 <X className="size-4" />
               </button>
             </div>
@@ -113,6 +151,24 @@ export function BudgetHero({
               : `Перерасход ${sym}${Math.abs(remaining).toFixed(0)}`}
           </span>
         </div>
+        {showPace && (
+          <div className="flex items-center gap-1.5 mt-1.5 text-xs text-white/80">
+            <CalendarDays className="size-3.5 shrink-0" />
+            <span>
+              ≈ {sym}{Math.ceil(remaining / daysLeft!)} в день · ещё {daysLeft} {plural(daysLeft!, "день", "дня", "дней")}
+            </span>
+          </div>
+        )}
+
+        {onAddClick && (
+          <button
+            type="button"
+            onClick={onAddClick}
+            className="mt-3.5 w-full sm:w-auto sm:px-6 min-h-11 rounded-xl bg-white/20 hover:bg-white/30 backdrop-blur flex items-center justify-center gap-1.5 text-sm font-semibold transition-colors active:scale-[0.98]"
+          >
+            <Plus className="size-4" /> Добавить трату
+          </button>
+        )}
       </div>
     </div>
   );

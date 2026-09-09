@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { requireTripMember } from "@/lib/api-auth";
 import { calculateCurrentDayNumber } from "@/lib/trip-days";
+import { EXPENSE_CATEGORIES, CATEGORY_META } from "@/lib/types";
 
 // P0 #4: in-memory rate-limit per user+trip (LLM стоит денег).
 // 10 запросов в час на пользователя на поездку — достаточно для тестов/демо.
@@ -34,11 +35,46 @@ function currencySymbol(code: string): string {
   return map[code] || "$";
 }
 
+// ─── Промпты: автор историй + 6 стилей рассказа ────────────────────────────
+
+const STORY_BASE = `Ты — штатный автор тревел-историй приложения TripTrek. Из сухих фактов поездки (маршрут, места, дневник, траты) ты делаешь живой текст, который участники захотят переслать друзьям.
+
+Правила:
+- Пиши по-русски, в markdown: один короткий заголовок, абзацы по 2–4 предложения, список — не длиннее 8 пунктов.
+- Факты бери только из данных ниже: реальные названия мест, настроения и цитаты из дневника, цифры трат. Ничего не выдумывай и не добавляй мест, которых нет в данных.
+- Конкретика вместо общих слов: не «посетили много красивых мест», а «ночной рынок, смотровая на закате и стеклянный мост».
+- Запрещены штампы: «незабываемое путешествие», «впечатления переполняют», «атмосфера была невероятная», «культурная программа».
+- Чередуй ритм: короткая ударная фраза — затем развёрнутая.
+- Ты пишешь для своих: обращайся к компании на «вы» или пиши от её лица («мы») — выбери одно и держись до конца.
+- Объём: 150–250 слов, без воды.`;
+
+const STYLE_PROMPTS: Record<string, string> = {
+  warm: `Стиль «Тёплый рассказ»: личный, светлый тон, как разговор вечером за чаем. Найди в данных одну маленькую живую деталь (запись из дневника, подпись к фото) и сделай её эмоциональным центром текста. Заверши коротким тостом поездке.`,
+  letter: `Стиль «Письмо другу»: это письмо тому, кто не поехал. Начни с обращения («Привет!», «Здравствуйте!»), расскажи главное доверительно, с лёгкой ностальгией. В конце пообещай рассказать остальное при встрече и подпишись именами участников.`,
+  cinema: `Стиль «Трейлер фильма»: заголовок звучит как название фильма. Драматургия: завязка → кульминация (самый яркий день или место) → финал. Короткие рубленые фразы. После заголовка — строка «В главных ролях: …» с именами участников. В самом конце — слоган поездки одной строкой.`,
+  humor: `Стиль «Добрый юмор»: подметь забавное — рекордные траты, контраст планов и реальности, смешное из дневника. Смеёмся вместе, а не над кем-то: без сарказма и обидных шуток про участников. Последний абзац — тёплый и искренний.`,
+  chronicle: `Стиль «Хроника»: телеграфный, фактологический, почти без лирики. Рубрики-подзаголовки: «Маршрут», «Бюджет», «Рекорды поездки». Максимум цифр и названий. В конце — рубрика «Цифра, которую запомним».`,
+  tale: `Стиль «Сказка»: преврати поездку в волшебную историю («В одном городе, дальше которого нет дальше…»). Места — сказочные локации, участники — герои, бюджет — испытания. Узнаваемые реальные детали (названия, имена) обязательны. Финал — счастливый.`,
+};
+
+const DEFAULT_STYLE = "warm";
+
+// Неклампнутый номер дня (calculateCurrentDayNumber зажат в [1..totalDays],
+// а для «будущий день vs прожитый» нужна настоящая фаза поездки)
+function dayOffsetFor(startDate: Date): number {
+  const now = new Date();
+  const nowUTC = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+  const s = new Date(startDate);
+  const startUTC = Date.UTC(s.getUTCFullYear(), s.getUTCMonth(), s.getUTCDate());
+  return Math.round((nowUTC - startUTC) / 86400000) + 1;
+}
+
 // POST /api/ai-summary — генерация AI-итогов
 // P0 #1: auth + membership; P0 #2: tripId required (no default-trip);
 // P0 #3: SDK fail → 502 error (not 200 + fake template);
 // P0 #4: rate-limit; P1 #6: shared day formula; P1 #8: currency;
 // P2 #19: totalSpent excludes settlement.
+// body: { type: "summary" | "day" | "tips", style?: string, dayNumber?: number }
 export async function POST(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
@@ -62,8 +98,17 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const body = await req.json().catch(() => ({}));
-    const type = (body as { type?: string })?.type || "summary";
+    const body = (await req.json().catch(() => ({}))) as {
+      type?: string;
+      style?: string;
+      dayNumber?: number;
+    };
+    const type = body.type || "summary";
+    const style = STYLE_PROMPTS[body.style || ""] ? (body.style as string) : DEFAULT_STYLE;
+    const requestedDayNum =
+      typeof body.dayNumber === "number" && Number.isFinite(body.dayNumber)
+        ? Math.max(1, Math.floor(body.dayNumber))
+        : null;
 
     // Собираем данные поездки
     const [trip, members, days, places, expenses, journals, photos] = await Promise.all([
@@ -109,54 +154,98 @@ export async function POST(req: NextRequest) {
       .slice(0, 10);
     const journalTexts = journals
       .slice(0, 10)
-      .map((j) => `${j.mood ?? ""} ${j.content}`.trim())
+      .map((j) => `${j.mood ?? ""} ${j.user?.name ?? ""}: ${j.content}`.trim())
       .filter(Boolean);
 
-    // P2 #18: system prompt — русский + markdown + лимит списков
-    const systemBase = "Ты — туристический ИИ-помощник. Пиши на русском языке. Используй markdown (заголовки, списки, **жирный**). Будь лаконичен — не больше 8 пунктов в списке. Не выдумывай факты, которых нет в данных.";
+    // Траты по категориям (топ-3) — дают отчёту конкретику
+    const catTotals = new Map<string, number>();
+    for (const e of realExpenses) {
+      catTotals.set(e.category, (catTotals.get(e.category) ?? 0) + e.amount);
+    }
+    const topCategories = [...catTotals.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 3)
+      .map(([cat, sum]) => {
+        const meta = EXPENSE_CATEGORIES[cat];
+        return `${meta?.emoji ?? "💸"} ${meta?.label ?? cat}: ${sym}${sum.toFixed(0)}`;
+      })
+      .join(", ");
+
+    const todayIso = new Date().toISOString().slice(0, 10);
+    const realCurrentDay = calculateCurrentDayNumber(trip.startDate, trip.totalDays);
+    const dayOffset = dayOffsetFor(trip.startDate);
+    const phaseNote =
+      dayOffset <= 0
+        ? "поездка ещё не началась"
+        : dayOffset > trip.totalDays
+          ? "поездка завершена"
+          : `сейчас день ${dayOffset}`;
+    const datesLine = `${new Date(trip.startDate).toISOString().slice(0, 10)} → ${
+      trip.endDate ? new Date(trip.endDate).toISOString().slice(0, 10) : "…"
+    }`;
 
     let systemPrompt = "";
     let userPrompt = "";
 
     if (type === "summary") {
-      systemPrompt = systemBase + " Создай красивый итоговый отчёт всей поездки: атмосфера, что посетили, что запомнилось. 3-4 абзаца + список.";
-      userPrompt = `Поездка "${trip.title}" в ${trip.destination}.
-Дней: ${trip.totalDays}. Мест: ${places.length} (посещено ${visitedPlaces.length}).
-Участников: ${members.length} (${memberNames.join(", ")}).
-Расходы: ${sym}${totalSpent.toFixed(2)} (бюджет ${sym}${trip.totalBudget}).
-Прогресс: ${progress}%.
-Дни: ${days.map((d) => `День ${d.dayNumber}: ${d.city} — ${d.title}`).join("; ") || "нет дней"}.
-Посещённые места: ${visitedPlaces.map((p) => `${p.name} (${p.category})`).join(", ").slice(0, 500) || "пока нет"}.
-Заметки из дневника: ${journalTexts.join(" | ").slice(0, 800) || "нет записей"}.
-Фото: ${photoCaptions.length > 0 ? photoCaptions.join(", ") : "без подписей"}.`;
+      systemPrompt =
+        STORY_BASE +
+        "\n\n" +
+        STYLE_PROMPTS[style] +
+        "\n\nЗадача: финальный отчёт по всей поездке. Дай дугу: с чего начали → самый яркий момент → чем закончились. 3–4 абзаца, один список допустим.";
+      userPrompt = `Факты поездки.
+Поездка «${trip.title}», направление: ${trip.destination}.
+Даты: ${datesLine}. Сегодня: ${todayIso}. Дней: ${trip.totalDays} (${phaseNote}).
+Участники (${members.length}): ${memberNames.join(", ") || "нет данных"}.
+Маршрут: ${days.map((d) => `Д${d.dayNumber} ${d.city}${d.title ? ` — ${d.title}` : ""}`).join("; ") || "нет дней"}.
+Мест: ${places.length}, посещено ${visitedPlaces.length} (${progress}%). Посещённые: ${visitedPlaces.map((p) => `${p.name} (${CATEGORY_META[p.category]?.label ?? p.category})`).slice(0, 15).join(", ") || "пока нет"}.
+Траты: ${sym}${totalSpent.toFixed(2)} из бюджета ${sym}${trip.totalBudget}.${topCategories ? ` По категориям: ${topCategories}.` : ""}
+Дневник: ${journalTexts.join(" | ").slice(0, 800) || "нет записей"}.
+Подписи к фото: ${photoCaptions.slice(0, 8).join(", ") || "без подписей"}.`;
     } else if (type === "day") {
-      systemPrompt = systemBase + " Опиши один день поездки: что делали, куда сходили, атмосфера. 2-3 абзаца.";
-      // P1 #6: shared currentDayNumber formula (как в api/trip)
-      const currentDayNum = calculateCurrentDayNumber(trip.startDate, trip.totalDays);
-      const day = days.find((d) => d.dayNumber === currentDayNum);
+      // День можно выбрать любой: прошлый → рассказ, будущий → предвкушение
+      const maxDay = Math.max(trip.totalDays, days.length, 1);
+      const dayNum = Math.min(requestedDayNum ?? Math.min(Math.max(realCurrentDay, 1), maxDay), maxDay);
+      const isFuture = dayNum > dayOffset;
+      const day = days.find((d) => d.dayNumber === dayNum);
       const dayPlaces = places.filter((p) => p.dayId === day?.id);
       const dayExpenses = realExpenses.filter((e) => e.dayId === day?.id);
       const dayJournals = journals.filter((j) => j.dayId === day?.id);
-      userPrompt = `День ${currentDayNum} поездки "${trip.title}" в ${trip.destination}.
-Город: ${day?.city ?? "неизвестен"}. Заголовок дня: ${day?.title ?? ""}.
-Места дня: ${dayPlaces.map((p) => `${p.name} (${p.category}${p.status === "visited" ? " ✓" : ""})`).join(", ") || "пока нет"}.
-Расходы за день: ${sym}${dayExpenses.reduce((s, e) => s + e.amount, 0).toFixed(2)}.
-Заметки: ${dayJournals.map((j) => `${j.mood ?? ""} ${j.content}`).join(" | ") || "нет записей"}.`;
+      systemPrompt =
+        STORY_BASE +
+        "\n\n" +
+        STYLE_PROMPTS[style] +
+        "\n\nЗадача: рассказ об одном дне поездки. " +
+        (isFuture
+          ? "Этот день ещё впереди: напиши предвкушение — чего ждать от дня по плану, чем он интересен. Тон лёгкого ожидания; планы — это планы, не выдавай их за свершившееся."
+          : "Прожитый день: утро → день → вечер, или «три момента дня». Можно настоящее время. 2–3 абзаца.");
+      userPrompt = `Факты дня.
+День ${dayNum} из ${trip.totalDays} поездки «${trip.title}» (${trip.destination}).${isFuture ? " День ещё НЕ наступил." : ""}
+Город: ${day?.city ?? "неизвестен"}. Тема дня: ${day?.title || "без темы"}.
+Места дня: ${dayPlaces.map((p) => `${p.name} (${CATEGORY_META[p.category]?.label ?? p.category}${p.status === "visited" ? ", посещено" : p.status === "current" ? ", сейчас здесь" : "в плане"})`).join(", ") || "пока нет"}.
+Траты за день: ${sym}${dayExpenses.reduce((s, e) => s + e.amount, 0).toFixed(2)}.
+Записи дневника за день: ${dayJournals.map((j) => `${j.mood ?? ""} ${j.user?.name ?? ""}: ${j.content}`).join(" | ").slice(0, 500) || "нет записей"}.`;
     } else {
-      systemPrompt = systemBase + " Дай 5 практичных советов на оставшиеся дни поездки. Нумерованный список.";
-      userPrompt = `Поездка "${trip.title}" в ${trip.destination}.
-Участников: ${members.length} (${memberNames.join(", ")}).
-Бюджет: ${sym}${trip.totalBudget}. Расходы: ${sym}${totalSpent.toFixed(2)}.
+      const unvisited = places.filter((p) => p.status === "planned").slice(0, 10);
+      systemPrompt =
+        STORY_BASE +
+        "\n\n" +
+        STYLE_PROMPTS[style] +
+        "\n\nЗадача: 5 практичных советов на оставшуюся часть поездки. Привязывай советы к реальным данным: каким городам ещё впереди, сколько осталось бюджета, какие места не посещены. Каждый совет — конкретное действие, а не банальность. Нумерованный список.";
+      userPrompt = `Факты поездки.
+Поездка «${trip.title}», направление: ${trip.destination}. Сегодня: ${todayIso}, фаза: ${phaseNote} (день ${dayOffset} из ${trip.totalDays}).
+Участники: ${memberNames.join(", ") || "нет данных"}.
+Бюджет: ${sym}${trip.totalBudget}, потрачено ${sym}${totalSpent.toFixed(2)} (осталось ≈ ${sym}${Math.max(trip.totalBudget - totalSpent, 0).toFixed(0)}).
 Посещено мест: ${visitedPlaces.length} из ${places.length}.
-Дни: ${days.map((d) => `День ${d.dayNumber}: ${d.city}`).join(", ") || "нет дней"}.
-Дай 5 практичных советов.`;
+Впереди дни: ${days.filter((d) => d.dayNumber >= realCurrentDay).map((d) => `Д${d.dayNumber} ${d.city}`).join(", ") || "поездка заканчивается"}.
+Не посещённые места: ${unvisited.map((p) => p.name).join(", ") || "основное посещено"}.${topCategories ? ` Траты по категориям: ${topCategories}.` : ""}`;
     }
 
     // LLM: OpenAI-compatible (Docker) → ZAI SDK → local draft from trip data
     try {
       const llm = await generateWithLLM(systemPrompt, userPrompt);
       if (llm) {
-        return NextResponse.json({ content: llm, type, generated: true, source: llmSource });
+        return NextResponse.json({ content: llm, type, style, generated: true, source: llmSource });
       }
     } catch (sdkErr) {
       const msg = sdkErr instanceof Error ? sdkErr.message : "SDK недоступен";
@@ -164,7 +253,6 @@ export async function POST(req: NextRequest) {
       // Fall through to local draft so Docker still works without keys
     }
 
-    const currentDayNum = calculateCurrentDayNumber(trip.startDate, trip.totalDays);
     const local = buildLocalSummary({
       type,
       title: trip.title,
@@ -177,7 +265,7 @@ export async function POST(req: NextRequest) {
       budget: trip.totalBudget,
       sym,
       progress,
-      currentDayNum,
+      currentDayNum: requestedDayNum ?? realCurrentDay,
       days: days.map((d) => ({ dayNumber: d.dayNumber, city: d.city, title: d.title })),
       visitedNames: visitedPlaces.map((p) => p.name).slice(0, 12),
       journalTexts,
@@ -186,6 +274,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({
       content: local,
       type,
+      style,
       generated: false,
       source: "local",
     });
@@ -215,7 +304,7 @@ async function generateWithLLM(systemPrompt: string, userPrompt: string): Promis
           { role: "system", content: systemPrompt },
           { role: "user", content: userPrompt },
         ],
-        temperature: 0.7,
+        temperature: 0.9,
       }),
     });
     if (!r.ok) {

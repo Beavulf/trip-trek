@@ -12,10 +12,11 @@ interface SettlementSectionProps {
   settlements: Settlement[];
   totalSpent: number;
   participantsCount: number;
+  currencySymbol?: string;
 }
 
 // "Расчёт между друзьями" — балансы, расшифровка, список переводов
-export function SettlementSection({ balances, settlements, totalSpent, participantsCount }: SettlementSectionProps) {
+export function SettlementSection({ balances, settlements, totalSpent, participantsCount, currencySymbol: sym = "$" }: SettlementSectionProps) {
   const [showBalanceHint, setShowBalanceHint] = useState(false);
   const [showSettlementHint, setShowSettlementHint] = useState(false);
   const [expandedBalance, setExpandedBalance] = useState<string | null>(null);
@@ -83,12 +84,12 @@ export function SettlementSection({ balances, settlements, totalSpent, participa
                   onClick={() => setExpandedBalance(expandedBalance === b.participant.id ? null : b.participant.id)}
                   className="text-[10px] text-muted-foreground flex items-center gap-1 active:scale-95 transition-transform"
                 >
-                  внёс ${b.paid.toFixed(2)}
+                  внёс {sym}{b.paid.toFixed(2)}
                   <ChevronDown className={cn("size-2.5 transition-transform", expandedBalance === b.participant.id && "rotate-180")} />
                 </button>
               </div>
               <span className={cn("font-semibold text-right text-sm shrink-0 tabular-nums", b.balance > 0 ? "text-green-600" : b.balance < 0 ? "text-red-500" : "text-muted-foreground")}>
-                {b.balance > 0 ? `+$${b.balance.toFixed(2)}` : b.balance < 0 ? `−$${Math.abs(b.balance).toFixed(2)}` : "ровно"}
+                {b.balance > 0 ? `+${sym}${b.balance.toFixed(2)}` : b.balance < 0 ? `−${sym}${Math.abs(b.balance).toFixed(2)}` : "ровно"}
               </span>
             </div>
           );
@@ -111,22 +112,22 @@ export function SettlementSection({ balances, settlements, totalSpent, participa
               <div className="bg-muted/40 rounded-xl p-3 mb-3 space-y-1.5 text-[11px]">
                 <div className="flex items-center justify-between">
                   <span className="text-muted-foreground">{b.participant.name} заплатил всего</span>
-                  <span className="font-medium">${b.paid.toFixed(2)}</span>
+                  <span className="font-medium">{sym}{b.paid.toFixed(2)}</span>
                 </div>
                 <div className="flex items-center justify-between">
                   <span className="text-muted-foreground">Ему должны</span>
-                  <span className="font-medium text-green-600">${b.owedToMe.toFixed(2)}</span>
+                  <span className="font-medium text-green-600">{sym}{b.owedToMe.toFixed(2)}</span>
                 </div>
                 <div className="flex items-center justify-between">
                   <span className="text-muted-foreground">Он должен</span>
-                  <span className="font-medium text-red-500">${b.owedToOthers.toFixed(2)}</span>
+                  <span className="font-medium text-red-500">{sym}{b.owedToOthers.toFixed(2)}</span>
                 </div>
                 <div className="border-t border-border pt-1.5 flex items-center justify-between">
                   <span className="text-muted-foreground">
                     {b.balance > 0 ? "Итог: ему должны" : b.balance < 0 ? "Итог: он должен" : "Итог: всё поровну"}
                   </span>
                   <span className={cn("font-bold", b.balance > 0 ? "text-green-600" : b.balance < 0 ? "text-red-500" : "text-muted-foreground")}>
-                    {b.balance > 0 ? `+$${b.balance.toFixed(2)}` : b.balance < 0 ? `−$${Math.abs(b.balance).toFixed(2)}` : "$0"}
+                    {b.balance > 0 ? `+${sym}${b.balance.toFixed(2)}` : b.balance < 0 ? `−${sym}${Math.abs(b.balance).toFixed(2)}` : `${sym}0`}
                   </span>
                 </div>
               </div>
@@ -186,7 +187,7 @@ export function SettlementSection({ balances, settlements, totalSpent, participa
                   <div className="text-xs font-medium truncate">{s.to.name}</div>
                   <div className="text-[10px] text-green-600">получит</div>
                 </div>
-                <span className="font-bold text-primary text-sm shrink-0">${s.amount.toFixed(2)}</span>
+                <span className="font-bold text-primary text-sm shrink-0">{sym}{s.amount.toFixed(2)}</span>
               </div>
               {/* Кнопка отметки */}
               <div className="mt-2 flex justify-end">
@@ -196,7 +197,7 @@ export function SettlementSection({ balances, settlements, totalSpent, participa
           ))}
         </div>
       ) : (
-        <div className="text-xs text-green-600 text-center py-2">Все расчёты ровны 🎉</div>
+        <div className="text-xs text-green-600 text-center py-2">Долгов нет 🎉</div>
       )}
     </div>
   );

@@ -352,6 +352,52 @@
   50% { box-shadow: 0 4px 12px rgba(0,0,0,0.35), 0 0 0 12px rgba(245, 158, 11, 0); }
 }
 
+/* Нити маршрута: у сегодняшнего дня пунктир «бежит» вперёд.
+   Класс на path через pathOptions.className не применяется (setStyle после
+   инициализации), поэтому сегодняшний день живёт в отдельной панели. */
+.leaflet-pane-route-today path[stroke-dasharray] {
+  animation: dash-march 1.5s linear infinite;
+}
+@keyframes dash-march {
+  to { stroke-dashoffset: -14; } /* 5+9 из dashArray — ровно один период */
+}
+
+/* Точка геолокации */
+.locate-dot {
+  background: transparent;
+  border: none;
+}
+.locate-dot-core {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #3b82f6;
+  border: 3px solid #fff;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.4);
+  animation: locate-pulse 2.4s ease-out infinite;
+}
+@keyframes locate-pulse {
+  0%, 100% { box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.4); }
+  50% { box-shadow: 0 0 0 9px rgba(59, 130, 246, 0); }
+}
+
+/* Полноэкранная карта: прячем хром приложения (шапка/FAB), т.к. обёртка
+   вкладки создаёт stacking context и перекрыть её z-index'ом нельзя */
+body.map-fs header,
+body.map-fs footer,
+body.map-fs button[aria-label="Быстрое добавление"] {
+  display: none !important;
+}
+
+/* Уважение к reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  .leaflet-pane-route-today path[stroke-dasharray],
+  .locate-dot-core,
+  .trip-pin-current .trip-pin-pin {
+    animation: none;
+  }
+}
+
 /* Анимации появления */
 @keyframes fade-up {
   from { opacity: 0; transform: translateY(8px); }

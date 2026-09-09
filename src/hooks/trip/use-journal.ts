@@ -64,3 +64,25 @@ export function useDeleteJournal() {
     },
   });
 }
+
+// Правка записи: контент / настроение / день (PATCH)
+export function useEditJournal() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (data: { id: string; content?: string; mood?: string | null; dayId?: string }) => {
+      const r = await fetch("/api/journal", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+      const body = await r.json().catch(() => ({}));
+      if (!r.ok) {
+        throw new Error(body?.error || `Ошибка ${r.status}`);
+      }
+      return body as JournalEntry;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["journal"] });
+    },
+  });
+}

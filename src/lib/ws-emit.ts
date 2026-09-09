@@ -14,6 +14,7 @@ type WSEvent =
   | "expense:deleted"
   | "journal:added"
   | "journal:deleted"
+  | "journal:updated"
   | "board:added"
   | "board:deleted"
   | "board:pinned"

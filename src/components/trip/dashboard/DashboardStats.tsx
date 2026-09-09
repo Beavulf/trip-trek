@@ -1,69 +1,36 @@
 "use client";
 
-import { useState } from "react";
 import { motion } from "framer-motion";
-import {
-  BookOpen,
-  Camera,
-  Clock,
-  Droplets,
-  MapPin,
-  Plane,
-  Route,
-  Settings2,
-  Sun,
-  TrendingDown,
-  Wallet,
-  Wind,
-} from "lucide-react";
-import { useWeather } from "@/hooks/use-trip";
-import { useTripStore } from "@/lib/trip-store";
-import { useAuth } from "@/hooks/use-auth";
+import { BookOpen, Camera, MapPin, TrendingDown, Wallet } from "lucide-react";
 import { type TripSummary } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { currencySymbol } from "@/lib/currencies";
-import { DatesEditor } from "./DatesEditor";
+import { useTripStore } from "@/lib/trip-store";
 
 interface DashboardStatsProps {
   trip: TripSummary;
-  isBefore: boolean;
-  isAfter: boolean;
+  /** Сколько дней осталось (0 — не показываем темп трат) */
   daysRemaining: number;
-  currentCityKey: string;
 }
 
-export function DashboardStats({
-  trip,
-  isBefore,
-  isAfter,
-  daysRemaining,
-  currentCityKey,
-}: DashboardStatsProps) {
+/**
+ * Статы Обзора: бюджет — крупно и тапабельно, рядом три счётчика.
+ * Погода и обратный отсчёт живут в hero, чтобы каждая цифра встречалась один раз.
+ */
+export function DashboardStats({ trip, daysRemaining }: DashboardStatsProps) {
   const { setActiveTab } = useTripStore();
-  const { data: session } = useAuth();
-  const currentUserId = (session?.user as { id?: string } | undefined)?.id || "";
   const sym = currencySymbol(trip.settings.currency);
   const budget = trip.settings.totalBudget;
-  const budgetPct = budget > 0 ? Math.min(100, (trip.totalSpent / budget) * 100) : 0;
+  const hasBudget = budget > 0;
+  const budgetPct = hasBudget ? Math.min(100, (trip.totalSpent / budget) * 100) : 0;
+  const showPace = hasBudget && daysRemaining >= 1 && trip.remainingBudget > 0;
 
   return (
-    <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-      <CountdownCard
-        isBefore={isBefore}
-        isAfter={isAfter}
-        daysRemaining={daysRemaining}
-        currentDay={trip.currentDayNumber}
-        totalDays={trip.settings.totalDays}
-        startDate={trip.settings.startDate}
-        endDate={trip.settings.endDate}
-        isOwner={!!trip.participants?.find((p) => p.role === "owner" && p.id === currentUserId)}
-      />
-
-      {/* Бюджет */}
+    <div className="grid grid-cols-3 lg:grid-cols-5 gap-3">
       <button
         type="button"
         onClick={() => setActiveTab("budget")}
-        className="col-span-2 lg:col-span-1 rounded-2xl bg-card border border-border p-4 text-left hover:shadow-lg transition-shadow group"
+        className="col-span-3 lg:col-span-2 rounded-2xl bg-card border border-border p-4 text-left hover:shadow-lg card-hover group"
       >
         <div className="flex items-center justify-between mb-2">
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -72,35 +39,48 @@ export function DashboardStats({
           <TrendingDown className="size-4 text-muted-foreground group-hover:translate-x-1 transition-transform" />
         </div>
         <div className="flex items-end gap-2">
-          <span className="text-2xl font-bold">{sym}{trip.totalSpent.toFixed(0)}</span>
-          <span className="text-sm text-muted-foreground mb-1">/ {sym}{budget}</span>
+          <span className="text-3xl font-bold leading-none tabular-nums">{sym}{trip.totalSpent.toFixed(0)}</span>
+          {hasBudget && <span className="text-sm text-muted-foreground mb-0.5">/ {sym}{budget}</span>}
         </div>
-        <div className="mt-2 h-2 rounded-full bg-muted overflow-hidden">
-          <div
-            className="h-full rounded-full bg-gradient-to-r from-orange-500 to-rose-500"
-            style={{ width: `${budgetPct}%` }}
-          />
-        </div>
-        <div className="text-xs text-muted-foreground mt-1.5">
-          Остаток: {sym}{trip.remainingBudget.toFixed(0)}
-        </div>
+        {hasBudget ? (
+          <>
+            <div className="mt-2.5 h-2 rounded-full bg-muted overflow-hidden">
+              <motion.div
+                initial={{ width: 0 }}
+                animate={{ width: `${budgetPct}%` }}
+                transition={{ duration: 0.8, ease: "easeOut" }}
+                className="h-full rounded-full bg-gradient-to-r from-orange-500 to-rose-500"
+              />
+            </div>
+            <div className="flex items-center justify-between mt-1.5 text-xs text-muted-foreground">
+              <span className={cn(trip.remainingBudget < 0 && "text-red-500 font-medium")}>
+                {trip.remainingBudget >= 0
+                  ? `Остаток ${sym}${trip.remainingBudget.toFixed(0)}`
+                  : `Перерасход ${sym}${Math.abs(trip.remainingBudget).toFixed(0)}`}
+              </span>
+              {showPace && (
+                <span>≈ {sym}{Math.ceil(trip.remainingBudget / daysRemaining)} в день</span>
+              )}
+            </div>
+          </>
+        ) : (
+          <div className="mt-2 text-xs text-muted-foreground">Бюджет не задан — задать →</div>
+        )}
       </button>
 
-      <WeatherWidget cityKey={currentCityKey} />
-
-      <StatCard
-        icon={<Camera className="size-5" />}
-        value={trip.totalPhotos}
-        label="Фото"
-        color="#06b6d4"
-        onClick={() => setActiveTab("gallery")}
-      />
       <StatCard
         icon={<MapPin className="size-5" />}
         value={trip.visitedPlaces}
         label={`из ${trip.totalPlaces} мест`}
         color="#f97316"
         onClick={() => setActiveTab("itinerary")}
+      />
+      <StatCard
+        icon={<Camera className="size-5" />}
+        value={trip.totalPhotos}
+        label="Фото"
+        color="#06b6d4"
+        onClick={() => setActiveTab("gallery")}
       />
       <StatCard
         icon={<BookOpen className="size-5" />}
@@ -132,133 +112,5 @@ function StatCard({ icon, value, label, color, onClick }: { icon: React.ReactNod
         <div className="text-xs text-muted-foreground mt-1">{label}</div>
       </div>
     </motion.button>
-  );
-}
-
-function WeatherWidget({ cityKey }: { cityKey: string }) {
-  const { data: weather, isLoading, isError, refetch } = useWeather(cityKey);
-  const noCity = !cityKey;
-  return (
-    <div className="rounded-2xl bg-card border border-border p-4">
-      <div className="flex items-center gap-2 text-sm text-muted-foreground mb-2">
-        <Sun className="size-4" /> Погода
-      </div>
-      {noCity ? (
-        <div className="text-xs text-muted-foreground py-1">Добавьте дни в маршрут</div>
-      ) : isError ? (
-        <div className="space-y-1">
-          <div className="text-xs text-muted-foreground">Не удалось загрузить</div>
-          <button
-            type="button"
-            onClick={() => refetch()}
-            className="text-xs text-primary font-medium min-h-11 px-1"
-          >
-            Обновить
-          </button>
-        </div>
-      ) : isLoading || !weather ? (
-        <div className="text-2xl text-muted-foreground animate-pulse">…</div>
-      ) : (
-        <div>
-          <div className="flex items-center gap-2">
-            <span className="text-3xl">{weather.emoji}</span>
-            <div>
-              <div className="text-2xl font-bold leading-none">{weather.temperature}°</div>
-              <div className="text-[11px] text-muted-foreground">{weather.label}</div>
-            </div>
-          </div>
-          <div className="flex items-center gap-3 mt-2 text-[10px] text-muted-foreground">
-            <span className="flex items-center gap-0.5"><Wind className="size-3" /> {weather.wind}</span>
-            <span className="flex items-center gap-0.5"><Droplets className="size-3" /> {weather.humidity}%</span>
-            <span>{weather.max}°/{weather.min}°</span>
-          </div>
-          <div className="text-[10px] text-muted-foreground mt-1">{weather.city}</div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-function CountdownCard({
-  isBefore,
-  isAfter,
-  daysRemaining,
-  currentDay,
-  totalDays,
-  startDate,
-  endDate,
-  isOwner,
-}: {
-  isBefore: boolean;
-  isAfter: boolean;
-  daysRemaining: number;
-  currentDay: number;
-  totalDays: number;
-  startDate: string;
-  endDate: string | null;
-  isOwner: boolean;
-}) {
-  const [showEditor, setShowEditor] = useState(false);
-  let icon = <Clock className="size-5" />;
-  let label = "В пути";
-  let value = `${currentDay}/${totalDays}`;
-  let sub = `осталось ${daysRemaining} дн.`;
-  let color = "#10b981";
-
-  if (isBefore) {
-    icon = <Plane className="size-5" />;
-    label = "До поездки";
-    value = `${daysRemaining}`;
-    sub = daysRemaining === 1 ? "день" : daysRemaining < 5 ? "дня" : "дней";
-    color = "#f59e0b";
-  } else if (isAfter) {
-    icon = <Route className="size-5" />;
-    label = "Поездка завершена";
-    value = "✓";
-    sub = `${totalDays} дней позади`;
-    color = "#8b5cf6";
-  }
-
-  const startStr = new Date(startDate).toISOString().slice(0, 10);
-  const endStr = endDate ? new Date(endDate).toISOString().slice(0, 10) : "";
-
-  return (
-    <div className="col-span-2 lg:col-span-1 rounded-2xl bg-card border border-border p-4 relative overflow-hidden">
-      <div
-        className="absolute -top-3 -right-3 size-16 rounded-full opacity-10 blur-xl"
-        style={{ background: color }}
-      />
-      {isOwner && (
-        <button
-          type="button"
-          onClick={() => setShowEditor((v) => !v)}
-          className="absolute top-2 right-2 size-11 rounded-md hover:bg-accent grid place-items-center text-muted-foreground z-10"
-          title="Изменить даты"
-          aria-label="Изменить даты"
-        >
-          <Settings2 className="size-3.5" />
-        </button>
-      )}
-      <div className="flex items-center gap-2 text-sm text-muted-foreground mb-2">
-        <span style={{ color }}>{icon}</span> {label}
-      </div>
-      <div className="flex items-baseline gap-1.5">
-        <span className="text-3xl font-bold leading-none" style={{ color }}>{value}</span>
-        <span className="text-xs text-muted-foreground">{sub}</span>
-      </div>
-      <div className="mt-3 flex gap-0.5">
-        {Array.from({ length: Math.max(0, totalDays) }).map((_, i) => (
-          <div
-            key={i}
-            className={cn(
-              "h-1.5 flex-1 rounded-full transition-colors",
-              isBefore ? "bg-muted" : isAfter ? "bg-primary" : i + 1 < currentDay ? "bg-primary" : i + 1 === currentDay ? "bg-primary/60" : "bg-muted"
-            )}
-          />
-        ))}
-      </div>
-
-      {showEditor && isOwner && <DatesEditor startStr={startStr} endStr={endStr} onDone={() => setShowEditor(false)} />}
-    </div>
   );
 }

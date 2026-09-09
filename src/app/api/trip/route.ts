@@ -64,7 +64,7 @@ export async function GET(req: NextRequest) {
     name: isReplacementOnly(m.displayName) ? m.user.name : m.displayName,
     color: m.color,
     emoji: m.emoji,
-    role: m.user.name === m.displayName ? undefined : m.user.name,
+    role: m.role,
     budget: m.budget,
     email: m.user.email,
   }));

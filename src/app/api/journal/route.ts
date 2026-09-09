@@ -24,7 +24,11 @@ export async function GET(req: NextRequest) {
   const entries = await db.journalEntry.findMany({
     where,
     orderBy: { createdAt: "desc" },
-    include: { user: true, day: { select: { dayNumber: true, city: true } } },
+    // select по user: include отдал бы email и хеш пароля каждого участника
+    include: {
+      user: { select: { id: true, name: true, emoji: true, color: true } },
+      day: { select: { dayNumber: true, city: true } },
+    },
   });
   return NextResponse.json(entries);
 }
@@ -68,7 +72,10 @@ export async function POST(req: NextRequest) {
 
   const entry = await db.journalEntry.create({
     data: { dayId, tripId, content: trimmed, mood: safeMood, userId: authorId },
-    include: { user: true, day: true },
+    include: {
+      user: { select: { id: true, name: true, emoji: true, color: true } },
+      day: true,
+    },
   });
 
   // P1 #9: await emitWS
@@ -116,4 +123,78 @@ export async function DELETE(req: NextRequest) {
   await db.journalEntry.delete({ where: { id } });
   await emitWS("journal:deleted", existing.tripId, { journalId: id });
   return NextResponse.json({ ok: true });
+}
+
+// PATCH /api/journal — правка записи (контент/настроение/день)
+// Права как у DELETE: автор или владелец поездки
+export async function PATCH(req: NextRequest) {
+  const body = await req.json();
+  const { id, content, mood, dayId } = body;
+  if (!id) return NextResponse.json({ error: "id required" }, { status: 400 });
+
+  const { user, response: authResp } = await requireUser(req);
+  if (authResp) return authResp;
+
+  const existing = await db.journalEntry.findUnique({
+    where: { id },
+    select: { tripId: true, userId: true },
+  });
+  if (!existing) return NextResponse.json({ error: "not found" }, { status: 404 });
+
+  const { response: memberResp } = await requireTripMember(req, existing.tripId);
+  if (memberResp) return memberResp;
+
+  const membership = await db.tripMember.findUnique({
+    where: { tripId_userId: { tripId: existing.tripId, userId: user!.id } },
+    select: { role: true },
+  });
+  const isAuthor = existing.userId === user!.id;
+  const isOwner = membership?.role === "owner";
+  if (!isAuthor && !isOwner) {
+    return NextResponse.json({ error: "Можно изменять только свои записи" }, { status: 403 });
+  }
+
+  const data: { content?: string; mood?: string | null; dayId?: string } = {};
+
+  if (content !== undefined) {
+    const trimmed = typeof content === "string" ? content.trim() : "";
+    if (!trimmed) {
+      return NextResponse.json({ error: "content не может быть пустым" }, { status: 400 });
+    }
+    if (trimmed.length > 5000) {
+      return NextResponse.json({ error: "content слишком длинный (макс 5000 символов)" }, { status: 400 });
+    }
+    data.content = trimmed;
+  }
+
+  if (mood !== undefined) {
+    data.mood = mood && isValidMood(mood) ? mood : null;
+  }
+
+  if (dayId !== undefined && dayId !== null) {
+    const day = await db.day.findUnique({
+      where: { id: dayId },
+      select: { tripId: true },
+    });
+    if (!day || day.tripId !== existing.tripId) {
+      return NextResponse.json({ error: "day не принадлежит этой поездке" }, { status: 400 });
+    }
+    data.dayId = dayId;
+  }
+
+  if (Object.keys(data).length === 0) {
+    return NextResponse.json({ error: "нечего обновлять" }, { status: 400 });
+  }
+
+  const entry = await db.journalEntry.update({
+    where: { id },
+    data,
+    include: {
+      user: { select: { id: true, name: true, emoji: true, color: true } },
+      day: true,
+    },
+  });
+
+  await emitWS("journal:updated", existing.tripId, { journalId: entry.id });
+  return NextResponse.json(entry);
 }

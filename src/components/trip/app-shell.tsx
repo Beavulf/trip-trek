@@ -130,6 +130,13 @@ export function AppShell({ children }: { children: ReactNode }) {
     return () => window.removeEventListener("keydown", handler);
   }, []);
 
+  // Hero «Обзора» открывает приглашение через событие (состояние шапки сюда не тащим)
+  useEffect(() => {
+    const openInvite = () => setInviteOpen(true);
+    window.addEventListener("triptrek-open-invite", openInvite);
+    return () => window.removeEventListener("triptrek-open-invite", openInvite);
+  }, []);
+
   useEffect(() => {
     if (!moreOpen) return;
     const onDoc = (e: MouseEvent) => {

@@ -102,7 +102,9 @@ export function ExpenseRow({ expense, participants }: ExpenseRowProps) {
             <Users className="size-2.5 text-primary" />
             <span className="text-primary font-medium">
               {excludeSelf
-                ? `За ${splitUsers.map(u => u.name).join(", ")}`
+                ? splitUsers.length > 0
+                  ? `За ${splitUsers.map(u => u.name).join(", ")}`
+                  : `За ${splitIds.length} чел.`
                 : `За всех (${splitIds.length + 1} чел)`
               }
             </span>

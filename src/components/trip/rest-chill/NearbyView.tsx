@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { Locate, Loader2, AlertCircle, RotateCw } from "lucide-react";
-import { useNearby } from "@/hooks/use-trip";
+import { useNearby, type NearbyPlace } from "@/hooks/use-trip";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import type { GeoState } from "./types";
@@ -14,9 +14,10 @@ import { wishlistDedupeKey } from "@/lib/wishlist";
 interface NearbyViewProps {
   category: string;
   onCategoryChange: (c: string) => void;
+  onGoToWishlist?: () => void;
 }
 
-export function NearbyView({ category, onCategoryChange }: NearbyViewProps) {
+export function NearbyView({ category, onCategoryChange, onGoToWishlist }: NearbyViewProps) {
   const tripId = getTripId();
   // P1 #14: сбрасываем cachedGeo при смене trip — не хотим «GZ кэш» в новой поездке
   useEffect(() => {
@@ -67,7 +68,7 @@ export function NearbyView({ category, onCategoryChange }: NearbyViewProps) {
   const dedupedPlaces = (() => {
     const places = data?.places ?? [];
     const seen = new Set<string>();
-    const result = [];
+    const result: NearbyPlace[] = [];
     for (const p of places) {
       const key = wishlistDedupeKey({ name: p.name, lat: p.lat, lng: p.lng });
       if (seen.has(key)) continue;
@@ -163,6 +164,7 @@ export function NearbyView({ category, onCategoryChange }: NearbyViewProps) {
                 <NearbyCard
                   key={`${p.lat.toFixed(5)},${p.lng.toFixed(5)}-${p.name}`}
                   place={p}
+                  onGoToWishlist={onGoToWishlist}
                 />
               ))}
             </div>

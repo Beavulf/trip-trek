@@ -144,6 +144,7 @@ model Photo {
   url           String
   thumbUrl      String?
   caption       String?
+  isFavorite    Boolean  @default(false)
   placeId       String?
   dayId         String
   userId        String?  // кто загрузил (был participantId)
@@ -253,6 +254,7 @@ model Phrase {
   cn         String
   pinyin     String
   audio      String?
+  language   String? // код языка фразы (zh, ja, fr...) — null у записей до миграции
   favorite   Boolean  @default(false)
   order      Int      @default(0)
   createdAt  DateTime @default(now())
@@ -276,6 +278,8 @@ model FoodItem {
   rating      Int?
   order       Int      @default(0)
   createdAt   DateTime @default(now())
+  // JSON-массив userId, проголосовавших «хочу попробовать»
+  wantedBy    String?
 
   trip        Trip     @relation(fields: [tripId], references: [id], onDelete: Cascade)
 }

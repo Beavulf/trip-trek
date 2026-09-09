@@ -10,7 +10,7 @@ import type { WishlistItem } from "./types";
 import { loadWishlist, saveWishlist, wishlistDedupeKey, migrateLegacyWishlist } from "@/lib/wishlist";
 import { useCurrentTripId } from "@/hooks/use-trip";
 
-export function NearbyCard({ place }: { place: NearbyPlace }) {
+export function NearbyCard({ place, onGoToWishlist }: { place: NearbyPlace; onGoToWishlist?: () => void }) {
   const [added, setAdded] = useState(false);
   const tripId = useCurrentTripId();
 
@@ -47,7 +47,12 @@ export function NearbyCard({ place }: { place: NearbyPlace }) {
     };
     saveWishlist([newItem, ...items], tripId);
     setAdded(true);
-    toast.success("Добавлено в «Хочу посетить» ⭐");
+    toast.success("Добавлено в «Хочу посетить» ⭐", {
+      description: place.name,
+      action: onGoToWishlist
+        ? { label: "Открыть список", onClick: onGoToWishlist }
+        : undefined,
+    });
   };
 
   return (

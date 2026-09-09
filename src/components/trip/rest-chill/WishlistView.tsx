@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
-import { CheckCircle2, MapPin, Plus, Star, X } from "lucide-react";
+import { useState, useMemo, useEffect, useRef } from "react";
+import { CheckCircle2, MapPin, Navigation, Plus, Star, X } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import type { WishlistItem } from "./types";
@@ -15,7 +15,7 @@ const CATS = [
   { key: "other", emoji: "✨", label: "Другое" },
 ];
 
-export function WishlistView() {
+export function WishlistView({ onGoNearby }: { onGoNearby?: () => void }) {
   const tripId = useCurrentTripId();
   const [name, setName] = useState("");
   const [category, setCategory] = useState("restaurant");
@@ -23,6 +23,11 @@ export function WishlistView() {
   const [note, setNote] = useState("");
   const [adding, setAdding] = useState(false);
   const [items, setItems] = useState<WishlistItem[]>([]);
+  // Свежий state для undo внутри тоста (closure в toast живёт дольше рендера)
+  const itemsRef = useRef<WishlistItem[]>([]);
+  useEffect(() => {
+    itemsRef.current = items;
+  }, [items]);
 
   useEffect(() => {
     if (!tripId) {
@@ -65,9 +70,30 @@ export function WishlistView() {
     save(items.map(i => i.id === id ? { ...i, rating: i.rating === rating ? null : rating } : i));
   };
 
-  const deleteItem = (id: string) => {
-    save(items.filter(i => i.id !== id));
+  // Удаление сразу, но с возможностью вернуть — вместо молчаливой потери
+  const deleteItem = (item: WishlistItem) => {
+    const idx = items.findIndex(i => i.id === item.id);
+    save(items.filter(i => i.id !== item.id));
+    toast("Удалено из списка", {
+      description: item.name,
+      duration: 6000,
+      action: {
+        label: "Вернуть",
+        onClick: () => {
+          const current = itemsRef.current;
+          const next = [...current];
+          next.splice(Math.min(idx, next.length), 0, item);
+          save(next);
+        },
+      },
+    });
   };
+
+  // Непосещённые сверху, посещённые — ниже (порядок внутри групп сохраняется)
+  const sorted = useMemo(
+    () => [...items].sort((a, b) => Number(a.visited) - Number(b.visited)),
+    [items]
+  );
 
   const stats = useMemo(() => ({
     total: items.length,
@@ -76,13 +102,19 @@ export function WishlistView() {
 
   return (
     <div className="space-y-3">
-      {/* P1 #5: честный copy — wishlist только на этом телефоне */}
+      {/* Честный copy: wishlist живёт только в localStorage этого устройства */}
       <div className="text-[11px] text-muted-foreground bg-muted/40 rounded-lg px-3 py-2 flex items-center gap-1.5">
-        <span>📱</span>
-        <span>Хранится только на этом телефоне — не виден компании. ({stats.visited}/{stats.total} отмечено)</span>
+        <span aria-hidden="true">📱</span>
+        <span>
+          Хранится только на этом телефоне — не виден компании.{" "}
+          <span className="font-medium text-foreground/70">
+            {stats.visited}/{stats.total}
+          </span>{" "}
+          отмечено
+        </span>
       </div>
 
-      {/* Кнопка добавить */}
+      {/* Форма добавления: Enter — добавить, Escape — отмена */}
       {!adding ? (
         <button
           onClick={() => setAdding(true)}
@@ -92,7 +124,11 @@ export function WishlistView() {
           <span className="text-sm font-medium">Добавить место</span>
         </button>
       ) : (
-        <div className="bg-card border border-border rounded-2xl p-3 space-y-2">
+        <form
+          onSubmit={(e) => { e.preventDefault(); addItem(); }}
+          onKeyDown={(e) => { if (e.key === "Escape") setAdding(false); }}
+          className="bg-card border border-border rounded-2xl p-3 space-y-2"
+        >
           <input
             value={name}
             onChange={(e) => setName(e.target.value)}
@@ -104,7 +140,9 @@ export function WishlistView() {
             {CATS.map((c) => (
               <button
                 key={c.key}
+                type="button"
                 onClick={() => setCategory(c.key)}
+                aria-pressed={category === c.key}
                 className={cn(
                   "min-h-11 flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors",
                   category === c.key ? "bg-primary text-primary-foreground" : "bg-muted hover:bg-accent"
@@ -128,45 +166,57 @@ export function WishlistView() {
           />
           <div className="flex gap-2">
             <button
+              type="button"
               onClick={() => setAdding(false)}
               className="flex-1 min-h-11 rounded-lg bg-secondary py-2.5 text-sm font-medium"
             >
               Отмена
             </button>
             <button
-              onClick={addItem}
+              type="submit"
               className="flex-1 min-h-11 rounded-lg bg-primary text-primary-foreground py-2.5 text-sm font-medium flex items-center justify-center gap-1"
             >
               <Plus className="size-4" /> Добавить
             </button>
           </div>
-        </div>
+        </form>
       )}
 
       {/* Список */}
       {items.length === 0 && !adding ? (
-        <div className="text-center py-12 text-muted-foreground text-sm">
-          <Star className="size-8 mx-auto mb-2 opacity-30" />
-          Список пуст. Добавь места, которые хочешь посетить!
+        <div className="text-center py-12 text-muted-foreground text-sm space-y-3">
+          <Star className="size-8 mx-auto opacity-30" />
+          <p>Список пуст. Добавляй места, куда хочется зайти.</p>
+          <p className="text-xs text-muted-foreground">Нашли что-то рядом прямо сейчас?</p>
+          {onGoNearby && (
+            <button
+              onClick={onGoNearby}
+              className="inline-flex items-center gap-1.5 text-xs px-3 py-2 rounded-lg bg-primary text-primary-foreground min-h-11"
+            >
+              <Navigation className="size-3.5" /> Посмотреть, что рядом
+            </button>
+          )}
         </div>
       ) : (
         <div className="space-y-2">
-          {items.map((item) => {
+          {sorted.map((item) => {
             const cat = CATS.find(c => c.key === item.category);
+            const hasCoords = typeof item.lat === "number" && typeof item.lng === "number";
             return (
               <div
                 key={item.id}
                 className={cn(
                   "rounded-xl bg-card border border-border p-3 flex items-start gap-3 transition-all",
-                  item.visited && "opacity-60"
+                  item.visited && "opacity-60 bg-green-500/5 border-green-500/20"
                 )}
               >
                 <button
                   onClick={() => toggleVisited(item.id)}
                   aria-label={item.visited ? "Снять отметку «посещено»" : "Отметить как посещённое"}
+                  aria-pressed={item.visited}
                   className={cn(
-                    "size-11 rounded-full border-2 grid place-items-center shrink-0 mt-0.5",
-                    item.visited ? "bg-green-500 border-green-500" : "border-input"
+                    "size-11 rounded-full border-2 grid place-items-center shrink-0 mt-0.5 transition-colors",
+                    item.visited ? "bg-green-500 border-green-500" : "border-input hover:border-primary"
                   )}
                 >
                   {item.visited && <CheckCircle2 className="size-4 text-white" />}
@@ -175,15 +225,29 @@ export function WishlistView() {
                   <div className={cn("text-sm font-medium", item.visited && "line-through")}>
                     {cat?.emoji} {item.name}
                   </div>
-                  {item.address && (
-                    <div className="text-[11px] text-muted-foreground flex items-center gap-0.5 mt-0.5">
-                      <MapPin className="size-2.5" /> {item.address}
+                  {(item.address || hasCoords) && (
+                    <div className="flex items-center flex-wrap gap-x-2 gap-y-0.5 mt-0.5">
+                      {item.address && (
+                        <span className="text-[11px] text-muted-foreground flex items-center gap-0.5">
+                          <MapPin className="size-2.5" /> {item.address}
+                        </span>
+                      )}
+                      {hasCoords && (
+                        <a
+                          href={`https://www.openstreetmap.org/directions?from=&to=${item.lat}%2C${item.lng}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-[10px] text-primary font-medium hover:underline flex items-center gap-0.5"
+                        >
+                          <Navigation className="size-2.5" /> Как добраться
+                        </a>
+                      )}
                     </div>
                   )}
                   {item.note && (
                     <div className="text-[11px] text-muted-foreground mt-0.5">{item.note}</div>
                   )}
-                  {/* Звёзды оценки */}
+                  {/* Звёзды оценки — появляются после посещения */}
                   {item.visited && (
                     <div className="flex items-center gap-1 mt-1.5">
                       {[1, 2, 3, 4, 5].map((s) => (
@@ -195,7 +259,7 @@ export function WishlistView() {
                         >
                           <Star
                             className={cn(
-                              "size-6 transition-transform",
+                              "size-5 transition-transform",
                               (item.rating ?? 0) >= s ? "fill-amber-400 text-amber-400" : "text-muted-foreground/40"
                             )}
                           />
@@ -208,9 +272,9 @@ export function WishlistView() {
                   )}
                 </div>
                 <button
-                  onClick={() => deleteItem(item.id)}
-                  aria-label="Удалить из списка"
-                  className="size-11 rounded-lg hover:bg-red-500/10 hover:text-red-500 grid place-items-center text-muted-foreground shrink-0"
+                  onClick={() => deleteItem(item)}
+                  aria-label={`Удалить ${item.name} из списка`}
+                  className="size-11 rounded-lg hover:bg-red-500/10 hover:text-red-500 grid place-items-center text-muted-foreground shrink-0 transition-colors"
                 >
                   <X className="size-3.5" />
                 </button>

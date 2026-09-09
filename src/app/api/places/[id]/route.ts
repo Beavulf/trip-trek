@@ -14,7 +14,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   const { response } = await requireTripMember(req, existing.tripId);
   if (response) return response;
 
-  const allowed = ["status", "notes", "rating", "visitedAt", "timeOfDay", "address", "name", "category", "budget", "description", "lat", "lng"];
+  const allowed = ["status", "notes", "rating", "visitedAt", "timeOfDay", "address", "name", "category", "budget", "description", "lat", "lng", "dayId"];
   const data: Record<string, unknown> = {};
   for (const k of allowed) {
     if (k in body) data[k] = body[k];

@@ -5,12 +5,12 @@ import {
   CheckCircle2,
   Circle,
   Clock,
-  DollarSign,
   MapPin,
   Navigation,
   Star,
 } from "lucide-react";
 import { useUpdatePlace } from "@/hooks/use-trip";
+import { useTripStore, type TripTab } from "@/lib/trip-store";
 import { CATEGORY_META, type Place } from "@/lib/types";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -18,13 +18,17 @@ import { cn } from "@/lib/utils";
 interface PlaceRowProps {
   place: Place;
   accentColor: string;
+  /** Символ валюты поездки для отображения бюджета места */
+  currency?: string;
   onOpen: () => void;
 }
 
-export function PlaceRow({ place, accentColor, onOpen }: PlaceRowProps) {
+export function PlaceRow({ place, accentColor, currency, onOpen }: PlaceRowProps) {
   const update = useUpdatePlace();
+  const { setActiveTab, setMapFocusTarget } = useTripStore();
   const meta = CATEGORY_META[place.category];
   const visited = place.status === "visited";
+  const isCurrent = place.status === "current";
 
   const toggle = async (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -38,20 +42,26 @@ export function PlaceRow({ place, accentColor, onOpen }: PlaceRowProps) {
     }
   };
 
+  const showOnMap = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setMapFocusTarget({ lat: place.lat, lng: place.lng, placeId: place.id });
+    setActiveTab("map" as TripTab);
+  };
+
   return (
     <motion.div
       layout
       onClick={onOpen}
       whileTap={{ scale: 0.99 }}
       className={cn(
-        "flex items-center gap-3 p-2.5 rounded-xl cursor-pointer transition-colors group relative overflow-hidden",
-        visited ? "bg-green-500/5" : "hover:bg-accent"
+        "flex items-center gap-2.5 p-2.5 rounded-xl cursor-pointer transition-colors group relative overflow-hidden",
+        visited ? "bg-green-500/5" : isCurrent ? "bg-orange-500/10" : "hover:bg-accent"
       )}
     >
       {/* Левая цветная полоска категории */}
       <div
         className="absolute left-0 top-0 bottom-0 w-1"
-        style={{ background: visited ? "#22c55e" : meta?.color ?? accentColor }}
+        style={{ background: visited ? "#22c55e" : isCurrent ? "#f97316" : meta?.color ?? accentColor }}
       />
       <button
         onClick={toggle}
@@ -61,7 +71,7 @@ export function PlaceRow({ place, accentColor, onOpen }: PlaceRowProps) {
         {visited ? (
           <CheckCircle2 className="size-6 text-green-500" />
         ) : (
-          <Circle className="size-6 text-muted-foreground group-hover:text-primary transition-colors" />
+          <Circle className={cn("size-6 transition-colors", isCurrent ? "text-orange-500" : "text-muted-foreground group-hover:text-primary")} />
         )}
       </button>
       <div
@@ -79,31 +89,42 @@ export function PlaceRow({ place, accentColor, onOpen }: PlaceRowProps) {
             <span className="line-clamp-1">{place.address}</span>
           </div>
         )}
-        <div className="flex items-center gap-2 text-[11px] text-muted-foreground mt-0.5 flex-wrap">
-          <span
-            className="px-1.5 py-0.5 rounded text-[9px] font-medium uppercase tracking-wide"
-            style={{ background: `${meta?.color}18`, color: meta?.color }}
-          >
-            {meta?.label}
-          </span>
+        <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground mt-0.5 flex-wrap">
+          {isCurrent && (
+            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wide text-orange-600 bg-orange-500/15">
+              <span className="relative flex size-1.5" aria-hidden="true">
+                <span className="absolute inline-flex size-full rounded-full bg-orange-500 opacity-75 animate-ping" />
+                <span className="relative inline-flex size-1.5 rounded-full bg-orange-500" />
+              </span>
+              Сейчас
+            </span>
+          )}
           {place.timeOfDay && (
             <span className="flex items-center gap-0.5"><Clock className="size-2.5" /> {timeLabel(place.timeOfDay)}</span>
           )}
           {place.budget ? (
-            <span className="flex items-center gap-0.5"><DollarSign className="size-2.5" /> {place.budget}</span>
+            <span className="tabular-nums">{currency ?? "$"}{place.budget}</span>
           ) : null}
           {place.rating ? <span className="flex items-center gap-0.5 text-amber-500"><Star className="size-2.5 fill-current" /> {place.rating}</span> : null}
         </div>
-        {/* Кнопка "как добраться" */}
-        <a
-          href={`https://www.google.com/maps/dir/?api=1&destination=${place.lat},${place.lng}`}
-          target="_blank"
-          rel="noopener noreferrer"
-          onClick={(e) => e.stopPropagation()}
-          className="inline-flex items-center gap-1 text-[10px] text-primary hover:underline mt-1"
-        >
-          <Navigation className="size-2.5" /> Как добраться
-        </a>
+        {/* Действия: как добраться (внешние карты) · показать на карте поездки */}
+        <div className="flex items-center gap-3 mt-1">
+          <a
+            href={`https://www.google.com/maps/dir/?api=1&destination=${place.lat},${place.lng}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={(e) => e.stopPropagation()}
+            className="inline-flex items-center gap-1 text-[10px] text-primary hover:underline"
+          >
+            <Navigation className="size-2.5" /> Как добраться
+          </a>
+          <button
+            onClick={showOnMap}
+            className="inline-flex items-center gap-1 text-[10px] text-muted-foreground hover:text-primary transition-colors"
+          >
+            <MapPin className="size-2.5" /> На карте
+          </button>
+        </div>
       </div>
       {visited && (
         <span className="shrink-0 text-[9px] font-bold uppercase tracking-wide text-green-600 bg-green-500/10 px-1.5 py-0.5 rounded">
@@ -114,7 +135,7 @@ export function PlaceRow({ place, accentColor, onOpen }: PlaceRowProps) {
   );
 }
 
-function timeLabel(t: string | null) {
+export function timeLabel(t: string | null) {
   switch (t) {
     case "morning": return "Утро";
     case "afternoon": return "День";

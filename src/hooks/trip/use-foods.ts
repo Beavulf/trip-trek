@@ -17,10 +17,37 @@ export interface FoodItem {
   tried: boolean;
   rating: number | null;
   order: number;
+  /** JSON-массив userId, проголосовавших «хочу попробовать» */
+  wantedBy: string | null;
 }
 
-// P0 #2: enabled !!tripId, placeholderData: []
-// P1 #5: throw on !ok
+/** wantedBy хранится JSON-строкой — на клиенте всегда работаем с массивом */
+export function parseWantedBy(food: Pick<FoodItem, "wantedBy">): string[] {
+  if (!food.wantedBy) return [];
+  try {
+    const arr = JSON.parse(food.wantedBy);
+    return Array.isArray(arr) ? arr.filter((v): v is string => typeof v === "string") : [];
+  } catch {
+    return [];
+  }
+}
+
+export interface FoodEditPayload {
+  tried?: boolean;
+  rating?: number | null;
+  imageUrl?: string | null;
+  name?: string;
+  nameCn?: string | null;
+  description?: string | null;
+  city?: string;
+  place?: string | null;
+  price?: string | null;
+  emoji?: string | null;
+  /** Голос «хочу попробовать»: true — добавить мой голос, false — убрать */
+  want?: boolean;
+}
+
+// enabled !!tripId; throw on !ok — UI ловит в try/catch
 export function useFoods(city?: string) {
   const tripId = useCurrentTripId();
   const params = new URLSearchParams();
@@ -39,11 +66,10 @@ export function useFoods(city?: string) {
   });
 }
 
-// P1 #5: throw on !ok — UI ловит в try/catch
 export function useUpdateFood() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ id, ...data }: { id: string; tried?: boolean; rating?: number | null }) => {
+    mutationFn: async ({ id, ...data }: FoodEditPayload & { id: string }) => {
       const r = await fetch("/api/foods", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
@@ -78,7 +104,7 @@ export function useAddFood() {
   });
 }
 
-// P0 #1: delete hook уже был, но throw on !ok добавлен
+// Удаление с восстановлением: после DELETE вернём поля через добавление (undo-тост)
 export function useDeleteFood() {
   const qc = useQueryClient();
   return useMutation({
@@ -109,5 +135,31 @@ export function useUploadFoodPhoto() {
       return body;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["foods"] }),
+  });
+}
+
+export interface FoodSuggestion {
+  name: string;
+  nameCn: string | null;
+  description: string;
+  price: string | null;
+  emoji: string;
+}
+
+// «Советы шефа»: LLM предлагает блюда города, пользователь выбирает что добавить
+export function useSuggestFoods() {
+  return useMutation({
+    mutationFn: async ({ tripId, city }: { tripId: string; city: string }) => {
+      const r = await fetch("/api/foods/suggest", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tripId, city }),
+      });
+      const body = await r.json().catch(() => ({}));
+      if (!r.ok) {
+        throw new Error(body?.error || `Ошибка ${r.status}`);
+      }
+      return body as { suggestions: FoodSuggestion[]; city: string };
+    },
   });
 }

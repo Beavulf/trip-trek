@@ -31,6 +31,8 @@ export function saveWishlist(items: WishlistItem[], tripId?: string): void {
   if (typeof window === "undefined") return;
   try {
     localStorage.setItem(wishlistKey(tripId), JSON.stringify(items));
+    // Тот же tab не получает `storage` event — оповещаем UI сами (hero-стат и бейдж вкладки).
+    window.dispatchEvent(new CustomEvent("triptrek-wishlist-changed"));
   } catch {
     // Quota / private mode — silent
   }

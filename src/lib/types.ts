@@ -46,6 +46,7 @@ export interface Photo {
   url: string;
   thumbUrl: string | null;
   caption: string | null;
+  isFavorite: boolean;
   placeId: string | null;
   dayId: string;
   userId: string | null;
@@ -83,6 +84,7 @@ export interface JournalEntry {
   mood: string | null;
   content: string;
   createdAt: string;
+  updatedAt?: string;
 }
 
 export interface TripSummary {

@@ -5,6 +5,7 @@ import { X } from "lucide-react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import type { ReactNode } from "react";
+import { cn } from "@/lib/utils";
 
 /** Shared mobile bottom sheet — same pattern as AddPlaceSheet. */
 export function MobileBottomSheet({
@@ -13,12 +14,15 @@ export function MobileBottomSheet({
   title,
   titleIcon,
   children,
+  zIndexClass = "z-[100]",
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
   title: string;
   titleIcon?: ReactNode;
   children: ReactNode;
+  /** Поднять выше другого портала (YARL-лайтбокс = 9999): передай "z-[10100]" */
+  zIndexClass?: string;
 }) {
   useBodyScrollLock(open);
   if (!open || typeof document === "undefined") return null;
@@ -31,7 +35,7 @@ export function MobileBottomSheet({
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
         onClick={() => onOpenChange(false)}
-        className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex items-end sm:items-center justify-center sm:p-4"
+        className={cn("fixed inset-0 bg-black/60 backdrop-blur-sm flex items-end sm:items-center justify-center sm:p-4", zIndexClass)}
       >
         <motion.div
           initial={{ y: "100%", opacity: 0 }}

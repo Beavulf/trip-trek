@@ -4,6 +4,20 @@ export const MOODS = ["😊", "🤩", "😴", "🤤", "🥳", "🤔", "😍", "�
 
 export type Mood = (typeof MOODS)[number];
 
+// Человекочитаемая подпись настроения — рядом с пилюлей выбора и в деталях записи
+export const MOOD_META: Record<Mood, { label: string }> = {
+  "😊": { label: "Спокойно" },
+  "🤩": { label: "Восторг" },
+  "😴": { label: "Устал" },
+  "🤤": { label: "Вкусно" },
+  "🥳": { label: "Праздник" },
+  "🤔": { label: "Думаю" },
+  "😍": { label: "Влюблён" },
+  "😰": { label: "Тревога" },
+  "🔥": { label: "Огонь" },
+  "💖": { label: "Нежность" },
+};
+
 // P1 #10: whitelist для валидации на сервере
 export function isValidMood(m: string | null | undefined): m is Mood {
   if (!m) return false;

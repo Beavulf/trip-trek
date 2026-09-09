@@ -4,10 +4,10 @@ import { useBudgetPlan, useUpdateBudgetPlan, useExpenses, useTrip } from "@/hook
 import { EXPENSE_CATEGORIES } from "@/lib/types";
 import { currencySymbol } from "@/lib/currencies";
 import { motion } from "framer-motion";
-import { Target, Pencil, Check, Loader2, X } from "lucide-react";
+import { Target, Pencil, Check, Loader2, X, ChevronDown } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
-import { cn } from "@/lib/utils";
+import { cn, plural } from "@/lib/utils";
 
 export function BudgetPlanWidget() {
   const { data: trip } = useTrip();
@@ -16,6 +16,7 @@ export function BudgetPlanWidget() {
   const update = useUpdateBudgetPlan();
   const [editingCat, setEditingCat] = useState<string | null>(null);
   const [editVal, setEditVal] = useState("");
+  const [showRest, setShowRest] = useState(false);
   const sym = currencySymbol(trip?.settings.currency);
 
   if (isLoading || !plans) {
@@ -38,6 +39,14 @@ export function BudgetPlanWidget() {
   const allCats = Object.keys(EXPENSE_CATEGORIES);
   const totalPlan = plans.reduce((s, p) => s + p.amount, 0);
   const totalSpent = realExpenses.reduce((s, e) => s + e.amount, 0);
+
+  // По умолчанию показываем только категории с планом или тратами — остальные за кнопкой
+  const relevantCats = allCats.filter((cat) => {
+    const plan = plans.find((p) => p.category === cat)?.amount ?? 0;
+    return plan > 0 || (spentByCat[cat] ?? 0) > 0;
+  });
+  const restCats = allCats.filter((cat) => !relevantCats.includes(cat));
+  const visibleCats = relevantCats.length === 0 || showRest ? allCats : relevantCats;
 
   const saveEdit = (cat: string) => {
     const num = parseFloat(editVal);
@@ -67,7 +76,7 @@ export function BudgetPlanWidget() {
       </div>
 
       <div className="space-y-2.5">
-        {allCats.map((cat) => {
+        {visibleCats.map((cat) => {
           const meta = EXPENSE_CATEGORIES[cat];
           const plan = plans.find((p) => p.category === cat)?.amount ?? 0;
           const spent = spentByCat[cat] ?? 0;
@@ -151,12 +160,16 @@ export function BudgetPlanWidget() {
         })}
       </div>
 
-      <p className="text-[11px] text-muted-foreground mt-3 text-center">
-        ✏️ Сумма в пунктирной рамке — тапни, чтобы изменить план
-      </p>
-      <p className="text-[10px] text-muted-foreground/70 mt-1 text-center">
-        Зелёный — норма, жёлтый — близко к лимиту, красный — перерасход
-      </p>
+      {restCats.length > 0 && relevantCats.length > 0 && (
+        <button
+          type="button"
+          onClick={() => setShowRest((v) => !v)}
+          className="mt-3 w-full min-h-9 rounded-lg text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-accent/50 flex items-center justify-center gap-1 transition-colors"
+        >
+          {showRest ? "Скрыть категории без плана и трат" : `Ещё ${restCats.length} ${plural(restCats.length, "категория", "категории", "категорий")} без плана и трат`}
+          <ChevronDown className={cn("size-3.5 transition-transform", showRest && "rotate-180")} />
+        </button>
+      )}
     </div>
   );
 }

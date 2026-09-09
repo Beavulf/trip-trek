@@ -5,16 +5,27 @@ import { getTripId } from "./trip-id";
 
 // P1 #10: убран мёртвый invalidateQueries(["ai-summary"]) — нет useQuery с этим ключом,
 // state локальный в компоненте. Сброс content по tripId делается в самом компоненте.
-// Возвращаем `generated: boolean` — true если это реальный AI, false если бы был шаблон (но теперь шаблонов нет, всегда true или error).
+// `generated: boolean` — true если это реальный AI, false если локальный черновик (нет ключа).
 export interface AISummaryResult {
   content: string;
   type: string;
+  style: string;
   generated?: boolean;
+}
+
+export type AISummaryType = "summary" | "day" | "tips";
+
+export interface AISummaryParams {
+  type: AISummaryType;
+  /** Стиль рассказа: warm | letter | cinema | humor | chronicle | tale */
+  style?: string;
+  /** Номер дня (для type: "day") — любой день, прошлый или будущий */
+  dayNumber?: number;
 }
 
 export function useAISummary() {
   return useMutation({
-    mutationFn: async ({ type }: { type: "summary" | "day" | "tips" }): Promise<AISummaryResult> => {
+    mutationFn: async ({ type, style, dayNumber }: AISummaryParams): Promise<AISummaryResult> => {
       const tripId = getTripId();
       // P0 #2: без tripId — не зовём API (кнопки disabled в UI)
       if (!tripId) {
@@ -23,7 +34,7 @@ export function useAISummary() {
       const r = await fetch(`/api/ai-summary?tripId=${tripId}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ type }),
+        body: JSON.stringify({ type, style, dayNumber }),
       });
       const body = await r.json().catch(() => ({}));
       if (!r.ok) {

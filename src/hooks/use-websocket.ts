@@ -113,6 +113,12 @@ export function useWebSocket(tripId: string) {
       }
     });
 
+    socket.on("journal:updated", (data: { tripId: string }) => {
+      if (data.tripId === tripId) {
+        qc.invalidateQueries({ queryKey: ["journal"] });
+      }
+    });
+
     socket.on("board:added", (data: { tripId: string; userId?: string }) => {
       if (data.tripId === tripId) {
         qc.invalidateQueries({ queryKey: ["board"] });

@@ -14,3 +14,22 @@ export function calculateCurrentDayNumber(startDate: Date, totalDays: number): n
   const diffDays = Math.floor((nowUTC - startUTC) / (1000 * 60 * 60 * 24));
   return Math.max(1, Math.min(totalDays, diffDays + 1));
 }
+
+/**
+ * Дата дня N маршрута — каноническая формула: старт поездки + (N−1) суток, локальная полночь.
+ * Единая для всех путей создания дней («Добавить день», синхронизация в редакторе дат),
+ * чтобы день 1 всегда совпадал с датой старта, а соседние дни не зависели от дат друг друга.
+ */
+export function dayDateFor(startDate: Date, dayNumber: number): Date {
+  const d = new Date(startDate);
+  d.setHours(0, 0, 0, 0);
+  d.setDate(d.getDate() + (dayNumber - 1));
+  return d;
+}
+
+/** Конец дня N (23:59:59.999) — каноническое значение endDate поездки. */
+export function dayEndFor(startDate: Date, dayNumber: number): Date {
+  const d = dayDateFor(startDate, dayNumber);
+  d.setHours(23, 59, 59, 999);
+  return d;
+}

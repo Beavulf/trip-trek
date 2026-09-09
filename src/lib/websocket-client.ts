@@ -59,6 +59,7 @@ export type WSEvent =
   | { type: "photo:added"; tripId: string; photo: unknown }
   | { type: "expense:added"; tripId: string; expense: unknown }
   | { type: "journal:added"; tripId: string; entry: unknown }
+  | { type: "journal:updated"; tripId: string; entry: unknown }
   | { type: "message:added"; tripId: string; message: unknown }
   | { type: "checklist:toggled"; tripId: string; itemId: string; done: boolean }
   | { type: "food:tried"; tripId: string; foodId: string; tried: boolean };

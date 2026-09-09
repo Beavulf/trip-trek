@@ -44,6 +44,30 @@ export function useUploadPhoto() {
   });
 }
 
+export function useUpdatePhoto() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, patch }: { id: string; patch: Record<string, unknown> }) => {
+      const r = await fetch(`/api/photos/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(patch),
+      });
+      if (!r.ok) {
+        const err = await r.json().catch(() => ({}));
+        throw new Error(err.error || "update photo failed");
+      }
+      return r.json();
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["photos"] });
+      qc.invalidateQueries({ queryKey: ["photos-geo"] });
+      qc.invalidateQueries({ queryKey: ["days"] });
+      qc.invalidateQueries({ queryKey: ["trip"] });
+    },
+  });
+}
+
 export function useDeletePhoto() {
   const qc = useQueryClient();
   return useMutation({

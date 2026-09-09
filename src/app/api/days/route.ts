@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { requireTripMember } from "@/lib/api-auth";
+import { dayDateFor, dayEndFor } from "@/lib/trip-days";
 
 // GET /api/days?tripId=...
 export async function GET(req: NextRequest) {
@@ -46,8 +47,9 @@ export async function POST(req: NextRequest) {
   });
 
   const newDayNumber = (maxDay?.dayNumber ?? 0) + 1;
-  const lastDate = maxDay?.date ? new Date(maxDay.date) : new Date(trip.startDate);
-  const newDate = new Date(lastDate.getTime() + 24 * 60 * 60 * 1000);
+  // Дата дня N канонична: старт поездки + (N−1) суток — день 1 совпадает со стартом,
+  // а новые дни не наследуют сдвинутые даты соседей.
+  const newDate = dayDateFor(new Date(trip.startDate), newDayNumber);
 
   const day = await db.day.create({
     data: {
@@ -62,8 +64,8 @@ export async function POST(req: NextRequest) {
     },
   });
 
-  // Обновим totalDays и endDate в поездке
-  const endDate = new Date(trip.startDate.getTime() + newDayNumber * 24 * 60 * 60 * 1000);
+  // Обновим totalDays и endDate в поездке: endDate = конец последнего дня маршрута
+  const endDate = dayEndFor(new Date(trip.startDate), newDayNumber);
   await db.trip.update({
     where: { id: tripId },
     data: {
@@ -95,21 +97,26 @@ export async function DELETE(req: NextRequest) {
 
   await db.day.delete({ where: { id } });
 
-  // Перенумеруем оставшиеся дни
+  // Перенумеруем оставшиеся дни и передатируем по канону (старт + (N−1)),
+  // иначе после удаления середины маршрута номера «уедут» от дат
+  const tripRow = await db.trip.findUnique({ where: { id: day.tripId }, select: { startDate: true } });
   const remaining = await db.day.findMany({
     where: { tripId: day.tripId },
     orderBy: { dayNumber: "asc" },
   });
   for (let i = 0; i < remaining.length; i++) {
     if (remaining[i].dayNumber !== i + 1) {
-      await db.day.update({ where: { id: remaining[i].id }, data: { dayNumber: i + 1 } });
+      await db.day.update({
+        where: { id: remaining[i].id },
+        data: { dayNumber: i + 1, date: dayDateFor(new Date(tripRow!.startDate), i + 1) },
+      });
     }
   }
 
-  // Обновим totalDays
+  // Обновим totalDays и endDate (конец последнего дня)
   await db.trip.update({
     where: { id: day.tripId },
-    data: { totalDays: remaining.length },
+    data: { totalDays: remaining.length, endDate: dayEndFor(new Date(tripRow!.startDate), remaining.length) },
   });
 
   return NextResponse.json({ ok: true });
