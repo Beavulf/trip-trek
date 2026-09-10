@@ -24,6 +24,7 @@ export interface TemplateDay {
 
 export interface TemplateFood {
   name: string;
+  /** Местное название блюда (поле исторически называется nameCn — колонка БД nameCn) */
   nameCn: string;
   description: string;
   city: string;
@@ -132,8 +133,8 @@ export const TRIP_TEMPLATES: TripTemplate[] = [
     ],
     foods: [
       { name: "Суши", nameCn: "寿司", description: "Свежие суши на Цукидзи", city: "Токио", price: "$10-30", emoji: "🍣" },
-      { name: "Рамен", nameCn: "拉面", description: "Свиная лапша в бульоне", city: "Токио", price: "$8-12", emoji: "🍜" },
-      { name: "Темпура", nameCn: "天妇罗", description: "Овощи и морепродукты в кляре", city: "Токио", price: "$12-20", emoji: "🍤" },
+      { name: "Рамен", nameCn: "ラーメン", description: "Свиная лапша в бульоне", city: "Токио", price: "$8-12", emoji: "🍜" },
+      { name: "Темпура", nameCn: "天ぷら", description: "Овощи и морепродукты в кляре", city: "Токио", price: "$12-20", emoji: "🍤" },
     ],
     phrases: [
       { category: "basics", ru: "Здравствуйте", cn: "こんにちは", pinyin: "konnichiwa" },
@@ -169,9 +170,9 @@ export const TRIP_TEMPLATES: TripTemplate[] = [
       },
     ],
     foods: [
-      { name: "Круассан", nameCn: "可颂", description: "Свежая выпечка на завтрак", city: "Париж", price: "$2-4", emoji: "🥐" },
-      { name: "Багет", nameCn: "法棍", description: "Свежий французский хлеб", city: "Париж", price: "$1-3", emoji: "🥖" },
-      { name: "Стейк-фрит", nameCn: "牛排薯条", description: "Стейк с картошкой фри", city: "Париж", price: "$15-25", emoji: "🥩" },
+      { name: "Круассан", nameCn: "Croissant", description: "Свежая выпечка на завтрак", city: "Париж", price: "$2-4", emoji: "🥐" },
+      { name: "Багет", nameCn: "Baguette", description: "Свежий французский хлеб", city: "Париж", price: "$1-3", emoji: "🥖" },
+      { name: "Стейк-фрит", nameCn: "Steak-frites", description: "Стейк с картошкой фри", city: "Париж", price: "$15-25", emoji: "🥩" },
     ],
     phrases: [
       { category: "basics", ru: "Здравствуйте", cn: "Bonjour", pinyin: "bon-zhoor" },
@@ -206,9 +207,9 @@ export const TRIP_TEMPLATES: TripTemplate[] = [
       },
     ],
     foods: [
-      { name: "Пад Тай", nameCn: "泰式炒河粉", description: "Жареная рисовая лапша", city: "Бангкок", price: "$2-4", emoji: "🍜" },
-      { name: "Том Ям", nameCn: "冬阴功汤", description: "Острый суп с креветками", city: "Бангкок", price: "$3-5", emoji: "🍲" },
-      { name: "Манго стики райс", nameCn: "芒果糯米饭", description: "Сладкий рис с манго", city: "Бангкок", price: "$2-3", emoji: "🥭" },
+      { name: "Пад Тай", nameCn: "ผัดไทย", description: "Жареная рисовая лапша", city: "Бангкок", price: "$2-4", emoji: "🍜" },
+      { name: "Том Ям", nameCn: "ต้มยำกุ้ง", description: "Острый суп с креветками", city: "Бангкок", price: "$3-5", emoji: "🍲" },
+      { name: "Манго стики райс", nameCn: "ข้าวเหนียวมะม่วง", description: "Сладкий рис с манго", city: "Бангкок", price: "$2-3", emoji: "🥭" },
     ],
     phrases: [
       { category: "basics", ru: "Здравствуйте", cn: "สวัสดี", pinyin: "sà-wàt-dii" },
