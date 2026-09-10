@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useAuth as useSession } from "@/hooks/use-auth";
 import { toast } from "sonner";
-import { cn } from "@/lib/utils";
+import { Switch } from "@/components/ui/switch";
 
 export function PushToggle() {
   const [enabled, setEnabled] = useState(false);
@@ -114,24 +114,14 @@ export function PushToggle() {
   };
 
   return (
-    <button
-      type="button"
-      onClick={toggle}
-      disabled={loading}
-      aria-label={enabled ? "Отключить уведомления" : "Включить уведомления"}
-      aria-pressed={enabled}
-      className={cn(
-        "min-h-11 min-w-11 px-1 rounded-full relative transition-colors shrink-0 flex items-center",
-        enabled ? "bg-primary" : "bg-muted"
-      )}
-    >
-      <div
-        className={cn(
-          "size-5 rounded-full bg-white shadow transition-transform mx-0.5",
-          enabled ? "translate-x-5" : "translate-x-0"
-        )}
+    <div className="min-h-11 min-w-11 grid place-items-center px-1 shrink-0">
+      <Switch
+        checked={enabled}
+        onCheckedChange={toggle}
+        disabled={loading}
+        aria-label={enabled ? "Отключить уведомления" : "Включить уведомления"}
       />
-    </button>
+    </div>
   );
 }
 
