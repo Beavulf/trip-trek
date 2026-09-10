@@ -1,5 +1,7 @@
-// Notification configuration for WebSocket events
-// Maps event names to emoji + message generator
+// Notification configuration for realtime events
+// Maps event names to emoji + message generator.
+// Потребитель — src/lib/ws-bus.ts (publish): тост "notification" в комнате
+// + Web Push участникам. Сокет-слой события не конфигурирует (read-only канал).
 
 export interface NotificationConfig {
   emoji: string;
@@ -9,7 +11,7 @@ export interface NotificationConfig {
 export const NOTIFICATION_MAP: Record<string, NotificationConfig> = {
   "place:visited": {
     emoji: "📍",
-    message: (d) => `${d.userName || "Кто-то"} отметил(а): ${d.placeName}`,
+    message: (d) => `${d.userName || "Кто-то"} отметил(а) место посещённым: ${d.placeName}`,
   },
   "place:created": {
     emoji: "📍",
@@ -31,94 +33,5 @@ export const NOTIFICATION_MAP: Record<string, NotificationConfig> = {
   "board:added": {
     emoji: "💬",
     message: (d) => `${d.userName || "Кто-то"}: ${String(d.content || "").slice(0, 50)}`,
-  },
-};
-
-// Socket event handlers config: maps event → broadcast event + notification
-export interface SocketEventConfig {
-  broadcastEvent?: string;
-  notification?: {
-    emoji: string;
-    message: (data: Record<string, unknown>) => string;
-  };
-}
-
-export const SOCKET_EVENTS: Record<string, SocketEventConfig> = {
-  "place:visited": {
-    broadcastEvent: "place:updated",
-    notification: {
-      emoji: "📍",
-      message: (d) => `${d.userName} отметил(а): ${d.placeName}`,
-    },
-  },
-  "place:created": {
-    broadcastEvent: "place:created",
-    notification: {
-      emoji: "📍",
-      message: (d) => `${d.userName} добавил(а) место: ${d.placeName}`,
-    },
-  },
-  "place:deleted": {
-    broadcastEvent: "place:deleted",
-  },
-  "photo:added": {
-    broadcastEvent: "photo:added",
-    notification: {
-      emoji: "📸",
-      message: (d) => `${d.userName} добавил(а) фото`,
-    },
-  },
-  "expense:added": {
-    broadcastEvent: "expense:added",
-    notification: {
-      emoji: "💸",
-      message: (d) =>
-        `${d.userName || d.paidByName || "Кто-то"} добавил(а) трату: ${d.currencySymbol || "$"}${d.amount} — ${d.description}`,
-    },
-  },
-  "expense:deleted": {
-    broadcastEvent: "expense:deleted",
-  },
-  "journal:added": {
-    broadcastEvent: "journal:added",
-    notification: {
-      emoji: "📔",
-      message: (d) => `${d.userName} написал(а) в дневник ${d.mood || ""}`,
-    },
-  },
-  "journal:deleted": {
-    broadcastEvent: "journal:deleted",
-  },
-  "board:added": {
-    broadcastEvent: "board:added",
-    notification: {
-      emoji: "💬",
-      message: (d) => `${d.userName}: ${String(d.content || "").slice(0, 50)}`,
-    },
-  },
-  "board:deleted": {
-    broadcastEvent: "board:deleted",
-  },
-  "board:pinned": {
-    // P1 #7: emit board:pinned (не board:added — иначе ложный toast "новое сообщение")
-    broadcastEvent: "board:pinned",
-  },
-  "checklist:updated": {
-    broadcastEvent: "checklist:updated",
-  },
-  "food:updated": {
-    broadcastEvent: "food:updated",
-  },
-  "phrase:updated": {
-    broadcastEvent: "phrase:updated",
-  },
-  "info:updated": {
-    broadcastEvent: "info:updated",
-  },
-  "budget:updated": {
-    broadcastEvent: "budget:updated",
-  },
-  "trip:updated": {
-    broadcastEvent: "trip:updated",
   },
 };

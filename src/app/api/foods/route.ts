@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { emitWS } from "@/lib/ws-emit";
+import { publish } from "@/lib/ws-bus";
 import { requireTripMember } from "@/lib/api-auth";
 import { writeFile, mkdir } from "fs/promises";
 import path from "path";
@@ -67,7 +67,7 @@ export async function POST(req: NextRequest) {
     },
   });
 
-  await emitWS("food:updated", tripId, {});
+  await publish(tripId, "food:updated", {});
   return NextResponse.json(food);
 }
 
@@ -86,7 +86,7 @@ export async function DELETE(req: NextRequest) {
   if (response) return response;
 
   await db.foodItem.delete({ where: { id } });
-  await emitWS("food:updated", food.tripId, {});
+  await publish(food.tripId, "food:updated", {});
   return NextResponse.json({ ok: true });
 }
 
@@ -131,7 +131,7 @@ export async function PATCH(req: NextRequest) {
     await writeFile(path.join(uploadDir, fileName), Buffer.from(await file.arrayBuffer()));
     const url = `/uploads/${fileName}`;
     const food = await db.foodItem.update({ where: { id }, data: { imageUrl: url } });
-    await emitWS("food:updated", food.tripId, {});
+    await publish(food.tripId, "food:updated", {});
     return NextResponse.json(food);
   }
 
@@ -182,6 +182,6 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({ error: "rating: 1–5" }, { status: 400 });
   }
   const food = await db.foodItem.update({ where: { id }, data });
-  await emitWS("food:updated", food.tripId, {});
+  await publish(food.tripId, "food:updated", {});
   return NextResponse.json(food);
 }

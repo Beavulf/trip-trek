@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { emitWS } from "@/lib/ws-emit";
+import { publish } from "@/lib/ws-bus";
 import { requireTripMember } from "@/lib/api-auth";
 
 // GET /api/checklist?tripId=...
@@ -28,7 +28,7 @@ export async function POST(req: NextRequest) {
   if (!text || !tripId) return NextResponse.json({ error: "text, tripId required" }, { status: 400 });
   const order = await db.checklistItem.count({ where: { tripId, category: category || "preparation" } });
   const item = await db.checklistItem.create({ data: { text, category: category || "preparation", tripId, order } });
-  emitWS("checklist:updated", tripId, {});
+  publish(tripId, "checklist:updated", {});
   return NextResponse.json(item);
 }
 
@@ -47,7 +47,7 @@ export async function PATCH(req: NextRequest) {
   if (typeof text === "string") data.text = text;
   if (typeof category === "string") data.category = category;
   const item = await db.checklistItem.update({ where: { id }, data });
-  emitWS("checklist:updated", item.tripId, { itemId: id, done });
+  publish(item.tripId, "checklist:updated", { itemId: id, done });
   return NextResponse.json(item);
 }
 
@@ -63,6 +63,6 @@ export async function DELETE(req: NextRequest) {
   if (response) return response;
 
   const item = await db.checklistItem.delete({ where: { id } });
-  emitWS("checklist:updated", item.tripId, {});
+  publish(item.tripId, "checklist:updated", {});
   return NextResponse.json({ ok: true });
 }

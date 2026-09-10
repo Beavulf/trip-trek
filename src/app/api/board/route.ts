@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { emitWS } from "@/lib/ws-emit";
+import { publish } from "@/lib/ws-bus";
 import { requireTripMember, requireUser } from "@/lib/api-auth";
 
 // Хелпер: безопасно разобрать reactions JSON
@@ -80,7 +80,7 @@ export async function POST(req: NextRequest) {
     include: MSG_INCLUDE,
   });
 
-  await emitWS("board:added", tripId, {
+  await publish(tripId, "board:added", {
     messageId: msg.id,
     userId: user!.id,
     userName: msg.user?.name || "Кто-то",
@@ -109,7 +109,7 @@ export async function PATCH(req: NextRequest) {
   // 1) Pin
   if (pinned !== undefined) {
     const msg = await db.boardMessage.update({ where: { id }, data: { pinned: !!pinned } });
-    await emitWS("board:pinned", existing.tripId, { messageId: id, pinned: !!pinned });
+    await publish(existing.tripId, "board:pinned", { messageId: id, pinned: !!pinned });
     return NextResponse.json(msg);
   }
 
@@ -128,7 +128,7 @@ export async function PATCH(req: NextRequest) {
       data: { content: trimmed, editedAt: new Date() },
       include: MSG_INCLUDE,
     });
-    await emitWS("board:updated", existing.tripId, { messageId: id, userId: user!.id });
+    await publish(existing.tripId, "board:updated", { messageId: id, userId: user!.id });
     return NextResponse.json({ ...msg, reactions: parseReactions(msg.reactions) });
   }
 
@@ -149,7 +149,7 @@ export async function PATCH(req: NextRequest) {
       where: { id },
       data: { reactions: JSON.stringify(next) },
     });
-    await emitWS("board:updated", existing.tripId, { messageId: id, userId: user!.id });
+    await publish(existing.tripId, "board:updated", { messageId: id, userId: user!.id });
     return NextResponse.json({ ...msg, reactions: next });
   }
 
@@ -185,6 +185,6 @@ export async function DELETE(req: NextRequest) {
   }
 
   const msg = await db.boardMessage.delete({ where: { id } });
-  await emitWS("board:deleted", msg.tripId, { messageId: id });
+  await publish(msg.tripId, "board:deleted", { messageId: id });
   return NextResponse.json({ ok: true });
 }

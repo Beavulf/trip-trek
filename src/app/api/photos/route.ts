@@ -3,7 +3,7 @@ import { mkdir, unlink, writeFile } from "fs/promises";
 import path from "path";
 import sharp from "sharp";
 import { db } from "@/lib/db";
-import { emitWS } from "@/lib/ws-emit";
+import { publish } from "@/lib/ws-bus";
 import { requireTripMember } from "@/lib/api-auth";
 
 const MAX_BYTES = 20 * 1024 * 1024;
@@ -147,7 +147,7 @@ export async function POST(req: NextRequest) {
     },
     include: { place: true, user: true, day: true },
   });
-  emitWS("photo:added", tripId, {
+  publish(tripId, "photo:added", {
     userId: user!.id,
     userName: user!.name || photo.user?.name || "Кто-то",
   });
@@ -187,6 +187,6 @@ export async function DELETE(req: NextRequest) {
     }
   }
 
-  emitWS("photo:deleted", photo.tripId, { photoId: id });
+  publish(photo.tripId, "photo:deleted", { photoId: id });
   return NextResponse.json({ ok: true });
 }

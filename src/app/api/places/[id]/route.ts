@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { emitWS } from "@/lib/ws-emit";
+import { publish } from "@/lib/ws-bus";
 import { requireTripMember } from "@/lib/api-auth";
 
 // PATCH /api/places/[id] — обновить место (статус, заметки, рейтинг, адрес, имя, категория, бюджет)
@@ -26,7 +26,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
   // WS: уведомить участников поездки
   const tripId = (place as { tripId?: string }).tripId;
-  if (tripId) emitWS("place:updated", tripId, { placeId: id, placeName: place.name, userName: body.userName || "Кто-то" });
+  if (tripId) publish(tripId, "place:updated", { placeId: id, placeName: place.name, userName: body.userName || "Кто-то" });
 
   return NextResponse.json(place);
 }
@@ -43,6 +43,6 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
 
   const place = await db.place.delete({ where: { id } });
   const tripId = (place as { tripId?: string }).tripId;
-  if (tripId) emitWS("place:deleted", tripId, { placeId: id });
+  if (tripId) publish(tripId, "place:deleted", { placeId: id });
   return NextResponse.json({ ok: true });
 }

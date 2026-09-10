@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { emitWS } from "@/lib/ws-emit";
+import { publish } from "@/lib/ws-bus";
 import { requireTripMember, requireTripOwner } from "@/lib/api-auth";
 
 // GET /api/trips/[id] — детали поездки (только для участников).
@@ -41,7 +41,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ tr
     }
   }
   const trip = await db.trip.update({ where: { id: tripId }, data });
-  emitWS("trip:updated", tripId, {});
+  publish(tripId, "trip:updated", {});
   return NextResponse.json(trip);
 }
 

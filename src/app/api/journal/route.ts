@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { emitWS } from "@/lib/ws-emit";
+import { publish } from "@/lib/ws-bus";
 import { requireTripMember, requireUser } from "@/lib/api-auth";
 import { isValidMood } from "@/lib/moods";
 
@@ -79,7 +79,7 @@ export async function POST(req: NextRequest) {
   });
 
   // P1 #9: await emitWS
-  await emitWS("journal:added", tripId, {
+  await publish(tripId, "journal:added", {
     journalId: entry.id,
     userName: entry.user?.name || "Кто-то",
     mood: safeMood || "",
@@ -121,7 +121,7 @@ export async function DELETE(req: NextRequest) {
   }
 
   await db.journalEntry.delete({ where: { id } });
-  await emitWS("journal:deleted", existing.tripId, { journalId: id });
+  await publish(existing.tripId, "journal:deleted", { journalId: id });
   return NextResponse.json({ ok: true });
 }
 
@@ -195,6 +195,6 @@ export async function PATCH(req: NextRequest) {
     },
   });
 
-  await emitWS("journal:updated", existing.tripId, { journalId: entry.id });
+  await publish(existing.tripId, "journal:updated", { journalId: entry.id });
   return NextResponse.json(entry);
 }

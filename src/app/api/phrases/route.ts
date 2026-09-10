@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { emitWS } from "@/lib/ws-emit";
+import { publish } from "@/lib/ws-bus";
 import { requireTripMember } from "@/lib/api-auth";
 
 const PHRASE_CATEGORIES = ["basics", "food", "transport", "shopping", "emergency", "social"];
@@ -61,7 +61,7 @@ export async function POST(req: NextRequest) {
       order: (last?.order ?? 0) + 1,
     },
   });
-  await emitWS("phrase:updated", tripId, {});
+  await publish(tripId, "phrase:updated", {});
   return NextResponse.json(phrase, { status: 201 });
 }
 
@@ -90,7 +90,7 @@ export async function PATCH(req: NextRequest) {
   if (category !== undefined && PHRASE_CATEGORIES.includes(category)) data.category = category;
 
   const phrase = await db.phrase.update({ where: { id }, data });
-  await emitWS("phrase:updated", phrase.tripId, {});
+  await publish(phrase.tripId, "phrase:updated", {});
   return NextResponse.json(phrase);
 }
 
@@ -106,6 +106,6 @@ export async function DELETE(req: NextRequest) {
   if (response) return response;
 
   await db.phrase.delete({ where: { id } });
-  await emitWS("phrase:updated", existing.tripId, {});
+  await publish(existing.tripId, "phrase:updated", {});
   return NextResponse.json({ ok: true });
 }

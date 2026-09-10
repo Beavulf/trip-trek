@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { emitWS } from "@/lib/ws-emit";
+import { publish } from "@/lib/ws-bus";
 import { requireTripMember } from "@/lib/api-auth";
 import { currencySymbol } from "@/lib/currencies";
 
@@ -98,7 +98,7 @@ export async function POST(req: NextRequest) {
   // Символ валюты поездки — для push/ws-уведомления (иначе там жёсткий $)
   const trip = await db.trip.findUnique({ where: { id: tripId }, select: { currency: true } });
 
-  await emitWS("expense:added", tripId, {
+  await publish(tripId, "expense:added", {
     id: expense.id,
     amount: expense.amount,
     category: expense.category,
@@ -137,7 +137,7 @@ export async function DELETE(req: NextRequest) {
 
   await db.expense.delete({ where: { id } });
 
-  await emitWS("expense:deleted", expense.tripId, { id });
+  await publish(expense.tripId, "expense:deleted", { id });
 
   return NextResponse.json({ ok: true });
 }

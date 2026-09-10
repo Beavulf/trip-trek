@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { emitWS } from "@/lib/ws-emit";
+import { publish } from "@/lib/ws-bus";
 import { requireTripMember } from "@/lib/api-auth";
 
 // ИИ-фразы: перевод своей фразы, «ещё фразы» раздела, пак для любого языка.
@@ -197,7 +197,7 @@ ${CATEGORIES.map((c) => `- ${c}: ${CATEGORY_RU[c]}`).join("\n")}
       };
     });
     await db.phrase.createMany({ data });
-    await emitWS("phrase:updated", tripId, {});
+    await publish(tripId, "phrase:updated", {});
 
     return NextResponse.json({
       created: data.length,

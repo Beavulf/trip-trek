@@ -123,7 +123,7 @@ export function useWebSocket(tripId: string) {
       if (data.tripId === tripId) {
         qc.invalidateQueries({ queryKey: ["board"] });
         // P1 #9: anti double-toast — actor уже видел toast при отправке
-        // Toast для других показывается через notification (emit-handler)
+        // Toast для других показывается через notification (publish из ws-bus)
       }
     });
 

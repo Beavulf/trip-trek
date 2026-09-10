@@ -3,18 +3,19 @@
 //
 // Architecture:
 //   server.ts (this)              → main entry, Next.js + Socket.io setup
-//   server/emit-handler.ts        → /emit HTTP endpoint (API → WS bridge)
-//   server/socket-handlers.ts     → socket.io event handlers
+//   server/socket-handlers.ts     → socket.io event handlers (read-only канал)
 //   server/rooms.ts               → trip rooms management
 //   server/notification-map.ts    → notification config (event → emoji+msg)
+//   src/lib/ws-bus.ts             → publish() шина для API-маршрутов
 
 import { createServer } from "http";
 import { Server } from "socket.io";
 import type { Server as IOServer } from "socket.io";
 import next from "next";
 import { db } from "./src/lib/db";
-import { handleEmitRequest } from "./server/emit-handler";
+import { setIo } from "./src/lib/ws-bus";
 import { setupSocketHandlers } from "./server/socket-handlers";
+import { wsHandshakeAuth } from "./server/ws-auth";
 import { TripRooms } from "./server/rooms";
 import { handleUploadsRequest } from "./server/static-uploads";
 
@@ -34,17 +35,17 @@ const rooms = new TripRooms();
 let io: IOServer;
 
 app.prepare().then(() => {
-  // HTTP server (Next.js) + /emit + runtime /uploads from disk volume
+  // HTTP server (Next.js) + runtime /uploads from disk volume
   const server = createServer((req, res) => {
     // Runtime uploads (Docker volume) — must bypass Next static snapshot
     if (handleUploadsRequest(req, res)) return;
-    // Try to handle /emit first (internal WS bridge)
-    if (io && handleEmitRequest(req, res, io)) return;
-    // Otherwise — Next.js handler
+    // Otherwise — Next.js handler (HTTP-мост /emit удалён: API-маршруты
+    // сидят в этом же процессе и зовут publish() из ws-bus напрямую)
     handle(req, res);
   });
 
-  // Socket.io server
+  // Socket.io server: handshake требует валидный JWT из cookie сессии —
+  // анонимные подключения отбиваются сразу
   io = new Server(server, {
     path: "/socket.io/",
     cors: {
@@ -52,6 +53,11 @@ app.prepare().then(() => {
       methods: ["GET", "POST"],
     },
   });
+
+  io.use(wsHandshakeAuth);
+
+  // Регистрируем io в шине — теперь API-маршруты зовут publish(tripId, event, …)
+  setIo(io);
 
   // Setup socket event handlers
   setupSocketHandlers(io, rooms);

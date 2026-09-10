@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { emitWS } from "@/lib/ws-emit";
+import { publish } from "@/lib/ws-bus";
 import { requireTripMember } from "@/lib/api-auth";
 
 // Базовые фразы для каждого языка (50+ фраз)
@@ -182,7 +182,7 @@ export async function POST(req: NextRequest) {
   );
 
   // P1 #12: emitWS чтобы другие клиенты увидели новые фразы
-  await emitWS("phrase:updated", tripId, {});
+  await publish(tripId, "phrase:updated", {});
 
   return NextResponse.json({
     created: created.length,
