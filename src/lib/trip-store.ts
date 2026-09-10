@@ -28,6 +28,10 @@ interface TripState {
   setSelectedDay: (d: number | null) => void;
   currentTripId: string;
   setCurrentTripId: (id: string) => void;
+  // id только что созданной поездки: пока список поездок не подтянулся,
+  // эффекты автовыбора не должны перебивать её на первую попавшуюся
+  pendingTripId: string | null;
+  setPendingTripId: (id: string | null) => void;
   tripSwitcherOpen: boolean;
   setTripSwitcherOpen: (v: boolean) => void;
   mapCityFilter: string | null;
@@ -60,6 +64,8 @@ export const useTripStore = create<TripState>()(
           mapOnlyChill: false,
           selectedDay: null,
         }),
+      pendingTripId: null,
+      setPendingTripId: (id) => set({ pendingTripId: id }),
       tripSwitcherOpen: false,
       setTripSwitcherOpen: (v) => set({ tripSwitcherOpen: v }),
       mapCityFilter: null,

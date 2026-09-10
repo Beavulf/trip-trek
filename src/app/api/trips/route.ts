@@ -12,7 +12,8 @@ export async function GET(req: NextRequest) {
     include: {
       trip: {
         include: {
-          members: { include: { user: true } },
+          // безопасный срез: без user — там bcrypt-хеш пароля и email участников
+          members: { select: { userId: true, role: true, displayName: true, emoji: true, color: true } },
           _count: { select: { places: true, photos: true, expenses: true, journals: true } },
         },
       },

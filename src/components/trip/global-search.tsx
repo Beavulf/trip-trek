@@ -3,7 +3,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { Search, X, Loader2, CornerDownLeft } from "lucide-react";
+import { Search, X, Loader2, CornerDownLeft, Clock, Trash2 } from "lucide-react";
 import { useState, useEffect, useMemo, useRef } from "react";
 import { useTripStore } from "@/lib/trip-store";
 import { cn } from "@/lib/utils";
@@ -12,15 +12,17 @@ import { useCurrentTripId } from "@/hooks/use-trip";
 
 interface SearchResult {
   id: string;
-  type: "place" | "phrase" | "food" | "expense" | "journal";
+  type: "city" | "place" | "phrase" | "food" | "expense" | "journal";
   title: string;
   subtitle: string;
   meta?: string;
   icon: string;
   dayNumber?: number | null;
+  cityKey?: string | null;
 }
 
 const TYPE_LABELS: Record<string, string> = {
+  city: "Город",
   place: "Место",
   phrase: "Фраза",
   food: "Блюдо",
@@ -29,6 +31,7 @@ const TYPE_LABELS: Record<string, string> = {
 };
 
 const TYPE_COLORS: Record<string, string> = {
+  city: "#0ea5e9",
   place: "#f97316",
   phrase: "#06b6d4",
   food: "#ef4444",
@@ -36,14 +39,58 @@ const TYPE_COLORS: Record<string, string> = {
   journal: "#8b5cf6",
 };
 
+const RECENTS_KEY = "triptrek:search-recents";
+
+function loadRecents(): string[] {
+  try {
+    const raw = localStorage.getItem(RECENTS_KEY);
+    return raw ? (JSON.parse(raw) as string[]).slice(0, 5) : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveRecent(q: string) {
+  try {
+    const next = [q, ...loadRecents().filter((x) => x !== q)].slice(0, 5);
+    localStorage.setItem(RECENTS_KEY, JSON.stringify(next));
+  } catch {
+    // приватный режим — просто не сохраняем
+  }
+}
+
+/** Подсветка совпавших слов в тексте результата */
+function Highlight({ text, words }: { text: string; words: string[] }) {
+  if (!words.length || !text) return <>{text}</>;
+  const esc = words.map((w) => w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).filter(Boolean);
+  if (!esc.length) return <>{text}</>;
+  const re = new RegExp(`(${esc.join("|")})`, "gi");
+  const parts = text.split(re);
+  const lower = new Set(words.map((w) => w.toLowerCase()));
+  return (
+    <>
+      {parts.map((p, i) =>
+        lower.has(p.toLowerCase()) ? (
+          <mark key={i} className="bg-primary/20 text-foreground rounded-sm px-0.5">
+            {p}
+          </mark>
+        ) : (
+          p
+        ),
+      )}
+    </>
+  );
+}
+
 export function GlobalSearch({ open, onOpenChange }: { open: boolean; onOpenChange: (v: boolean) => void }) {
   useBodyScrollLock(open);
   const [query, setQuery] = useState("");
   const [debounced, setDebounced] = useState("");
   const [selectedIdx, setSelectedIdx] = useState(0);
+  const [recents, setRecents] = useState<string[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
   const tripId = useCurrentTripId();
-  const { setActiveTab, setSelectedDay, setTripSwitcherOpen } = useTripStore();
+  const { setActiveTab, setSelectedDay, setTripSwitcherOpen, setMapCityFilter } = useTripStore();
 
   useEffect(() => {
     const t = setTimeout(() => setDebounced(query.trim()), 280);
@@ -75,6 +122,7 @@ export function GlobalSearch({ open, onOpenChange }: { open: boolean; onOpenChan
   }, [results]);
 
   const flatResults = results;
+  const queryWords = useMemo(() => debounced.toLowerCase().split(/\s+/).filter(Boolean), [debounced]);
 
   useEffect(() => {
     setSelectedIdx(0);
@@ -84,6 +132,7 @@ export function GlobalSearch({ open, onOpenChange }: { open: boolean; onOpenChan
     if (open) {
       setQuery("");
       setDebounced("");
+      setRecents(loadRecents());
       setTimeout(() => inputRef.current?.focus(), 100);
     }
   }, [open]);
@@ -91,24 +140,31 @@ export function GlobalSearch({ open, onOpenChange }: { open: boolean; onOpenChan
   if (!open || typeof document === "undefined") return null;
 
   const onResultClick = (r: SearchResult) => {
-    if (r.dayNumber != null) setSelectedDay(r.dayNumber);
-    else setSelectedDay(null);
-    switch (r.type) {
-      case "place":
-        setActiveTab("itinerary");
-        break;
-      case "phrase":
-        setActiveTab("phrases");
-        break;
-      case "food":
-        setActiveTab("food");
-        break;
-      case "expense":
-        setActiveTab("budget");
-        break;
-      case "journal":
-        setActiveTab("journal");
-        break;
+    if (query.trim()) saveRecent(query.trim());
+    if (r.type === "city" && r.cityKey) {
+      setSelectedDay(null);
+      setMapCityFilter(r.cityKey);
+      setActiveTab("map");
+    } else {
+      if (r.dayNumber != null) setSelectedDay(r.dayNumber);
+      else setSelectedDay(null);
+      switch (r.type) {
+        case "place":
+          setActiveTab("itinerary");
+          break;
+        case "phrase":
+          setActiveTab("phrases");
+          break;
+        case "food":
+          setActiveTab("food");
+          break;
+        case "expense":
+          setActiveTab("budget");
+          break;
+        case "journal":
+          setActiveTab("journal");
+          break;
+      }
     }
     onOpenChange(false);
   };
@@ -163,17 +219,31 @@ export function GlobalSearch({ open, onOpenChange }: { open: boolean; onOpenChan
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               onKeyDown={onKeyDown}
-              placeholder="Поиск: места, фразы, блюда, траты…"
+              placeholder="Поиск: города, места, фразы, блюда…"
               className="flex-1 bg-transparent outline-none text-base input-mobile placeholder:text-muted-foreground"
             />
-            <button
-              type="button"
-              onClick={() => onOpenChange(false)}
-              aria-label="Закрыть"
-              className="size-11 rounded-md hover:bg-accent grid place-items-center text-muted-foreground"
-            >
-              <X className="size-4" />
-            </button>
+            {query ? (
+              <button
+                type="button"
+                onClick={() => {
+                  setQuery("");
+                  inputRef.current?.focus();
+                }}
+                aria-label="Очистить"
+                className="size-11 rounded-md hover:bg-accent grid place-items-center text-muted-foreground"
+              >
+                <X className="size-4" />
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => onOpenChange(false)}
+                aria-label="Закрыть"
+                className="size-11 rounded-md hover:bg-accent grid place-items-center text-muted-foreground"
+              >
+                <X className="size-4" />
+              </button>
+            )}
           </div>
 
           <div className="max-h-[60vh] overflow-y-auto">
@@ -193,11 +263,46 @@ export function GlobalSearch({ open, onOpenChange }: { open: boolean; onOpenChan
                 </button>
               </div>
             ) : query.trim().length < 2 ? (
-              <div className="px-4 py-8 text-center text-sm text-muted-foreground">
-                <p>Введите минимум 2 символа</p>
-                <p className="text-xs mt-1 text-muted-foreground/70">
-                  Поиск по местам, фразам, блюдам, тратам и дневнику
-                </p>
+              <div className="px-4 py-6">
+                {recents.length > 0 ? (
+                  <>
+                    <div className="flex items-center justify-between mb-2.5">
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                        <Clock className="size-3" /> Недавние запросы
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          localStorage.removeItem(RECENTS_KEY);
+                          setRecents([]);
+                        }}
+                        className="flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground min-h-8 px-1.5"
+                        aria-label="Очистить историю поиска"
+                      >
+                        <Trash2 className="size-3" /> Очистить
+                      </button>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {recents.map((r) => (
+                        <button
+                          key={r}
+                          type="button"
+                          onClick={() => setQuery(r)}
+                          className="min-h-9 px-3 rounded-full bg-muted hover:bg-accent text-xs font-medium transition-colors"
+                        >
+                          {r}
+                        </button>
+                      ))}
+                    </div>
+                  </>
+                ) : (
+                  <div className="text-center text-sm text-muted-foreground py-2">
+                    <p>Введи минимум 2 символа</p>
+                    <p className="text-xs mt-1 text-muted-foreground/70">
+                      Города, места, фразы, блюда, траты и дневник
+                    </p>
+                  </div>
+                )}
               </div>
             ) : isError ? (
               <div className="px-4 py-8 text-center space-y-3">
@@ -244,9 +349,13 @@ export function GlobalSearch({ open, onOpenChange }: { open: boolean; onOpenChan
                             {r.icon}
                           </div>
                           <div className="min-w-0 flex-1">
-                            <div className="text-sm font-medium truncate">{r.title}</div>
+                            <div className="text-sm font-medium truncate">
+                              <Highlight text={r.title} words={queryWords} />
+                            </div>
                             {r.subtitle && (
-                              <div className="text-xs text-muted-foreground truncate">{r.subtitle}</div>
+                              <div className="text-xs text-muted-foreground truncate">
+                                <Highlight text={r.subtitle} words={queryWords} />
+                              </div>
                             )}
                           </div>
                           {r.meta && (
@@ -276,7 +385,9 @@ export function GlobalSearch({ open, onOpenChange }: { open: boolean; onOpenChan
                 <kbd className="px-1.5 py-0.5 rounded bg-muted text-[9px]">esc</kbd> закрыть
               </span>
             </div>
-            <span className="sm:ml-auto">{results.length} результатов</span>
+            <span className="sm:ml-auto">
+              {query.trim().length < 2 ? "" : `${results.length} результатов`}
+            </span>
           </div>
         </motion.div>
       </motion.div>

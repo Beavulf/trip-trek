@@ -92,7 +92,7 @@ export async function GET(req: NextRequest) {
       status: trip.status,
     },
     participants,
-    members,
+    // members с вложенным user (bcrypt-хеш, email) наружу не отдаём — только participants
     currentDayNumber,
     dayProgress,
     placeProgress,

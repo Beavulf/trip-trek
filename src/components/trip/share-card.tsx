@@ -144,6 +144,21 @@ export function ShareCard({ open, onOpenChange }: { open: boolean; onOpenChange:
     toast.success("Карточка скачана! 📸");
   };
 
+  const canCopyImage = typeof window !== "undefined" && !!navigator.clipboard && "ClipboardItem" in window;
+  const [imageCopied, setImageCopied] = useState(false);
+  const copyImage = async () => {
+    if (!imageUrl) return;
+    try {
+      const blob = await (await fetch(imageUrl)).blob();
+      await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
+      setImageCopied(true);
+      toast.success("Карточка в буфере! 📋");
+      setTimeout(() => setImageCopied(false), 2000);
+    } catch {
+      toast.error("Браузер не разрешает копировать картинки", { description: "Скачай файл и вставь вручную" });
+    }
+  };
+
   const share = async () => {
     if (!imageUrl) return;
     try {
@@ -274,6 +289,19 @@ export function ShareCard({ open, onOpenChange }: { open: boolean; onOpenChange:
                 <Share2 className="size-4" /> Поделиться
               </button>
             </div>
+
+            {/* Копирование картинки — там, где браузер умеет */}
+            {canCopyImage && (
+              <button
+                type="button"
+                onClick={copyImage}
+                disabled={!imageUrl}
+                className="w-full flex items-center justify-center gap-2 min-h-11 rounded-xl border border-border text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-accent disabled:opacity-50 transition-colors"
+              >
+                {imageCopied ? <Check className="size-3.5 text-green-500" /> : <Copy className="size-3.5" />}
+                {imageCopied ? "Скопировано!" : "Копировать картинку в буфер"}
+              </button>
+            )}
 
             {/* Ссылка */}
             <button

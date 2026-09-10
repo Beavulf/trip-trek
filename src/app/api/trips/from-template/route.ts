@@ -10,7 +10,7 @@ export async function POST(req: NextRequest) {
     if (response) return response;
 
     const body = await req.json();
-    const { templateId, displayName, emoji, color, customTitle } = body;
+    const { templateId, displayName, emoji, color, customTitle, startDate: startDateRaw } = body;
     const userId = sessionUser!.id;
 
     if (!templateId) {
@@ -29,7 +29,9 @@ export async function POST(req: NextRequest) {
     const maxTrips = isPremium ? Infinity : 1;
 
     // Create trip with all template data
-    const startDate = new Date();
+    // дата старта от клиента (YYYY-MM-DD), иначе — сегодня
+    const parsed = startDateRaw ? new Date(`${startDateRaw}T12:00:00`) : null;
+    const startDate = parsed && !isNaN(parsed.getTime()) ? parsed : new Date();
     const endDate = new Date(startDate.getTime() + template.totalDays * 24 * 60 * 60 * 1000);
 
     // Лимит + create в одной транзакции (меньше гонки double-click)

@@ -23,6 +23,7 @@ import {
   Plus,
   Moon,
   Sun,
+  Monitor,
   Search,
   ChevronLeft,
   ChevronRight,
@@ -32,6 +33,7 @@ import {
   MoreHorizontal,
 } from "lucide-react";
 import { useState, useEffect, useRef, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { useTheme } from "next-themes";
 import { useAuth as useSession } from "@/hooks/use-auth";
 import { useRouter } from "next/navigation";
@@ -172,7 +174,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             >
               T
             </motion.div>
-            <div className="min-w-0 max-w-[28vw] sm:max-w-none">
+            <div className="hidden sm:block min-w-0 max-w-[28vw] sm:max-w-none">
               <div className="font-bold text-sm leading-tight truncate">TripTrek</div>
               <div className="text-[10px] text-muted-foreground leading-tight truncate">{dayLine}</div>
             </div>
@@ -224,7 +226,7 @@ export function AppShell({ children }: { children: ReactNode }) {
               </HeaderIconBtn>
               <AnimatePresence>
                 {moreOpen && (
-                  <MobileMoreMenu
+                  <MobileMoreSheet
                     isPremium={!!isPremium}
                     onClose={() => setMoreOpen(false)}
                     onPremium={() => setPremiumOpen(true)}
@@ -360,7 +362,8 @@ export function AppShell({ children }: { children: ReactNode }) {
   );
 }
 
-function MobileMoreMenu({
+/** Мобильное меню «Ещё»: bottom sheet с крупными зонами касания и переключателем темы */
+function MobileMoreSheet({
   isPremium,
   onClose,
   onPremium,
@@ -373,53 +376,89 @@ function MobileMoreMenu({
   onInvite: () => void;
   onShare: () => void;
 }) {
-  const { setTheme } = useTheme();
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: -4, scale: 0.96 }}
-      animate={{ opacity: 1, y: 0, scale: 1 }}
-      exit={{ opacity: 0, y: -4, scale: 0.96 }}
-      className="absolute right-0 top-full mt-1.5 w-48 rounded-2xl border border-border bg-card shadow-xl z-50 py-1 overflow-hidden"
-    >
-      <MoreItem
-        icon={<Crown className="size-4" />}
-        label={isPremium ? "Premium ✓" : "Premium"}
-        onClick={() => {
-          onClose();
-          onPremium();
-        }}
-      />
-      <MoreItem
-        icon={<UserPlus className="size-4" />}
-        label="Пригласить"
-        onClick={() => {
-          onClose();
-          onInvite();
-        }}
-      />
-      <MoreItem
-        icon={<Share2 className="size-4" />}
-        label="Карточка"
-        onClick={() => {
-          onClose();
-          onShare();
-        }}
-      />
-      <MoreItem
-        icon={
-          <>
-            <Sun className="size-4 hidden dark:block" />
-            <Moon className="size-4 block dark:hidden" />
-          </>
-        }
-        label="Тема"
-        onClick={() => {
-          const isDark = document.documentElement.classList.contains("dark");
-          setTheme(isDark ? "light" : "dark");
-          onClose();
-        }}
-      />
-    </motion.div>
+  const { theme, setTheme } = useTheme();
+  if (typeof document === "undefined") return null;
+  const themeOptions = [
+    { value: "light", label: "Светлая", icon: Sun },
+    { value: "dark", label: "Тёмная", icon: Moon },
+    { value: "system", label: "Авто", icon: Monitor },
+  ] as const;
+  return createPortal(
+    <AnimatePresence>
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        onClick={onClose}
+        className="fixed inset-0 z-[200] bg-black/60 backdrop-blur-sm flex items-end sm:items-center justify-center sm:p-4"
+      >
+        <motion.div
+          initial={{ y: "100%", opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
+          exit={{ y: "100%", opacity: 0 }}
+          transition={{ type: "spring", stiffness: 320, damping: 32 }}
+          onClick={(e) => e.stopPropagation()}
+          className="bg-card w-full sm:max-w-xs rounded-t-3xl sm:rounded-3xl overflow-hidden pb-[env(safe-area-inset-bottom)]"
+        >
+          <div className="flex justify-center pt-2.5 pb-1">
+            <div className="w-10 h-1 rounded-full bg-muted-foreground/30" />
+          </div>
+
+          <div className="px-4 pt-2 pb-1">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Тема</span>
+            <div className="grid grid-cols-3 gap-1.5 mt-1.5 p-1 rounded-2xl bg-muted">
+              {themeOptions.map((o) => {
+                const Icon = o.icon;
+                const active = (theme ?? "system") === o.value;
+                return (
+                  <button
+                    key={o.value}
+                    type="button"
+                    onClick={() => setTheme(o.value)}
+                    className={cn(
+                      "flex flex-col items-center gap-1 min-h-14 rounded-xl text-[11px] font-semibold transition-all",
+                      active ? "bg-card shadow text-foreground" : "text-muted-foreground hover:text-foreground"
+                    )}
+                    aria-pressed={active}
+                  >
+                    <Icon className="size-4" />
+                    {o.label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="p-2">
+            <MoreItem
+              icon={<UserPlus className="size-4" />}
+              label="Пригласить друзей"
+              onClick={() => {
+                onClose();
+                onInvite();
+              }}
+            />
+            <MoreItem
+              icon={<Share2 className="size-4" />}
+              label="Карточка поездки"
+              onClick={() => {
+                onClose();
+                onShare();
+              }}
+            />
+            <MoreItem
+              icon={<Crown className="size-4" />}
+              label={isPremium ? "Premium активен ✓" : "Premium — больше лимитов"}
+              onClick={() => {
+                onClose();
+                onPremium();
+              }}
+            />
+          </div>
+        </motion.div>
+      </motion.div>
+    </AnimatePresence>,
+    document.body
   );
 }
 

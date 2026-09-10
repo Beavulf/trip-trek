@@ -3,10 +3,12 @@ import { db } from "@/lib/db";
 import { requireTripMember } from "@/lib/api-auth";
 import { currencySymbol } from "@/lib/currencies";
 
-// GET /api/search?q=…&tripId=… — поиск только внутри поездки участника
+// GET /api/search?q=…&tripId=… — поиск только внутри поездки участника.
+// Фильтрация в JS: SQLite LIKE регистронезависим только для ASCII,
+// для кириллицы/иероглифов сравниваем нижние регистры на стороне приложения.
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
-  const q = searchParams.get("q")?.trim().toLowerCase();
+  const q = searchParams.get("q")?.trim().toLowerCase() ?? "";
   const tripId = searchParams.get("tripId");
 
   if (!q || q.length < 2) return NextResponse.json({ results: [] });
@@ -20,31 +22,57 @@ export async function GET(req: NextRequest) {
   const trip = await db.trip.findUnique({ where: { id: tripId }, select: { currency: true } });
   const sym = currencySymbol(trip?.currency);
 
+  // каждое слово запроса должно встретиться хотя бы в одном из полей
+  const words = q.split(/\s+/).filter(Boolean);
+  const matches = (fields: (string | null | undefined)[]) => {
+    const hay = fields.filter(Boolean).map((f) => f!.toLowerCase());
+    return words.every((w) => hay.some((f) => f.includes(w)));
+  };
+
   const results: Array<{
     id: string;
-    type: "place" | "phrase" | "food" | "expense" | "journal";
+    type: "city" | "place" | "phrase" | "food" | "expense" | "journal";
     title: string;
     subtitle: string;
     meta?: string;
     icon: string;
     dayNumber?: number | null;
-    href?: string;
+    cityKey?: string | null;
   }> = [];
 
-  const places = await db.place.findMany({
-    where: {
-      tripId,
-      OR: [
-        { name: { contains: q } },
-        { description: { contains: q } },
-        { address: { contains: q } },
-        { notes: { contains: q } },
-      ],
-    },
-    take: 8,
-  });
+  const [days, places, phrases, foods, expenses, journals] = await Promise.all([
+    db.day.findMany({ where: { tripId }, orderBy: { dayNumber: "asc" } }),
+    db.place.findMany({ where: { tripId } }),
+    db.phrase.findMany({ where: { tripId } }),
+    db.foodItem.findMany({ where: { tripId } }),
+    db.expense.findMany({ where: { tripId } }),
+    db.journalEntry.findMany({ where: { tripId } }),
+  ]);
+
+  const dayById = new Map(days.map((d) => [d.id, d]));
+
+  // Города из дней маршрута — ведут на карту с фильтром по городу
+  const seenCities = new Set<string>();
+  for (const d of days) {
+    if (!d.city || seenCities.has(d.city)) continue;
+    if (matches([d.city, d.title])) {
+      seenCities.add(d.city);
+      results.push({
+        id: `city-${d.cityKey || d.city}`,
+        type: "city",
+        title: d.city,
+        subtitle: `День ${d.dayNumber}${d.title ? ` · ${d.title}` : ""}`,
+        meta: "Город",
+        icon: "🏙️",
+        dayNumber: d.dayNumber,
+        cityKey: d.cityKey,
+      });
+    }
+  }
+
   for (const p of places) {
-    const day = await db.day.findUnique({ where: { id: p.dayId } });
+    const day = dayById.get(p.dayId);
+    if (!matches([p.name, p.description, p.address, p.notes])) continue;
     results.push({
       id: `place-${p.id}`,
       type: "place",
@@ -56,18 +84,8 @@ export async function GET(req: NextRequest) {
     });
   }
 
-  const phrases = await db.phrase.findMany({
-    where: {
-      tripId,
-      OR: [
-        { ru: { contains: q } },
-        { cn: { contains: q } },
-        { pinyin: { contains: q } },
-      ],
-    },
-    take: 8,
-  });
   for (const p of phrases) {
+    if (!matches([p.ru, p.cn, p.pinyin])) continue;
     results.push({
       id: `phrase-${p.id}`,
       type: "phrase",
@@ -78,19 +96,8 @@ export async function GET(req: NextRequest) {
     });
   }
 
-  const foods = await db.foodItem.findMany({
-    where: {
-      tripId,
-      OR: [
-        { name: { contains: q } },
-        { nameCn: { contains: q } },
-        { description: { contains: q } },
-        { place: { contains: q } },
-      ],
-    },
-    take: 8,
-  });
   for (const f of foods) {
+    if (!matches([f.name, f.nameCn, f.description, f.place])) continue;
     results.push({
       id: `food-${f.id}`,
       type: "food",
@@ -101,11 +108,8 @@ export async function GET(req: NextRequest) {
     });
   }
 
-  const expenses = await db.expense.findMany({
-    where: { tripId, description: { contains: q } },
-    take: 5,
-  });
   for (const e of expenses) {
+    if (!matches([e.description, e.category])) continue;
     results.push({
       id: `expense-${e.id}`,
       type: "expense",
@@ -116,12 +120,9 @@ export async function GET(req: NextRequest) {
     });
   }
 
-  const journals = await db.journalEntry.findMany({
-    where: { tripId, content: { contains: q } },
-    take: 5,
-  });
   for (const j of journals) {
-    const day = await db.day.findUnique({ where: { id: j.dayId } });
+    if (!matches([j.content, j.mood])) continue;
+    const day = dayById.get(j.dayId);
     results.push({
       id: `journal-${j.id}`,
       type: "journal",
@@ -133,5 +134,5 @@ export async function GET(req: NextRequest) {
     });
   }
 
-  return NextResponse.json({ results });
+  return NextResponse.json({ results: results.slice(0, 30) });
 }
