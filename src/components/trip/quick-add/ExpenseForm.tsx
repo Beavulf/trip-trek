@@ -1,9 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useTrip, useAddExpense, useCurrency } from "@/hooks/use-trip";
+import { useTrip, useAddExpense, useCurrency, useCurrentTripId } from "@/hooks/use-trip";
 import { EXPENSE_CATEGORIES } from "@/lib/types";
-import { CURRENCIES, currencySymbol } from "@/lib/currencies";
+import { currencySelectOptions, currencySymbol } from "@/lib/currencies";
+import { getSavedCurrency, saveCurrency } from "@/lib/currency-pref";
 import { Check, Loader2, Users } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -16,13 +17,16 @@ interface ExpenseFormProps {
 
 export function ExpenseForm({ userId, onDone }: ExpenseFormProps) {
   const { data: trip } = useTrip();
+  const tripId = useCurrentTripId();
   const addExpense = useAddExpense();
   const { data: currency } = useCurrency();
+  const tripCurrency = trip?.settings?.currency;
   const [amount, setAmount] = useState("");
   const [currencyCode, setCurrencyCode] = useState(() => {
     if (typeof window === "undefined") return "USD";
-    return localStorage.getItem("triptrek-currency") || trip?.settings?.currency || "USD";
+    return getSavedCurrency(tripId) || "USD";
   });
+  const [currencyTouched, setCurrencyTouched] = useState(false);
   const [category, setCategory] = useState("food");
   const [description, setDescription] = useState("");
   const [dayId, setDayId] = useState("");
@@ -37,6 +41,13 @@ export function ExpenseForm({ userId, onDone }: ExpenseFormProps) {
       "";
     setDayId(today);
   }, [trip, dayId]);
+
+  // Дефолт — валюта поездки, пока пользователь не выбрал свою
+  useEffect(() => {
+    if (currencyTouched || !tripCurrency) return;
+    if (getSavedCurrency(tripId)) return;
+    setCurrencyCode(tripCurrency);
+  }, [tripCurrency, tripId, currencyTouched]);
 
   const usdRate = currency?.rates?.[currencyCode] || 1;
   const amountNum = parseFloat(amount) || 0;
@@ -80,7 +91,7 @@ export function ExpenseForm({ userId, onDone }: ExpenseFormProps) {
         excludeSelf,
       });
 
-      localStorage.setItem("triptrek-currency", currencyCode);
+      saveCurrency(tripId, currencyCode);
 
       if (splitWithArr.length > 0) {
         const splitCount = excludeSelf ? splitWithArr.length : splitWithArr.length + 1;
@@ -148,10 +159,13 @@ export function ExpenseForm({ userId, onDone }: ExpenseFormProps) {
           <label className="text-xs text-muted-foreground mb-1 block">Валюта</label>
           <select
             value={currencyCode}
-            onChange={(e) => setCurrencyCode(e.target.value)}
+            onChange={(e) => {
+              setCurrencyCode(e.target.value);
+              setCurrencyTouched(true);
+            }}
             className="w-full rounded-lg border border-input bg-background px-2 py-2.5 text-base input-mobile max-w-[5.5rem]"
           >
-            {CURRENCIES.map((c) => (
+            {currencySelectOptions(tripCurrency).map((c) => (
               <option key={c.code} value={c.code}>
                 {c.flag} {c.code}
               </option>
