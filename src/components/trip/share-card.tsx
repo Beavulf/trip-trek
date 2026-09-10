@@ -20,6 +20,7 @@ export function ShareCard({ open, onOpenChange }: { open: boolean; onOpenChange:
   const [generating, setGenerating] = useState(false);
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [imageCopied, setImageCopied] = useState(false);
 
   const variant = CARD_VARIANTS.find((v) => v.id === variantId) ?? CARD_VARIANTS[0];
 
@@ -145,7 +146,6 @@ export function ShareCard({ open, onOpenChange }: { open: boolean; onOpenChange:
   };
 
   const canCopyImage = typeof window !== "undefined" && !!navigator.clipboard && "ClipboardItem" in window;
-  const [imageCopied, setImageCopied] = useState(false);
   const copyImage = async () => {
     if (!imageUrl) return;
     try {

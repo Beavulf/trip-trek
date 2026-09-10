@@ -71,7 +71,6 @@ export function AppShell({ children }: { children: ReactNode }) {
   const [shareOpen, setShareOpen] = useState(false);
   const [premiumOpen, setPremiumOpen] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
-  const moreRef = useRef<HTMLDivElement>(null);
   const { data: session } = useSession();
   const isPremium = (session?.user as { plan?: string } | undefined)?.plan === "premium";
   const { activeTab, setActiveTab } = useTripStore();
@@ -139,17 +138,6 @@ export function AppShell({ children }: { children: ReactNode }) {
     return () => window.removeEventListener("triptrek-open-invite", openInvite);
   }, []);
 
-  useEffect(() => {
-    if (!moreOpen) return;
-    const onDoc = (e: MouseEvent) => {
-      if (moreRef.current && !moreRef.current.contains(e.target as Node)) {
-        setMoreOpen(false);
-      }
-    };
-    document.addEventListener("mousedown", onDoc);
-    return () => document.removeEventListener("mousedown", onDoc);
-  }, [moreOpen]);
-
   const dayLine = trip
     ? `День ${trip.currentDayNumber}/${trip.settings.totalDays}${trip.days.find((d) => d.dayNumber === trip.currentDayNumber)?.city ? ` · ${trip.days.find((d) => d.dayNumber === trip.currentDayNumber)?.city}` : ""}`
     : "загрузка…";
@@ -215,7 +203,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             <HeaderIconBtn onClick={() => setSearchOpen(true)} label="Поиск" large>
               <Search className="size-5" />
             </HeaderIconBtn>
-            <div className="relative" ref={moreRef}>
+            <div className="relative">
               <HeaderIconBtn
                 onClick={() => setMoreOpen((v) => !v)}
                 label="Ещё"
@@ -416,7 +404,7 @@ function MobileMoreSheet({
                     type="button"
                     onClick={() => setTheme(o.value)}
                     className={cn(
-                      "flex flex-col items-center gap-1 min-h-14 rounded-xl text-[11px] font-semibold transition-all",
+                      "flex flex-col items-center justify-center gap-1 min-h-14 rounded-xl text-[11px] font-semibold transition-all",
                       active ? "bg-card shadow text-foreground" : "text-muted-foreground hover:text-foreground"
                     )}
                     aria-pressed={active}
