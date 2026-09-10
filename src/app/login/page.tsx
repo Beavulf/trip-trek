@@ -266,28 +266,30 @@ function LoginPageContent() {
               : "Уже есть аккаунт? Нажми «Вход»"}
           </p>
 
-          {/* Демо-аккаунты */}
-          <div className="mt-3 pt-3 border-t border-border">
-            <p className="text-[10px] text-muted-foreground text-center mb-2">Демо-аккаунты:</p>
-            <div className="grid grid-cols-3 gap-1.5">
-              {[
-                { name: "Ты", email: "you@triptrek.com", emoji: "🦊", color: "#f97316" },
-                { name: "Лёха", email: "leha@triptrek.com", emoji: "🐻", color: "#06b6d4" },
-                { name: "Дэн", email: "den@triptrek.com", emoji: "🐼", color: "#8b5cf6" },
-              ].map((acc) => (
-                <button
-                  key={acc.email}
-                  onClick={() => { setEmail(acc.email); setPassword("1234"); setMode("login"); }}
-                  className="flex flex-col items-center gap-1 p-2 rounded-lg hover:bg-accent transition-colors"
-                >
-                  <div className="size-8 rounded-full grid place-items-center text-sm" style={{ background: acc.color }}>
-                    {acc.emoji}
-                  </div>
-                  <span className="text-[10px] font-medium">{acc.name}</span>
-                </button>
-              ))}
+          {/* Демо-аккаунты — только в dev: в проде известных логинов быть не должно */}
+          {process.env.NODE_ENV !== "production" && (
+            <div className="mt-3 pt-3 border-t border-border">
+              <p className="text-[10px] text-muted-foreground text-center mb-2">Демо-аккаунты:</p>
+              <div className="grid grid-cols-3 gap-1.5">
+                {[
+                  { name: "Ты", email: "you@triptrek.com", emoji: "🦊", color: "#f97316" },
+                  { name: "Лёха", email: "leha@triptrek.com", emoji: "🐻", color: "#06b6d4" },
+                  { name: "Дэн", email: "den@triptrek.com", emoji: "🐼", color: "#8b5cf6" },
+                ].map((acc) => (
+                  <button
+                    key={acc.email}
+                    onClick={() => { setEmail(acc.email); setPassword("1234"); setMode("login"); }}
+                    className="flex flex-col items-center gap-1 p-2 rounded-lg hover:bg-accent transition-colors"
+                  >
+                    <div className="size-8 rounded-full grid place-items-center text-sm" style={{ background: acc.color }}>
+                      {acc.emoji}
+                    </div>
+                    <span className="text-[10px] font-medium">{acc.name}</span>
+                  </button>
+                ))}
+              </div>
             </div>
-          </div>
+          )}
         </div>
       </motion.div>
     </div>
