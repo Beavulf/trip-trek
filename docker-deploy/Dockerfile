@@ -19,7 +19,9 @@ ENV NEXT_TELEMETRY_DISABLED=1
 # Для generate достаточно любого валидного URL — на билд-стадии БД не нужна
 ENV DATABASE_URL=postgresql://build:build@localhost:5432/build
 RUN bunx prisma generate
-RUN bunx next build
+# --webpack: turbopack-билд падает под Linux (resolve 'tw-animate-css', Next 16),
+# а server.ts всё равно запускает runtime на webpack (webpack: true) — собираем тем же
+RUN bunx next build --webpack
 
 FROM oven/bun:1.3.14-debian AS runner
 WORKDIR /app
