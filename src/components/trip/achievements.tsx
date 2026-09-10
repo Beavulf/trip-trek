@@ -1,6 +1,6 @@
 "use client";
 
-import { useTrip, useExpenses, useFoods, useChecklist, useCurrentTripId } from "@/hooks/use-trip";
+import { useTrip, useExpenses, useFoods, useChecklist, useCurrentTripId, useCurrency } from "@/hooks/use-trip";
 import { motion } from "framer-motion";
 import { Trophy, Target, Share2, Loader2, Sparkles, ArrowRight, CheckCircle2 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -13,6 +13,7 @@ import {
   describeBadge,
   closestBadge,
   rankFor,
+  BIG_SPENDER_TARGET_USD,
   type Badge,
 } from "@/lib/achievements";
 import { MobileBottomSheet } from "./mobile-bottom-sheet";
@@ -55,7 +56,7 @@ function unitWord(unit: [string, string, string], n: number): string {
 /** «Ещё 2 фото — и «Фотограф» ваш» */
 function remainingLine(b: Badge, sym: string): string {
   const remaining = b.target - b.current;
-  if (b.id === "big-spender") return `Ещё ${sym}${remaining} — и «${b.title}» ваш`;
+  if (b.id === "big-spender") return `Ещё ${sym}${remaining.toLocaleString("ru-RU")} — и «${b.title}» ваш`;
   if (!b.unit) return describeBadge(b, sym);
   return `Ещё ${remaining} ${unitWord(b.unit, remaining)} — и «${b.title}» ваш`;
 }
@@ -115,6 +116,7 @@ export function Achievements() {
   const { data: expenses, error: expensesError, isLoading: expensesLoading, refetch: refetchExpenses } = useExpenses();
   const { data: foods, isLoading: foodsLoading } = useFoods();
   const { data: checklist, isLoading: checklistLoading } = useChecklist();
+  const { data: fx } = useCurrency();
 
   const [filter, setFilter] = useState<Filter>("all");
   const [sheetId, setSheetId] = useState<string | null>(null);
@@ -129,13 +131,18 @@ export function Achievements() {
     const checklistDone = checklist?.filter((i) => i.done).length ?? 0;
     const checklistTotal = checklist?.length ?? 0;
     const realExpenses = expenses?.filter((e) => e.category !== "settlement") ?? [];
-    const totalSpent = realExpenses.reduce((s, e) => s + e.amount, 0);
+    const totalSpentUsd = realExpenses.reduce((s, e) => s + e.amount, 0);
+    // «Шопоголик» считается и показывается в валюте поездки (курс — за 1 USD)
+    const rate = fx?.rates?.[trip.settings.currency];
+    const totalSpent = rate && rate > 0 ? totalSpentUsd * rate : totalSpentUsd;
+    const spendTarget = rate && rate > 0 ? Math.round(BIG_SPENDER_TARGET_USD * rate) : BIG_SPENDER_TARGET_USD;
     return computeBadges({
       visitedPlaces: trip.visitedPlaces,
       totalPlaces: trip.totalPlaces,
       totalPhotos: trip.totalPhotos,
       totalJournals: trip.totalJournals,
       totalSpent,
+      spendTarget,
       triedFoods,
       totalFoods,
       currentDay: trip.currentDayNumber,
@@ -145,7 +152,7 @@ export function Achievements() {
       currency: trip.settings.currency,
       tripStatus: trip.trip?.status ?? "planning",
     });
-  }, [trip, expenses, foods, checklist]);
+  }, [trip, expenses, foods, checklist, fx]);
 
   const sym = currencySymbol(trip?.settings.currency ?? "USD");
   const { unlocked, locked } = useMemo(() => split(badges), [badges]);

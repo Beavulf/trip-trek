@@ -7,12 +7,17 @@ import type { LucideIcon } from "lucide-react";
  * Бейджи общие для всей компании — считаются по данным поездки на клиенте.
  */
 
+/** Цель «Шопоголика» в канонических USD; на UI конвертируется в валюту поездки */
+export const BIG_SPENDER_TARGET_USD = 500;
+
 export interface AchievementContext {
   visitedPlaces: number;
   totalPlaces: number;
   totalPhotos: number;
   totalJournals: number;
   totalSpent: number;
+  /** Цель денежного бейджа в той же валюте, что и totalSpent */
+  spendTarget: number;
   triedFoods: number;
   totalFoods: number;
   currentDay: number;
@@ -185,12 +190,12 @@ export const ACHIEVEMENTS: AchievementDef[] = [
   {
     id: "big-spender",
     title: "Шопоголик",
-    description: "Потратить 500",
+    description: "Совместные траты достигли цели",
     icon: Wallet,
     color: "#84cc16",
     emoji: "💸",
-    check: (c) => c.totalSpent >= 500,
-    progress: (c) => ({ current: Math.min(Math.round(c.totalSpent), 500), target: 500 }),
+    check: (c) => c.totalSpent >= c.spendTarget,
+    progress: (c) => ({ current: Math.min(Math.round(c.totalSpent), c.spendTarget), target: c.spendTarget }),
     cta: { tab: "budget", label: "Открыть бюджет" },
   },
 ];
@@ -211,9 +216,11 @@ export function computeBadges(ctx: AchievementContext): Badge[] {
   });
 }
 
-/** Описание с валютой для денежных бейджей */
-export function describeBadge(a: AchievementDef, sym: string): string {
-  return a.id === "big-spender" ? `Потратить ${sym}500` : a.description;
+/** Описание с валютой для денежных бейджей (badge.target — уже в валюте поездки) */
+export function describeBadge(a: AchievementDef & { target?: number }, sym: string): string {
+  if (a.id !== "big-spender") return a.description;
+  const target = a.target && a.target > 0 ? a.target : BIG_SPENDER_TARGET_USD;
+  return `Потратить ${sym}${target.toLocaleString("ru-RU")}`;
 }
 
 /** Прожектор: ближайший незакрытый бейдж (по % прогресса, при равенстве — с меньшим остатком) */
