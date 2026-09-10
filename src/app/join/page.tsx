@@ -131,7 +131,7 @@ function JoinPageContent() {
                   setPreview(null);
                 }}
                 onKeyDown={(e) => e.key === "Enter" && lookupTrip(code)}
-                placeholder="Например, CHINA2024"
+                placeholder="Например, ABCD1234"
                 autoFocus
                 className="w-full rounded-xl border border-input bg-background px-3 py-3 text-base uppercase tracking-wider font-mono input-mobile"
               />
