@@ -13,7 +13,7 @@ import sharp from "sharp";
 //  - имя файла — crypto.randomUUID(), предсказать/подобрать нельзя;
 //  - URL immutable (кэшируются год в static-uploads.ts).
 
-export type StorageKind = "photo" | "avatar" | "food";
+export type StorageKind = "photo" | "avatar" | "food" | "feedback";
 
 export interface PutInput {
   data: Buffer;
@@ -42,6 +42,7 @@ const MAX_BYTES: Record<StorageKind, number> = {
   photo: 20 * 1024 * 1024,
   avatar: 5 * 1024 * 1024,
   food: 10 * 1024 * 1024,
+  feedback: 5 * 1024 * 1024,
 };
 
 const UPLOADS_ROOT = () =>
@@ -89,6 +90,14 @@ async function toJpeg(data: Buffer, kind: StorageKind): Promise<{ full: Buffer; 
         .toBuffer();
       return { full };
     }
+    if (kind === "feedback") {
+      // скриншоты баг-репортов: без миниатюры, скриншоты читаемы и в 1280px
+      const full = await base
+        .resize(1280, 1280, { fit: "inside", withoutEnlargement: true })
+        .jpeg({ quality: 80, mozjpeg: true })
+        .toBuffer();
+      return { full };
+    }
     // photo: полноразмерная версия + миниатюра
     const full = await base
       .clone()
@@ -127,7 +136,7 @@ export async function put(input: PutInput): Promise<PutResult> {
   const { full, thumb } = await toJpeg(data, kind);
 
   const root = UPLOADS_ROOT();
-  const relDir = kind === "avatar" ? "avatars" : ".";
+  const relDir = kind === "avatar" ? "avatars" : kind === "feedback" ? "feedback" : ".";
   const dir = relDir === "." ? root : path.join(root, relDir);
   await mkdir(dir, { recursive: true });
 
@@ -139,6 +148,8 @@ export async function put(input: PutInput): Promise<PutResult> {
     thumbName = `${uuid}-thumb.jpg`;
   } else if (kind === "avatar") {
     fileName = `avatar-${uuid}.jpg`;
+  } else if (kind === "feedback") {
+    fileName = `feedback-${uuid}.jpg`;
   } else {
     fileName = `food-${uuid}.jpg`;
   }
@@ -148,7 +159,7 @@ export async function put(input: PutInput): Promise<PutResult> {
     await writeFile(path.join(dir, thumbName), thumb);
   }
 
-  const urlPrefix = kind === "avatar" ? "/uploads/avatars" : "/uploads";
+  const urlPrefix = kind === "avatar" ? "/uploads/avatars" : kind === "feedback" ? "/uploads/feedback" : "/uploads";
   const result: PutResult = { url: `${urlPrefix}/${fileName}` };
   if (thumb && thumbName) result.thumbUrl = `${urlPrefix}/${thumbName}`;
   return result;

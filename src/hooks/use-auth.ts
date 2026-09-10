@@ -9,7 +9,11 @@ interface AuthUser {
   email: string;
   emoji?: string;
   color?: string;
+  avatarUrl?: string | null;
   plan?: string;
+  planExpiry?: string | null;
+  isPremium?: boolean;
+  isAdmin?: boolean;
 }
 
 interface AuthSession {

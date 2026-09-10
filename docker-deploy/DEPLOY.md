@@ -140,6 +140,10 @@ curl -s https://<домен>/api/health                                # db up/d
 - Забыли NEXTAUTH_SECRET → app не стартует с явным FATAL в логах.
 - Миграция не применяется → `docker compose logs app | grep prisma`, чинить
   migration, повторный `up -d` перезапустит entrypoint.
+- Назначить админа (доступ к `/admin`): зарегистрироваться в приложении, затем
+  `docker compose exec app bun prisma/set-admin.mjs <email>` (локально:
+  `npm run db:admin -- <email>`). Роль проверяется на сервере при каждом запросе —
+  повторный вход не нужен.
 
 ## 6. Известные ограничения (осознанные решения)
 

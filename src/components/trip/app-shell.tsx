@@ -31,6 +31,8 @@ import {
   Share2,
   Crown,
   MoreHorizontal,
+  Bug,
+  Shield,
 } from "lucide-react";
 import { useState, useEffect, useRef, type ReactNode } from "react";
 import { createPortal } from "react-dom";
@@ -45,6 +47,8 @@ import { PremiumModal } from "./premium-modal";
 import { PWAUpdateNotification } from "./pwa-update";
 import { InviteFriends } from "./invite-friends";
 import { ShareCard } from "./share-card";
+import { BugReportSheet } from "./bug-report-sheet";
+import { useAdminStats } from "@/hooks/use-admin-stats";
 
 const TABS = [
   { key: "dashboard", label: "Обзор", icon: LayoutDashboard },
@@ -65,14 +69,20 @@ const TABS = [
 ] as const;
 
 export function AppShell({ children }: { children: ReactNode }) {
+  const router = useRouter();
   const [quickOpen, setQuickOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [inviteOpen, setInviteOpen] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
   const [premiumOpen, setPremiumOpen] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
+  const [bugOpen, setBugOpen] = useState(false);
   const { data: session } = useSession();
   const isPremium = (session?.user as { plan?: string } | undefined)?.plan === "premium";
+  const isAdmin = session?.user?.isAdmin === true;
+  // Бейдж новых отзывов для админа (неадминам эндпоинт недоступен — не опрашиваем)
+  const { data: adminStats } = useAdminStats(!!isAdmin);
+  const feedbackNew = isAdmin ? adminStats?.feedback.new ?? 0 : 0;
   const { activeTab, setActiveTab } = useTripStore();
   const { data: trip } = useTrip();
   const tabScrollRef = useRef<HTMLDivElement>(null);
@@ -194,6 +204,11 @@ export function AppShell({ children }: { children: ReactNode }) {
             <HeaderIconBtn onClick={() => setSearchOpen(true)} label="Поиск">
               <Search className="size-4" />
             </HeaderIconBtn>
+            {isAdmin && (
+              <HeaderIconBtn onClick={() => router.push("/admin")} label="Админ-панель">
+                <Shield className="size-4" />
+              </HeaderIconBtn>
+            )}
             <ThemeToggle />
             <ParticipantAvatars />
           </div>
@@ -212,14 +227,24 @@ export function AppShell({ children }: { children: ReactNode }) {
               >
                 <MoreHorizontal className="size-5" />
               </HeaderIconBtn>
+              {feedbackNew > 0 && (
+                <span
+                  className="absolute -top-0.5 -right-0.5 size-2.5 rounded-full bg-amber-500 ring-2 ring-background pointer-events-none"
+                  aria-hidden
+                />
+              )}
               <AnimatePresence>
                 {moreOpen && (
                   <MobileMoreSheet
                     isPremium={!!isPremium}
+                    isAdmin={isAdmin}
+                    feedbackNew={feedbackNew}
                     onClose={() => setMoreOpen(false)}
                     onPremium={() => setPremiumOpen(true)}
                     onInvite={() => setInviteOpen(true)}
                     onShare={() => setShareOpen(true)}
+                    onReportBug={() => setBugOpen(true)}
+                    onAdmin={() => router.push("/admin")}
                   />
                 )}
               </AnimatePresence>
@@ -345,6 +370,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       <InviteFriends open={inviteOpen} onOpenChange={setInviteOpen} />
       <ShareCard open={shareOpen} onOpenChange={setShareOpen} />
       <PremiumModal open={premiumOpen} onOpenChange={setPremiumOpen} />
+      <BugReportSheet open={bugOpen} onOpenChange={setBugOpen} />
       <PWAUpdateNotification />
     </div>
   );
@@ -353,16 +379,24 @@ export function AppShell({ children }: { children: ReactNode }) {
 /** Мобильное меню «Ещё»: bottom sheet с крупными зонами касания и переключателем темы */
 function MobileMoreSheet({
   isPremium,
+  isAdmin,
+  feedbackNew,
   onClose,
   onPremium,
   onInvite,
   onShare,
+  onReportBug,
+  onAdmin,
 }: {
   isPremium: boolean;
+  isAdmin: boolean;
+  feedbackNew: number;
   onClose: () => void;
   onPremium: () => void;
   onInvite: () => void;
   onShare: () => void;
+  onReportBug: () => void;
+  onAdmin: () => void;
 }) {
   const { theme, setTheme } = useTheme();
   if (typeof document === "undefined") return null;
@@ -418,6 +452,24 @@ function MobileMoreSheet({
           </div>
 
           <div className="p-2">
+            <MoreItem
+              icon={<Bug className="size-4" />}
+              label="Сообщить о проблеме"
+              onClick={() => {
+                onClose();
+                onReportBug();
+              }}
+            />
+            {isAdmin && (
+              <MoreItem
+                icon={<Shield className="size-4" />}
+                label={feedbackNew > 0 ? `Админ-панель · ${feedbackNew} нов.` : "Админ-панель"}
+                onClick={() => {
+                  onClose();
+                  onAdmin();
+                }}
+              />
+            )}
             <MoreItem
               icon={<UserPlus className="size-4" />}
               label="Пригласить друзей"

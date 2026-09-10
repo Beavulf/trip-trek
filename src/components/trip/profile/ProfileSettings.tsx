@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
-import { ArrowRight, Bell, Crown, Monitor, Moon, Settings, Sun } from "lucide-react";
+import { ArrowRight, Bell, Bug, Crown, Monitor, Moon, Settings, Shield, Sun } from "lucide-react";
 import { useTheme } from "next-themes";
 import { cn } from "@/lib/utils";
 import type { UserProfile } from "./types";
@@ -11,6 +12,9 @@ import { PushToggle } from "./PushToggle";
 interface ProfileSettingsProps {
   profile: UserProfile;
   setPremiumOpen: (v: boolean) => void;
+  onReportBug: () => void;
+  isAdmin: boolean;
+  feedbackNew: number;
 }
 
 const THEME_OPTIONS = [
@@ -19,8 +23,9 @@ const THEME_OPTIONS = [
   { value: "dark", icon: Moon, label: "Тёмная" },
 ] as const;
 
-export function ProfileSettings({ profile, setPremiumOpen }: ProfileSettingsProps) {
+export function ProfileSettings({ profile, setPremiumOpen, onReportBug, isAdmin, feedbackNew }: ProfileSettingsProps) {
   const { theme, setTheme } = useTheme();
+  const router = useRouter();
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
 
@@ -114,6 +119,45 @@ export function ProfileSettings({ profile, setPremiumOpen }: ProfileSettingsProp
           </div>
           <PushToggle />
         </div>
+
+        {/* Сообщить о проблеме */}
+        <button
+          type="button"
+          onClick={onReportBug}
+          className="w-full flex items-center gap-3 p-3.5 text-left hover:bg-accent/50 transition-colors"
+        >
+          <div className="size-9 rounded-xl bg-secondary grid place-items-center shrink-0">
+            <Bug className="size-4.5 text-muted-foreground" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="text-sm font-medium">Сообщить о проблеме</div>
+            <div className="text-xs text-muted-foreground">Баг, идея или вопрос</div>
+          </div>
+          <ArrowRight className="size-4 text-muted-foreground shrink-0" />
+        </button>
+
+        {/* Админ-панель — только для роли admin */}
+        {isAdmin && (
+          <button
+            type="button"
+            onClick={() => router.push("/admin")}
+            className="w-full flex items-center gap-3 p-3.5 text-left hover:bg-accent/50 transition-colors"
+          >
+            <div className="size-9 rounded-xl bg-secondary grid place-items-center shrink-0">
+              <Shield className="size-4.5 text-muted-foreground" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="text-sm font-medium">Админ-панель</div>
+              <div className="text-xs text-muted-foreground">Юзеры, поездки, отзывы</div>
+            </div>
+            {feedbackNew > 0 && (
+              <span className="min-w-5 h-5 px-1.5 rounded-full bg-amber-500/20 text-amber-500 text-[10px] font-bold grid place-items-center shrink-0">
+                {feedbackNew}
+              </span>
+            )}
+            <ArrowRight className="size-4 text-muted-foreground shrink-0" />
+          </button>
+        )}
 
         {/* Версия */}
         <div className="flex items-center gap-3 p-3.5">

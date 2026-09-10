@@ -21,6 +21,7 @@ model User {
   avatarUrl  String? // фото пользователя (загруженное)
   plan       String    @default("free") // free / premium
   planExpiry DateTime? // для премиума
+  role       String    @default("user") // user / admin
   createdAt  DateTime  @default(now())
 
   memberships TripMember[]
@@ -29,6 +30,7 @@ model User {
   journals    JournalEntry[]
   messages    BoardMessage[]
   pushSubs    PushSubscription[]
+  feedback    Feedback[]
 }
 
 // === Push подписка (Web Push для уведомлений) ===
@@ -190,8 +192,8 @@ model Expense {
   originalAmount   Float?
   originalCurrency String?
   // settlementKey — детерминированный ключ для идемпотентности переводов (P0 #3).
-  // Формат: "settle-{fromId}-{toId}-{YYYY-MM-DDTHH}". В течение часа повторный клик
-  // даёт тот же ключ → второй клик не дублирует расчёт, баланс не ломается.
+  // Формат: "settle-{fromId}-{toId}-{сумма-в-центах}-{timestamp}" — уникален на каждый
+  // факт перевода, поэтому одна пара может гасить одинаковые по сумме долги многократно.
   settlementKey    String?  @unique
   createdAt        DateTime @default(now())
 
@@ -326,4 +328,28 @@ model BudgetPlan {
   trip Trip @relation(fields: [tripId], references: [id], onDelete: Cascade)
 
   @@unique([tripId, category])
+}
+
+// === Обратная связь: баг-репорты, идеи и вопросы из приложения ===
+model Feedback {
+  id            String    @id @default(cuid())
+  userId        String? // автор; переживает удаление аккаунта (SetNull)
+  type          String    @default("bug") // bug / idea / question
+  message       String
+  screenshotUrl String? // /uploads/feedback/*.jpg через единый storage-пайплайн
+  status        String    @default("new") // new / in_progress / resolved
+  adminNote     String? // внутренняя заметка админа
+  // Автоконтекст: страница, откуда отправили, и активная поездка (без FK —
+  // поездку могут удалить, репорт остаётся)
+  pageUrl       String?
+  tripId        String?
+  userAgent     String? // заполняет сервер из заголовка, клиенту не доверяем
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  resolvedAt    DateTime?
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([status, createdAt])
+  @@index([userId])
 }

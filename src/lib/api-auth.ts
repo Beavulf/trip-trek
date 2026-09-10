@@ -148,3 +148,29 @@ export async function requireTripOwner(
 
   return result;
 }
+
+/**
+ * Require authenticated admin (User.role === "admin").
+ * Роль всегда читается из БД, а не из JWT: существующие токены живут 30 дней
+ * и поля role не содержат — проверка по токену оставила бы админом пониженного.
+ */
+export async function requireAdmin(req: NextRequest): Promise<
+  { user: AuthUser; response: null } | { user: null; response: NextResponse }
+> {
+  const { user, response } = await requireUser(req);
+  if (response) return { user: null, response };
+
+  const row = await db.user.findUnique({
+    where: { id: user!.id },
+    select: { role: true },
+  });
+
+  if (row?.role !== "admin") {
+    return {
+      user: null,
+      response: NextResponse.json({ error: "Forbidden" }, { status: 403 }),
+    };
+  }
+
+  return { user: user!, response: null };
+}

@@ -27,6 +27,8 @@ import { AchievementsGrid } from "./AchievementsGrid";
 import { TripsList } from "./TripsList";
 import { ProfileSettings } from "./ProfileSettings";
 import { EditProfileSheet } from "./EditProfileSheet";
+import { BugReportSheet } from "@/components/trip/bug-report-sheet";
+import { useAdminStats } from "@/hooks/use-admin-stats";
 
 export function ProfilePage() {
   const router = useRouter();
@@ -34,12 +36,15 @@ export function ProfilePage() {
   const qc = useQueryClient();
   const [premiumOpen, setPremiumOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
+  const [bugOpen, setBugOpen] = useState(false);
   const [signOutOpen, setSignOutOpen] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const avatarInputRef = useRef<HTMLInputElement>(null);
 
   const userId = (session?.user as { id?: string } | undefined)?.id || "";
+  const isAdmin = session?.user?.isAdmin === true;
+  const { data: adminStats } = useAdminStats(status === "authenticated" && isAdmin);
 
   const { data: profile, isLoading, isError, refetch } = useQuery<UserProfile>({
     queryKey: ["user-profile", userId],
@@ -179,7 +184,13 @@ export function ProfilePage() {
               }}
             />
 
-            <ProfileSettings profile={profile} setPremiumOpen={setPremiumOpen} />
+            <ProfileSettings
+              profile={profile}
+              setPremiumOpen={setPremiumOpen}
+              onReportBug={() => setBugOpen(true)}
+              isAdmin={isAdmin}
+              feedbackNew={adminStats?.feedback.new ?? 0}
+            />
 
             <motion.button
               type="button"
@@ -211,6 +222,9 @@ export function ProfilePage() {
           onRemoveAvatar={removeAvatar}
         />
       )}
+
+      {/* Сообщить о проблеме */}
+      <BugReportSheet open={bugOpen} onOpenChange={setBugOpen} />
 
       {/* Подтверждение выхода */}
       <AlertDialog open={signOutOpen} onOpenChange={setSignOutOpen}>
