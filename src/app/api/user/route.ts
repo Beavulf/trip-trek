@@ -163,7 +163,9 @@ export async function PATCH(req: NextRequest) {
   if (typeof name === "string" && name.trim()) data.name = name.trim();
   if (typeof emoji === "string") data.emoji = emoji;
   if (typeof color === "string" && color.match(/^#[0-9a-fA-F]{6}$/)) data.color = color;
+  // avatarUrl: строка — установить фото, null — убрать фото (вернуться к эмодзи)
   if (typeof avatarUrl === "string") data.avatarUrl = avatarUrl;
+  if (avatarUrl === null) data.avatarUrl = null;
 
   if (Object.keys(data).length === 0) {
     return NextResponse.json({ error: "no fields to update" }, { status: 400 });

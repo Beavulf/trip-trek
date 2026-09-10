@@ -5,38 +5,58 @@ import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth as useSession } from "@/hooks/use-auth";
-import { Loader2, ChevronLeft, LogOut } from "lucide-react";
+import { ChevronLeft, Loader2, LogOut } from "lucide-react";
 import { toast } from "sonner";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { PremiumModal } from "@/components/trip/premium-modal";
-import { getTripId, setTripId } from "@/hooks/use-trip";
+import { setTripId } from "@/hooks/use-trip";
 import { useTripStore } from "@/lib/trip-store";
 import type { UserProfile } from "./types";
 import { ProfileHeader, PremiumActiveCard, PremiumCTA } from "./ProfileHeader";
-import { ProfileStats, FreemiumLimits } from "./ProfileStats";
+import { ProfileStats } from "./ProfileStats";
 import { AchievementsGrid } from "./AchievementsGrid";
 import { TripsList } from "./TripsList";
 import { ProfileSettings } from "./ProfileSettings";
+import { EditProfileSheet } from "./EditProfileSheet";
 
 export function ProfilePage() {
   const router = useRouter();
   const { data: session, status } = useSession();
   const qc = useQueryClient();
   const [premiumOpen, setPremiumOpen] = useState(false);
-  const [editing, setEditing] = useState(false);
-  const [name, setName] = useState("");
-  const [emoji, setEmoji] = useState("👤");
-  const [color, setColor] = useState("#94a3b8");
-  const [saving, setSaving] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
+  const [signOutOpen, setSignOutOpen] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
-  const [selectedAchievement, setSelectedAchievement] = useState<string | null>(null);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const avatarInputRef = useRef<HTMLInputElement>(null);
 
   const userId = (session?.user as { id?: string } | undefined)?.id || "";
 
-  const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file || !userId) return;
+  const { data: profile, isLoading, isError, refetch } = useQuery<UserProfile>({
+    queryKey: ["user-profile", userId],
+    queryFn: async () => {
+      const r = await fetch("/api/user");
+      if (!r.ok) throw new Error("fetch profile");
+      return r.json();
+    },
+    enabled: !!userId,
+  });
+
+  useEffect(() => {
+    if (status === "unauthenticated") router.push("/login");
+  }, [status, router]);
+
+  const uploadAvatar = async (file: File) => {
+    if (!userId) return;
     setUploadingAvatar(true);
     try {
       const fd = new FormData();
@@ -53,45 +73,25 @@ export function ProfilePage() {
     }
   };
 
-  const { data: profile, isLoading, isError, refetch } = useQuery<UserProfile>({
-    queryKey: ["user-profile", userId],
-    queryFn: async () => {
-      const r = await fetch("/api/user");
-      if (!r.ok) throw new Error("fetch profile");
-      return r.json();
-    },
-    enabled: !!userId,
-  });
+  const handleAvatarFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) void uploadAvatar(file);
+    e.target.value = "";
+  };
 
-  useEffect(() => {
-    if (profile) {
-      setName(profile.name);
-      setEmoji(profile.emoji);
-      setColor(profile.color);
-    }
-  }, [profile]);
-
-  useEffect(() => {
-    if (status === "unauthenticated") router.push("/login");
-  }, [status, router]);
-
-  const saveProfile = async () => {
-    setSaving(true);
+  const removeAvatar = async () => {
     try {
       const r = await fetch("/api/user", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, emoji, color }),
+        body: JSON.stringify({ avatarUrl: null }),
       });
-      if (!r.ok) throw new Error("update failed");
-      toast.success("Профиль обновлён ✨");
-      setEditing(false);
+      if (!r.ok) throw new Error("remove failed");
+      toast.success("Фото убрано — снова эмодзи");
       qc.invalidateQueries({ queryKey: ["user-profile"] });
       qc.invalidateQueries({ queryKey: ["trip"] });
     } catch {
-      toast.error("Не удалось сохранить");
-    } finally {
-      setSaving(false);
+      toast.error("Не удалось убрать фото");
     }
   };
 
@@ -114,15 +114,6 @@ export function ProfilePage() {
     router.push("/");
   };
 
-  const cancelEdit = () => {
-    setEditing(false);
-    if (profile) {
-      setName(profile.name);
-      setEmoji(profile.emoji);
-      setColor(profile.color);
-    }
-  };
-
   if (status === "loading" || status === "unauthenticated" || !userId) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
@@ -133,10 +124,6 @@ export function ProfilePage() {
 
   return (
     <div className="min-h-screen bg-background">
-      <div className="fixed inset-0 pointer-events-none opacity-[0.03]" style={{
-        backgroundImage: "radial-gradient(circle at 30% 0%, var(--primary) 0%, transparent 50%), radial-gradient(circle at 70% 100%, #8b5cf6 0%, transparent 50%)",
-      }} />
-
       <header className="sticky top-0 z-40 glass-strong border-b border-border/80 pt-[env(safe-area-inset-top)]">
         <div className="mx-auto max-w-2xl px-4 h-14 flex items-center justify-between">
           <button
@@ -152,7 +139,7 @@ export function ProfilePage() {
         </div>
       </header>
 
-      <main className="mx-auto max-w-2xl px-4 py-4 pb-24 space-y-4 relative">
+      <main className="mx-auto max-w-2xl px-4 py-4 pb-24 space-y-4">
         {isError ? (
           <div className="py-16 text-center space-y-3">
             <div className="text-4xl">🤔</div>
@@ -171,40 +158,17 @@ export function ProfilePage() {
           </div>
         ) : (
           <>
-            <ProfileHeader
-              profile={profile}
-              editing={editing}
-              setEditing={setEditing}
-              setPremiumOpen={setPremiumOpen}
-              name={name}
-              setName={setName}
-              emoji={emoji}
-              setEmoji={setEmoji}
-              color={color}
-              setColor={setColor}
-              saving={saving}
-              uploadingAvatar={uploadingAvatar}
-              saveProfile={saveProfile}
-              handleAvatarUpload={handleAvatarUpload}
-              avatarInputRef={avatarInputRef}
-              onCancelEdit={cancelEdit}
-            />
+            <ProfileHeader profile={profile} onEdit={() => setEditOpen(true)} />
 
             {profile.isPremium ? (
               <PremiumActiveCard profile={profile} />
             ) : (
-              <PremiumCTA onOpen={() => setPremiumOpen(true)} />
+              <PremiumCTA profile={profile} onOpen={() => setPremiumOpen(true)} />
             )}
-
-            <FreemiumLimits profile={profile} />
 
             <ProfileStats profile={profile} />
 
-            <AchievementsGrid
-              profile={profile}
-              selectedAchievement={selectedAchievement}
-              setSelectedAchievement={setSelectedAchievement}
-            />
+            <AchievementsGrid profile={profile} onOpenPremium={() => setPremiumOpen(true)} />
 
             <TripsList
               profile={profile}
@@ -218,19 +182,61 @@ export function ProfilePage() {
             <ProfileSettings profile={profile} setPremiumOpen={setPremiumOpen} />
 
             <motion.button
+              type="button"
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.25 }}
-              onClick={handleSignOut}
-              disabled={signingOut}
-              className="w-full rounded-2xl bg-destructive/10 text-destructive border border-destructive/20 py-3.5 font-medium flex items-center justify-center gap-2 hover:bg-destructive/20 transition-colors disabled:opacity-50"
+              onClick={() => setSignOutOpen(true)}
+              className="w-full min-h-12 rounded-2xl bg-destructive/10 text-destructive border border-destructive/20 font-medium flex items-center justify-center gap-2 hover:bg-destructive/20 transition-colors active:scale-[0.98]"
             >
-              {signingOut ? <Loader2 className="size-4 animate-spin" /> : <LogOut className="size-4" />}
+              <LogOut className="size-4" />
               Выйти из аккаунта
             </motion.button>
+
+            <p className="text-center font-mono text-[10px] uppercase tracking-widest text-muted-foreground/70 pt-1">
+              TripTrek · travel passport
+            </p>
           </>
         )}
       </main>
+
+      {/* Редактирование профиля */}
+      {profile && (
+        <EditProfileSheet
+          open={editOpen}
+          onOpenChange={setEditOpen}
+          profile={profile}
+          uploadingAvatar={uploadingAvatar}
+          onAvatarFile={handleAvatarFile}
+          onRemoveAvatar={removeAvatar}
+        />
+      )}
+
+      {/* Подтверждение выхода */}
+      <AlertDialog open={signOutOpen} onOpenChange={setSignOutOpen}>
+        <AlertDialogContent className="max-w-sm rounded-3xl">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Выйти из аккаунта?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {profile?.email ? `Профиль ${profile.email} останется на сервере — просто снова войди при необходимости.` : "Войдёшь снова тем же email и паролем."}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="gap-2">
+            <AlertDialogCancel className="mt-0 rounded-xl">Остаться</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => {
+                e.preventDefault();
+                setSignOutOpen(false);
+                void handleSignOut();
+              }}
+              className="rounded-xl bg-destructive text-white hover:bg-destructive/90"
+            >
+              {signingOut ? <Loader2 className="size-4 animate-spin" /> : <LogOut className="size-4" />}
+              Выйти
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <PremiumModal open={premiumOpen} onOpenChange={setPremiumOpen} />
     </div>
