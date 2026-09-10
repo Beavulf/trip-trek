@@ -38,11 +38,12 @@ export async function GET() {
     if (!res.ok) throw new Error("currency fetch failed");
     const data = await res.json();
 
-    // Берём курс из API, если нет — fallback. Если и fallback нет — 0 (не должно случаться).
-    const rates: Record<string, number> = {};
+    // Пропускаем ВСЕ живые курсы (API отдаёт ~160 валют): поездка может быть
+    // в валюте вне списка UI (EGP, BRL, ISK…). Для валют UI без живого курса — статичный fallback.
+    const apiRates = (data.rates as Record<string, number> | undefined) ?? {};
+    const rates: Record<string, number> = { ...apiRates };
     for (const [code, fbRate] of Object.entries(FALLBACK_RATES)) {
-      const apiRate = (data.rates as Record<string, number> | undefined)?.[code];
-      rates[code] = typeof apiRate === "number" && apiRate > 0 ? apiRate : fbRate;
+      if (!(typeof rates[code] === "number" && rates[code] > 0)) rates[code] = fbRate;
     }
 
     return NextResponse.json({
