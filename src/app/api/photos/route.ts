@@ -1,22 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { mkdir, unlink, writeFile } from "fs/promises";
-import path from "path";
-import sharp from "sharp";
 import { db } from "@/lib/db";
 import { publish } from "@/lib/ws-bus";
 import { requireTripMember } from "@/lib/api-auth";
-
-const MAX_BYTES = 20 * 1024 * 1024;
-const ALLOWED = new Set([
-  "image/jpeg",
-  "image/png",
-  "image/webp",
-  "image/gif",
-  "image/heic",
-  "image/heif",
-  "image/jpg",
-  "",
-]);
+import { put as storagePut, remove as storageRemove, StorageError } from "@/lib/storage";
 
 // GET /api/photos?tripId=...&dayId=...&placeId=...
 export async function GET(req: NextRequest) {
@@ -48,48 +34,6 @@ export async function GET(req: NextRequest) {
   return NextResponse.json(photos);
 }
 
-async function processUpload(file: File): Promise<{ url: string; thumbUrl: string }> {
-  const uploadDir = path.join(process.cwd(), "public", "uploads");
-  await mkdir(uploadDir, { recursive: true });
-
-  const id = crypto.randomUUID();
-  const raw = Buffer.from(await file.arrayBuffer());
-
-  try {
-    const pipeline = sharp(raw, { failOn: "none" }).rotate();
-    const fullBuf = await pipeline
-      .clone()
-      .resize(1600, 1600, { fit: "inside", withoutEnlargement: true })
-      .jpeg({ quality: 80, mozjpeg: true })
-      .toBuffer();
-
-    const thumbBuf = await sharp(fullBuf)
-      .resize(480, 480, { fit: "inside", withoutEnlargement: true })
-      .jpeg({ quality: 70 })
-      .toBuffer();
-
-    const fileName = `${id}.jpg`;
-    const thumbName = `${id}-thumb.jpg`;
-    await writeFile(path.join(uploadDir, fileName), fullBuf);
-    await writeFile(path.join(uploadDir, thumbName), thumbBuf);
-    return { url: `/uploads/${fileName}`, thumbUrl: `/uploads/${thumbName}` };
-  } catch (e) {
-    console.error("[photos] sharp convert failed:", e);
-    // Fallback: store original only if already a web-friendly type
-    const type = (file.type || "").toLowerCase();
-    if (type === "image/jpeg" || type === "image/jpg" || type === "image/png" || type === "image/webp") {
-      const ext = type === "image/png" ? "png" : type === "image/webp" ? "webp" : "jpg";
-      const fileName = `${id}.${ext}`;
-      await writeFile(path.join(uploadDir, fileName), raw);
-      const url = `/uploads/${fileName}`;
-      return { url, thumbUrl: url };
-    }
-    throw new Error(
-      "Не удалось обработать фото (часто HEIC). Сохраните как JPEG и попробуйте снова"
-    );
-  }
-}
-
 // POST — загрузка фото
 export async function POST(req: NextRequest) {
   const formData = await req.formData();
@@ -104,18 +48,6 @@ export async function POST(req: NextRequest) {
   const { user, response } = await requireTripMember(req, tripId);
   if (response) return response;
 
-  if (file.type && !ALLOWED.has(file.type.toLowerCase())) {
-    // Mobile camera sometimes sends empty/octet-stream — allow by extension
-    const name = (file.name || "").toLowerCase();
-    const okExt = /\.(jpe?g|png|webp|gif|heic|heif)$/.test(name);
-    if (!okExt && file.type !== "application/octet-stream") {
-      return NextResponse.json({ error: "Недопустимый тип файла" }, { status: 400 });
-    }
-  }
-  if (file.size > MAX_BYTES) {
-    return NextResponse.json({ error: "Файл слишком большой (макс 20MB)" }, { status: 400 });
-  }
-
   const placeId = (formData.get("placeId") as string) || null;
   const userId = user!.id;
   const caption = (formData.get("caption") as string) || null;
@@ -123,18 +55,23 @@ export async function POST(req: NextRequest) {
   const lng = formData.get("lng") ? parseFloat(formData.get("lng") as string) : null;
   const address = (formData.get("address") as string) || null;
 
-  let urls: { url: string; thumbUrl: string };
+  // Единая политика хранилища: magic bytes, лимит 20MB, sharp-обработка
+  // (EXIF/GPS выпиливаются), никакого raw-fallback
+  let urls: { url: string; thumbUrl?: string };
   try {
-    urls = await processUpload(file);
+    urls = await storagePut({ data: Buffer.from(await file.arrayBuffer()), kind: "photo" });
   } catch (e) {
-    const msg = e instanceof Error ? e.message : "Ошибка обработки фото";
-    return NextResponse.json({ error: msg }, { status: 400 });
+    if (e instanceof StorageError) {
+      return NextResponse.json({ error: e.message }, { status: e.status });
+    }
+    console.error("[photos] upload failed:", e);
+    return NextResponse.json({ error: "Ошибка обработки фото" }, { status: 500 });
   }
 
   const photo = await db.photo.create({
     data: {
       url: urls.url,
-      thumbUrl: urls.thumbUrl,
+      thumbUrl: urls.thumbUrl ?? urls.url,
       caption,
       dayId,
       tripId,
@@ -177,13 +114,14 @@ export async function DELETE(req: NextRequest) {
 
   const photo = await db.photo.delete({ where: { id } });
 
+  // Файлы — не транзакционны с БД: чистим после успешного delete,
+  // отсутствующий файл не ошибка
   for (const rel of [photo.url, photo.thumbUrl]) {
     if (!rel) continue;
     try {
-      const relPath = rel.replace(/^\//, "");
-      await unlink(path.join(process.cwd(), "public", relPath));
+      await storageRemove(rel);
     } catch {
-      // ignore missing files
+      // мусор в url — не повод ломать удаление записи
     }
   }
 

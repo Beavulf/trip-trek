@@ -246,18 +246,19 @@ export async function POST(req: NextRequest) {
     });
   }
 
-  // 3) Фото — оставляем url как есть, но привязываем к новому tripId и dayId.
-  //    Файлов на сервере нет (URL — это локальный путь со старого устройства),
-  //    поэтому такие фото не отрендерятся, но записи не сломают приложение.
+  // 3) Фото — url валиден только как внутренний /uploads/-путь этого
+  //    инстанса (тогда файл реально существует и отрендерится); внешние
+  //    и произвольные url не переносим — фото без файла не создаем.
   for (const ph of body.photos || []) {
     const newDayId = ph.dayId ? dayIdMap.get(ph.dayId) : null;
     if (!newDayId) continue;
+    if (typeof ph.url !== "string" || !ph.url.startsWith("/uploads/")) continue;
     await db.photo.create({
       data: {
         tripId: trip.id,
         dayId: newDayId,
         url: ph.url,
-        thumbUrl: ph.thumbUrl || null,
+        thumbUrl: (typeof ph.thumbUrl === "string" && ph.thumbUrl.startsWith("/uploads/") && ph.thumbUrl) || null,
         caption: ph.caption || null,
         lat: ph.lat ?? null,
         lng: ph.lng ?? null,
@@ -367,7 +368,8 @@ export async function POST(req: NextRequest) {
         place: f.place || null,
         price: f.price || null,
         emoji: f.emoji || null,
-        imageUrl: f.imageUrl || null,
+        // Картинка блюда валидна только как /uploads/-путь этого инстанса
+        imageUrl: (typeof f.imageUrl === "string" && f.imageUrl.startsWith("/uploads/") && f.imageUrl) || null,
         tried: !!f.tried,
         rating: f.rating ?? null,
         order: f.order ?? 0,

@@ -2,8 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { publish } from "@/lib/ws-bus";
 import { requireTripMember } from "@/lib/api-auth";
-import { writeFile, mkdir } from "fs/promises";
-import path from "path";
+import { put as storagePut, remove as storageRemove, StorageError } from "@/lib/storage";
 
 // GET /api/foods?tripId=...&city=...
 // P0 #2: tripId required — без него 400 (раньше пустая строка → where={} → все блюда всех поездок)
@@ -103,35 +102,36 @@ export async function PATCH(req: NextRequest) {
     const id = formData.get("id") as string;
     if (!file || !id) return NextResponse.json({ error: "file and id required" }, { status: 400 });
 
-    // P1 #8: MIME validation
-    const allowedTypes = ["image/jpeg", "image/png", "image/webp", "image/gif"];
-    if (!allowedTypes.includes(file.type)) {
-      return NextResponse.json({ error: "Только изображения (JPEG, PNG, WebP, GIF)" }, { status: 400 });
-    }
-    // P1 #8: size limit (10MB)
-    if (file.size > 10 * 1024 * 1024) {
-      return NextResponse.json({ error: "Файл слишком большой (макс 10MB)" }, { status: 400 });
-    }
-    // Расширение из имени файла клиент контролирует — берём только из белого списка
-    // (иначе food-<uuid>.html с declared image/png отдаётся из /uploads как text/html — stored XSS)
-    const ext = file.name.split(".").pop()?.toLowerCase() || "jpg";
-    if (!["jpg", "jpeg", "png", "webp", "gif"].includes(ext)) {
-      return NextResponse.json({ error: "Недопустимое расширение файла" }, { status: 400 });
-    }
-
     // P0 #3: membership check via food.tripId
-    const existing = await db.foodItem.findUnique({ where: { id }, select: { tripId: true } });
+    const existing = await db.foodItem.findUnique({ where: { id }, select: { tripId: true, imageUrl: true } });
     if (!existing) return NextResponse.json({ error: "not found" }, { status: 404 });
     const { response } = await requireTripMember(req, existing.tripId);
     if (response) return response;
 
-    const fileName = `food-${crypto.randomUUID()}.${ext}`;
-    const uploadDir = path.join(process.cwd(), "public", "uploads");
-    await mkdir(uploadDir, { recursive: true });
-    await writeFile(path.join(uploadDir, fileName), Buffer.from(await file.arrayBuffer()));
-    const url = `/uploads/${fileName}`;
+    // Единая политика хранилища: magic bytes (не доверяем MIME/расширению),
+    // лимит 10MB, sharp-обработка — stored-XSS через /uploads исключён
+    let url: string;
+    try {
+      const res = await storagePut({ data: Buffer.from(await file.arrayBuffer()), kind: "food" });
+      url = res.url;
+    } catch (e) {
+      if (e instanceof StorageError) {
+        return NextResponse.json({ error: e.message }, { status: e.status });
+      }
+      console.error("[foods] image upload failed:", e);
+      return NextResponse.json({ error: "Не удалось загрузить изображение" }, { status: 500 });
+    }
     const food = await db.foodItem.update({ where: { id }, data: { imageUrl: url } });
     await publish(food.tripId, "food:updated", {});
+
+    // Старое изображение блюда больше не нужно
+    if (existing.imageUrl && existing.imageUrl !== url) {
+      try {
+        await storageRemove(existing.imageUrl);
+      } catch {
+        // не критично
+      }
+    }
     return NextResponse.json(food);
   }
 
