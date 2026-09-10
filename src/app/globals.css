@@ -1,6 +1,11 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 
+/* Tailwind v4: автодетект классов ведёт скан от корня git-репозитория.
+   В Docker-образе .git нет (в .dockerignore) → utilities layer выходит пустым.
+   Явно задаём источник — путь относительно этого файла (src/app/globals.css). */
+@source "../";
+
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
