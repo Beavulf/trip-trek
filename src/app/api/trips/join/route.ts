@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { requireUser } from "@/lib/api-auth";
+import { rateLimitMiddleware } from "@/lib/rate-limit";
 
 // POST /api/trips/join?code=CHINA2024 — присоединиться к поездке по invite-коду
 export async function POST(req: NextRequest) {
@@ -80,7 +81,14 @@ export async function POST(req: NextRequest) {
 }
 
 // GET /api/trips/join?code=CHINA2024 — получить инфо о поездке по коду (для preview)
+// Только для авторизованных + rate-limit: код инвайт-страницы перебирают боты
 export async function GET(req: NextRequest) {
+  const { response } = await requireUser(req);
+  if (response) return response;
+
+  const limited = rateLimitMiddleware(req, "join-get", 30, 60_000);
+  if (limited) return limited;
+
   const { searchParams } = new URL(req.url);
   const code = searchParams.get("code");
 

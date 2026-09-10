@@ -10,9 +10,8 @@ export function Providers({ children }: { children: ReactNode }) {
       new QueryClient({
         defaultOptions: {
           queries: {
-            staleTime: 15_000, // 15с polling для real-time
+            staleTime: 15_000,
             refetchOnWindowFocus: true,
-            refetchInterval: 30_000, // автообновление каждые 30с
             retry: 1,
           },
         },

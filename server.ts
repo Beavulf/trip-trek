@@ -12,6 +12,7 @@ import { createServer } from "http";
 import { Server } from "socket.io";
 import type { Server as IOServer } from "socket.io";
 import next from "next";
+import { db } from "./src/lib/db";
 import { handleEmitRequest } from "./server/emit-handler";
 import { setupSocketHandlers } from "./server/socket-handlers";
 import { TripRooms } from "./server/rooms";
@@ -60,4 +61,19 @@ app.prepare().then(() => {
     console.log(`> Ready on http://0.0.0.0:${port}`);
     console.log(`> WebSocket on ws://0.0.0.0:${port}/socket.io/`);
   });
+
+  // Graceful shutdown: докер шлёт SIGTERM, ждёт stop_grace_period и шлёт SIGKILL.
+  // Порядок: перестать принимать WS → добить HTTP → закрыть пул Prisma.
+  const shutdown = (signal: string) => {
+    console.log(`> ${signal} received, shutting down…`);
+    io.close(() => {
+      server.close(() => {
+        db.$disconnect().finally(() => process.exit(0));
+      });
+    });
+    // Failsafe: если что-то зависло в close-колбэках — выходим принудительно
+    setTimeout(() => process.exit(0), 5000).unref();
+  };
+  process.on("SIGTERM", () => shutdown("SIGTERM"));
+  process.on("SIGINT", () => shutdown("SIGINT"));
 });
