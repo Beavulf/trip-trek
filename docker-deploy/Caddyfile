@@ -1,0 +1,17 @@
+# TripTrek — Caddy: TLS от Let's Encrypt + reverse proxy на app
+# Домен и email для ACME задаются в .env (DOMAIN, ACME_EMAIL).
+# WebSocket (/socket.io/) Caddy апгрейдит автоматически.
+
+{
+	email {$ACME_EMAIL}
+}
+
+{$DOMAIN} {
+	reverse_proxy app:3000 {
+		# X-Forwarded-For формирует Caddy — приложение доверяет ему
+		# (rate-limit берёт первый IP из XFF)
+	}
+
+	# Загруженные файлы раздаёт само приложение (static-uploads.ts,
+	# immutable-кэш), отдельно кэшировать здесь не нужно
+}

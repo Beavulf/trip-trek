@@ -3,6 +3,12 @@
 Утверждён 2026-09-09 (grilling-сессия с владельцем). Ключевые решения — в `docs/adr/0001…0008`.
 Аудитория документа: ИИ-агенты, выполняющие фазы по очереди.
 
+> **Статус исполнения (2026-09-10):** Phase 0 ✅ (5fc0d3d) · Phase 1 ✅ (11b4d74) ·
+> Phase 2 ✅ с поправкой владельца «хранилище = локальный диск, без S3» (546ea71,
+> ADR-0003 amended) · Phase 3 ✅ (747f51d) · Phase 4 ✅ (70e7349) · Phase 5 ✅
+> (Caddy+backup+DEPLOY.md; e2e-смоук в docker-deploy/compose.smoke.yml).
+> Phase 6 (мобильный полиш) — после запуска. Реализацию вёл ZCode по этому плану.
+
 ## Контекст
 
 - Стек: Next.js 16 App Router + custom `server.ts` (bun) с socket.io, Prisma 6, NextAuth v4 (JWT 30d), sharp, web-push.
@@ -24,7 +30,7 @@
 |---|---|
 | Один VPS + Docker Compose (app + Postgres), швы под Redis/S3, без их включения | [0001](adr/0001-single-vps-docker.md) |
 | Postgres + `prisma migrate`, `db push --accept-data-loss` запрещён | [0002](adr/0002-postgres-migrations.md) |
-| Фото сразу в S3-совместимое хранилище; disk-adapter в dev; публичные URL; EXIF-strip на сервере | [0003](adr/0003-object-storage.md) |
+| Хранилище: **локальный диск в контейнере** (изменено владельцем 2026-09-10, было «S3 с первого дня»); единый storage-модуль с политикой; EXIF-strip на сервере | [0003](adr/0003-object-storage.md) |
 | Realtime: JWT на handshake, `publish(tripId, event)`, сокет только читает | [0004](adr/0004-realtime-auth.md) |
 | Rate limiting: один модуль, in-memory store, Redis-adapter позже | [0005](adr/0005-rate-limit.md) |
 | Бэкапы: ночной `pg_dump` во внешний bucket + учения по восстановлению | [0006](adr/0006-backups.md) |
@@ -213,11 +219,13 @@ SMTP-сброс пароля (владелец поднимет на своём 
 
 | Переменная | Куда | Откуда взять |
 |---|---|---|
-| `NEXTAUTH_SECRET` | app | `openssl rand -base64 32` |
-| `DATABASE_URL` | app | от сервиса db в compose |
-| `POSTGRES_PASSWORD` | db | сгенерировать, в `.env` |
+| `NEXTAUTH_SECRET` | app | `openssl rand -hex 32` |
+| `POSTGRES_PASSWORD` | db+app | сгенерировать, в `.env` рядом с compose |
+| `NEXTAUTH_URL` | app | `https://<домен>` |
+| `DOMAIN`, `ACME_EMAIL` | caddy | домен + email для Let's Encrypt |
 | `WS_ALLOWED_ORIGINS` | app | `https://<домен>` |
-| `STORAGE_DRIVER` | app | `s3` |
-| `S3_ENDPOINT`, `S3_REGION`, `S3_BUCKET`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`, `S3_PUBLIC_BASE_URL` | app | консоль провайдера (R2 / Яндекс / Selectel) |
-| `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` | app | `npx web-push generate-vapid-keys` |
+| `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` | app | `npx web-push generate-vapid-keys` (опц.) |
 | `OPENAI_API_KEY` (опц.), `OPENAI_BASE_URL`, `OPENAI_MODEL` | app | провайдер LLM; без ключа — локальный fallback |
+
+Хранилище — локальный том `triptrek-uploads` (S3_* больше не нужны); бэкапы
+uploads включены в `docker-deploy/backup.sh` (ADR-0003 amended).
