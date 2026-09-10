@@ -1,0 +1,12 @@
+# Railway config-as-code (https://docs.railway.app/reference/config-as-code)
+# Сборка — нашим Dockerfile (контекст = корень репо), не Nixpacks.
+[build]
+builder = "DOCKERFILE"
+dockerfile = "docker-deploy/Dockerfile"
+
+[deploy]
+# Entrypoint ждёт БД (до 60с) + prisma migrate deploy — даём запас.
+healthcheckPath = "/api/health"
+healthcheckTimeout = 300
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 3
