@@ -1,3 +1,4 @@
+import { fetchJson } from "@/lib/outbound";
 import { NextRequest, NextResponse } from "next/server";
 import { KNOWN_CITIES, decodeCustomKey } from "@/lib/city-coords";
 
@@ -115,9 +116,28 @@ export async function GET(req: NextRequest) {
       `&current=temperature_2m,relative_humidity_2m,apparent_temperature,weather_code,wind_speed_10m,is_day` +
       `&daily=temperature_2m_max,temperature_2m_min,weather_code,precipitation_probability_max,uv_index_max,sunrise,sunset` +
       `${hourlyParam}&${tzParam}${rangeParam}`;
-    const res = await fetch(url, { next: { revalidate: 600 } });
-    if (!res.ok) throw new Error(`open-meteo returned ${res.status}`);
-    const data = await res.json();
+    const data = await fetchJson<{
+      timezone?: string;
+      current?: Record<string, number | undefined>;
+      hourly?: {
+        time?: string[];
+        temperature_2m?: number[];
+        precipitation_probability?: number[];
+        weather_code?: number[];
+        is_day?: number[];
+      };
+      daily?: {
+        time?: string[];
+        temperature_2m_max?: number[];
+        temperature_2m_min?: number[];
+        weather_code?: number[];
+        precipitation_probability_max?: number[];
+        uv_index_max?: number[];
+        sunrise?: string[];
+        sunset?: string[];
+      };
+    }>(url, { cacheSec: 600, timeoutMs: 8000 });
+    if (!data) throw new Error("open-meteo unreachable");
 
     const code = data.current?.weather_code ?? 0;
     const isDay = data.current?.is_day !== 0;

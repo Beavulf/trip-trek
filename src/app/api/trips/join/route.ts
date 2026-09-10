@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { requireUser } from "@/lib/api-auth";
-import { rateLimitMiddleware } from "@/lib/rate-limit";
+import { rateLimitMiddleware, userRateLimit } from "@/lib/rate-limit";
 
 // POST /api/trips/join?code=CHINA2024 — присоединиться к поездке по invite-коду
 export async function POST(req: NextRequest) {

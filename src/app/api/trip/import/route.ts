@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { requireUser } from "@/lib/api-auth";
+import { userRateLimit } from "@/lib/rate-limit";
 
 // POST /api/trip/import — импорт поездки из JSON-бэкапа (формат backup v2.0)
 // Создаёт НОВУЮ поездку для текущего пользователя (owner). Все userId-ссылки
@@ -160,6 +161,11 @@ export async function POST(req: NextRequest) {
   const { user: authUser, response } = await requireUser(req);
   if (response) return response;
   const userId = authUser!.id;
+
+  // Импорт тяжёлый — 2 в час
+  const limited = userRateLimit(req, userId, "import", 2, 60 * 60_000);
+  if (limited) return limited;
+
   const user = await db.user.findUnique({
     where: { id: userId },
     select: { name: true, emoji: true, color: true },

@@ -1,41 +1,20 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireUser } from "@/lib/api-auth";
+import { userRateLimit } from "@/lib/rate-limit";
+import { fetchJson } from "@/lib/outbound";
 
 // GET /api/nearby?lat=..&lng=..&radius=1500&category=cafe (requires auth)
 // P0 #2: нет default Guangzhou coords — bad/empty coords → 400.
 //         User-Agent — "TripTrek/1.0" (без China).
-//         Session уже проверяется requireUser (раньше тоже было).
-//         Rate-limit — in-memory bucket per userId (60 req/час).
-const RATE_LIMIT_WINDOW_MS = 60 * 60 * 1000; // 1 час
-const RATE_LIMIT_MAX = 60; // 60 запросов в час на пользователя
-const rateLimit = new Map<string, { count: number; resetAt: number }>();
-
-function checkRateLimit(userId: string): { ok: boolean; resetIn?: number } {
-  const now = Date.now();
-  const entry = rateLimit.get(userId);
-  if (!entry || entry.resetAt < now) {
-    rateLimit.set(userId, { count: 1, resetAt: now + RATE_LIMIT_WINDOW_MS });
-    return { ok: true };
-  }
-  if (entry.count >= RATE_LIMIT_MAX) {
-    return { ok: false, resetIn: Math.ceil((entry.resetAt - now) / 1000) };
-  }
-  entry.count += 1;
-  return { ok: true };
-}
+//         Rate-limit — единый модуль lib/rate-limit (60 req/час на пользователя).
 
 export async function GET(req: NextRequest) {
   const { user, response } = await requireUser(req);
   if (response) return response;
 
-  // P0 #2: rate-limit per user
-  const rl = checkRateLimit(user!.id);
-  if (!rl.ok) {
-    return NextResponse.json(
-      { error: `Слишком много запросов к «Рядом». Попробуйте через ${Math.ceil((rl.resetIn ?? 0) / 60)} мин.`, places: [] },
-      { status: 429 }
-    );
-  }
+  // 60 запросов в час на пользователя (Overpass тяжёлый)
+  const limited = userRateLimit(req, user!.id, "nearby", 60, 60 * 60_000);
+  if (limited) return limited;
 
   const { searchParams } = new URL(req.url);
   const latStr = searchParams.get("lat");

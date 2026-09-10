@@ -4,26 +4,7 @@ import { requireTripMember } from "@/lib/api-auth";
 import { calculateCurrentDayNumber } from "@/lib/trip-days";
 import { EXPENSE_CATEGORIES, CATEGORY_META } from "@/lib/types";
 import { currencySymbol } from "@/lib/currencies";
-
-// P0 #4: in-memory rate-limit per user+trip (LLM стоит денег).
-// 10 запросов в час на пользователя на поездку — достаточно для тестов/демо.
-const RATE_LIMIT_WINDOW_MS = 60 * 60 * 1000; // 1 час
-const RATE_LIMIT_MAX = 10;
-const rateLimit = new Map<string, { count: number; resetAt: number }>();
-
-function checkRateLimit(key: string): { ok: boolean; resetIn?: number } {
-  const now = Date.now();
-  const entry = rateLimit.get(key);
-  if (!entry || entry.resetAt < now) {
-    rateLimit.set(key, { count: 1, resetAt: now + RATE_LIMIT_WINDOW_MS });
-    return { ok: true };
-  }
-  if (entry.count >= RATE_LIMIT_MAX) {
-    return { ok: false, resetIn: Math.ceil((entry.resetAt - now) / 1000) };
-  }
-  entry.count += 1;
-  return { ok: true };
-}
+import { userRateLimit } from "@/lib/rate-limit";
 
 // ─── Промпты: автор историй + 6 стилей рассказа ────────────────────────────
 
@@ -78,15 +59,9 @@ export async function POST(req: NextRequest) {
     const { user, response } = await requireTripMember(req, tripId);
     if (response) return response;
 
-    // P0 #4: rate-limit per user+trip
-    const rlKey = `${user!.id}:${tripId}`;
-    const rl = checkRateLimit(rlKey);
-    if (!rl.ok) {
-      return NextResponse.json(
-        { error: `Лимит генераций исчерпан (${RATE_LIMIT_MAX}/час). Попробуйте через ${Math.ceil((rl.resetIn ?? 0) / 60)} мин.` },
-        { status: 429 }
-      );
-    }
+    // 10 генераций в час на пользователя (LLM стоит денег)
+    const limited = userRateLimit(req, `${user!.id}:${tripId}`, "ai-summary", 10, 60 * 60_000);
+    if (limited) return limited;
 
     const body = (await req.json().catch(() => ({}))) as {
       type?: string;
@@ -282,8 +257,12 @@ async function generateWithLLM(systemPrompt: string, userPrompt: string): Promis
   const openaiModel = process.env.OPENAI_MODEL || "gpt-4o-mini";
 
   if (openaiKey) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 60_000); // LLM может думать долго — но не дольше минуты
+    try {
     const r = await fetch(`${openaiBase}/chat/completions`, {
       method: "POST",
+      signal: controller.signal,
       headers: {
         Authorization: `Bearer ${openaiKey}`,
         "Content-Type": "application/json",
@@ -306,6 +285,9 @@ async function generateWithLLM(systemPrompt: string, userPrompt: string): Promis
     if (!content) throw new Error("OpenAI вернул пустой ответ");
     llmSource = "openai";
     return content;
+    } finally {
+      clearTimeout(timeout);
+    }
   }
 
   try {

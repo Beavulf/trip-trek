@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { publish } from "@/lib/ws-bus";
 import { requireTripMember } from "@/lib/api-auth";
 import { put as storagePut, remove as storageRemove, StorageError } from "@/lib/storage";
+import { userRateLimit } from "@/lib/rate-limit";
 
 // GET /api/photos?tripId=...&dayId=...&placeId=...
 export async function GET(req: NextRequest) {
@@ -47,6 +48,10 @@ export async function POST(req: NextRequest) {
 
   const { user, response } = await requireTripMember(req, tripId);
   if (response) return response;
+
+  // 20 фото в час на пользователя — sharp тяжёлый, диск не резиновый
+  const limited = userRateLimit(req, user!.id, "photos", 20, 60 * 60_000);
+  if (limited) return limited;
 
   const placeId = (formData.get("placeId") as string) || null;
   const userId = user!.id;

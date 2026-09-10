@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireUser } from "@/lib/api-auth";
+import { fetchJson } from "@/lib/outbound";
 
 // GET /api/geocode?lat=..&lng=.. — reverse geocoding (requires auth)
 export async function GET(req: NextRequest) {
@@ -13,14 +14,12 @@ export async function GET(req: NextRequest) {
 
   try {
     const url = `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json&accept-language=ru&zoom=18`;
-    const res = await fetch(url, {
-      headers: {
-        "User-Agent": "TripTrek/1.0 (travel app)",
-      },
-      next: { revalidate: 0 },
-    });
-    if (!res.ok) throw new Error("geocode failed");
-    const data = await res.json();
+    // Точку по координатам спрашивают часто и повторно — кэш на сутки
+    const data = await fetchJson<{
+      display_name?: string;
+      address?: Record<string, string>;
+    }>(url, { cacheSec: 86400, timeoutMs: 8000 });
+    if (!data) throw new Error("geocode failed");
 
     // Формируем читаемый адрес
     const a = data.address || {};

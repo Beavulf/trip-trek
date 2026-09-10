@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { publish } from "@/lib/ws-bus";
 import { requireTripMember } from "@/lib/api-auth";
 import { put as storagePut, remove as storageRemove, StorageError } from "@/lib/storage";
+import { userRateLimit } from "@/lib/rate-limit";
 
 // GET /api/foods?tripId=...&city=...
 // P0 #2: tripId required — без него 400 (раньше пустая строка → where={} → все блюда всех поездок)
@@ -42,8 +43,12 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "name too long (max 200)" }, { status: 400 });
   }
 
-  const { response } = await requireTripMember(req, tripId);
+  const { user: foodUser, response } = await requireTripMember(req, tripId);
   if (response) return response;
+
+  // 20 блюд в час на пользователя
+  const limited = userRateLimit(req, foodUser!.id, "foods", 20, 60 * 60_000);
+  if (limited) return limited;
 
   // Максимальный order
   const maxOrder = await db.foodItem.findFirst({

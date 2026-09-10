@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { requireUser } from "@/lib/api-auth";
 import { put as storagePut, remove as storageRemove, StorageError } from "@/lib/storage";
+import { userRateLimit } from "@/lib/rate-limit";
 
 // POST /api/user/avatar — загрузить фото профиля (только себе)
 export async function POST(req: NextRequest) {
@@ -9,6 +10,9 @@ export async function POST(req: NextRequest) {
     const { user: authUser, response } = await requireUser(req);
     if (response) return response;
     const userId = authUser!.id;
+
+    const limited = userRateLimit(req, userId, "avatar", 10, 60 * 60_000);
+    if (limited) return limited;
 
     const formData = await req.formData();
     const file = formData.get("file") as File | null;

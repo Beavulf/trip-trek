@@ -1,16 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 
 /**
- * Simple in-memory rate limiter.
- * Keyed by `${prefix}:${ip}`. Entries auto-expire after the window.
+ * In-memory rate limiter (один инстанс — ADR-0005; шов под Redis позже).
  *
- * For single-instance deploys this is sufficient. For multi-instance,
- * replace with a shared store (Redis, etc.).
+ * Ключ — `${prefix}:${userId|ip}`. Записи истекают по окну; фоновая чистка
+ * раз в 5 минут не даёт Map расти бесконечно.
  *
- * Usage:
- *   const limited = rateLimitMiddleware(req, "login", 5, 15 * 60_000);
- *   if (limited) return limited;
+ * Использование:
+ *   const limited = userRateLimit(req, user.id, "photos", 20, 60*60_000);
+ *   if (limited) return limited; // 429 + Retry-After
  */
+
 interface Entry {
   count: number;
   resetAt: number;
@@ -18,8 +18,7 @@ interface Entry {
 
 const store = new Map<string, Entry>();
 
-// Periodic cleanup of expired entries to prevent memory growth
-const CLEANUP_INTERVAL = 5 * 60_000; // 5 min
+const CLEANUP_INTERVAL = 5 * 60_000; // 5 мин
 let lastCleanup = 0;
 
 function cleanup() {
@@ -31,6 +30,7 @@ function cleanup() {
   }
 }
 
+/** true — запрос разрешён, false — лимит исчерпан. */
 export function rateLimitCheck(key: string, maxRequests: number, windowMs: number): boolean {
   cleanup();
   const now = Date.now();
@@ -46,25 +46,52 @@ export function rateLimitCheck(key: string, maxRequests: number, windowMs: numbe
   return true;
 }
 
-/**
- * Returns a 429 NextResponse if rate-limited, or null if the request is allowed.
- */
+/** Результат с деталями для 429-ответа. */
+export function limit(
+  key: string,
+  opts: { max: number; windowMs: number }
+): { ok: boolean; retryAfterSec: number } {
+  const ok = rateLimitCheck(key, opts.max, opts.windowMs);
+  const retryAfterSec = ok ? 0 : Math.ceil((((store.get(key)?.resetAt ?? Date.now()) - Date.now())) / 1000);
+  return { ok, retryAfterSec: Math.max(retryAfterSec, 1) };
+}
+
+/** IP из X-Forwarded-For (доверяем только за Caddy, он перезаписывает заголовок). */
+export function clientIp(req: NextRequest): string {
+  return (
+    req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
+    req.headers.get("x-real-ip") ||
+    "unknown"
+  );
+}
+
+function tooMany(retryAfterSec: number, windowMs: number): NextResponse {
+  return NextResponse.json(
+    { error: "Слишком много запросов. Попробуйте позже." },
+    { status: 429, headers: { "Retry-After": String(retryAfterSec || Math.ceil(windowMs / 1000)) } }
+  );
+}
+
+/** Лимит по IP (анонимные/публичные эндпоинты: login, register, join GET, FX…). */
 export function rateLimitMiddleware(
   req: NextRequest,
   prefix: string,
   maxRequests: number,
   windowMs: number
 ): NextResponse | null {
-  const ip =
-    req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
-    req.headers.get("x-real-ip") ||
-    "unknown";
-  const key = `${prefix}:${ip}`;
-  if (!rateLimitCheck(key, maxRequests, windowMs)) {
-    return NextResponse.json(
-      { error: "Слишком много запросов. Попробуйте позже." },
-      { status: 429, headers: { "Retry-After": String(Math.ceil(windowMs / 1000)) } }
-    );
-  }
-  return null;
+  const { ok, retryAfterSec } = limit(`${prefix}:${clientIp(req)}`, { max: maxRequests, windowMs });
+  return ok ? null : tooMany(retryAfterSec, windowMs);
+}
+
+/** Лимит по пользователю (мутации: фото, аватары, импорт, LLM…). */
+export function userRateLimit(
+  req: NextRequest,
+  userId: string | null | undefined,
+  prefix: string,
+  maxRequests: number,
+  windowMs: number
+): NextResponse | null {
+  const key = userId ? `${prefix}:${userId}` : `${prefix}:${clientIp(req)}`;
+  const { ok, retryAfterSec } = limit(key, { max: maxRequests, windowMs });
+  return ok ? null : tooMany(retryAfterSec, windowMs);
 }

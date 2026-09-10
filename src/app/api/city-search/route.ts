@@ -1,8 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
+import { rateLimitMiddleware } from "@/lib/rate-limit";
+import { fetchJson } from "@/lib/outbound";
 
 // GET /api/city-search?q=Tokyo — поиск городов через Open-Meteo Geocoding API
 // Бесплатный API без ключа, возвращает города с координатами и страной
 export async function GET(req: NextRequest) {
+  // геокодинг дёшев, но боты его любят — 60/мин на IP
+  const limited = rateLimitMiddleware(req, "city-search", 60, 60_000);
+  if (limited) return limited;
+
   const { searchParams } = new URL(req.url);
   const q = searchParams.get("q");
 
@@ -13,14 +19,25 @@ export async function GET(req: NextRequest) {
   try {
     // Open-Meteo Geocoding API: https://open-meteo.com/en/docs/geocoding-api
     // Параметры: name (запрос), count (лимит), language, format
+    // Кэш сутки: названия городов не меняются
     const url = `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(q)}&count=8&language=ru&format=json`;
-    const r = await fetch(url, { cache: "no-store" });
+    const data = await fetchJson<{
+      results?: Array<{
+        id: number;
+        name: string;
+        latitude: number;
+        longitude: number;
+        country?: string;
+        country_code?: string;
+        admin1?: string; // регион/штат
+        timezone?: string;
+        population?: number;
+      }>;
+    }>(url, { cacheSec: 86400, timeoutMs: 8000 });
 
-    if (!r.ok) {
+    if (!data) {
       return NextResponse.json({ results: [], error: "geocoding failed" }, { status: 502 });
     }
-
-    const data = await r.json();
 
     if (!data.results || data.results.length === 0) {
       return NextResponse.json({ results: [] });

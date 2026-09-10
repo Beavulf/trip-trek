@@ -1,4 +1,6 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
+import { rateLimitMiddleware } from "@/lib/rate-limit";
+import { fetchJson } from "@/lib/outbound";
 
 // GET /api/currency — курсы валют через open.er-api.com (бесплатно, без ключа)
 // База: USD. Кэш 1 час.
@@ -30,17 +32,22 @@ const FALLBACK_RATES: Record<string, number> = {
   CHF: 0.88,
 };
 
-export async function GET() {
+export async function GET(req: NextRequest) {
+  // Публичный эндпоинт с внешним вызовом — лимит по IP
+  const limited = rateLimitMiddleware(req, "fx", 60, 60_000);
+  if (limited) return limited;
+
   try {
-    const res = await fetch("https://open.er-api.com/v6/latest/USD", {
-      next: { revalidate: 3600 },
-    });
-    if (!res.ok) throw new Error("currency fetch failed");
-    const data = await res.json();
+    // Кэш 1ч + таймаут 8с: зависший курсовой API не вешает приложение
+    const data = await fetchJson<{ rates?: Record<string, number>; time_last_update_utc?: string }>(
+      "https://open.er-api.com/v6/latest/USD",
+      { cacheSec: 3600, timeoutMs: 8000 }
+    );
+    if (!data?.rates) throw new Error("currency fetch failed");
 
     // Пропускаем ВСЕ живые курсы (API отдаёт ~160 валют): поездка может быть
     // в валюте вне списка UI (EGP, BRL, ISK…). Для валют UI без живого курса — статичный fallback.
-    const apiRates = (data.rates as Record<string, number> | undefined) ?? {};
+    const apiRates = data.rates;
     const rates: Record<string, number> = { ...apiRates };
     for (const [code, fbRate] of Object.entries(FALLBACK_RATES)) {
       if (!(typeof rates[code] === "number" && rates[code] > 0)) rates[code] = fbRate;

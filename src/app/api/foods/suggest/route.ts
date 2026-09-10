@@ -2,26 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { requireTripMember } from "@/lib/api-auth";
 import { currencySymbol } from "@/lib/currencies";
+import { userRateLimit } from "@/lib/rate-limit";
 
 // «Советы шефа»: LLM предлагает знаковые блюда города, которых ещё нет в гиде.
 // Пишет только клиент (пользователь выбирает, что добавить) — БД здесь не трогаем.
-
-// LLM стоит денег: 10 запросов в час на пользователя на поездку (как в ai-summary)
-const RATE_LIMIT_WINDOW_MS = 60 * 60 * 1000;
-const RATE_LIMIT_MAX = 10;
-const rateLimit = new Map<string, { count: number; resetAt: number }>();
-
-function checkRateLimit(key: string): boolean {
-  const now = Date.now();
-  const entry = rateLimit.get(key);
-  if (!entry || entry.resetAt < now) {
-    rateLimit.set(key, { count: 1, resetAt: now + RATE_LIMIT_WINDOW_MS });
-    return true;
-  }
-  if (entry.count >= RATE_LIMIT_MAX) return false;
-  entry.count += 1;
-  return true;
-}
+// Лимит 10/час на пользователя — LLM стоит денег (единый модуль lib/rate-limit).
 
 // Пример цены — в валюте конкретной поездки (buildSystemPrompt), а не жёсткий ¥
 function buildSystemPrompt(priceExample: string): string {
@@ -76,12 +61,8 @@ export async function POST(req: NextRequest) {
     }
     const { user, response } = await requireTripMember(req, tripId);
     if (response) return response;
-    if (!checkRateLimit(`${user.id}:${tripId}`)) {
-      return NextResponse.json(
-        { error: "Шеф устал: не больше 10 советов в час" },
-        { status: 429 }
-      );
-    }
+    const limited = userRateLimit(req, `${user.id}:${tripId}`, "foods-suggest", 10, 60 * 60_000);
+    if (limited) return limited;
 
     const [trip, foods] = await Promise.all([
       db.trip.findUnique({ where: { id: tripId }, select: { destination: true, currency: true } }),
@@ -122,8 +103,13 @@ async function generateWithLLM(systemPrompt: string, userPrompt: string): Promis
 
   if (openaiKey) {
     try {
-      const r = await fetch(`${openaiBase}/chat/completions`, {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 60_000); // не висим дольше минуты
+      let r: Response;
+      try {
+        r = await fetch(`${openaiBase}/chat/completions`, {
         method: "POST",
+        signal: controller.signal,
         headers: {
           Authorization: `Bearer ${openaiKey}`,
           "Content-Type": "application/json",
@@ -137,6 +123,9 @@ async function generateWithLLM(systemPrompt: string, userPrompt: string): Promis
           temperature: 0.8,
         }),
       });
+      } finally {
+        clearTimeout(timeout);
+      }
       if (!r.ok) {
         const t = await r.text().catch(() => "");
         console.error(`[foods/suggest] OpenAI ${r.status}: ${t.slice(0, 200)}`);

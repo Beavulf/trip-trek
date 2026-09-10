@@ -24,9 +24,7 @@ export const authOptions: NextAuthOptions = {
         password: { label: "Пароль", type: "password" },
       },
       async authorize(credentials) {
-        process.stderr.write("[AUTH] authorize called\n");
         if (!credentials?.email || !credentials?.password) {
-          process.stderr.write("[AUTH] no credentials\n");
           return null;
         }
 
@@ -34,14 +32,11 @@ export const authOptions: NextAuthOptions = {
           where: { email: credentials.email },
         });
 
-        console.log("[AUTH] user found:", !!user, user?.email);
         if (!user || !user.password) {
-          console.log("[AUTH] no user or password");
           return null;
         }
 
         const isValid = verifyPassword(credentials.password, user.password);
-        console.log("[AUTH] password valid:", isValid);
         if (!isValid) {
           return null;
         }
