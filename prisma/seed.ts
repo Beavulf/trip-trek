@@ -1,4 +1,24 @@
+import bcrypt from "bcryptjs";
 import { db } from "../src/lib/db";
+
+// Канонический dev-сид: демо-пользователи (кнопки входа на /login) + демо-поездка.
+//
+// Идемпотентность и безопасность:
+// - пользователи создаются через upsert по email — пароль демо-аккаунтов
+//   гарантированно равен DEMO_PASSWORD после прогона;
+// - удаляется ТОЛЬКО демо-поездка (каскад чистит её дни/места/траты/фото/участников).
+//   Никаких глобальных deleteMany — данные других поездок не трогаются.
+//
+// Запуск: bun prisma/seed.ts (или npm run db:seed) с DATABASE_URL.
+
+const DEMO_TRIP_ID = "trip-demo-china";
+const DEMO_PASSWORD = "1234";
+
+const DEMO_USERS = [
+  { id: "demo-user-1", email: "you@triptrek.com", name: "Ты", emoji: "🦊", color: "#f97316" },
+  { id: "demo-user-2", email: "leha@triptrek.com", name: "Лёха", emoji: "🐻", color: "#06b6d4" },
+  { id: "demo-user-3", email: "den@triptrek.com", name: "Дэн", emoji: "🐼", color: "#8b5cf6" },
+];
 
 // Города и их цвета/координаты
 const CITIES = {
@@ -8,14 +28,7 @@ const CITIES = {
   macau: { name: "Макао", key: "macau", color: "#8b5cf6", lat: 22.1987, lng: 113.5439 },
 };
 
-// Участники поездки
-const PARTICIPANTS = [
-  { name: "Ты", emoji: "🦊", color: "#f97316", role: "Организатор" },
-  { name: "Лёха", emoji: "🐻", color: "#06b6d4", role: "Фотограф" },
-  { name: "Дэн", emoji: "🐼", color: "#8b5cf6", role: "Гурман" },
-];
-
-// Дни и места (из плана путешествия)
+// Дни и места демо-поездки
 const TRIP_DAYS: Array<{
   day: number;
   city: keyof typeof CITIES;
@@ -177,40 +190,73 @@ const TRIP_DAYS: Array<{
   },
 ];
 
+// Стартовые траты: paidBy — индекс DEMO_USERS, day — номер дня
+const DEMO_EXPENSES = [
+  { amount: 30, category: "food", description: "Уличная еда день 1", paidBy: 0, dayNumber: 1 },
+  { amount: 40, category: "attractions", description: "Canton Tower + круиз", paidBy: 1, dayNumber: 2 },
+  { amount: 25, category: "food", description: "Хот-пот и димсамы день 3", paidBy: 2, dayNumber: 3 },
+  { amount: 50, category: "transport", description: "Поезд Гуанчжоу-Шэньчжэнь + смотровая", paidBy: 0, dayNumber: 5 },
+  { amount: 35, category: "food", description: "Пляж и морепродукты", paidBy: 1, dayNumber: 7 },
+  { amount: 18, category: "transport", description: "Паром в Гонконг", paidBy: 2, dayNumber: 8 },
+  { amount: 60, category: "food", description: "SoHo и коктейли", paidBy: 0, dayNumber: 9 },
+  { amount: 320, category: "accommodation", description: "Отель Гуанчжоу 4 ночи", paidBy: 1, dayNumber: 1 },
+];
+
 async function main() {
-  console.log("🌱 Seeding database...");
+  console.log("🌱 Seeding demo data (trip-scoped, idempotent)…");
 
-  // Очистка
-  await db.photo.deleteMany();
-  await db.expense.deleteMany();
-  await db.journalEntry.deleteMany();
-  await db.place.deleteMany();
-  await db.day.deleteMany();
-  await db.participant.deleteMany();
-  await db.tripSettings.deleteMany();
+  // 1. Демо-пользователи — upsert по email (не удаляем: могут быть привязаны
+  //    к другим поездкам). Пароль приводим к DEMO_PASSWORD.
+  const passwordHash = await bcrypt.hash(DEMO_PASSWORD, 10);
+  for (const u of DEMO_USERS) {
+    await db.user.upsert({
+      where: { email: u.email },
+      create: { ...u, password: passwordHash },
+      update: { name: u.name, emoji: u.emoji, color: u.color, password: passwordHash },
+    });
+  }
+  console.log(`✓ ${DEMO_USERS.length} demo users (пароль: ${DEMO_PASSWORD})`);
 
-  // Участники
-  const participants = await Promise.all(
-    PARTICIPANTS.map((p) => db.participant.create({ data: p }))
-  );
-  console.log(`✓ Created ${participants.length} participants`);
+  // 2. Демо-поездка: пересоздаём только её — каскад чистит дни/места/траты/
+  //    участников этой поездки, чужие поездки не затрагиваются.
+  await db.trip.deleteMany({ where: { id: DEMO_TRIP_ID } });
 
-  // Настройки поездки — startDate = сегодня (для демо, день 1 = сегодня)
   const startDate = new Date();
   startDate.setHours(0, 0, 0, 0);
-  await db.tripSettings.create({
+
+  const trip = await db.trip.create({
     data: {
-      id: "default",
-      title: "TripTrek: China 2024",
+      id: DEMO_TRIP_ID,
+      title: "Китай: Гуанчжоу — Шэньчжэнь — Гонконг — Макао",
+      destination: "Китай",
       startDate,
       totalDays: 12,
       totalBudget: 1100,
       currency: "USD",
-      currentUserId: participants[0].id,
+      coverColor: "#f97316",
+      coverEmoji: "🐼",
+      status: "active",
+      inviteCode: "demo2026",
     },
   });
 
-  // Дни и места
+  const members = await Promise.all(
+    DEMO_USERS.map((u, i) =>
+      db.tripMember.create({
+        data: {
+          tripId: trip.id,
+          userId: u.id,
+          role: i === 0 ? "owner" : "member",
+          displayName: u.name,
+          emoji: u.emoji,
+          color: u.color,
+        },
+      })
+    )
+  );
+  console.log(`✓ Trip «${trip.title}» + ${members.length} members (invite: ${trip.inviteCode})`);
+
+  // 3. Дни и места
   let placeCount = 0;
   for (const tripDay of TRIP_DAYS) {
     const city = CITIES[tripDay.city];
@@ -219,6 +265,7 @@ async function main() {
 
     const day = await db.day.create({
       data: {
+        tripId: trip.id,
         dayNumber: tripDay.day,
         date,
         city: city.name,
@@ -233,39 +280,32 @@ async function main() {
       await db.place.create({
         data: {
           ...place,
+          tripId: trip.id,
           dayId: day.id,
         },
       });
       placeCount++;
     }
   }
-  console.log(`✓ Created ${TRIP_DAYS.length} days, ${placeCount} places`);
+  console.log(`✓ ${TRIP_DAYS.length} days, ${placeCount} places`);
 
-  // Несколько стартовых трат для демонстрации бюджета
-  const expenses = [
-    { amount: 30, category: "food", description: "Уличная еда день 1", paidById: participants[0].id, dayNumber: 1 },
-    { amount: 40, category: "attractions", description: "Canton Tower + круиз", paidById: participants[1].id, dayNumber: 2 },
-    { amount: 25, category: "food", description: "Хот-пот и димсамы день 3", paidById: participants[2].id, dayNumber: 3 },
-    { amount: 50, category: "transport", description: "Поезд Гуанчжоу-Шэньчжэнь + смотровая", paidById: participants[0].id, dayNumber: 5 },
-    { amount: 35, category: "food", description: "Пляж и морепродукты", paidById: participants[1].id, dayNumber: 7 },
-    { amount: 18, category: "transport", description: "Паром в Гонконг", paidById: participants[2].id, dayNumber: 8 },
-    { amount: 60, category: "food", description: "SoHo и коктейли", paidById: participants[0].id, dayNumber: 9 },
-    { amount: 320, category: "accommodation", description: "Отель Гуанчжоу 4 ночи", paidById: participants[1].id, dayNumber: 1 },
-  ];
-
-  for (const exp of expenses) {
-    const day = await db.day.findFirst({ where: { dayNumber: exp.dayNumber } });
+  // 4. Стартовые траты для демонстрации бюджета
+  for (const exp of DEMO_EXPENSES) {
+    const day = await db.day.findFirst({
+      where: { tripId: trip.id, dayNumber: exp.dayNumber },
+    });
     await db.expense.create({
       data: {
+        tripId: trip.id,
         amount: exp.amount,
         category: exp.category,
         description: exp.description,
-        paidById: exp.paidById,
+        paidById: DEMO_USERS[exp.paidBy].id,
         dayId: day?.id,
       },
     });
   }
-  console.log(`✓ Created ${expenses.length} expenses`);
+  console.log(`✓ ${DEMO_EXPENSES.length} expenses`);
 
   console.log("🌱 Seed complete!");
 }
