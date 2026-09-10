@@ -1,6 +1,6 @@
 # TripTrek — Production Dockerfile
 # Build context: repo root (docker-compose context: ..)
-# Multi-stage: deps → build → runner
+# Multi-stage: deps → build → runner (non-root)
 
 FROM oven/bun:1-debian AS deps
 WORKDIR /app
@@ -16,11 +16,9 @@ RUN apt-get update -y && apt-get install -y --no-install-recommends openssl ca-c
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 ENV NEXT_TELEMETRY_DISABLED=1
-ENV DATABASE_URL=file:/app/data/triptrek.db
-RUN mkdir -p /app/data \
-  && bunx prisma generate \
-  && bunx prisma db push --skip-generate --accept-data-loss
-# next build (package.json also copies standalone; we use custom server.ts)
+# Для generate достаточно любого валидного URL — на билд-стадии БД не нужна
+ENV DATABASE_URL=postgresql://build:build@localhost:5432/build
+RUN bunx prisma generate
 RUN bunx next build
 
 FROM oven/bun:1-debian AS runner
@@ -32,7 +30,7 @@ ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV PORT=3000
 ENV HOSTNAME=0.0.0.0
-ENV DATABASE_URL=file:/app/data/triptrek.db
+# DATABASE_URL задаёт docker-compose (Postgres сервиса db)
 
 COPY package.json bun.lock ./
 RUN bun install --frozen-lockfile --production
@@ -48,9 +46,12 @@ COPY --from=builder /app/src/lib ./src/lib
 COPY --from=builder /app/next.config.ts ./next.config.ts
 COPY --from=builder /app/tsconfig.json ./tsconfig.json
 
-RUN mkdir -p /app/data /app/public/uploads/avatars /app/public/uploads/foods
+# Non-root: образ oven/bun включает пользователя bun
+RUN mkdir -p /app/public/uploads/avatars /app/public/uploads/foods \
+  && chown -R bun:bun /app
+USER bun
 
-COPY docker-deploy/entrypoint.sh /entrypoint.sh
+COPY --chown=bun:bun docker-deploy/entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
 EXPOSE 3000

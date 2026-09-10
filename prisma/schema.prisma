@@ -1,4 +1,4 @@
-// TripTrek — Prisma schema (PostgreSQL-compatible, works on SQLite)
+// TripTrek — Prisma schema (PostgreSQL, ADR-0002)
 // Multi-trip architecture
 
 generator client {
@@ -6,22 +6,22 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
 // === Пользователь (глобальный аккаунт) ===
 model User {
-  id         String   @id @default(cuid())
-  email      String   @unique
+  id         String    @id @default(cuid())
+  email      String    @unique
   name       String
-  password   String   // bcrypt hash
-  emoji      String   @default("👤")
-  color      String   @default("#94a3b8")
-  avatarUrl  String?  // фото пользователя (загруженное)
-  plan       String   @default("free") // free / premium
+  password   String // bcrypt hash
+  emoji      String    @default("👤")
+  color      String    @default("#94a3b8")
+  avatarUrl  String? // фото пользователя (загруженное)
+  plan       String    @default("free") // free / premium
   planExpiry DateTime? // для премиума
-  createdAt  DateTime @default(now())
+  createdAt  DateTime  @default(now())
 
   memberships TripMember[]
   photos      Photo[]
@@ -40,7 +40,9 @@ model PushSubscription {
   auth      String
   createdAt DateTime @default(now())
 
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
 }
 
 // === Поездка ===
@@ -60,18 +62,18 @@ model Trip {
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
-  members      TripMember[]
-  days         Day[]
-  places       Place[]
-  photos       Photo[]
-  expenses     Expense[]
-  journals     JournalEntry[]
-  messages     BoardMessage[]
-  checklist    ChecklistItem[]
-  info         InfoItem[]
-  phrases      Phrase[]
-  foods        FoodItem[]
-  budgetPlans  BudgetPlan[]
+  members     TripMember[]
+  days        Day[]
+  places      Place[]
+  photos      Photo[]
+  expenses    Expense[]
+  journals    JournalEntry[]
+  messages    BoardMessage[]
+  checklist   ChecklistItem[]
+  info        InfoItem[]
+  phrases     Phrase[]
+  foods       FoodItem[]
+  budgetPlans BudgetPlan[]
 }
 
 // === Участник поездки (связь User ↔ Trip) ===
@@ -80,14 +82,14 @@ model TripMember {
   tripId      String
   userId      String
   role        String   @default("member") // owner / member
-  displayName String   // имя в рамках поездки
+  displayName String // имя в рамках поездки
   emoji       String   @default("👤")
   color       String   @default("#94a3b8")
-  budget      Float?   // персональный бюджет
+  budget      Float? // персональный бюджет
   joinedAt    DateTime @default(now())
 
-  trip        Trip     @relation(fields: [tripId], references: [id], onDelete: Cascade)
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  trip Trip @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([tripId, userId])
 }
@@ -104,16 +106,18 @@ model Day {
   summary     String?
   accentColor String?
 
-  trip        Trip     @relation(fields: [tripId], references: [id], onDelete: Cascade)
-  places      Place[]
-  photos      Photo[]
-  expenses    Expense[]
-  journals    JournalEntry[]
+  trip     Trip           @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  places   Place[]
+  photos   Photo[]
+  expenses Expense[]
+  journals JournalEntry[]
+
+  @@index([tripId])
 }
 
 // === Место ===
 model Place {
-  id          String   @id @default(cuid())
+  id          String    @id @default(cuid())
   tripId      String
   name        String
   description String?
@@ -122,57 +126,64 @@ model Place {
   lng         Float
   dayId       String
   timeOfDay   String?
-  status      String   @default("planned")
+  status      String    @default("planned")
   budget      Float?
   address     String?
   notes       String?
   rating      Int?
   visitedAt   DateTime?
-  order       Int      @default(0)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  order       Int       @default(0)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
 
-  trip        Trip     @relation(fields: [tripId], references: [id], onDelete: Cascade)
-  day         Day      @relation(fields: [dayId], references: [id], onDelete: Cascade)
-  photos      Photo[]
+  trip   Trip    @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  day    Day     @relation(fields: [dayId], references: [id], onDelete: Cascade)
+  photos Photo[]
+
+  @@index([tripId])
+  @@index([dayId])
 }
 
 // === Фото ===
 model Photo {
-  id            String   @id @default(cuid())
-  tripId        String
-  url           String
-  thumbUrl      String?
-  caption       String?
-  isFavorite    Boolean  @default(false)
-  placeId       String?
-  dayId         String
-  userId        String?  // кто загрузил (был participantId)
-  lat           Float?
-  lng           Float?
-  address       String?
-  takenAt       DateTime @default(now())
-  width         Int?
-  height        Int?
-  createdAt     DateTime @default(now())
+  id         String   @id @default(cuid())
+  tripId     String
+  url        String
+  thumbUrl   String?
+  caption    String?
+  isFavorite Boolean  @default(false)
+  placeId    String?
+  dayId      String
+  userId     String? // кто загрузил (был participantId)
+  lat        Float?
+  lng        Float?
+  address    String?
+  takenAt    DateTime @default(now())
+  width      Int?
+  height     Int?
+  createdAt  DateTime @default(now())
 
-  trip          Trip     @relation(fields: [tripId], references: [id], onDelete: Cascade)
-  place         Place?   @relation(fields: [placeId], references: [id], onDelete: SetNull)
-  day           Day      @relation(fields: [dayId], references: [id], onDelete: Cascade)
-  user          User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  trip  Trip   @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  place Place? @relation(fields: [placeId], references: [id], onDelete: SetNull)
+  day   Day    @relation(fields: [dayId], references: [id], onDelete: Cascade)
+  user  User?  @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([tripId])
+  @@index([dayId])
+  @@index([placeId])
 }
 
 // === Трата ===
 model Expense {
-  id            String   @id @default(cuid())
-  tripId        String
-  amount        Float
-  category      String
-  description   String
-  paidById      String   // userId кто заплатил
-  dayId         String?
-  splitWith     String   @default("")  // comma-separated userIds (пусто = личная трата)
-  excludeSelf   Boolean  @default(false) // true = плательщик не участвует в делении
+  id               String   @id @default(cuid())
+  tripId           String
+  amount           Float
+  category         String
+  description      String
+  paidById         String // userId кто заплатил
+  dayId            String?
+  splitWith        String   @default("") // comma-separated userIds (пусто = личная трата)
+  excludeSelf      Boolean  @default(false) // true = плательщик не участвует в делении
   // Исходная сумма и валюта, как пользователь её ввёл (до конвертации в валюту поездки).
   // amount всегда хранится в валюте поездки. originalAmount/originalCurrency хранят то,
   // что ввёл пользователь — чтобы можно было показать «изначально 100 ¥» под конвертированной суммой.
@@ -181,46 +192,54 @@ model Expense {
   // settlementKey — детерминированный ключ для идемпотентности переводов (P0 #3).
   // Формат: "settle-{fromId}-{toId}-{YYYY-MM-DDTHH}". В течение часа повторный клик
   // даёт тот же ключ → второй клик не дублирует расчёт, баланс не ломается.
-  settlementKey String?  @unique
-  createdAt     DateTime @default(now())
+  settlementKey    String?  @unique
+  createdAt        DateTime @default(now())
 
-  trip        Trip     @relation(fields: [tripId], references: [id], onDelete: Cascade)
-  paidBy      User     @relation(fields: [paidById], references: [id])
-  day         Day?     @relation(fields: [dayId], references: [id], onDelete: SetNull)
+  trip   Trip @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  paidBy User @relation(fields: [paidById], references: [id])
+  day    Day? @relation(fields: [dayId], references: [id], onDelete: SetNull)
+
+  @@index([tripId])
+  @@index([paidById])
 }
 
 // === Запись дневника ===
 model JournalEntry {
-  id            String   @id @default(cuid())
-  tripId        String
-  dayId         String
-  userId        String?  // был participantId
-  mood          String?
-  content       String
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  id        String   @id @default(cuid())
+  tripId    String
+  dayId     String
+  userId    String? // был participantId
+  mood      String?
+  content   String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  trip          Trip     @relation(fields: [tripId], references: [id], onDelete: Cascade)
-  day           Day      @relation(fields: [dayId], references: [id], onDelete: Cascade)
-  user          User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  trip Trip  @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  day  Day   @relation(fields: [dayId], references: [id], onDelete: Cascade)
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([tripId])
+  @@index([dayId])
 }
 
 // === Сообщение в чате ===
 model BoardMessage {
-  id            String   @id @default(cuid())
-  tripId        String
-  content       String
-  userId        String?  // был participantId
-  pinned        Boolean  @default(false)
-  reactions     String?  // JSON {"👍":["userId",...]}
-  editedAt      DateTime?
-  replyToId     String?
-  createdAt     DateTime @default(now())
+  id        String    @id @default(cuid())
+  tripId    String
+  content   String
+  userId    String? // был participantId
+  pinned    Boolean   @default(false)
+  reactions String? // JSON {"👍":["userId",...]}
+  editedAt  DateTime?
+  replyToId String?
+  createdAt DateTime  @default(now())
 
-  trip          Trip     @relation(fields: [tripId], references: [id], onDelete: Cascade)
-  user          User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
-  replyTo       BoardMessage?  @relation("BoardReply", fields: [replyToId], references: [id], onDelete: SetNull)
-  replies       BoardMessage[] @relation("BoardReply")
+  trip    Trip           @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  user    User?          @relation(fields: [userId], references: [id], onDelete: SetNull)
+  replyTo BoardMessage?  @relation("BoardReply", fields: [replyToId], references: [id], onDelete: SetNull)
+  replies BoardMessage[] @relation("BoardReply")
+
+  @@index([tripId])
 }
 
 // === Чек-лист ===
@@ -233,7 +252,9 @@ model ChecklistItem {
   order     Int      @default(0)
   createdAt DateTime @default(now())
 
-  trip      Trip     @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  trip Trip @relation(fields: [tripId], references: [id], onDelete: Cascade)
+
+  @@index([tripId])
 }
 
 // === Справка ===
@@ -247,24 +268,28 @@ model InfoItem {
   order     Int      @default(0)
   createdAt DateTime @default(now())
 
-  trip      Trip     @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  trip Trip @relation(fields: [tripId], references: [id], onDelete: Cascade)
+
+  @@index([tripId])
 }
 
 // === Фраза разговорника ===
 model Phrase {
-  id         String   @id @default(cuid())
-  tripId     String
-  category   String
-  ru         String
-  cn         String
-  pinyin     String
-  audio      String?
-  language   String? // код языка фразы (zh, ja, fr...) — null у записей до миграции
-  favorite   Boolean  @default(false)
-  order      Int      @default(0)
-  createdAt  DateTime @default(now())
+  id        String   @id @default(cuid())
+  tripId    String
+  category  String
+  ru        String
+  cn        String
+  pinyin    String
+  audio     String?
+  language  String? // код языка фразы (zh, ja, fr...) — null у записей до миграции
+  favorite  Boolean  @default(false)
+  order     Int      @default(0)
+  createdAt DateTime @default(now())
 
-  trip       Trip     @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  trip Trip @relation(fields: [tripId], references: [id], onDelete: Cascade)
+
+  @@index([tripId])
 }
 
 // === Блюдо ===
@@ -286,17 +311,19 @@ model FoodItem {
   // JSON-массив userId, проголосовавших «хочу попробовать»
   wantedBy    String?
 
-  trip        Trip     @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  trip Trip @relation(fields: [tripId], references: [id], onDelete: Cascade)
+
+  @@index([tripId])
 }
 
 // === Плановый бюджет по категории ===
 model BudgetPlan {
-  id        String   @id @default(cuid())
-  tripId    String
-  category  String
-  amount    Float
+  id       String @id @default(cuid())
+  tripId   String
+  category String
+  amount   Float
 
-  trip      Trip     @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  trip Trip @relation(fields: [tripId], references: [id], onDelete: Cascade)
 
   @@unique([tripId, category])
 }

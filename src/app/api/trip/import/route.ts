@@ -177,7 +177,11 @@ export async function POST(req: NextRequest) {
   }
 
   // Создаём новую поездку и текущего пользователя как owner-участника
-  const trip = await db.trip.create({
+  // Атомарность (Phase 3): битый элемент в середине бэкапа не должен оставить
+  // в БД полусобранную поездку — весь импорт в одной транзакции
+  const trip = await db.$transaction(async (tx) => {
+  // Создаём новую поездку и текущего пользователя как owner-участника
+  const trip = await tx.trip.create({
     data: {
       title: body.trip.title,
       destination: body.trip.destination || "Unknown",
@@ -206,7 +210,7 @@ export async function POST(req: NextRequest) {
 
   // 1) Дни
   for (const d of body.days) {
-    const newDay = await db.day.create({
+    const newDay = await tx.day.create({
       data: {
         tripId: trip.id,
         dayNumber: d.dayNumber,
@@ -225,7 +229,7 @@ export async function POST(req: NextRequest) {
   for (const p of body.places || []) {
     const newDayId = p.dayId ? dayIdMap.get(p.dayId) : null;
     if (!newDayId) continue; // пропускаем места без привязки к дню
-    await db.place.create({
+    await tx.place.create({
       data: {
         tripId: trip.id,
         dayId: newDayId,
@@ -253,7 +257,7 @@ export async function POST(req: NextRequest) {
     const newDayId = ph.dayId ? dayIdMap.get(ph.dayId) : null;
     if (!newDayId) continue;
     if (typeof ph.url !== "string" || !ph.url.startsWith("/uploads/")) continue;
-    await db.photo.create({
+    await tx.photo.create({
       data: {
         tripId: trip.id,
         dayId: newDayId,
@@ -272,7 +276,7 @@ export async function POST(req: NextRequest) {
   // 4) Траты — paidById → текущий пользователь
   for (const ex of body.expenses || []) {
     const newDayId = ex.dayId ? dayIdMap.get(ex.dayId) : null;
-    await db.expense.create({
+    await tx.expense.create({
       data: {
         tripId: trip.id,
         amount: ex.amount,
@@ -290,7 +294,7 @@ export async function POST(req: NextRequest) {
   for (const j of body.journals || []) {
     const newDayId = j.dayId ? dayIdMap.get(j.dayId) : null;
     if (!newDayId) continue;
-    await db.journalEntry.create({
+    await tx.journalEntry.create({
       data: {
         tripId: trip.id,
         dayId: newDayId,
@@ -303,7 +307,7 @@ export async function POST(req: NextRequest) {
 
   // 6) Сообщения на доске
   for (const m of body.messages || []) {
-    await db.boardMessage.create({
+    await tx.boardMessage.create({
       data: {
         tripId: trip.id,
         content: m.content,
@@ -315,7 +319,7 @@ export async function POST(req: NextRequest) {
 
   // 7) Чек-лист
   for (const c of body.checklist || []) {
-    await db.checklistItem.create({
+    await tx.checklistItem.create({
       data: {
         tripId: trip.id,
         text: c.text,
@@ -328,7 +332,7 @@ export async function POST(req: NextRequest) {
 
   // 8) Инфо-блоки
   for (const inf of body.info || []) {
-    await db.infoItem.create({
+    await tx.infoItem.create({
       data: {
         tripId: trip.id,
         type: inf.type,
@@ -342,7 +346,7 @@ export async function POST(req: NextRequest) {
 
   // 9) Фразы разговорника
   for (const p of body.phrases || []) {
-    await db.phrase.create({
+    await tx.phrase.create({
       data: {
         tripId: trip.id,
         category: p.category,
@@ -358,7 +362,7 @@ export async function POST(req: NextRequest) {
 
   // 10) Блюда
   for (const f of body.foods || []) {
-    await db.foodItem.create({
+    await tx.foodItem.create({
       data: {
         tripId: trip.id,
         name: f.name,
@@ -379,12 +383,16 @@ export async function POST(req: NextRequest) {
 
   // 11) Планы бюджета
   for (const b of body.budgetPlans || []) {
-    await db.budgetPlan.upsert({
+    await tx.budgetPlan.upsert({
       where: { tripId_category: { tripId: trip.id, category: b.category } },
       update: { amount: b.amount },
       create: { tripId: trip.id, category: b.category, amount: b.amount },
     });
   }
+
+
+    return trip;
+  });
 
   return NextResponse.json({ ok: true, tripId: trip.id, title: trip.title });
 }

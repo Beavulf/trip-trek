@@ -1,0 +1,20 @@
+# Локальный dev: только Postgres (само приложение — bun server.ts на хосте).
+#   npm run db:up    — поднять
+#   npm run db:down  — остановить (данные в volume triptrek-pgdata-dev)
+# DATABASE_URL для dev: postgresql://postgres:dev@localhost:5432/triptrek?schema=public
+services:
+  pg:
+    image: postgres:16-alpine
+    container_name: triptrek-pg-dev
+    restart: unless-stopped
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=dev
+      - POSTGRES_DB=triptrek
+    ports:
+      - "5432:5432"
+    volumes:
+      - triptrek-pgdata-dev:/var/lib/postgresql/data
+
+volumes:
+  triptrek-pgdata-dev:

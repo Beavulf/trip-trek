@@ -34,24 +34,25 @@ export async function POST(req: NextRequest) {
     const startDate = parsed && !isNaN(parsed.getTime()) ? parsed : new Date();
     const endDate = new Date(startDate.getTime() + template.totalDays * 24 * 60 * 60 * 1000);
 
-    // Лимит + create в одной транзакции (меньше гонки double-click)
+    // Лимит + create в одной транзакции: меньше гонки double-click и никакой
+    // полусобранной поездки (дни+места+блюда+фразы — атомарно, Phase 3)
     const trip = await db.$transaction(async (tx) => {
       const tripCount = await tx.tripMember.count({ where: { userId, role: "owner" } });
       if (tripCount >= maxTrips) {
         throw new Error("LIMIT_REACHED");
       }
-      return tx.trip.create({
+      const trip = await tx.trip.create({
       data: {
-        title: customTitle || template.title,
-        destination: template.destination,
-        startDate,
-        endDate,
-        totalDays: template.totalDays,
-        totalBudget: template.totalBudget,
-        coverEmoji: template.coverEmoji,
-        coverColor: template.coverColor,
-        status: "planning",
-        members: {
+      title: customTitle || template.title,
+      destination: template.destination,
+      startDate,
+      endDate,
+      totalDays: template.totalDays,
+      totalBudget: template.totalBudget,
+      coverEmoji: template.coverEmoji,
+      coverColor: template.coverColor,
+      status: "planning",
+      members: {
           create: {
             userId,
             role: "owner",
@@ -74,61 +75,63 @@ export async function POST(req: NextRequest) {
       },
       include: { days: true, members: true },
     });
-    });
 
-    // Create places for each day
-    for (const templateDay of template.days) {
-      const dbDay = trip.days.find((d) => d.dayNumber === templateDay.dayNumber);
-      if (!dbDay) continue;
-      for (const place of templateDay.places) {
-        await db.place.create({
+      // Places for each day
+      for (const templateDay of template.days) {
+        const dbDay = trip.days.find((d) => d.dayNumber === templateDay.dayNumber);
+        if (!dbDay) continue;
+        for (const place of templateDay.places) {
+          await tx.place.create({
+            data: {
+              tripId: trip.id,
+              dayId: dbDay.id,
+              name: place.name,
+              description: place.description,
+              category: place.category,
+              lat: place.lat,
+              lng: place.lng,
+              timeOfDay: place.timeOfDay,
+              budget: place.budget,
+              address: place.address,
+              status: "planned",
+              order: 0,
+            },
+          });
+        }
+      }
+
+      // Foods
+      for (const food of template.foods) {
+        await tx.foodItem.create({
           data: {
             tripId: trip.id,
-            dayId: dbDay.id,
-            name: place.name,
-            description: place.description,
-            category: place.category,
-            lat: place.lat,
-            lng: place.lng,
-            timeOfDay: place.timeOfDay,
-            budget: place.budget,
-            address: place.address,
-            status: "planned",
+            name: food.name,
+            nameCn: food.nameCn,
+            description: food.description,
+            city: food.city,
+            price: food.price,
+            emoji: food.emoji,
             order: 0,
           },
         });
       }
-    }
 
-    // Create foods
-    for (const food of template.foods) {
-      await db.foodItem.create({
-        data: {
-          tripId: trip.id,
-          name: food.name,
-          nameCn: food.nameCn,
-          description: food.description,
-          city: food.city,
-          price: food.price,
-          emoji: food.emoji,
-          order: 0,
-        },
-      });
-    }
+      // Phrases
+      for (const phrase of template.phrases) {
+        await tx.phrase.create({
+          data: {
+            tripId: trip.id,
+            category: phrase.category,
+            ru: phrase.ru,
+            cn: phrase.cn,
+            pinyin: phrase.pinyin,
+            order: 0,
+          },
+        });
+      }
 
-    // Create phrases
-    for (const phrase of template.phrases) {
-      await db.phrase.create({
-        data: {
-          tripId: trip.id,
-          category: phrase.category,
-          ru: phrase.ru,
-          cn: phrase.cn,
-          pinyin: phrase.pinyin,
-          order: 0,
-        },
-      });
-    }
+      return trip;
+    });
 
     return NextResponse.json({
       id: trip.id,
