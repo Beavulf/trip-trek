@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef } from "react";
-import { Download, Upload, Loader2, Database } from "lucide-react";
+import { Download, Upload, Loader2, Database, ChevronRight } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
@@ -99,60 +99,70 @@ export function DataBackup() {
 
   return (
     <div className="rounded-2xl bg-card border border-border p-4">
-      <h2 className="font-semibold text-sm mb-3 flex items-center gap-2">
-        <Database className="size-4" /> Резервное копирование
-      </h2>
-      <p className="text-xs text-muted-foreground mb-3 leading-relaxed">
-        Экспорт скачивает JSON поездки. Импорт добавляет маршрут, траты, фразы, еду и чек-лист в текущую поездку
-        (новые id). Фото, дневник и чат из файла не восстанавливаются.
-      </p>
-
-      <div className="grid grid-cols-2 gap-2">
-        <button
-          type="button"
-          onClick={handleExport}
-          disabled={exporting || importing}
-          aria-label="Экспортировать данные поездки"
-          className="min-h-[72px] flex flex-col items-center gap-1.5 py-3 rounded-xl border-2 border-border hover:border-primary/40 hover:bg-accent transition-colors group disabled:opacity-50"
-        >
-          {exporting ? (
-            <Loader2 className="size-6 text-primary animate-spin" />
-          ) : (
-            <Download className="size-6 text-primary group-hover:scale-110 transition-transform" />
-          )}
-          <span className="text-xs font-medium">{exporting ? "Экспорт…" : "Экспорт"}</span>
-          <span className="text-[10px] text-muted-foreground">Скачать JSON</span>
-        </button>
-
-        <input
-          ref={inputRef}
-          type="file"
-          accept="application/json,.json"
-          className="hidden"
-          onChange={(e) => {
-            const f = e.target.files?.[0];
-            if (f) handleImportFile(f);
-          }}
-        />
-        <button
-          type="button"
-          onClick={() => setConfirmImport(true)}
-          disabled={importing || exporting}
-          aria-label="Импортировать данные из JSON"
-          className={cn(
-            "min-h-[72px] flex flex-col items-center gap-1.5 py-3 rounded-xl border-2 transition-colors group disabled:opacity-50",
-            confirmImport ? "border-amber-500/40 bg-amber-500/5" : "border-border hover:border-primary/40 hover:bg-accent"
-          )}
-        >
-          {importing ? (
-            <Loader2 className="size-6 text-primary animate-spin" />
-          ) : (
-            <Upload className="size-6 text-primary group-hover:scale-110 transition-transform" />
-          )}
-          <span className="text-xs font-medium">{importing ? "Импорт…" : "Импорт"}</span>
-          <span className="text-[10px] text-muted-foreground">Загрузить JSON</span>
-        </button>
+      <div className="flex items-center gap-3 mb-3">
+        <div className="size-10 rounded-xl bg-primary/10 grid place-items-center shrink-0">
+          <Database className="size-5 text-primary" />
+        </div>
+        <div className="min-w-0">
+          <div className="text-sm font-medium">Данные поездки</div>
+          <div className="text-xs text-muted-foreground leading-snug">
+            Резервная копия: маршрут, траты, фразы, чек-лист
+          </div>
+        </div>
       </div>
+
+      {/* Экспорт */}
+      <button
+        type="button"
+        onClick={handleExport}
+        disabled={exporting || importing}
+        aria-label="Экспортировать данные поездки"
+        className="w-full min-h-14 rounded-xl border border-border px-3 flex items-center gap-3 hover:bg-accent transition-colors disabled:opacity-50 text-left"
+      >
+        {exporting ? (
+          <Loader2 className="size-5 text-primary animate-spin shrink-0" />
+        ) : (
+          <Download className="size-5 text-primary shrink-0" />
+        )}
+        <span className="flex-1 min-w-0">
+          <span className="block text-sm font-medium">{exporting ? "Экспорт…" : "Экспорт"}</span>
+          <span className="block text-xs text-muted-foreground">Скачать JSON-файл на устройство</span>
+        </span>
+        <ChevronRight className="size-4 text-muted-foreground shrink-0" />
+      </button>
+
+      {/* Импорт */}
+      <input
+        ref={inputRef}
+        type="file"
+        accept="application/json,.json"
+        className="hidden"
+        onChange={(e) => {
+          const f = e.target.files?.[0];
+          if (f) handleImportFile(f);
+        }}
+      />
+      <button
+        type="button"
+        onClick={() => setConfirmImport(true)}
+        disabled={importing || exporting}
+        aria-label="Импортировать данные из JSON"
+        className={cn(
+          "w-full min-h-14 rounded-xl border px-3 mt-2 flex items-center gap-3 transition-colors disabled:opacity-50 text-left",
+          confirmImport ? "border-amber-500/40 bg-amber-500/5" : "border-border hover:bg-accent"
+        )}
+      >
+        {importing ? (
+          <Loader2 className="size-5 text-primary animate-spin shrink-0" />
+        ) : (
+          <Upload className="size-5 text-primary shrink-0" />
+        )}
+        <span className="flex-1 min-w-0">
+          <span className="block text-sm font-medium">{importing ? "Импорт…" : "Импорт"}</span>
+          <span className="block text-xs text-muted-foreground">Загрузить данные из JSON-файла</span>
+        </span>
+        <ChevronRight className="size-4 text-muted-foreground shrink-0" />
+      </button>
 
       <AnimatePresence>
         {confirmImport && (
@@ -160,25 +170,27 @@ export function DataBackup() {
             initial={{ opacity: 0, height: 0 }}
             animate={{ opacity: 1, height: "auto" }}
             exit={{ opacity: 0, height: 0 }}
-            className="mt-2 rounded-lg bg-amber-500/10 border border-amber-500/30 p-2.5 text-[11px] text-amber-700 dark:text-amber-400"
+            className="overflow-hidden"
           >
-            ⚠️ <strong>Внимание:</strong> данные добавятся в текущую поездку. Только владелец может импортировать.
-            Фото/дневник из бэкапа не переносятся.
-            <div className="flex gap-2 mt-2">
-              <button
-                type="button"
-                onClick={() => inputRef.current?.click()}
-                className="min-h-11 px-3 rounded-lg bg-amber-600 text-white text-xs font-medium"
-              >
-                Продолжить
-              </button>
-              <button
-                type="button"
-                onClick={() => setConfirmImport(false)}
-                className="min-h-11 px-3 rounded-lg text-xs text-muted-foreground"
-              >
-                Отмена
-              </button>
+            <div className="mt-2 rounded-xl bg-amber-500/10 border border-amber-500/30 p-3 text-xs text-amber-700 dark:text-amber-400">
+              <strong>Внимание:</strong> данные добавятся в текущую поездку (новые записи). Только владелец может
+              импортировать. Фото, дневник и чат из файла не переносятся.
+              <div className="flex gap-2 mt-2.5">
+                <button
+                  type="button"
+                  onClick={() => inputRef.current?.click()}
+                  className="min-h-11 px-4 rounded-lg bg-amber-600 text-white text-xs font-medium active:scale-95 transition-transform"
+                >
+                  Выбрать файл
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setConfirmImport(false)}
+                  className="min-h-11 px-4 rounded-lg text-xs text-muted-foreground hover:bg-accent"
+                >
+                  Отмена
+                </button>
+              </div>
             </div>
           </motion.div>
         )}
