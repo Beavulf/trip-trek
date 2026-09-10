@@ -1,17 +1,32 @@
 "use client";
 
-import { useCurrency } from "@/hooks/use-trip";
+import { useCurrency, useTrip } from "@/hooks/use-trip";
 import { ArrowRight, Loader2, RefreshCw } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
-import { CURRENCIES } from "@/lib/currencies";
+import { CURRENCIES, currencySelectOptions } from "@/lib/currencies";
 
 export function CurrencyConverter() {
   const { data: rates, isLoading, isError, refetch, isFetching } = useCurrency();
+  const { data: trip } = useTrip();
+  const tripCurrency = trip?.settings?.currency;
   const [amount, setAmount] = useState("100");
   const [from, setFrom] = useState("USD");
   const [to, setTo] = useState("CNY");
+  const [userPicked, setUserPicked] = useState(false);
+
+  // Дефолтная пара — валюта поездки ↔ USD (не жёсткий USD→CNY)
+  useEffect(() => {
+    if (userPicked || !tripCurrency) return;
+    if (tripCurrency === "USD") {
+      setFrom("USD");
+      setTo("EUR");
+    } else {
+      setFrom(tripCurrency);
+      setTo("USD");
+    }
+  }, [tripCurrency, userPicked]);
 
   const convert = (amt: number, f: string, t: string): number => {
     if (!rates?.rates[f] || !rates?.rates[t]) return 0;
@@ -70,10 +85,13 @@ export function CurrencyConverter() {
             <div className="flex gap-2">
               <select
                 value={from}
-                onChange={(e) => setFrom(e.target.value)}
+                onChange={(e) => {
+                  setFrom(e.target.value);
+                  setUserPicked(true);
+                }}
                 className="rounded-lg border border-input bg-background px-2 py-2.5 text-sm w-28 min-h-11"
               >
-                {CURRENCIES.map((c) => (
+                {currencySelectOptions(tripCurrency).map((c) => (
                   <option key={c.code} value={c.code}>{c.flag} {c.code}</option>
                 ))}
               </select>
@@ -102,10 +120,13 @@ export function CurrencyConverter() {
             <div className="flex gap-2">
               <select
                 value={to}
-                onChange={(e) => setTo(e.target.value)}
+                onChange={(e) => {
+                  setTo(e.target.value);
+                  setUserPicked(true);
+                }}
                 className="rounded-lg border border-input bg-background px-2 py-2.5 text-sm w-28 min-h-11"
               >
-                {CURRENCIES.map((c) => (
+                {currencySelectOptions(tripCurrency).map((c) => (
                   <option key={c.code} value={c.code}>{c.flag} {c.code}</option>
                 ))}
               </select>
