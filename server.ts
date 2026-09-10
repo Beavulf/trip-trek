@@ -3,21 +3,48 @@
 //
 // Architecture:
 //   server.ts (this)              → main entry, Next.js + Socket.io setup
+//   server/ws-auth.ts             → JWT handshake для socket.io
 //   server/socket-handlers.ts     → socket.io event handlers (read-only канал)
 //   server/rooms.ts               → trip rooms management
 //   server/notification-map.ts    → notification config (event → emoji+msg)
 //   src/lib/ws-bus.ts             → publish() шина для API-маршрутов
+//
+// Next 16 рассчитывает на глобальный AsyncLocalStorage (вебпак-сборка next
+// start его инжектит, а custom-server под bun — нет: модуль async-local-storage
+// видит undefined и ставит Fake, который кидает инвариант на первом же
+// unhandled-rejection). Подставляем настоящий node:async_hooks ALS ДО любого
+// импорта next.
+import { AsyncLocalStorage } from "node:async_hooks";
 
-import { createServer } from "http";
-import { Server } from "socket.io";
-import type { Server as IOServer } from "socket.io";
-import next from "next";
-import { db } from "./src/lib/db";
-import { setIo } from "./src/lib/ws-bus";
-import { setupSocketHandlers } from "./server/socket-handlers";
-import { wsHandshakeAuth } from "./server/ws-auth";
-import { TripRooms } from "./server/rooms";
-import { handleUploadsRequest } from "./server/static-uploads";
+if (typeof (globalThis as { AsyncLocalStorage?: unknown }).AsyncLocalStorage === "undefined") {
+  (globalThis as { AsyncLocalStorage?: unknown }).AsyncLocalStorage = AsyncLocalStorage;
+}
+
+// Необработанные реджекты печатаем ЧЕРЕЗ stderr напрямую: next патчит
+// console.* через ALS — вызов console.error в этих обработчиках под bun
+// сам взрывается инвариантом.
+process.on("unhandledRejection", (reason) => {
+  const text = reason instanceof Error ? (reason.stack ?? reason.message) : String(reason);
+  process.stderr.write(`[unhandledRejection] ${text}\n`);
+});
+process.on("uncaughtException", (err) => {
+  const text = err instanceof Error ? (err.stack ?? err.message) : String(err);
+  process.stderr.write(`[uncaughtException] ${text}\n`);
+  process.exit(1);
+});
+
+const [{ createServer }, { Server }, { default: next }, { db }, { setIo }, { setupSocketHandlers }, { wsHandshakeAuth }, { TripRooms }, { handleUploadsRequest }] =
+  await Promise.all([
+    import("http"),
+    import("socket.io"),
+    import("next"),
+    import("./src/lib/db"),
+    import("./src/lib/ws-bus"),
+    import("./server/socket-handlers"),
+    import("./server/ws-auth"),
+    import("./server/rooms"),
+    import("./server/static-uploads"),
+  ]);
 
 const dev = process.env.NODE_ENV !== "production";
 const port = parseInt(process.env.PORT || "3000");
@@ -32,7 +59,7 @@ const rooms = new TripRooms();
 
 // io is assigned after server creation, but referenced in the HTTP callback.
 // Using `let` + type annotation so the closure can access it.
-let io: IOServer;
+let io: import("socket.io").Server;
 
 app.prepare().then(() => {
   // HTTP server (Next.js) + runtime /uploads from disk volume
@@ -83,3 +110,5 @@ app.prepare().then(() => {
   process.on("SIGTERM", () => shutdown("SIGTERM"));
   process.on("SIGINT", () => shutdown("SIGINT"));
 });
+
+export {};

@@ -2,14 +2,14 @@
 # Build context: repo root (docker-compose context: ..)
 # Multi-stage: deps → build → runner (non-root)
 
-FROM oven/bun:1-debian AS deps
+FROM oven/bun:1.3.14-debian AS deps
 WORKDIR /app
 RUN apt-get update -y && apt-get install -y --no-install-recommends openssl ca-certificates \
   && rm -rf /var/lib/apt/lists/*
 COPY package.json bun.lock ./
 RUN bun install --frozen-lockfile
 
-FROM oven/bun:1-debian AS builder
+FROM oven/bun:1.3.14-debian AS builder
 WORKDIR /app
 RUN apt-get update -y && apt-get install -y --no-install-recommends openssl ca-certificates \
   && rm -rf /var/lib/apt/lists/*
@@ -21,7 +21,7 @@ ENV DATABASE_URL=postgresql://build:build@localhost:5432/build
 RUN bunx prisma generate
 RUN bunx next build
 
-FROM oven/bun:1-debian AS runner
+FROM oven/bun:1.3.14-debian AS runner
 WORKDIR /app
 RUN apt-get update -y && apt-get install -y --no-install-recommends openssl ca-certificates curl \
   && rm -rf /var/lib/apt/lists/*
