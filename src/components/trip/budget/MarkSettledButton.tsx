@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Check, Clock, Loader2, LogIn } from "lucide-react";
 import { toast } from "sonner";
 import { useAddExpense } from "@/hooks/use-trip";
@@ -19,15 +19,21 @@ export function MarkSettledButton({ from, to, amount }: MarkSettledButtonProps) 
   const { data: session } = useAuth();
   const currentUserId = (session?.user as { id?: string } | undefined)?.id || "";
   const [done, setDone] = useState(false);
+  // Синхронная защита от двойного клика: у каждого клика свой settlementKey,
+  // поэтому полагаться только на disabled={isPending} нельзя (два клика в одном кадре)
+  const submittingRef = useRef(false);
 
   // from = должник, to = кредитор (ему должны)
   const isCreditor = currentUserId === to.id;
   const isDebtor = currentUserId === from.id;
 
   const handleSettle = async () => {
-    // Идемпотентность по паре + округлённой сумме (не по часу — иначе повтор в тот же час даёт старый amount)
+    if (submittingRef.current) return;
+    submittingRef.current = true;
+    // Ключ уникален на каждый факт перевода: одна и та же пара может гасить
+    // одинаковые по сумме долги многократно (два ужина по $20 — не должны коллидировать).
     const cents = Math.round(amount * 100);
-    const settlementKey = `settle-${from.id}-${to.id}-${cents}`;
+    const settlementKey = `settle-${from.id}-${to.id}-${cents}-${Date.now()}`;
     try {
       await addExpense.mutateAsync({
         amount: cents / 100,
@@ -41,6 +47,7 @@ export function MarkSettledButton({ from, to, amount }: MarkSettledButtonProps) 
       toast.success("Перевод подтверждён ✅", { description: `${amount.toFixed(2)} от ${from.name}` });
       setDone(true);
     } catch (err) {
+      submittingRef.current = false;
       toast.error("Не удалось подтвердить перевод", {
         description: err instanceof Error ? err.message : "Попробуйте ещё раз",
       });

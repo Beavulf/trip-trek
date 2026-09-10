@@ -7,7 +7,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { useTripStore } from "@/lib/trip-store";
 import { EXPENSE_CATEGORIES } from "@/lib/types";
 import { currencySymbol } from "@/lib/currencies";
-import { calculateBalances, calculateSettlements } from "@/lib/budget";
+import { calculateBalances, calculateSettlements, calculateNetSpent } from "@/lib/budget";
 import { cn, plural } from "@/lib/utils";
 import { CurrencyConverter } from "../currency-converter";
 import { BudgetPlanWidget } from "../budget-plan-widget";
@@ -139,6 +139,8 @@ export function Budget() {
 
   const balances = calculateBalances(expenses, trip.participants);
   const settlements = calculateSettlements(expenses, trip.participants);
+  // Чистые траты каждого: траты из кошелька минус вернувшиеся переводы (см. SettlementSection)
+  const netSpent = calculateNetSpent(expenses, trip.participants);
   const sym = currencySymbol(trip.settings.currency);
 
   const myCount = realExpenses.filter((e) => e.paidById === currentUserId).length;
@@ -203,12 +205,13 @@ export function Budget() {
             <ParticipantBudgetRow
               key={p.id}
               participant={p}
-              spent={realExpenses.filter((e) => e.paidById === p.id).reduce((s, e) => s + e.amount, 0)}
+              spent={netSpent[p.id] ?? 0}
             />
           ))}
         </div>
         <p className="text-[11px] text-muted-foreground mt-2.5">
           Общий бюджет группы: {sym}{trip.settings.totalBudget} — сумма бюджетов участников.
+          {" "}Потраченное учитывает вернувшиеся переводы.
         </p>
       </div>
 

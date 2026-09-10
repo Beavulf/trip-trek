@@ -19,19 +19,21 @@ export function ExpenseRow({ expense, participants }: ExpenseRowProps) {
   const { data: session } = useAuth();
   const currentUserId = (session?.user as { id?: string } | undefined)?.id || "";
   const myRole = participants.find((p) => p.id === currentUserId)?.role;
-  const canDelete = expense.paidById === currentUserId || myRole === "owner";
-  const sym = currencySymbol(trip?.settings.currency);
-  const del = useDeleteExpense();
-  const [confirming, setConfirming] = useState(false);
-  const isSettlement = expense.category === "settlement";
-  const cat = EXPENSE_CATEGORIES[expense.category];
-  const paidBy = participants.find((p) => p.id === expense.paidById);
 
   // Split info
   const splitIds = expense.splitWith ? expense.splitWith.split(",").filter(Boolean) : [];
   const splitUsers = participants.filter(p => splitIds.includes(p.id));
   const hasSplit = splitIds.length > 0;
   const excludeSelf = expense.excludeSelf;
+  const isSettlement = expense.category === "settlement";
+  // Отменить ошибочную отметку «Перевели» может любая сторона перевода
+  const isSettlementRecipient = isSettlement && splitIds.includes(currentUserId);
+  const canDelete = expense.paidById === currentUserId || myRole === "owner" || isSettlementRecipient;
+  const sym = currencySymbol(trip?.settings.currency);
+  const del = useDeleteExpense();
+  const [confirming, setConfirming] = useState(false);
+  const cat = EXPENSE_CATEGORIES[expense.category];
+  const paidBy = participants.find((p) => p.id === expense.paidById);
 
   // Время
   const timeStr = new Date(expense.createdAt).toLocaleString("ru-RU", {

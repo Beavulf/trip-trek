@@ -55,7 +55,7 @@ export function SettlementSection({ balances, settlements, totalSpent, participa
               </div>
               <div className="flex items-start gap-1.5">
                 <span className="text-primary shrink-0">③</span>
-                <span><b className="text-foreground">Внёс</b> — сколько всего человек заплатил из кошелька.</span>
+                <span><b className="text-foreground">Внёс</b> — сколько человек заплатил за траты поездки (переводы не считаются).</span>
               </div>
               <div className="flex items-start gap-1.5">
                 <span className="text-primary shrink-0">④</span>

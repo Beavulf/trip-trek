@@ -20,6 +20,14 @@ export interface Settlement {
 // excludeSelf = true → плательщик не участвует (купил только для других)
 // excludeSelf = false → плательщик тоже участвует (купил для себя + других)
 
+// Доля одного участника в трате (единая формула для долгов и чистых трат)
+function sharePerPerson(e: Expense): number {
+  const splitUsers: string[] = (e.splitWith || "").split(",").filter(Boolean);
+  if (splitUsers.length === 0) return 0;
+  const count = e.excludeSelf ? splitUsers.length : splitUsers.length + 1;
+  return e.amount / count;
+}
+
 // Считаем paid (сколько каждый реально заплатил, без settlement)
 // и долги (кто кому сколько должен)
 export function calculateBalances(expenses: Expense[], participants: Participant[]): Balance[] {
@@ -37,10 +45,7 @@ export function calculateBalances(expenses: Expense[], participants: Participant
       .forEach((e) => {
         const splitUsers: string[] = (e.splitWith || "").split(",").filter(Boolean);
         if (splitUsers.length === 0) return;
-        const perPerson = e.excludeSelf
-          ? e.amount / splitUsers.length
-          : e.amount / (splitUsers.length + 1);
-        owedToMe += perPerson * splitUsers.length;
+        owedToMe += sharePerPerson(e) * splitUsers.length;
       });
 
     // Сколько я должен другим (я в splitWith чужих трат)
@@ -50,16 +55,32 @@ export function calculateBalances(expenses: Expense[], participants: Participant
       .forEach((e) => {
         const splitUsers: string[] = (e.splitWith || "").split(",").filter(Boolean);
         if (!splitUsers.includes(p.id)) return;
-        const perPerson = e.excludeSelf
-          ? e.amount / splitUsers.length
-          : e.amount / (splitUsers.length + 1);
-        owedToOthers += perPerson;
+        owedToOthers += sharePerPerson(e);
       });
 
     // Баланс: + значит мне должны, - значит я должен
     const balance = owedToMe - owedToOthers;
     return { participant: p, paid, balance, owedToMe, owedToOthers };
   });
+}
+
+// Чистые траты каждого («Бюджет каждого») — сколько денег ушло из кошелька человека
+// с учётом переводов: реальные траты + переводы, которые он отправил, − доли переводов,
+// которые ему вернули. Сумма по всем всегда равна сумме реальных трат поездки.
+export function calculateNetSpent(expenses: Expense[], participants: Participant[]): Record<string, number> {
+  const spent: Record<string, number> = {};
+  participants.forEach((p) => { spent[p.id] = 0; });
+  expenses.forEach((e) => {
+    if (!(e.paidById in spent)) return;
+    spent[e.paidById] += e.amount;
+    if (e.category !== "settlement") return;
+    // Перевод: paidById отправил деньги тем, кто в splitWith — у них чистая трата уменьшается
+    const recipients: string[] = (e.splitWith || "").split(",").filter(Boolean);
+    recipients.forEach((id) => {
+      if (id in spent) spent[id] -= sharePerPerson(e);
+    });
+  });
+  return spent;
 }
 
 // Расчёт кто кому конкретно должен (per-person debts)
@@ -72,12 +93,9 @@ export function calculateSettlements(expenses: Expense[], participants: Particip
     .forEach((e) => {
       const splitUsers: string[] = (e.splitWith || "").split(",").filter(Boolean);
       if (splitUsers.length === 0) return;
-      const perPerson = e.excludeSelf
-        ? e.amount / splitUsers.length
-        : e.amount / (splitUsers.length + 1);
       splitUsers.forEach((userId) => {
         if (!debtsMap[userId]) debtsMap[userId] = {};
-        debtsMap[userId][e.paidById] = (debtsMap[userId][e.paidById] || 0) + perPerson;
+        debtsMap[userId][e.paidById] = (debtsMap[userId][e.paidById] || 0) + sharePerPerson(e);
       });
     });
 

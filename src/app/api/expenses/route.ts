@@ -121,17 +121,20 @@ export async function DELETE(req: NextRequest) {
 
   const expense = await db.expense.findUnique({
     where: { id },
-    select: { tripId: true, paidById: true },
+    select: { tripId: true, paidById: true, category: true, splitWith: true },
   });
   if (!expense) return NextResponse.json({ error: "not found" }, { status: 404 });
 
   const { user, membership, response } = await requireTripMember(req, expense.tripId);
   if (response) return response;
 
-  // Только плательщик или owner поездки
+  // Плательщик, owner поездки, либо получатель перевода (отменить ошибочную отметку «Перевели»)
   const isPayer = expense.paidById === user!.id;
   const isOwner = membership!.role === "owner";
-  if (!isPayer && !isOwner) {
+  const isSettlementRecipient =
+    expense.category === "settlement" &&
+    (expense.splitWith || "").split(",").filter(Boolean).includes(user!.id);
+  if (!isPayer && !isOwner && !isSettlementRecipient) {
     return NextResponse.json({ error: "Можно удалять только свои траты" }, { status: 403 });
   }
 
