@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { requireTripMember } from "@/lib/api-auth";
 import { calculateCurrentDayNumber } from "@/lib/trip-days";
 import { EXPENSE_CATEGORIES, CATEGORY_META } from "@/lib/types";
+import { currencySymbol } from "@/lib/currencies";
 
 // P0 #4: in-memory rate-limit per user+trip (LLM стоит денег).
 // 10 запросов в час на пользователя на поездку — достаточно для тестов/демо.
@@ -22,17 +23,6 @@ function checkRateLimit(key: string): { ok: boolean; resetIn?: number } {
   }
   entry.count += 1;
   return { ok: true };
-}
-
-// P1 #8: валюта → символ
-function currencySymbol(code: string): string {
-  const map: Record<string, string> = {
-    USD: "$", EUR: "€", GBP: "£", CNY: "¥", JPY: "¥", KRW: "₩",
-    RUB: "₽", KZT: "₸", THB: "฿", UAH: "₴", HKD: "HK$", SGD: "S$",
-    AUD: "A$", CAD: "C$", CHF: "Fr", INR: "₹", VND: "₫", IDR: "Rp",
-    MYR: "RM", PHP: "₱", TRY: "₺", AED: "د.إ", MOP: "MOP", BYN: "Br",
-  };
-  return map[code] || "$";
 }
 
 // ─── Промпты: автор историй + 6 стилей рассказа ────────────────────────────

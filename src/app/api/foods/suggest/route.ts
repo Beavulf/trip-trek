@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { requireTripMember } from "@/lib/api-auth";
+import { currencySymbol } from "@/lib/currencies";
 
 // «Советы шефа»: LLM предлагает знаковые блюда города, которых ещё нет в гиде.
 // Пишет только клиент (пользователь выбирает, что добавить) — БД здесь не трогаем.
@@ -22,11 +23,14 @@ function checkRateLimit(key: string): boolean {
   return true;
 }
 
-const SYSTEM_PROMPT = `Ты — шеф-повар и гастрогид. Пользователь собирает список «что попробовать» в городе своей поездки.
+// Пример цены — в валюте конкретной поездки (buildSystemPrompt), а не жёсткий ¥
+function buildSystemPrompt(priceExample: string): string {
+  return `Ты — шеф-повар и гастрогид. Пользователь собирает список «что попробовать» в городе своей поездки.
 Предложи 4 знаковых блюда или напитка именно этого города, которых НЕТ в списке уже добавленных.
 Отвечай СТРОГО JSON-массивом без markdown-обёрток, каждый элемент:
-{"name": "название по-русски", "nameCn": "оригинальное название местным письмом или null", "description": "1–2 предложения по-русски: что это и почему стоит попробовать", "price": "ориентир цены в валюте поездки, например \\"¥25–40\\"", "emoji": "один эмодзи блюда"}
+{"name": "название по-русски", "nameCn": "оригинальное название местным письмом или null", "description": "1–2 предложения по-русски: что это и почему стоит попробовать", "price": "ориентир цены в валюте поездки, например \"${priceExample}\"", "emoji": "один эмодзи блюда"}
 Никакого текста до или после JSON.`;
+}
 
 function parseSuggestions(raw: string): Suggestion[] {
   // LLM любят оборачивать JSON в ```-блоки — срезаем
@@ -89,7 +93,10 @@ export async function POST(req: NextRequest) {
     const userPrompt = `Город: ${city.trim()}. Контекст поездки: ${trip.destination || city.trim()}. Валюта: ${trip.currency}.
 Уже в списке (не предлагай их и близкие синонимы): ${existing.length ? existing.join(", ") : "пусто"}.`;
 
-    const content = await generateWithLLM(SYSTEM_PROMPT, userPrompt);
+    const content = await generateWithLLM(
+      buildSystemPrompt(`${currencySymbol(trip.currency)}25–40`),
+      userPrompt
+    );
     if (!content) {
       return NextResponse.json(
         { error: "Шеф сейчас недоступен — проверь настройки LLM (OPENAI_API_KEY)" },
