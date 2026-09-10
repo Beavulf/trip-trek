@@ -22,7 +22,7 @@ export const NOTIFICATION_MAP: Record<string, NotificationConfig> = {
   "expense:added": {
     emoji: "💸",
     message: (d) =>
-      `${d.userName || d.paidByName || "Кто-то"} добавил(а) трату: $${d.amount} — ${d.description}`,
+      `${d.userName || d.paidByName || "Кто-то"} добавил(а) трату: ${d.currencySymbol || "$"}${d.amount} — ${d.description}`,
   },
   "journal:added": {
     emoji: "📔",
@@ -73,7 +73,7 @@ export const SOCKET_EVENTS: Record<string, SocketEventConfig> = {
     notification: {
       emoji: "💸",
       message: (d) =>
-        `${d.userName || d.paidByName || "Кто-то"} добавил(а) трату: $${d.amount} — ${d.description}`,
+        `${d.userName || d.paidByName || "Кто-то"} добавил(а) трату: ${d.currencySymbol || "$"}${d.amount} — ${d.description}`,
     },
   },
   "expense:deleted": {

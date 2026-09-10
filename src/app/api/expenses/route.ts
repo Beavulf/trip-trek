@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { emitWS } from "@/lib/ws-emit";
 import { requireTripMember } from "@/lib/api-auth";
+import { currencySymbol } from "@/lib/currencies";
 
 // GET /api/expenses?tripId=...
 export async function GET(req: NextRequest) {
@@ -94,12 +95,16 @@ export async function POST(req: NextRequest) {
     },
   });
 
+  // Символ валюты поездки — для push/ws-уведомления (иначе там жёсткий $)
+  const trip = await db.trip.findUnique({ where: { id: tripId }, select: { currency: true } });
+
   await emitWS("expense:added", tripId, {
     id: expense.id,
     amount: expense.amount,
     category: expense.category,
     description: expense.description,
     paidByName: expense.paidBy?.name || "Кто-то",
+    currencySymbol: currencySymbol(trip?.currency),
     // author for toast text + anti double-toast on the client
     userId: user!.id,
     userName: user!.name || expense.paidBy?.name || "Кто-то",
