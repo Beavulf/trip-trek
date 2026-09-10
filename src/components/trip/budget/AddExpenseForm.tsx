@@ -1,20 +1,17 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Wallet, Plus, Users, Check, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { useTrip, useAddExpense, useCurrency, useCurrentTripId } from "@/hooks/use-trip";
 import { useAuth } from "@/hooks/use-auth";
 import { EXPENSE_CATEGORIES } from "@/lib/types";
-import { CURRENCIES } from "@/lib/currencies";
+import { currencySelectOptions } from "@/lib/currencies";
+import { getSavedCurrency, saveCurrency, clearSavedCurrency } from "@/lib/currency-pref";
 
 interface AddExpenseFormProps {
   onDone: () => void;
-}
-
-function currencyKey(tripId: string) {
-  return `triptrek-currency:${tripId}`;
 }
 
 export function AddExpenseForm({ onDone }: AddExpenseFormProps) {
@@ -28,14 +25,21 @@ export function AddExpenseForm({ onDone }: AddExpenseFormProps) {
   const [amount, setAmount] = useState("");
   const [currencyCode, setCurrencyCode] = useState(() => {
     if (typeof window === "undefined") return "USD";
-    const scoped = tripId ? localStorage.getItem(currencyKey(tripId)) : null;
-    return scoped || localStorage.getItem("triptrek-currency") || "USD";
+    return getSavedCurrency(tripId) || "USD";
   });
   const [rememberCurrency, setRememberCurrency] = useState(() => {
     if (typeof window === "undefined") return false;
-    if (tripId && localStorage.getItem(currencyKey(tripId))) return true;
-    return !!localStorage.getItem("triptrek-currency");
+    return !!getSavedCurrency(tripId);
   });
+  const [currencyTouched, setCurrencyTouched] = useState(false);
+  const tripCurrency = trip?.settings?.currency;
+
+  // Пока валюта не запомнена и пользователь не трогал селект — дефолтим к валюте поездки
+  useEffect(() => {
+    if (currencyTouched || !tripCurrency) return;
+    if (getSavedCurrency(tripId)) return;
+    setCurrencyCode(tripCurrency);
+  }, [tripCurrency, tripId, currencyTouched]);
   const [category, setCategory] = useState("food");
   const [description, setDescription] = useState("");
   const [paidById, setPaidById] = useState(currentUserId || trip?.participants[0]?.id || "");
@@ -82,7 +86,7 @@ export function AddExpenseForm({ onDone }: AddExpenseFormProps) {
 
     // Сохраняем валюту если выбрана галочка (scoped по trip)
     if (rememberCurrency && tripId) {
-      localStorage.setItem(currencyKey(tripId), currencyCode);
+      saveCurrency(tripId, currencyCode);
     }
 
     // splitWith = все участники КРОМЕ плательщика
@@ -153,10 +157,13 @@ export function AddExpenseForm({ onDone }: AddExpenseFormProps) {
           />
           <select
             value={currencyCode}
-            onChange={(e) => setCurrencyCode(e.target.value)}
+            onChange={(e) => {
+              setCurrencyCode(e.target.value);
+              setCurrencyTouched(true);
+            }}
             className="rounded-lg border border-input bg-background px-2 py-2.5 text-sm font-medium"
           >
-            {CURRENCIES.map((c) => (
+            {currencySelectOptions(tripCurrency).map((c) => (
               <option key={c.code} value={c.code}>{c.flag} {c.code}</option>
             ))}
           </select>
@@ -179,9 +186,9 @@ export function AddExpenseForm({ onDone }: AddExpenseFormProps) {
                 setRememberCurrency(e.target.checked);
                 if (!tripId) return;
                 if (e.target.checked) {
-                  localStorage.setItem(currencyKey(tripId), currencyCode);
+                  saveCurrency(tripId, currencyCode);
                 } else {
-                  localStorage.removeItem(currencyKey(tripId));
+                  clearSavedCurrency(tripId);
                 }
               }}
               className="size-3.5 accent-primary"

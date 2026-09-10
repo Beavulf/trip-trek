@@ -61,3 +61,14 @@ export function currencySymbol(code: string | undefined | null): string {
   return map[code || ""] || (code ? `${code} ` : "$");
 }
 
+/** Опции селекта валют: стандартный список + валюта поездки, если её в списке нет. */
+export function currencySelectOptions(
+  tripCurrency?: string | null
+): { code: string; flag: string; name: string }[] {
+  const list: { code: string; flag: string; name: string }[] = [...CURRENCIES];
+  if (tripCurrency && !list.some((c) => c.code === tripCurrency)) {
+    list.push({ code: tripCurrency, flag: "🏳️", name: tripCurrency });
+  }
+  return list;
+}
+
