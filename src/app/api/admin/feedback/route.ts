@@ -2,10 +2,12 @@ import { NextRequest, NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { requireAdmin } from "@/lib/api-auth";
+import { logAdmin } from "@/lib/admin-log";
 import { remove as storageRemove } from "@/lib/storage";
 import { userRateLimit } from "@/lib/rate-limit";
 
 const STATUSES = ["new", "in_progress", "resolved"] as const;
+const TYPES = ["bug", "idea", "question"] as const;
 
 const FEEDBACK_SELECT = {
   id: true,
@@ -22,16 +24,21 @@ const FEEDBACK_SELECT = {
   user: { select: { id: true, name: true, email: true, emoji: true, color: true } },
 } as const;
 
-// GET /api/admin/feedback?status=new|in_progress|resolved — очередь отзывов
+// GET /api/admin/feedback?status=&type= — очередь отзывов (фильтры независимы)
 export async function GET(req: NextRequest) {
   const { response } = await requireAdmin(req);
   if (response) return response;
 
-  const statusParam = new URL(req.url).searchParams.get("status");
+  const params = new URL(req.url).searchParams;
+  const statusParam = params.get("status");
+  const typeParam = params.get("type");
   const status = (STATUSES as readonly string[]).includes(statusParam || "") ? statusParam : undefined;
+  const type = (TYPES as readonly string[]).includes(typeParam || "") ? typeParam : undefined;
 
   const items = await db.feedback.findMany({
-    where: status ? { status } : undefined,
+    where: {
+      AND: [status ? { status } : {}, type ? { type } : {}],
+    },
     orderBy: { createdAt: "desc" },
     take: 100,
     select: FEEDBACK_SELECT,
@@ -71,6 +78,12 @@ export async function PATCH(req: NextRequest) {
 
   try {
     const updated = await db.feedback.update({ where: { id }, data, select: FEEDBACK_SELECT });
+    if (data.status) {
+      await logAdmin(admin!.id, "feedback.status", { type: "feedback", id, label: updated.user?.name || "аноним" }, { status: data.status });
+    }
+    if (adminNote !== undefined) {
+      await logAdmin(admin!.id, "feedback.note", { type: "feedback", id, label: updated.user?.name || "аноним" });
+    }
     return NextResponse.json(updated);
   } catch (e) {
     if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2025") {
@@ -93,12 +106,13 @@ export async function DELETE(req: NextRequest) {
 
   const existing = await db.feedback.findUnique({
     where: { id },
-    select: { screenshotUrl: true },
+    select: { screenshotUrl: true, type: true, user: { select: { name: true } } },
   });
   if (!existing) return NextResponse.json({ error: "Отзыв не найден" }, { status: 404 });
 
   try {
     await db.feedback.delete({ where: { id } });
+    await logAdmin(admin!.id, "feedback.delete", { type: "feedback", id, label: existing.user?.name || "аноним" }, { type: existing.type });
   } catch (e) {
     if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2025") {
       return NextResponse.json({ error: "Отзыв не найден" }, { status: 404 });

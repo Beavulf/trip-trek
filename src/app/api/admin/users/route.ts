@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
+import bcrypt from "bcryptjs";
 import { db } from "@/lib/db";
 import { requireAdmin } from "@/lib/api-auth";
+import { logAdmin } from "@/lib/admin-log";
 import { userRateLimit } from "@/lib/rate-limit";
 
 // Никогда не отдаём password и служебные поля
@@ -15,16 +17,51 @@ const SAFE_SELECT = {
   plan: true,
   planExpiry: true,
   role: true,
+  aiApiKey: false,
   createdAt: true,
   _count: { select: { memberships: true } },
 } as const;
 
-// GET /api/admin/users?q= — список пользователей (поиск по имени/email)
+// GET /api/admin/users?q= — список (поиск по имени/email)
+// GET /api/admin/users?id= — карточка: профиль + поездки + вклад в контент
 export async function GET(req: NextRequest) {
   const { response } = await requireAdmin(req);
   if (response) return response;
 
-  const q = new URL(req.url).searchParams.get("q")?.trim();
+  const params = new URL(req.url).searchParams;
+  const id = params.get("id");
+  if (id) {
+    const user = await db.user.findUnique({
+      where: { id },
+      select: {
+        ...SAFE_SELECT,
+        memberships: {
+          select: {
+            id: true,
+            role: true,
+            displayName: true,
+            joinedAt: true,
+            trip: {
+              select: {
+                id: true,
+                title: true,
+                status: true,
+                coverEmoji: true,
+                coverColor: true,
+                _count: { select: { members: true, expenses: true } },
+              },
+            },
+          },
+          orderBy: { joinedAt: "desc" },
+        },
+        _count: { select: { memberships: true, photos: true, expenses: true, journals: true, feedback: true } },
+      },
+    });
+    if (!user) return NextResponse.json({ error: "Пользователь не найден" }, { status: 404 });
+    return NextResponse.json(user);
+  }
+
+  const q = params.get("q")?.trim();
   const users = await db.user.findMany({
     where: q
       ? {
@@ -42,7 +79,7 @@ export async function GET(req: NextRequest) {
   return NextResponse.json(users);
 }
 
-// PATCH /api/admin/users — тело { id, plan?, premiumDays?, role? }
+// PATCH /api/admin/users — тело { id, plan?, premiumDays?, role?, name?, email?, emoji?, color?, password? }
 // premiumDays: число → premium на N дней; null/undefined → бессрочно
 export async function PATCH(req: NextRequest) {
   const { user: admin, response } = await requireAdmin(req);
@@ -51,16 +88,31 @@ export async function PATCH(req: NextRequest) {
   if (limited) return limited;
 
   const body = await req.json().catch(() => ({}));
-  const { id, plan, premiumDays, role } = body as {
+  const { id, plan, premiumDays, role, name, email, emoji, color, password } = body as {
     id?: string;
     plan?: string;
     premiumDays?: number | null;
     role?: string;
+    name?: string;
+    email?: string;
+    emoji?: string;
+    color?: string;
+    password?: string;
   };
 
   if (!id) return NextResponse.json({ error: "id required" }, { status: 400 });
 
-  const data: { plan?: string; planExpiry?: Date | null; role?: string } = {};
+  const data: {
+    plan?: string;
+    planExpiry?: Date | null;
+    role?: string;
+    name?: string;
+    email?: string;
+    emoji?: string;
+    color?: string;
+    password?: string;
+  } = {};
+
   if (plan !== undefined) {
     if (plan !== "free" && plan !== "premium") {
       return NextResponse.json({ error: "plan: free | premium" }, { status: 400 });
@@ -85,17 +137,75 @@ export async function PATCH(req: NextRequest) {
     }
     data.role = role;
   }
+  if (name !== undefined) {
+    if (typeof name !== "string" || !name.trim() || name.trim().length > 64) {
+      return NextResponse.json({ error: "Имя: 1–64 символа" }, { status: 400 });
+    }
+    data.name = name.trim();
+  }
+  if (email !== undefined) {
+    if (typeof email !== "string" || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+      return NextResponse.json({ error: "Некорректный email" }, { status: 400 });
+    }
+    data.email = email.trim().toLowerCase();
+  }
+  if (emoji !== undefined) {
+    if (typeof emoji !== "string" || !emoji.trim() || emoji.length > 16) {
+      return NextResponse.json({ error: "emoji: 1–16 символов" }, { status: 400 });
+    }
+    data.emoji = emoji.trim();
+  }
+  if (color !== undefined) {
+    if (typeof color !== "string" || !/^#[0-9a-fA-F]{6}$/.test(color)) {
+      return NextResponse.json({ error: "Цвет в формате #rrggbb" }, { status: 400 });
+    }
+    data.color = color.toLowerCase();
+  }
+  if (password !== undefined) {
+    if (typeof password !== "string" || password.length < 8) {
+      return NextResponse.json({ error: "Пароль минимум 8 символов" }, { status: 400 });
+    }
+    if (!/[a-z]/i.test(password) || !/\d/.test(password)) {
+      return NextResponse.json({ error: "Пароль должен содержать буквы и цифры" }, { status: 400 });
+    }
+    data.password = await bcrypt.hash(password, 10);
+  }
 
   if (Object.keys(data).length === 0) {
     return NextResponse.json({ error: "no fields to update" }, { status: 400 });
   }
 
   try {
+    const before = await db.user.findUnique({ where: { id }, select: { name: true } });
     const updated = await db.user.update({ where: { id }, data, select: SAFE_SELECT });
+
+    // Журнал: каждое действие отдельно, с человеческой меткой
+    const label = updated.name;
+    if (data.plan) {
+      await logAdmin(admin!.id, "user.premium", { type: "user", id, label }, {
+        plan: data.plan,
+        days: data.plan === "premium" ? (premiumDays ?? null) : 0,
+      });
+    }
+    if (data.role) {
+      await logAdmin(admin!.id, "user.role", { type: "user", id, label }, { role: data.role });
+    }
+    if (data.password) {
+      await logAdmin(admin!.id, "user.password", { type: "user", id, label });
+    }
+    const profileFields = [data.name, data.email, data.emoji, data.color].filter((v) => v !== undefined);
+    if (profileFields.length > 0) {
+      await logAdmin(admin!.id, "user.edit", { type: "user", id, label }, {
+        fields: Object.keys(data).filter((k) => ["name", "email", "emoji", "color"].includes(k)),
+        beforeName: before?.name,
+      });
+    }
+
     return NextResponse.json(updated);
   } catch (e) {
-    if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2025") {
-      return NextResponse.json({ error: "Пользователь не найден" }, { status: 404 });
+    if (e instanceof Prisma.PrismaClientKnownRequestError) {
+      if (e.code === "P2025") return NextResponse.json({ error: "Пользователь не найден" }, { status: 404 });
+      if (e.code === "P2002") return NextResponse.json({ error: "Этот email уже занят другим аккаунтом" }, { status: 409 });
     }
     console.error("[admin/users] PATCH failed:", e);
     return NextResponse.json({ error: "Внутренняя ошибка" }, { status: 500 });
@@ -117,6 +227,9 @@ export async function DELETE(req: NextRequest) {
   if (id === admin!.id) {
     return NextResponse.json({ error: "Нельзя удалить собственный аккаунт" }, { status: 400 });
   }
+
+  const target = await db.user.findUnique({ where: { id }, select: { name: true } });
+  if (!target) return NextResponse.json({ error: "Пользователь не найден" }, { status: 404 });
 
   const expenseCount = await db.expense.count({ where: { paidById: id } });
   if (expenseCount > 0) {
@@ -145,6 +258,7 @@ export async function DELETE(req: NextRequest) {
       }
       await tx.user.delete({ where: { id } });
     });
+    await logAdmin(admin!.id, "user.delete", { type: "user", id, label: target.name }, { expenseCount: 0 });
     return NextResponse.json({ ok: true });
   } catch (e) {
     if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2025") {

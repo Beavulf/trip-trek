@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import { db } from "@/lib/db";
 import { rateLimitMiddleware } from "@/lib/rate-limit";
+import { getAppConfig } from "@/lib/app-config";
 
 // POST /api/auth/register — регистрация
 export async function POST(req: NextRequest) {
@@ -9,6 +10,15 @@ export async function POST(req: NextRequest) {
     // P0: rate limiting — 3 registrations per hour per IP
     const rateLimit = rateLimitMiddleware(req, "register", 3, 60 * 60_000);
     if (rateLimit) return rateLimit;
+
+    // Админ может закрыть регистрацию новых аккаунтов из панели
+    const { registrationEnabled } = await getAppConfig();
+    if (!registrationEnabled) {
+      return NextResponse.json(
+        { error: "Регистрация новых аккаунтов временно закрыта. Вход для существующих — как обычно." },
+        { status: 403 }
+      );
+    }
 
     const { email, password, name, tripId, inviteCode } = await req.json();
 

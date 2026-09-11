@@ -41,6 +41,13 @@ const FILTERS: { value: FeedbackStatus | "all"; label: string }[] = [
   { value: "resolved", label: "Решённые" },
 ];
 
+const TYPE_FILTERS: { value: FeedbackType | "all"; label: string }[] = [
+  { value: "all", label: "Все типы" },
+  { value: "bug", label: "🐞 Баги" },
+  { value: "idea", label: "💡 Идеи" },
+  { value: "question", label: "❓ Вопросы" },
+];
+
 export function FeedbackTab({
   statusFilter,
   onFilterChange,
@@ -50,6 +57,7 @@ export function FeedbackTab({
   onFilterChange: (f: FeedbackStatus | "all") => void;
   counts: { new: number; inProgress: number; resolved: number };
 }) {
+  const [typeFilter, setTypeFilter] = useState<FeedbackType | "all">("all");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   // Строка после PATCH: фильтр «Новые» больше не включает сменённый статус,
   // но шторка должна остаться открытой с актуальными данными
@@ -57,10 +65,12 @@ export function FeedbackTab({
   const qc = useQueryClient();
 
   const { data: items, isLoading } = useQuery<FeedbackRow[]>({
-    queryKey: ["admin-feedback", statusFilter],
+    queryKey: ["admin-feedback", statusFilter, typeFilter],
     queryFn: async () => {
-      const param = statusFilter === "all" ? "" : `?status=${statusFilter}`;
-      const r = await fetch(`/api/admin/feedback${param}`);
+      const params = new URLSearchParams();
+      if (statusFilter !== "all") params.set("status", statusFilter);
+      if (typeFilter !== "all") params.set("type", typeFilter);
+      const r = await fetch(`/api/admin/feedback${params.toString() ? `?${params}` : ""}`);
       if (!r.ok) throw new Error("fetch feedback failed");
       return r.json();
     },
@@ -119,36 +129,55 @@ export function FeedbackTab({
 
   return (
     <>
-      {/* Фильтр статусов */}
-      <div className="flex gap-1.5 overflow-x-auto no-scrollbar chip-snap">
-        {FILTERS.map((f) => {
-          const n = countFor(f.value);
-          return (
+      {/* Фильтр статусов + тип */}
+      <div className="space-y-1.5">
+        <div className="flex gap-1.5 overflow-x-auto no-scrollbar chip-snap">
+          {FILTERS.map((f) => {
+            const n = countFor(f.value);
+            return (
+              <button
+                key={f.value}
+                type="button"
+                onClick={() => onFilterChange(f.value)}
+                className={cn(
+                  "flex items-center gap-1.5 px-3 min-h-9 rounded-xl text-sm font-medium whitespace-nowrap shrink-0 transition-colors",
+                  statusFilter === f.value
+                    ? "bg-primary text-primary-foreground shadow-sm"
+                    : "bg-card border border-border text-muted-foreground hover:text-foreground"
+                )}
+              >
+                {f.label}
+                {n > 0 && (
+                  <span
+                    className={cn(
+                      "min-w-4 h-4 px-1 rounded-full text-[9px] font-bold grid place-items-center",
+                      statusFilter === f.value ? "bg-white/25 text-white" : "bg-primary/15 text-primary"
+                    )}
+                  >
+                    {n}
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+        <div className="flex gap-1.5 overflow-x-auto no-scrollbar chip-snap">
+          {TYPE_FILTERS.map((f) => (
             <button
               key={f.value}
               type="button"
-              onClick={() => onFilterChange(f.value)}
+              onClick={() => setTypeFilter(f.value)}
               className={cn(
-                "flex items-center gap-1.5 px-3 min-h-9 rounded-xl text-sm font-medium whitespace-nowrap shrink-0 transition-colors",
-                statusFilter === f.value
-                  ? "bg-primary text-primary-foreground shadow-sm"
-                  : "bg-card border border-border text-muted-foreground hover:text-foreground"
+                "px-2.5 min-h-8 rounded-lg text-xs font-medium whitespace-nowrap shrink-0 transition-colors",
+                typeFilter === f.value
+                  ? "bg-accent text-foreground"
+                  : "text-muted-foreground hover:text-foreground"
               )}
             >
               {f.label}
-              {n > 0 && (
-                <span
-                  className={cn(
-                    "min-w-4 h-4 px-1 rounded-full text-[9px] font-bold grid place-items-center",
-                    statusFilter === f.value ? "bg-white/25 text-white" : "bg-primary/15 text-primary"
-                  )}
-                >
-                  {n}
-                </span>
-              )}
             </button>
-          );
-        })}
+          ))}
+        </div>
       </div>
 
       {/* Очередь */}
@@ -213,7 +242,6 @@ export function FeedbackTab({
             {/* Скриншот */}
             {selected.screenshotUrl && (
               <a href={selected.screenshotUrl} target="_blank" rel="noreferrer" className="block relative rounded-2xl overflow-hidden border border-border group">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src={selected.screenshotUrl} alt="Скриншот" className="w-full max-h-64 object-cover" />
                 <span className="absolute bottom-2 right-2 size-8 rounded-full bg-black/60 text-white grid place-items-center backdrop-blur group-hover:bg-black/80">
                   <ExternalLink className="size-3.5" />

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { requireUser } from "@/lib/api-auth";
 import { rateLimitMiddleware, userRateLimit } from "@/lib/rate-limit";
+import { getPlanLimits } from "@/lib/app-config";
 import { publish } from "@/lib/ws-bus";
 
 // POST /api/trips/join?code=CHINA2024 — присоединиться к поездке по invite-коду
@@ -54,7 +55,8 @@ export async function POST(req: NextRequest) {
   if (owner) {
     const ownerUser = await db.user.findUnique({ where: { id: owner.userId } });
     const isOwnerPremium = ownerUser?.plan === "premium" && (!ownerUser?.planExpiry || ownerUser.planExpiry > new Date());
-    const maxMembers = isOwnerPremium ? Infinity : 5;
+    const { maxMembers: freeMaxMembers } = await getPlanLimits();
+    const maxMembers = isOwnerPremium ? Infinity : freeMaxMembers;
 
     if (trip.members.length >= maxMembers) {
       return NextResponse.json({

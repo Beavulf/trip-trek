@@ -1,6 +1,7 @@
 import { mkdir, unlink, writeFile } from "fs/promises";
 import path from "path";
 import sharp from "sharp";
+import { UPLOADS_ROOT } from "./root";
 
 // Единая политика загрузки файлов (локальный диск — решение владельца
 // 2026-09-10, ADR-0003-amended: самодостаточный контейнер, без S3).
@@ -44,9 +45,6 @@ const MAX_BYTES: Record<StorageKind, number> = {
   food: 10 * 1024 * 1024,
   feedback: 5 * 1024 * 1024,
 };
-
-const UPLOADS_ROOT = () =>
-  process.env.UPLOADS_DIR || path.join(process.cwd(), "public", "uploads");
 
 type SniffedType = "jpeg" | "png" | "webp" | "gif" | "heic" | "heif";
 
