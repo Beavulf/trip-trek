@@ -44,6 +44,17 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Invalid invite code" }, { status: 404 });
   }
 
+  // Забаненному в этой поездке вход закрыт (утёкшая ссылка и т.п.)
+  const ban = await db.tripBan.findUnique({
+    where: { tripId_userId: { tripId: trip.id, userId } },
+  });
+  if (ban) {
+    return NextResponse.json(
+      { error: "Вас заблокировали в этой поездке. Свяжись с владельцем или админом.", banned: true },
+      { status: 403 }
+    );
+  }
+
   // Проверить не участник ли уже
   const existing = trip.members.find((m) => m.userId === userId);
   if (existing) {

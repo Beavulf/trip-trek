@@ -1,9 +1,11 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Loader2, Paperclip, Send, X } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/hooks/use-auth";
 import { MobileBottomSheet } from "./mobile-bottom-sheet";
 import { useTripStore } from "@/lib/trip-store";
 
@@ -15,7 +17,23 @@ const TYPES: { value: FeedbackType; emoji: string; label: string; hint: string }
   { value: "question", emoji: "❓", label: "Вопрос", hint: "что непонятно" },
 ];
 
-/** Форма баг-репорта/идеи/вопроса. Страница и поездка подставляются сами. */
+const STATUS_LABEL: Record<string, { label: string; cls: string }> = {
+  new: { label: "Новый", cls: "text-amber-500 border-amber-500/40" },
+  in_progress: { label: "В работе", cls: "text-sky-500 border-sky-500/40" },
+  resolved: { label: "Решён", cls: "text-emerald-500 border-emerald-500/40" },
+};
+
+interface MyFeedback {
+  id: string;
+  type: FeedbackType;
+  message: string;
+  status: string;
+  adminReply: string | null;
+  repliedAt: string | null;
+  createdAt: string;
+}
+
+/** Форма баг-репорта/идеи/вопроса + список своих обращений с ответами админа. */
 export function BugReportSheet({
   open,
   onOpenChange,
@@ -23,6 +41,7 @@ export function BugReportSheet({
   open: boolean;
   onOpenChange: (v: boolean) => void;
 }) {
+  const { data: session } = useAuth();
   const [type, setType] = useState<FeedbackType>("bug");
   const [message, setMessage] = useState("");
   const [file, setFile] = useState<File | null>(null);
@@ -30,6 +49,18 @@ export function BugReportSheet({
   const [sending, setSending] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const currentTripId = useTripStore((s) => s.currentTripId);
+
+  // Мои обращения: статусы и ответы админа
+  const { data: mine } = useQuery<MyFeedback[]>({
+    queryKey: ["feedback-mine"],
+    queryFn: async () => {
+      const r = await fetch("/api/feedback/mine");
+      if (!r.ok) throw new Error("fetch mine failed");
+      return r.json();
+    },
+    enabled: open && !!session?.user,
+    staleTime: 30_000,
+  });
 
   // Превью скриншота + очистка object URL
   useEffect(() => {
@@ -178,6 +209,49 @@ export function BugReportSheet({
           {sending ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}
           Отправить
         </button>
+
+        {/* Мои обращения: статус + ответ админа */}
+        {mine && mine.length > 0 && (
+          <div className="pt-1">
+            <p className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground/70 mb-1.5">
+              мои обращения
+            </p>
+            <div className="space-y-2">
+              {mine.map((f) => {
+                const st = STATUS_LABEL[f.status] || STATUS_LABEL.new;
+                const t = TYPES.find((x) => x.value === f.type) || TYPES[0];
+                return (
+                  <div key={f.id} className="rounded-2xl border border-border p-3 space-y-1.5">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm">{t.emoji}</span>
+                      <span
+                        className={cn(
+                          "rounded-md border px-1.5 py-0.5 text-[9px] font-black uppercase tracking-widest",
+                          st.cls
+                        )}
+                      >
+                        {st.label}
+                      </span>
+                      <span className="flex-1" />
+                      <span className="font-mono text-[9px] uppercase tracking-widest text-muted-foreground/60">
+                        {new Date(f.createdAt).toLocaleDateString("ru-RU")}
+                      </span>
+                    </div>
+                    <p className="text-xs text-muted-foreground line-clamp-2 whitespace-pre-wrap">{f.message}</p>
+                    {f.adminReply && (
+                      <div className="rounded-xl bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-2 mt-1">
+                        <p className="font-mono text-[9px] uppercase tracking-widest text-emerald-600 dark:text-emerald-400">
+                          ответ админа
+                        </p>
+                        <p className="text-xs mt-0.5 whitespace-pre-wrap">{f.adminReply}</p>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
       </div>
     </MobileBottomSheet>
   );

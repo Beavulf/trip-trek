@@ -3,6 +3,7 @@ import { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { requireAdmin } from "@/lib/api-auth";
 import { logAdmin } from "@/lib/admin-log";
+import { notifyUser } from "@/lib/notify";
 import { userRateLimit } from "@/lib/rate-limit";
 import { buildTripExport } from "@/lib/trip-export";
 
@@ -42,6 +43,15 @@ export async function GET(req: NextRequest) {
           orderBy: { joinedAt: "asc" },
         },
         _count: { select: { members: true, days: true, places: true, photos: true, expenses: true, journals: true, messages: true } },
+        bans: {
+          orderBy: { createdAt: "desc" },
+          select: {
+            id: true,
+            reason: true,
+            createdAt: true,
+            user: { select: { id: true, name: true, email: true, emoji: true, color: true, avatarUrl: true } },
+          },
+        },
       },
     });
     if (!trip) return NextResponse.json({ error: "Поездка не найдена" }, { status: 404 });
@@ -83,7 +93,7 @@ export async function PATCH(req: NextRequest) {
   if (limited) return limited;
 
   const body = await req.json().catch(() => ({}));
-  const { id, title, destination, status, totalBudget, currency, regenInvite } = body as {
+  const { id, title, destination, status, totalBudget, currency, regenInvite, transferTo } = body as {
     id?: string;
     title?: string;
     destination?: string;
@@ -91,6 +101,7 @@ export async function PATCH(req: NextRequest) {
     totalBudget?: number;
     currency?: string;
     regenInvite?: boolean;
+    transferTo?: string;
   };
   if (!id) return NextResponse.json({ error: "id required" }, { status: 400 });
 
@@ -129,26 +140,61 @@ export async function PATCH(req: NextRequest) {
     data.inviteCode = crypto.randomUUID();
   }
 
-  if (Object.keys(data).length === 0) {
+  // Передача владения другому участнику (если старый владелец ушёл)
+  let transferInfo: { newOwnerId: string; newOwnerName: string; tripTitle: string } | null = null;
+  if (typeof transferTo === "string" && transferTo) {
+    const newOwner = await db.tripMember.findUnique({
+      where: { tripId_userId: { tripId: id, userId: transferTo } },
+      include: { user: { select: { name: true } }, trip: { select: { title: true } } },
+    });
+    if (!newOwner) {
+      return NextResponse.json({ error: "Этот пользователь не состоит в поездке" }, { status: 400 });
+    }
+    await db.tripMember.updateMany({ where: { tripId: id, role: "owner" }, data: { role: "member" } });
+    await db.tripMember.update({ where: { id: newOwner.id }, data: { role: "owner" } });
+    transferInfo = { newOwnerId: transferTo, newOwnerName: newOwner.user.name, tripTitle: newOwner.trip.title };
+  }
+
+  // Только transferTo — других полей нет, и апдейтить поездку нечем
+  const hasTripFields = Object.keys(data).length > 0;
+  if (!hasTripFields && !transferInfo) {
     return NextResponse.json({ error: "no fields to update" }, { status: 400 });
   }
 
   try {
     const before = await db.trip.findUnique({ where: { id }, select: { title: true } });
-    const updated = await db.trip.update({
-      where: { id },
-      data,
-      include: {
-        _count: { select: { members: true, places: true, photos: true, expenses: true, journals: true } },
-      },
-    });
+    const updated = hasTripFields
+      ? await db.trip.update({
+          where: { id },
+          data,
+          include: {
+            _count: { select: { members: true, places: true, photos: true, expenses: true, journals: true } },
+          },
+        })
+      : await db.trip.findUnique({
+          where: { id },
+          include: {
+            _count: { select: { members: true, places: true, photos: true, expenses: true, journals: true } },
+          },
+        });
 
+    if (transferInfo) {
+      await logAdmin(admin!.id, "trip.transfer", { type: "trip", id, label: updated!.title }, {
+        newOwner: transferInfo.newOwnerName,
+      });
+      await notifyUser(transferInfo.newOwnerId, {
+        type: "ownership",
+        title: `Вы теперь владелец поездки «${transferInfo.tripTitle}»`,
+        body: "Владение передал админ. Управлять составом можно через «Пригласить друзей».",
+        url: "/",
+      });
+    }
     if (regenInvite) {
-      await logAdmin(admin!.id, "trip.invite_regen", { type: "trip", id, label: updated.title });
+      await logAdmin(admin!.id, "trip.invite_regen", { type: "trip", id, label: updated!.title });
     }
     const tripFields = Object.keys(data).filter((k) => k !== "inviteCode");
     if (tripFields.length > 0) {
-      await logAdmin(admin!.id, "trip.edit", { type: "trip", id, label: updated.title }, {
+      await logAdmin(admin!.id, "trip.edit", { type: "trip", id, label: updated!.title }, {
         fields: tripFields,
         beforeTitle: before?.title,
       });
@@ -179,11 +225,25 @@ export async function DELETE(req: NextRequest) {
   if (!trip) return NextResponse.json({ error: "Поездка не найдена" }, { status: 404 });
 
   try {
+    // Адресаты до удаления: после delete участники каскадно исчезнут
+    const recipients = await db.tripMember.findMany({
+      where: { tripId: id, userId: { not: admin!.id } },
+      select: { userId: true },
+    });
     await db.trip.delete({ where: { id } });
     await logAdmin(admin!.id, "trip.delete", { type: "trip", id, label: trip.title }, {
       members: trip._count.members,
       photos: trip._count.photos,
     });
+    await Promise.allSettled(
+      recipients.map((m) =>
+        notifyUser(m.userId, {
+          type: "trip_deleted",
+          title: `Поездка «${trip.title}» удалена админом`,
+          body: "Данные поездки (дни, места, фото, траты) удалены вместе с ней.",
+        })
+      )
+    );
     return NextResponse.json({ ok: true });
   } catch (e) {
     if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2025") {

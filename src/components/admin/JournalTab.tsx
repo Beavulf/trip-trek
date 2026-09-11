@@ -33,6 +33,8 @@ function metaSummary(row: JournalRow): string {
   if (!row.meta) return "";
   const parts: string[] = [];
   const m = row.meta as Record<string, unknown>;
+  if (typeof m.userName === "string") parts.push(m.userName);
+  if (typeof m.newOwner === "string") parts.push(`новый владелец: ${m.newOwner}`);
   if (typeof m.plan === "string") parts.push(m.plan === "premium" ? `premium${m.days ? ` · ${m.days} дн` : " · бессрочно"}` : "снят premium");
   if (typeof m.role === "string") parts.push(`роль: ${m.role}`);
   if (Array.isArray(m.fields) && m.fields.length > 0) parts.push(m.fields.join(", "));

@@ -27,14 +27,16 @@ model User {
   aiApiKey   String?
   createdAt  DateTime  @default(now())
 
-  memberships TripMember[]
-  photos      Photo[]
-  expenses    Expense[]
-  journals    JournalEntry[]
-  messages    BoardMessage[]
-  pushSubs    PushSubscription[]
-  feedback    Feedback[]
-  adminLogs   AdminLog[]
+  memberships   TripMember[]
+  photos        Photo[]
+  expenses      Expense[]
+  journals      JournalEntry[]
+  messages      BoardMessage[]
+  pushSubs      PushSubscription[]
+  feedback      Feedback[]
+  adminLogs     AdminLog[]
+  tripBans      TripBan[]
+  notifications UserNotification[]
 }
 
 // === Глобальные настройки приложения (singleton-строка id="app") ===
@@ -105,12 +107,13 @@ model Trip {
   photos      Photo[]
   expenses    Expense[]
   journals    JournalEntry[]
-  messages    BoardMessage[]
-  checklist   ChecklistItem[]
-  info        InfoItem[]
-  phrases     Phrase[]
-  foods       FoodItem[]
-  budgetPlans BudgetPlan[]
+  messages     BoardMessage[]
+  checklist    ChecklistItem[]
+  info         InfoItem[]
+  phrases      Phrase[]
+  foods        FoodItem[]
+  budgetPlans  BudgetPlan[]
+  bans         TripBan[]
 }
 
 // === Участник поездки (связь User ↔ Trip) ===
@@ -365,6 +368,40 @@ model BudgetPlan {
   @@unique([tripId, category])
 }
 
+// === Бан пользователя в конкретной поездке (утёк инвайт-ссылки и т.п.) ===
+// Проверяется при джойне; снимается админом или владельцем поездки
+model TripBan {
+  id        String   @id @default(cuid())
+  tripId    String
+  userId    String
+  reason    String?
+  createdBy String? // userId того, кто забанил (админ или владелец)
+  createdAt DateTime @default(now())
+
+  trip Trip @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([tripId, userId])
+  @@index([tripId])
+}
+
+// === Уведомление пользователю (события админ-действий, ответы на отзывы) ===
+// В приложении — колокольчик в шапке; при настроенном VAPID дублируется web-push
+model UserNotification {
+  id        String    @id @default(cuid())
+  userId    String
+  type      String // premium / password / member_removed / member_banned / member_unbanned / trip_deleted / feedback_reply / admin_message / ownership
+  title     String
+  body      String?
+  url       String? // куда вести по тапу
+  readAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+}
+
 // === Обратная связь: баг-репорты, идеи и вопросы из приложения ===
 model Feedback {
   id            String    @id @default(cuid())
@@ -374,6 +411,8 @@ model Feedback {
   screenshotUrl String? // /uploads/feedback/*.jpg через единый storage-пайплайн
   status        String    @default("new") // new / in_progress / resolved
   adminNote     String? // внутренняя заметка админа
+  adminReply    String? // ответ админа пользователю — придёт ему в уведомления
+  repliedAt     DateTime?
   // Автоконтекст: страница, откуда отправили, и активная поездка (без FK —
   // поездку могут удалить, репорт остаётся)
   pageUrl       String?

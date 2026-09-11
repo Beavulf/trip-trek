@@ -10,6 +10,7 @@ import {
   Loader2,
   Pencil,
   Search,
+  Send,
   ShieldOff,
   ShieldCheck,
   Trash2,
@@ -324,7 +325,28 @@ function UserDetailSheet({
   const [form, setForm] = useState({ name: "", email: "", emoji: "", color: "" });
   const [password, setPassword] = useState("");
   const [days, setDays] = useState(30);
+  const [adminMessage, setAdminMessage] = useState("");
   const [syncKey, setSyncKey] = useState("");
+
+  const qc = useQueryClient();
+  const sendMessage = useMutation({
+    mutationFn: async (body: Record<string, unknown>) => {
+      const r = await fetch("/api/admin/users", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const json = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(json.error || "Не удалось отправить");
+      return json;
+    },
+    onSuccess: () => {
+      setAdminMessage("");
+      qc.invalidateQueries({ queryKey: ["admin-journal"] });
+      toast.success("Отправлено — пользователь увидит в колокольчике");
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
 
   const currentKey = user ? `${user.id}:${user.name}:${user.email}:${user.emoji}:${user.color}` : "";
   if (user && currentKey !== syncKey) {
@@ -332,6 +354,7 @@ function UserDetailSheet({
     setForm({ name: user.name, email: user.email, emoji: user.emoji, color: user.color });
     setPassword("");
     setDays(30);
+    setAdminMessage("");
   }
 
   if (!userId || !user) return null;
@@ -453,17 +476,24 @@ function UserDetailSheet({
             <label className="space-y-1">
               <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Цвет</span>
               <div className="flex gap-2">
+                {/* Нативный color-инпут невидим под свотчем — иначе выпирает из рамок */}
+                <label
+                  className="relative size-10 rounded-xl border border-input shrink-0 overflow-hidden cursor-pointer"
+                  title="Выбрать цвет"
+                >
+                  <input
+                    type="color"
+                    value={/^#[0-9a-fA-F]{6}$/.test(form.color) ? form.color : "#94a3b8"}
+                    onChange={(e) => setForm((f) => ({ ...f, color: e.target.value }))}
+                    className="absolute inset-0 size-full opacity-0 cursor-pointer"
+                    aria-label="Цвет аватара"
+                  />
+                  <span className="absolute inset-1.5 rounded-lg pointer-events-none" style={{ background: form.color }} />
+                </label>
                 <input
-                  type="color"
                   value={form.color}
                   onChange={(e) => setForm((f) => ({ ...f, color: e.target.value }))}
-                  className="size-10 rounded-xl border border-input bg-background p-1 cursor-pointer"
-                  aria-label="Цвет аватара"
-                />
-                <input
-                  value={form.color}
-                  onChange={(e) => setForm((f) => ({ ...f, color: e.target.value }))}
-                  className="flex-1 min-h-10 rounded-xl border border-input bg-background px-3 text-sm font-mono input-mobile"
+                  className="flex-1 min-w-0 min-h-10 rounded-xl border border-input bg-background px-3 text-sm font-mono input-mobile"
                 />
               </div>
             </label>
@@ -505,6 +535,33 @@ function UserDetailSheet({
               Задать
             </button>
           </div>
+        </div>
+
+        {/* Сообщение от админа */}
+        <div className="rounded-2xl border border-border p-3.5 space-y-2.5">
+          <div className="flex items-center gap-1.5 text-sm font-semibold">
+            <Send className="size-3.5 text-muted-foreground" />
+            Написать сообщение
+          </div>
+          <p className="text-xs text-muted-foreground -mt-1">
+            Придёт пользователю в колокольчик в приложении. Для ответа на баг лучше отвечать прямо в отзыве.
+          </p>
+          <textarea
+            rows={3}
+            value={adminMessage}
+            onChange={(e) => setAdminMessage(e.target.value)}
+            maxLength={2000}
+            placeholder="Например: ваш баг исправлен, спасибо что написали!"
+            className="w-full rounded-2xl border border-border bg-background px-3.5 py-3 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-ring placeholder:text-muted-foreground/60 input-mobile"
+          />
+          <button
+            type="button"
+            disabled={!adminMessage.trim() || sendMessage.isPending}
+            onClick={() => sendMessage.mutate({ id: user.id, message: adminMessage.trim() })}
+            className="w-full min-h-10 rounded-xl bg-secondary border border-border text-sm font-semibold disabled:opacity-40 active:scale-[0.98] transition-all"
+          >
+            {sendMessage.isPending ? <Loader2 className="size-4 animate-spin inline" /> : "Отправить"}
+          </button>
         </div>
 
         {/* Premium */}

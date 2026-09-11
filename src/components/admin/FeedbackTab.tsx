@@ -26,6 +26,8 @@ interface FeedbackRow {
   screenshotUrl: string | null;
   status: FeedbackStatus;
   adminNote: string | null;
+  adminReply: string | null;
+  repliedAt: string | null;
   pageUrl: string | null;
   tripId: string | null;
   userAgent: string | null;
@@ -312,6 +314,37 @@ export function FeedbackTab({
               >
                 {patch.isPending ? <Loader2 className="size-4 animate-spin inline" /> : "Сохранить заметку"}
               </button>
+            </div>
+
+            {/* Ответ пользователю */}
+            <div>
+              <p className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground/70 mb-1.5">
+                ответ пользователю (увидит в приложении)
+              </p>
+              <textarea
+                defaultValue={selected.adminReply || ""}
+                id={`reply-${selected.id}`}
+                rows={3}
+                maxLength={2000}
+                placeholder="Спасибо, исправили в версии…"
+                className="w-full rounded-2xl border border-border bg-background px-3.5 py-3 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-ring placeholder:text-muted-foreground/60 input-mobile"
+              />
+              <button
+                type="button"
+                disabled={patch.isPending}
+                onClick={() => {
+                  const el = document.getElementById(`reply-${selected.id}`) as HTMLTextAreaElement | null;
+                  patch.mutate({ id: selected.id, adminReply: el?.value ?? null });
+                }}
+                className="mt-2 w-full min-h-11 rounded-2xl bg-emerald-600 text-white text-sm font-semibold disabled:opacity-50 active:scale-[0.98] transition-all"
+              >
+                {patch.isPending ? <Loader2 className="size-4 animate-spin inline" /> : "Ответить пользователю"}
+              </button>
+              {selected.repliedAt && (
+                <p className="font-mono text-[10px] uppercase tracking-widest text-emerald-500/80 mt-1.5">
+                  отправлено {fmtDateTime(selected.repliedAt)} · придёт в колокольчик и в «Мои обращения»
+                </p>
+              )}
             </div>
 
             <button

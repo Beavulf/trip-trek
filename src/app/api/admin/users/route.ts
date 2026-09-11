@@ -4,6 +4,7 @@ import bcrypt from "bcryptjs";
 import { db } from "@/lib/db";
 import { requireAdmin } from "@/lib/api-auth";
 import { logAdmin } from "@/lib/admin-log";
+import { notifyUser } from "@/lib/notify";
 import { userRateLimit } from "@/lib/rate-limit";
 
 // Никогда не отдаём password и служебные поля
@@ -88,7 +89,7 @@ export async function PATCH(req: NextRequest) {
   if (limited) return limited;
 
   const body = await req.json().catch(() => ({}));
-  const { id, plan, premiumDays, role, name, email, emoji, color, password } = body as {
+  const { id, plan, premiumDays, role, name, email, emoji, color, password, message } = body as {
     id?: string;
     plan?: string;
     premiumDays?: number | null;
@@ -98,6 +99,7 @@ export async function PATCH(req: NextRequest) {
     emoji?: string;
     color?: string;
     password?: string;
+    message?: string;
   };
 
   if (!id) return NextResponse.json({ error: "id required" }, { status: 400 });
@@ -171,6 +173,27 @@ export async function PATCH(req: NextRequest) {
     data.password = await bcrypt.hash(password, 10);
   }
 
+  // Сообщение от админа — не меняет профиль, только уведомление
+  if (message !== undefined) {
+    if (typeof message !== "string" || !message.trim()) {
+      return NextResponse.json({ error: "Пустое сообщение" }, { status: 400 });
+    }
+    if (message.length > 2000) {
+      return NextResponse.json({ error: "Сообщение: до 2000 символов" }, { status: 400 });
+    }
+    if (Object.keys(data).length === 0) {
+      const target = await db.user.findUnique({ where: { id }, select: { name: true } });
+      if (!target) return NextResponse.json({ error: "Пользователь не найден" }, { status: 404 });
+      await notifyUser(id, {
+        type: "admin_message",
+        title: "Сообщение от админа TripTrek",
+        body: message.trim(),
+      });
+      await logAdmin(admin!.id, "user.message", { type: "user", id, label: target.name });
+      return NextResponse.json({ ok: true, sent: true });
+    }
+  }
+
   if (Object.keys(data).length === 0) {
     return NextResponse.json({ error: "no fields to update" }, { status: 400 });
   }
@@ -179,12 +202,26 @@ export async function PATCH(req: NextRequest) {
     const before = await db.user.findUnique({ where: { id }, select: { name: true } });
     const updated = await db.user.update({ where: { id }, data, select: SAFE_SELECT });
 
-    // Журнал: каждое действие отдельно, с человеческой меткой
+    // Журнал + уведомление: каждое действие отдельно, с человеческой меткой
     const label = updated.name;
     if (data.plan) {
+      const granted = data.plan === "premium";
       await logAdmin(admin!.id, "user.premium", { type: "user", id, label }, {
         plan: data.plan,
-        days: data.plan === "premium" ? (premiumDays ?? null) : 0,
+        days: granted ? (premiumDays ?? null) : 0,
+      });
+      await notifyUser(id, {
+        type: "premium",
+        title: granted
+          ? premiumDays
+            ? `Вам выдали Premium на ${premiumDays} дн 🎉`
+            : "Вам выдали безлимитный Premium 🎉"
+          : "Premium отключён админом",
+        body: granted
+          ? premiumDays
+            ? `Активен до ${new Date(Date.now() + premiumDays! * 86_400_000).toLocaleDateString("ru-RU")}. Поездки и участники — без лимитов.`
+            : "Без лимитов поездок и участников, навсегда."
+          : "Лимиты free-плана вернулись. Если это ошибка — напиши админу.",
       });
     }
     if (data.role) {
@@ -192,6 +229,11 @@ export async function PATCH(req: NextRequest) {
     }
     if (data.password) {
       await logAdmin(admin!.id, "user.password", { type: "user", id, label });
+      await notifyUser(id, {
+        type: "password",
+        title: "Пароль вашего аккаунта изменён админом",
+        body: "Если вы этого не ожидали — свяжитесь с админом через «Сообщить о проблеме».",
+      });
     }
     const profileFields = [data.name, data.email, data.emoji, data.color].filter((v) => v !== undefined);
     if (profileFields.length > 0) {

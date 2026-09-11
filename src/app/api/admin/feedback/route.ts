@@ -3,6 +3,7 @@ import { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { requireAdmin } from "@/lib/api-auth";
 import { logAdmin } from "@/lib/admin-log";
+import { notifyUser } from "@/lib/notify";
 import { remove as storageRemove } from "@/lib/storage";
 import { userRateLimit } from "@/lib/rate-limit";
 
@@ -11,11 +12,14 @@ const TYPES = ["bug", "idea", "question"] as const;
 
 const FEEDBACK_SELECT = {
   id: true,
+  userId: true,
   type: true,
   message: true,
   screenshotUrl: true,
   status: true,
   adminNote: true,
+  adminReply: true,
+  repliedAt: true,
   pageUrl: true,
   tripId: true,
   userAgent: true,
@@ -56,11 +60,22 @@ export async function PATCH(req: NextRequest) {
   if (limited) return limited;
 
   const body = await req.json().catch(() => ({}));
-  const { id, status, adminNote } = body as { id?: string; status?: string; adminNote?: string | null };
+  const { id, status, adminNote, adminReply } = body as {
+    id?: string;
+    status?: string;
+    adminNote?: string | null;
+    adminReply?: string | null;
+  };
 
   if (!id) return NextResponse.json({ error: "id required" }, { status: 400 });
 
-  const data: { status?: string; adminNote?: string | null; resolvedAt?: Date | null } = {};
+  const data: {
+    status?: string;
+    adminNote?: string | null;
+    adminReply?: string | null;
+    repliedAt?: Date | null;
+    resolvedAt?: Date | null;
+  } = {};
   if (status !== undefined) {
     if (!(STATUSES as readonly string[]).includes(status)) {
       return NextResponse.json({ error: "status: new | in_progress | resolved" }, { status: 400 });
@@ -70,6 +85,16 @@ export async function PATCH(req: NextRequest) {
   }
   if (adminNote !== undefined) {
     data.adminNote = typeof adminNote === "string" ? adminNote.slice(0, 2000) || null : null;
+  }
+  // Ответ пользователю: виден ему в «Моих обращениях» + уходит в уведомления
+  if (adminReply !== undefined) {
+    if (adminReply === null || (typeof adminReply === "string" && !adminReply.trim())) {
+      data.adminReply = null;
+      data.repliedAt = null;
+    } else if (typeof adminReply === "string") {
+      data.adminReply = adminReply.slice(0, 2000);
+      data.repliedAt = new Date();
+    }
   }
 
   if (Object.keys(data).length === 0) {
@@ -83,6 +108,16 @@ export async function PATCH(req: NextRequest) {
     }
     if (adminNote !== undefined) {
       await logAdmin(admin!.id, "feedback.note", { type: "feedback", id, label: updated.user?.name || "аноним" });
+    }
+    if (adminReply !== undefined) {
+      await logAdmin(admin!.id, "feedback.reply", { type: "feedback", id, label: updated.user?.name || "аноним" });
+      if (updated.userId && updated.adminReply) {
+        await notifyUser(updated.userId, {
+          type: "feedback_reply",
+          title: "Админ ответил на ваше обращение",
+          body: updated.adminReply.slice(0, 300),
+        });
+      }
     }
     return NextResponse.json(updated);
   } catch (e) {

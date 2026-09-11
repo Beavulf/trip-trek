@@ -4,12 +4,24 @@ import { useState } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { QRCodeSVG } from "qrcode.react";
-import { X, Copy, Check, Share2, Users, Link as LinkIcon, Loader2, ScanLine } from "lucide-react";
+import { X, Copy, Check, Share2, Users, Link as LinkIcon, Loader2, ScanLine, Crown, UserMinus, Ban, ShieldCheck } from "lucide-react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTrip, useCurrentTripId } from "@/hooks/use-trip";
 import { useTripStore } from "@/lib/trip-store";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { useBodyScrollLock } from "@/hooks/use-body-scroll-lock";
+import { useAuth } from "@/hooks/use-auth";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 export function InviteFriends({ open, onOpenChange }: { open: boolean; onOpenChange: (v: boolean) => void }) {
   useBodyScrollLock(open);
@@ -265,6 +277,9 @@ export function InviteFriends({ open, onOpenChange }: { open: boolean; onOpenCha
                     )}
                   </div>
                 )}
+
+                {/* Управление участниками (только владелец поездки) */}
+                <OwnerMemberPanel tripId={tripId} members={members} refetch={refetch} />
               </>
             )}
           </div>
@@ -272,5 +287,236 @@ export function InviteFriends({ open, onOpenChange }: { open: boolean; onOpenCha
       </motion.div>
     </AnimatePresence>,
     document.body
+  );
+}
+
+interface OwnerMember {
+  id: string; // userId участника
+  name: string;
+  emoji: string;
+  color: string;
+  role: string | null;
+}
+
+/** Панель управления участниками для владельца: передать владение, исключить, забанить */
+function OwnerMemberPanel({
+  tripId,
+  members,
+  refetch,
+}: {
+  tripId: string;
+  members: OwnerMember[];
+  refetch: () => Promise<unknown>;
+}) {
+  const { data: session } = useAuth();
+  const qc = useQueryClient();
+  const [pending, setPending] = useState<{ kind: "remove" | "ban" | "transfer"; userId: string; name: string } | null>(null);
+
+  const ownerMember = members.find((m) => m.role === "owner");
+  const isOwner = !!session?.user?.id && ownerMember?.id === session.user.id;
+  const others = members.filter((m) => m.role !== "owner");
+
+  const { data: bans } = useQuery<
+    { id: string; reason: string | null; createdAt: string; user: { id: string; name: string; emoji: string; color: string; avatarUrl: string | null } }[]
+  >({
+    queryKey: ["trip-bans", tripId],
+    queryFn: async () => {
+      const r = await fetch(`/api/participants/ban?tripId=${tripId}`);
+      if (!r.ok) throw new Error("fetch bans failed");
+      return r.json();
+    },
+    enabled: isOwner,
+  });
+
+  const memberAction = useMutation({
+    mutationFn: async (opts: { url: string; method: "POST" | "DELETE" | "PATCH"; body?: Record<string, unknown> }) => {
+      const r = await fetch(opts.url, {
+        method: opts.method,
+        headers: opts.body ? { "Content-Type": "application/json" } : undefined,
+        body: opts.body ? JSON.stringify(opts.body) : undefined,
+      });
+      const json = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(json.error || "Не получилось");
+      return json;
+    },
+    onSuccess: () => {
+      setPending(null);
+      void refetch();
+      qc.invalidateQueries({ queryKey: ["trip-bans", tripId] });
+      toast.success("Готово — участник получил уведомление");
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  if (!isOwner || (others.length === 0 && (!bans || bans.length === 0))) return null;
+
+  return (
+    <>
+      {others.length > 0 && (
+        <div className="rounded-2xl border border-border p-3 space-y-2">
+          <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+            Управление участниками
+          </span>
+          <div className="divide-y divide-border -mx-1">
+            {others.map((m) => (
+              <div key={m.id} className="flex items-center gap-2.5 px-1 py-2">
+                <span
+                  className="size-8 rounded-full grid place-items-center text-sm border-2 border-card shrink-0"
+                  style={{ background: m.color }}
+                >
+                  {m.emoji}
+                </span>
+                <span className="text-xs font-medium truncate flex-1 min-w-0">{m.name}</span>
+                <div className="flex items-center gap-0.5 shrink-0">
+                  <button
+                    type="button"
+                    title="Передать владение"
+                    aria-label={`Передать владение ${m.name}`}
+                    onClick={() => setPending({ kind: "transfer", userId: m.id, name: m.name })}
+                    className="size-9 rounded-lg grid place-items-center text-muted-foreground hover:text-amber-500 hover:bg-accent transition-colors"
+                  >
+                    <Crown className="size-4" />
+                  </button>
+                  <button
+                    type="button"
+                    title="Исключить из поездки"
+                    aria-label={`Исключить ${m.name}`}
+                    onClick={() => setPending({ kind: "remove", userId: m.id, name: m.name })}
+                    className="size-9 rounded-lg grid place-items-center text-muted-foreground hover:text-destructive hover:bg-accent transition-colors"
+                  >
+                    <UserMinus className="size-4" />
+                  </button>
+                  <button
+                    type="button"
+                    title="Заблокировать в поездке"
+                    aria-label={`Заблокировать ${m.name}`}
+                    onClick={() => setPending({ kind: "ban", userId: m.id, name: m.name })}
+                    className="size-9 rounded-lg grid place-items-center text-muted-foreground hover:text-destructive hover:bg-accent transition-colors"
+                  >
+                    <Ban className="size-4" />
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+          <p className="text-[10px] text-muted-foreground leading-snug">
+            Заблокированный не сможет вернуться по ссылке-приглашению. Участник получит уведомление.
+          </p>
+        </div>
+      )}
+
+      {bans && bans.length > 0 && (
+        <div className="rounded-2xl border border-destructive/20 p-3 space-y-2">
+          <span className="text-[10px] font-bold uppercase tracking-wider text-destructive">
+            Заблокированные
+          </span>
+          {bans.map((b) => (
+            <div key={b.id} className="flex items-center gap-2.5">
+              <span
+                className="size-8 rounded-full grid place-items-center text-sm border-2 border-card shrink-0 opacity-80"
+                style={{ background: b.user.color }}
+              >
+                {b.user.emoji}
+              </span>
+              <span className="text-xs font-medium truncate flex-1 min-w-0">{b.user.name}</span>
+              <button
+                type="button"
+                onClick={() =>
+                  memberAction.mutate({
+                    url: `/api/participants/ban?tripId=${tripId}&userId=${b.user.id}`,
+                    method: "DELETE",
+                  })
+                }
+                className="min-h-9 px-2.5 rounded-lg bg-secondary border border-border text-[11px] font-medium inline-flex items-center gap-1 hover:bg-accent transition-colors"
+              >
+                <ShieldCheck className="size-3.5" />
+                Разблокировать
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Подтверждение */}
+      <AlertDialog open={!!pending} onOpenChange={(v) => !v && setPending(null)}>
+        <AlertDialogContent className="max-w-sm rounded-3xl">
+          {pending?.kind === "remove" && (
+            <>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Исключить {pending.name}?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  Участник потеряет доступ к поездке и получит уведомление. Его траты останутся в истории бюджета.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter className="gap-2">
+                <AlertDialogCancel className="mt-0 rounded-xl">Отмена</AlertDialogCancel>
+                <AlertDialogAction
+                  onClick={(e) => {
+                    e.preventDefault();
+                    memberAction.mutate({ url: `/api/participants/${pending.userId}?tripId=${tripId}`, method: "DELETE" });
+                  }}
+                  className="rounded-xl bg-destructive text-white hover:bg-destructive/90"
+                >
+                  Исключить
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </>
+          )}
+          {pending?.kind === "ban" && (
+            <>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Заблокировать {pending.name}?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  Участник будет исключён и не сможет вернуться по ссылке или коду приглашения — полезно, если ссылка
+                  утекла. Получит уведомление.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter className="gap-2">
+                <AlertDialogCancel className="mt-0 rounded-xl">Отмена</AlertDialogCancel>
+                <AlertDialogAction
+                  onClick={(e) => {
+                    e.preventDefault();
+                    memberAction.mutate({
+                      url: "/api/participants/ban",
+                      method: "POST",
+                      body: { tripId, userId: pending.userId, reason: "Заблокирован владельцем" },
+                    });
+                  }}
+                  className="rounded-xl bg-destructive text-white hover:bg-destructive/90"
+                >
+                  Заблокировать
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </>
+          )}
+          {pending?.kind === "transfer" && (
+            <>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Передать владение {pending.name}?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  Ты станешь обычным участником, а {pending.name} — владельцем: сможет управлять составом и приглашать.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter className="gap-2">
+                <AlertDialogCancel className="mt-0 rounded-xl">Отмена</AlertDialogCancel>
+                <AlertDialogAction
+                  onClick={(e) => {
+                    e.preventDefault();
+                    memberAction.mutate({
+                      url: `/api/trips/${tripId}/members/${pending.userId}`,
+                      method: "PATCH",
+                      body: { role: "owner" },
+                    });
+                  }}
+                  className="rounded-xl"
+                >
+                  Передать владение
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </>
+          )}
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
   );
 }

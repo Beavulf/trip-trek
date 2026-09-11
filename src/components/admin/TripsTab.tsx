@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { motion } from "framer-motion";
-import { Copy, Download, Loader2, RefreshCw, Search, Trash2 } from "lucide-react";
+import { Ban, Copy, Crown, Download, Loader2, RefreshCw, Search, ShieldCheck, Trash2, UserMinus } from "lucide-react";
 import { toast } from "sonner";
 import { cn, plural } from "@/lib/utils";
 import { UserAvatar } from "@/components/trip/user-avatar";
@@ -18,7 +18,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { EmptyState, Stamp, TripStatusStamp, TRIP_STATUS_META, type TripStatus } from "./shared";
+import { EmptyState, Stamp, TripStatusStamp, TRIP_STATUS_META, relTime, type TripStatus } from "./shared";
 
 interface TripCounts {
   members: number;
@@ -55,6 +55,12 @@ interface AdminTripDetail extends AdminTripRow {
     budget: number | null;
     joinedAt: string;
     user: { id: string; name: string; email: string; emoji: string; color: string; avatarUrl: string | null; plan: string } | null;
+  }[];
+  bans: {
+    id: string;
+    reason: string | null;
+    createdAt: string;
+    user: { id: string; name: string; email: string; emoji: string; color: string; avatarUrl: string | null } | null;
   }[];
   _count: TripCounts & { days: number; messages: number };
 }
@@ -300,6 +306,11 @@ function TripDetailSheet({
 }) {
   const [confirmRegen, setConfirmRegen] = useState(false);
   const [form, setForm] = useState<{ title: string; destination: string; totalBudget: string; currency: string } | null>(null);
+  const qc = useQueryClient();
+  // Действие над участником, ждущее подтверждения
+  const [memberAction, setMemberAction] = useState<
+    { kind: "remove" | "ban" | "transfer"; memberId: string; userId: string; name: string } | null
+  >(null);
 
   const { data: trip } = useQuery<AdminTripDetail>({
     queryKey: ["admin-trip", tripId],
@@ -352,6 +363,47 @@ function TripDetailSheet({
       });
     }
   }, [patch.isSuccess, trip?.updatedAt]);
+
+  // Исключить / забанить / разбанить / передать владение
+  const memberAct = useMutation({
+    mutationFn: async (opts: { method: "POST" | "DELETE"; query?: string; body?: Record<string, unknown> }) => {
+      const r = await fetch(`/api/admin/trips/members${opts.query ? `?${opts.query}` : ""}`, {
+        method: opts.method,
+        headers: opts.body ? { "Content-Type": "application/json" } : undefined,
+        body: opts.body ? JSON.stringify(opts.body) : undefined,
+      });
+      const json = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(json.error || "Не удалось выполнить");
+      return json;
+    },
+    onSuccess: () => {
+      invalidate();
+      if (tripId) qc.invalidateQueries({ queryKey: ["admin-trip", tripId] });
+      setMemberAction(null);
+      toast.success("Готово — пользователь получил уведомление");
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const transfer = useMutation({
+    mutationFn: async (userId: string) => {
+      const r = await fetch("/api/admin/trips", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: tripId, transferTo: userId }),
+      });
+      const json = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(json.error || "Не удалось передать владение");
+      return json;
+    },
+    onSuccess: () => {
+      invalidate();
+      if (tripId) qc.invalidateQueries({ queryKey: ["admin-trip", tripId] });
+      setMemberAction(null);
+      toast.success("Владение передано");
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
 
   const exportJson = useCallback(async () => {
     if (!trip) return;
@@ -458,6 +510,40 @@ function TripDetailSheet({
                     {m.budget != null ? ` · бюджет ${m.budget} ${trip.currency}` : ""}
                   </div>
                 </div>
+                {m.role !== "owner" && m.user && (
+                  <div className="flex items-center gap-1 shrink-0">
+                    <button
+                      type="button"
+                      title="Передать владение"
+                      aria-label={`Передать владение ${m.displayName}`}
+                      disabled={transfer.isPending}
+                      onClick={() => setMemberAction({ kind: "transfer", memberId: m.id, userId: m.user!.id, name: m.displayName })}
+                      className="size-9 rounded-xl grid place-items-center text-muted-foreground hover:text-amber-500 hover:bg-accent transition-colors disabled:opacity-50"
+                    >
+                      <Crown className="size-4" />
+                    </button>
+                    <button
+                      type="button"
+                      title="Исключить из поездки"
+                      aria-label={`Исключить ${m.displayName}`}
+                      disabled={memberAct.isPending}
+                      onClick={() => setMemberAction({ kind: "remove", memberId: m.id, userId: m.user!.id, name: m.displayName })}
+                      className="size-9 rounded-xl grid place-items-center text-muted-foreground hover:text-destructive hover:bg-accent transition-colors disabled:opacity-50"
+                    >
+                      <UserMinus className="size-4" />
+                    </button>
+                    <button
+                      type="button"
+                      title="Заблокировать в поездке"
+                      aria-label={`Заблокировать ${m.displayName}`}
+                      disabled={memberAct.isPending}
+                      onClick={() => setMemberAction({ kind: "ban", memberId: m.id, userId: m.user!.id, name: m.displayName })}
+                      className="size-9 rounded-xl grid place-items-center text-muted-foreground hover:text-destructive hover:bg-accent transition-colors disabled:opacity-50"
+                    >
+                      <Ban className="size-4" />
+                    </button>
+                  </div>
+                )}
                 <span className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground/60 shrink-0">
                   {new Date(m.joinedAt).toLocaleDateString("ru-RU")}
                 </span>
@@ -465,6 +551,46 @@ function TripDetailSheet({
             ))}
           </div>
         </div>
+
+        {/* Заблокированные */}
+        {trip.bans.length > 0 && (
+          <div>
+            <p className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground/70 mb-1.5">
+              заблокированные в поездке
+            </p>
+            <div className="rounded-2xl border border-destructive/20 divide-y divide-border overflow-hidden">
+              {trip.bans.map((b) => (
+                <div key={b.id} className="flex items-center gap-3 px-3 py-2.5 bg-destructive/5">
+                  <UserAvatar
+                    name={b.user?.name || "?"}
+                    emoji={b.user?.emoji || "🚫"}
+                    color={b.user?.color || "#94a3b8"}
+                    avatarUrl={b.user?.avatarUrl}
+                    className="size-9 text-base opacity-80"
+                  />
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-medium truncate">{b.user?.name || "аккаунт удалён"}</div>
+                    <div className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground/70 truncate">
+                      {b.reason ? `${b.reason} · ` : ""}с {new Date(b.createdAt).toLocaleDateString("ru-RU")}
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    disabled={memberAct.isPending}
+                    onClick={() => memberAct.mutate({ method: "DELETE", query: `banId=${b.id}` })}
+                    className="min-h-9 px-3 rounded-xl bg-secondary border border-border text-xs font-medium inline-flex items-center gap-1.5 hover:bg-accent transition-colors disabled:opacity-50"
+                  >
+                    <ShieldCheck className="size-3.5" />
+                    Разблокировать
+                  </button>
+                </div>
+              ))}
+            </div>
+            <p className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground/60 mt-1.5">
+              забаненный не сможет зайти по ссылке-приглашению
+            </p>
+          </div>
+        )}
 
         {/* Контент */}
         <div className="rounded-2xl border border-border divide-y divide-border">
@@ -575,6 +701,83 @@ function TripDetailSheet({
           Удалить поездку
         </button>
       </div>
+
+      {/* Подтверждение действия над участником */}
+      <AlertDialog open={!!memberAction} onOpenChange={(v) => !v && setMemberAction(null)}>
+        <AlertDialogContent className="max-w-sm rounded-3xl">
+          {memberAction?.kind === "remove" && (
+            <>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Исключить {memberAction.name}?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  Участник потеряет доступ к поездке, но его траты останутся в истории. Он получит уведомление.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter className="gap-2">
+                <AlertDialogCancel className="mt-0 rounded-xl">Отмена</AlertDialogCancel>
+                <AlertDialogAction
+                  onClick={(e) => {
+                    e.preventDefault();
+                    memberAct.mutate({ method: "DELETE", query: `memberId=${memberAction.memberId}` });
+                  }}
+                  className="rounded-xl bg-destructive text-white hover:bg-destructive/90"
+                >
+                  Исключить
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </>
+          )}
+          {memberAction?.kind === "ban" && (
+            <>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Заблокировать {memberAction.name} в поездке?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  Участник будет исключён и не сможет вернуться по ссылке-приглашению — пригласительный код для него
+                  перестанет работать. Получит уведомление.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter className="gap-2">
+                <AlertDialogCancel className="mt-0 rounded-xl">Отмена</AlertDialogCancel>
+                <AlertDialogAction
+                  onClick={(e) => {
+                    e.preventDefault();
+                    memberAct.mutate({
+                      method: "POST",
+                      body: { tripId, userId: memberAction.userId, reason: "Заблокирован админом" },
+                    });
+                  }}
+                  className="rounded-xl bg-destructive text-white hover:bg-destructive/90"
+                >
+                  Заблокировать
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </>
+          )}
+          {memberAction?.kind === "transfer" && (
+            <>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Передать владение {memberAction.name}?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  Текущий владелец станет обычным участником. Новый владелец получит уведомление и сможет управлять
+                  составом.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter className="gap-2">
+                <AlertDialogCancel className="mt-0 rounded-xl">Отмена</AlertDialogCancel>
+                <AlertDialogAction
+                  onClick={(e) => {
+                    e.preventDefault();
+                    transfer.mutate(memberAction.userId);
+                  }}
+                  className="rounded-xl"
+                >
+                  Передать владение
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </>
+          )}
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Подтверждение перевыпуска кода */}
       <AlertDialog open={confirmRegen} onOpenChange={setConfirmRegen}>

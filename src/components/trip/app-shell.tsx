@@ -48,6 +48,7 @@ import { PWAUpdateNotification } from "./pwa-update";
 import { InviteFriends } from "./invite-friends";
 import { ShareCard } from "./share-card";
 import { BugReportSheet } from "./bug-report-sheet";
+import { NotificationsBell } from "./notifications-bell";
 import { useAdminStats } from "@/hooks/use-admin-stats";
 
 const TABS = [
@@ -204,6 +205,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             <HeaderIconBtn onClick={() => setSearchOpen(true)} label="Поиск">
               <Search className="size-4" />
             </HeaderIconBtn>
+            <NotificationsBell authed={!!session?.user} />
             {isAdmin && (
               <HeaderIconBtn onClick={() => router.push("/admin")} label="Админ-панель">
                 <Shield className="size-4" />
@@ -218,6 +220,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             <HeaderIconBtn onClick={() => setSearchOpen(true)} label="Поиск" large>
               <Search className="size-5" />
             </HeaderIconBtn>
+            <NotificationsBell authed={!!session?.user} large />
             <div className="relative">
               <HeaderIconBtn
                 onClick={() => setMoreOpen((v) => !v)}
