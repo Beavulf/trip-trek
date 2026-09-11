@@ -66,3 +66,8 @@ public/uploads/**
 
 # local DB (moved from db/ to prisma/db/)
 prisma/db/
+
+# agent/audit artifacts
+.playwright-mcp/
+.tmp-audit/
+pub-login-*.png

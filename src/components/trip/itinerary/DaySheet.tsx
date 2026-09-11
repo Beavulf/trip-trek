@@ -6,6 +6,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { CalendarPlus, Loader2, MapPin, Pencil, X } from "lucide-react";
 import { useAddDay, useDays, useUpdateDay } from "@/hooks/use-trip";
 import { useBodyScrollLock } from "@/hooks/use-body-scroll-lock";
+import { useDialogA11y } from "@/hooks/use-dialog-a11y";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { CityAutocomplete } from "../city-autocomplete";
@@ -13,6 +14,17 @@ import { encodeCustomKey } from "@/lib/city-coords";
 import type { Day } from "@/lib/types";
 
 const COLORS = ["#f97316", "#06b6d4", "#8b5cf6", "#ec4899", "#10b981", "#f59e0b", "#ef4444", "#3b82f6"];
+
+const COLOR_NAMES: Record<string, string> = {
+  "#f97316": "Оранжевый",
+  "#06b6d4": "Бирюзовый",
+  "#8b5cf6": "Фиолетовый",
+  "#ec4899": "Розовый",
+  "#10b981": "Изумрудный",
+  "#f59e0b": "Янтарный",
+  "#ef4444": "Красный",
+  "#3b82f6": "Синий",
+};
 
 interface DaySheetProps {
   /** null/undefined → режим создания; день → редактирование */
@@ -41,6 +53,8 @@ export function DaySheet({ day, open, onOpenChange }: DaySheetProps) {
   const [citySession, setCitySession] = useState(0);
 
   useBodyScrollLock(open);
+  // Фокус-трап, Escape, возврат фокуса на триггер
+  const panelRef = useDialogA11y<HTMLDivElement>(open, () => onOpenChange(false));
 
   // Пересобираем форму при открытии (и при смене редактируемого дня)
   useEffect(() => {
@@ -98,10 +112,12 @@ export function DaySheet({ day, open, onOpenChange }: DaySheetProps) {
     }
   };
 
-  if (!open || typeof document === "undefined") return null;
+  if (typeof document === "undefined") return null;
 
+  // open проверяем внутри AnimatePresence — иначе unmount убивает exit-анимацию
   return createPortal(
     <AnimatePresence>
+      {open && (
       <motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
@@ -110,12 +126,16 @@ export function DaySheet({ day, open, onOpenChange }: DaySheetProps) {
         className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex items-end sm:items-center justify-center sm:p-4"
       >
         <motion.div
+          ref={panelRef}
+          role="dialog"
+          aria-modal="true"
+          aria-label={isEdit ? `Редактирование дня ${day!.dayNumber}` : "Новый день"}
           initial={{ y: "100%", opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
           exit={{ y: "100%", opacity: 0 }}
           transition={{ type: "spring", stiffness: 320, damping: 32 }}
           onClick={(e) => e.stopPropagation()}
-          className="bg-card w-full sm:max-w-md rounded-t-3xl sm:rounded-3xl overflow-y-auto max-h-[90vh]"
+          className="bg-card w-full sm:max-w-md rounded-t-3xl sm:rounded-3xl overflow-y-auto overscroll-contain max-h-[90vh] pb-[env(safe-area-inset-bottom)]"
         >
           <div className="sm:hidden flex justify-center pt-2.5 pb-1">
             <div className="w-10 h-1 rounded-full bg-muted-foreground/30" />
@@ -137,7 +157,7 @@ export function DaySheet({ day, open, onOpenChange }: DaySheetProps) {
               </div>
             )}
             <div>
-              <label className="text-xs text-muted-foreground mb-1 block">Город{isEdit ? "" : " *"}</label>
+              <label htmlFor="day-city" className="text-xs text-muted-foreground mb-1 block">Город{isEdit ? "" : " *"}</label>
               {isEdit && !changeCity ? (
                 <div className="flex items-center gap-2 rounded-xl border border-input bg-background px-3 py-2.5 text-sm">
                   <MapPin className="size-4 text-muted-foreground shrink-0" />
@@ -152,6 +172,7 @@ export function DaySheet({ day, open, onOpenChange }: DaySheetProps) {
                 </div>
               ) : (
                 <CityAutocomplete
+                  id="day-city"
                   key={citySession}
                   value={city}
                   onChange={setCity}
@@ -161,34 +182,42 @@ export function DaySheet({ day, open, onOpenChange }: DaySheetProps) {
               )}
             </div>
             <div>
-              <label className="text-xs text-muted-foreground mb-1 block">Название дня (необязательно)</label>
+              <label htmlFor="day-title" className="text-xs text-muted-foreground mb-1 block">Название дня (необязательно)</label>
               <input
+                id="day-title"
+                name="title"
+                type="text"
+                autoComplete="off"
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
-                placeholder="Например, Переезд в Шанхай"
+                placeholder="Например, переезд в Шанхай…"
                 className="w-full rounded-xl border border-input bg-background px-3 py-2.5 text-sm input-mobile"
               />
             </div>
             {isEdit && (
               <div>
-                <label className="text-xs text-muted-foreground mb-1 block">Коротко о дне</label>
+                <label htmlFor="day-summary" className="text-xs text-muted-foreground mb-1 block">Коротко о дне</label>
                 <input
+                  id="day-summary"
+                  name="summary"
+                  type="text"
+                  autoComplete="off"
                   value={summary}
                   onChange={(e) => setSummary(e.target.value)}
-                  placeholder="Одной строкой — чем займётесь"
+                  placeholder="Одной строкой — чем займётесь…"
                   className="w-full rounded-xl border border-input bg-background px-3 py-2.5 text-sm input-mobile"
                 />
               </div>
             )}
             <div>
-              <label className="text-xs text-muted-foreground mb-1.5 block">Цвет дня</label>
-              <div className="flex gap-2 flex-wrap">
+              <div id="day-color-label" className="text-xs text-muted-foreground mb-1.5">Цвет дня</div>
+              <div role="group" aria-labelledby="day-color-label" className="flex gap-2 flex-wrap">
                 {COLORS.map((c) => (
                   <button
                     key={c}
                     type="button"
                     onClick={() => setColor(c)}
-                    aria-label={`Цвет ${c}`}
+                    aria-label={`Цвет дня: ${COLOR_NAMES[c] ?? c}`}
                     aria-pressed={color === c}
                     className={cn(
                       "size-11 rounded-full transition-all",
@@ -215,6 +244,7 @@ export function DaySheet({ day, open, onOpenChange }: DaySheetProps) {
           </div>
         </motion.div>
       </motion.div>
+      )}
     </AnimatePresence>,
     document.body
   );

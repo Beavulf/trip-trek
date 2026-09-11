@@ -476,9 +476,9 @@ function HeaderTripChip({
     <button
       type="button"
       onClick={onOpen}
-      className="group flex items-center gap-2 min-h-11 max-w-[46vw] sm:max-w-56 pl-1 pr-2 rounded-xl bg-secondary border border-border hover:bg-accent hover:border-primary/40 transition-colors shrink-0 min-w-0"
+      className="group flex items-center gap-2 min-h-11 max-w-[38vw] sm:max-w-56 pl-1 pr-2 rounded-xl bg-secondary border border-border hover:bg-accent hover:border-primary/40 transition-colors min-w-0"
       title="Сменить поездку"
-      aria-label={`Текущая поездка: ${title}. Сменить`}
+      aria-label={dayLine ? `Текущая поездка: ${title}, ${dayLine}. Сменить` : `Текущая поездка: ${title}. Сменить поездку`}
     >
       <span
         className="size-7 rounded-lg grid place-items-center text-sm shrink-0 shadow-sm"

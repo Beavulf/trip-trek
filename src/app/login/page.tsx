@@ -79,7 +79,7 @@ function LoginPageContent() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4 bg-gradient-to-br from-orange-500 via-rose-500 to-violet-600 relative overflow-hidden">
+    <main className="min-h-screen flex items-center justify-center p-4 bg-gradient-to-br from-orange-500 via-rose-500 to-violet-600 relative overflow-hidden">
       {/* Декоративные круги */}
       <div className="absolute top-10 left-10 size-32 rounded-full bg-white/5 blur-2xl" />
       <div className="absolute bottom-20 right-10 size-40 rounded-full bg-white/5 blur-3xl" />
@@ -203,7 +203,8 @@ function LoginPageContent() {
                 <button
                   type="button"
                   onClick={() => setShowPassword(v => !v)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                  aria-label="Показать или скрыть пароль"
+                  className="absolute right-1 top-1/2 -translate-y-1/2 p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-accent"
                 >
                   {showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
                 </button>
@@ -230,7 +231,8 @@ function LoginPageContent() {
                   <button
                     type="button"
                     onClick={() => setShowPasswordConfirm(v => !v)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                    aria-label="Показать или скрыть пароль"
+                    className="absolute right-1 top-1/2 -translate-y-1/2 p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-accent"
                   >
                     {showPasswordConfirm ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
                   </button>
@@ -291,8 +293,8 @@ function LoginPageContent() {
             </div>
           )}
         </div>
-      </motion.div>
-    </div>
+          </motion.div>
+    </main>
   );
 }
 

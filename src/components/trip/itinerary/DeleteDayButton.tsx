@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Trash2 } from "lucide-react";
+import { Loader2, Trash2 } from "lucide-react";
 import { useDeleteDay, useDays } from "@/hooks/use-trip";
 import { useTripStore } from "@/lib/trip-store";
 import { toast } from "sonner";
@@ -22,6 +22,7 @@ export function DeleteDayButton({ dayId, dayNumber }: DeleteDayButtonProps) {
   if (isLastDay) {
     return (
       <button
+        type="button"
         disabled
         onClick={(e) => e.stopPropagation()}
         className="btn-icon-touch text-muted-foreground/30 cursor-not-allowed"
@@ -36,6 +37,7 @@ export function DeleteDayButton({ dayId, dayNumber }: DeleteDayButtonProps) {
   if (!confirming) {
     return (
       <button
+        type="button"
         onClick={(e) => {
           e.stopPropagation();
           setConfirming(true);
@@ -52,6 +54,7 @@ export function DeleteDayButton({ dayId, dayNumber }: DeleteDayButtonProps) {
   return (
     <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
       <button
+        type="button"
         onClick={() => {
           deleteDay.mutate(dayId, {
             onSuccess: () => {
@@ -64,9 +67,15 @@ export function DeleteDayButton({ dayId, dayNumber }: DeleteDayButtonProps) {
         disabled={deleteDay.isPending}
         className="btn-confirm-yes"
       >
-        {deleteDay.isPending ? "…" : "Удалить"}
+        {deleteDay.isPending ? (
+          <>
+            <Loader2 className="size-3.5 animate-spin" /> Удаляем…
+          </>
+        ) : (
+          "Удалить"
+        )}
       </button>
-      <button onClick={() => setConfirming(false)} className="btn-confirm-no">
+      <button type="button" onClick={() => setConfirming(false)} className="btn-confirm-no">
         Отмена
       </button>
     </div>

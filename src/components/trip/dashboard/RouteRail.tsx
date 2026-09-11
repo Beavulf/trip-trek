@@ -44,14 +44,17 @@ export function RouteRail({ trip }: { trip: TripSummary }) {
             const accent = d.accentColor ?? "#f97316";
             const hasNext = i < trip.days.length - 1;
 
-            let meta;
-            if (isCurrent) {
-              meta = <span className="text-primary font-semibold">сегодня</span>;
-            } else if (isPast) {
-              meta = d.places.length > 0 ? `${visited}/${d.places.length}` : "прошёл";
-            } else {
-              meta = d.places.length > 0 ? `${d.places.length} ${plural(d.places.length, "место", "места", "мест")}` : "—";
-            }
+            // Текстовая мета — она же идёт в aria-label (WCAG 2.5.3 Label in Name)
+            const metaText = isCurrent
+              ? "сегодня"
+              : isPast
+                ? (d.places.length > 0 ? `${visited}/${d.places.length}` : "прошёл")
+                : (d.places.length > 0 ? `${d.places.length} ${plural(d.places.length, "место", "места", "мест")}` : "—");
+            const meta = isCurrent ? (
+              <span className="text-primary font-semibold">{metaText}</span>
+            ) : (
+              metaText
+            );
 
             return (
               <Fragment key={d.id}>
@@ -62,7 +65,7 @@ export function RouteRail({ trip }: { trip: TripSummary }) {
                     setActiveTab("itinerary");
                   }}
                   className="flex flex-col items-center gap-1 min-w-[68px] group"
-                  aria-label={`День ${d.dayNumber}, ${d.city}${isCurrent ? " — сегодня" : ""}`}
+                  aria-label={`День ${d.dayNumber}, ${d.city}, ${metaText}`}
                   aria-current={isCurrent ? "step" : undefined}
                 >
                   <span className="relative">

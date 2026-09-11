@@ -89,10 +89,24 @@ export function AppShell({ children }: { children: ReactNode }) {
   const { activeTab, setActiveTab } = useTripStore();
   const { data: trip } = useTrip();
   const tabScrollRef = useRef<HTMLDivElement>(null);
+  const headerRef = useRef<HTMLElement>(null);
   const [showLeftArrow, setShowLeftArrow] = useState(false);
   const [showRightArrow, setShowRightArrow] = useState(false);
 
   useWebSocket(trip?.settings.tripId || "");
+
+  // Реальная высота липкого хедера — в CSS-переменную: её используют
+  // sticky-элементы контента (линейка дней и т.п.) вместо захардкоженных пикселей
+  useEffect(() => {
+    const el = headerRef.current;
+    if (!el) return;
+    const sync = () =>
+      document.documentElement.style.setProperty("--header-h", `${Math.round(el.getBoundingClientRect().height)}px`);
+    sync();
+    const ro = new ResizeObserver(sync);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
 
   const handleTabScroll = () => {
     const el = tabScrollRef.current;
@@ -165,7 +179,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         }}
       />
 
-      <header className="sticky top-0 z-40 glass-strong border-b border-border/80 pt-safe">
+      <header ref={headerRef} className="sticky top-0 z-40 glass-strong border-b border-border/80 pt-safe">
         <div className="mx-auto max-w-7xl px-3 sm:px-4 h-14 flex items-center gap-1.5 sm:gap-3">
           <div className="flex items-center gap-2 min-w-0 shrink-0">
             <motion.div
@@ -313,7 +327,7 @@ export function AppShell({ children }: { children: ReactNode }) {
               <div className="pointer-events-none absolute left-0 top-0 bottom-1.5 w-12 bg-gradient-to-r from-background via-background/80 to-transparent z-10" />
               <button
                 onClick={() => tabScrollRef.current?.scrollBy({ left: -200, behavior: "smooth" })}
-                className="absolute left-0 top-1/2 -translate-y-1/2 z-20 size-11 rounded-full bg-primary/90 backdrop-blur text-primary-foreground shadow-lg grid place-items-center active:scale-90"
+                className="absolute left-0 top-1/2 -translate-y-1/2 z-20 hidden sm:grid size-11 rounded-full bg-primary/90 backdrop-blur text-primary-foreground shadow-lg place-items-center active:scale-90"
                 aria-label="Влево"
               >
                 <ChevronLeft className="size-5" />
@@ -325,7 +339,7 @@ export function AppShell({ children }: { children: ReactNode }) {
               <div className="pointer-events-none absolute right-0 top-0 bottom-1.5 w-12 bg-gradient-to-l from-background via-background/80 to-transparent z-10" />
               <button
                 onClick={() => tabScrollRef.current?.scrollBy({ left: 200, behavior: "smooth" })}
-                className="absolute right-0 top-1/2 -translate-y-1/2 z-20 size-11 rounded-full bg-primary/90 backdrop-blur text-primary-foreground shadow-lg grid place-items-center active:scale-90"
+                className="absolute right-0 top-1/2 -translate-y-1/2 z-20 hidden sm:grid size-11 rounded-full bg-primary/90 backdrop-blur text-primary-foreground shadow-lg place-items-center active:scale-90"
                 aria-label="Вправо"
               >
                 <ChevronRight className="size-5" />

@@ -1,5 +1,7 @@
 "use client";
 
+// CSS Leaflet едет вместе с этим чанком (а не глобальным render-blocking <link> в layout)
+import "leaflet/dist/leaflet.css";
 import { useDays, useTrip, useCurrentTripId } from "@/hooks/use-trip";
 import { useTripStore } from "@/lib/trip-store";
 import { CATEGORY_META, type Place, type Day, type Photo } from "@/lib/types";

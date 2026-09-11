@@ -13,6 +13,9 @@ const nextConfig: NextConfig = {
           { key: "X-Content-Type-Options", value: "nosniff" },
           { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
           { key: "Permissions-Policy", value: "camera=(self), microphone=(), geolocation=(self)" },
+          // HSTS здесь, а не в Caddyfile: заголовок переживает смену хостинга/прокси.
+          // Браузер игнорирует его на http://localhost, dev не ломается.
+          { key: "Strict-Transport-Security", value: "max-age=31536000" },
         ],
       },
     ];

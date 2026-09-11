@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import { useDays, useTrip, useCurrentTripId } from "@/hooks/use-trip";
 import { useTripStore } from "@/lib/trip-store";
@@ -39,6 +39,33 @@ export function Itinerary() {
   const [addData, setAddData] = useState<AddPlaceData | null>(null);
   const [daySheetOpen, setDaySheetOpen] = useState(false);
   const [editDay, setEditDay] = useState<Day | null>(null);
+  // Дата-статус считаем на клиенте (SSR показывает скелетон) и обновляем раз в минуту,
+  // чтобы «Старт через N дней» не зависал
+  const [now, setNow] = useState(() => Date.now());
+  const urlDayApplied = useRef(false);
+
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), 60_000);
+    return () => clearInterval(t);
+  }, []);
+
+  // Deep-link ?day=N: применяем один раз, когда дни загрузились
+  useEffect(() => {
+    if (urlDayApplied.current || daysLoading || !days) return;
+    urlDayApplied.current = true;
+    const raw = new URLSearchParams(window.location.search).get("day");
+    const n = raw && /^\d+$/.test(raw) ? Number(raw) : null;
+    if (n && days.some((d) => d.dayNumber === n)) setSelectedDay(n);
+  }, [days, daysLoading, setSelectedDay]);
+
+  /** Выбор дня синхронно с URL (?day=N), без записи в историю */
+  const selectDay = (dayNumber: number | null) => {
+    setSelectedDay(dayNumber);
+    const url = new URL(window.location.href);
+    if (dayNumber == null) url.searchParams.delete("day");
+    else url.searchParams.set("day", String(dayNumber));
+    window.history.replaceState(null, "", url);
+  };
 
   if (!tripId) {
     return (
@@ -49,7 +76,7 @@ export function Itinerary() {
           <p className="text-white/80 text-sm mt-1">Создай или присоединись к поездке</p>
           <button
             type="button"
-            onClick={() => useTripStore.setState({ activeTab: "dashboard" })}
+            onClick={() => setActiveTab("dashboard")}
             className="mt-4 rounded-xl bg-white/20 backdrop-blur px-4 py-3 text-sm font-medium active:scale-95 transition-transform min-h-11"
           >
             На главную →
@@ -70,7 +97,7 @@ export function Itinerary() {
             void refetchTrip();
             void refetchDays();
           }}
-          className="inline-flex text-xs px-3 py-2 rounded-lg bg-primary text-primary-foreground min-h-11"
+          className="inline-flex text-xs px-3 py-2 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-colors min-h-11"
         >
           Повторить
         </button>
@@ -129,7 +156,6 @@ export function Itinerary() {
   const startOf = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
   const start = startOf(new Date(trip.settings.startDate));
   const end = trip.settings.endDate ? startOf(new Date(trip.settings.endDate)) + 86_399_000 : null;
-  const now = Date.now();
   const isBefore = now < start;
   const isAfter = end != null && now > end;
   const daysUntilStart = Math.max(0, Math.ceil((start - now) / 86_400_000));
@@ -167,17 +193,17 @@ export function Itinerary() {
           <div className="flex items-center gap-1.5 text-white/70 text-[11px] font-medium uppercase tracking-wide">
             <HeroIcon className="size-3.5" />
             <span>Маршрут</span>
-            <span className="ml-auto normal-case tracking-normal">{trip.visitedPlaces}/{trip.totalPlaces} мест</span>
+            <span className="ml-auto normal-case tracking-normal tabular-nums">{trip.visitedPlaces}/{trip.totalPlaces} мест</span>
           </div>
           <h1 className="text-xl sm:text-2xl font-bold leading-tight mt-1">{heroTitle}</h1>
           <p className="text-white/80 text-xs sm:text-sm mt-0.5">{heroSubtitle}</p>
 
           <div className="mt-3 h-1.5 rounded-full bg-white/20 overflow-hidden">
             <motion.div
-              initial={{ width: 0 }}
-              animate={{ width: `${trip.placeProgress}%` }}
+              initial={{ scaleX: 0 }}
+              animate={{ scaleX: Math.min(1, Math.max(0, trip.placeProgress / 100)) }}
               transition={{ duration: 0.8, ease: "easeOut" }}
-              className="h-full rounded-full bg-white"
+              className="h-full w-full origin-left rounded-full bg-white"
             />
           </div>
 
@@ -200,13 +226,14 @@ export function Itinerary() {
         </div>
       </section>
 
-      {/* Липкая линейка дней + быстрое добавление места в выбранный день */}
-      <div className="sticky top-[102px] z-20 -mx-1 px-1 py-1 bg-background/85 backdrop-blur-sm rounded-xl">
+      {/* Липкая линейка дней + быстрое добавление места в выбранный день.
+          Офсет — реальная высота хедера из --header-h (синхронизирует app-shell) */}
+      <div className="sticky top-[calc(var(--header-h,102px))] z-20 -mx-1 px-1 py-1 bg-background/85 backdrop-blur-sm rounded-xl">
         <div className="flex items-center gap-2">
           <div className="chip-rail no-scrollbar flex-1 gap-1.5">
             <button
               type="button"
-              onClick={() => setSelectedDay(null)}
+              onClick={() => selectDay(null)}
               aria-pressed={!selectedDay}
               className={cn(
                 "min-h-11 px-3.5 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-colors active:scale-95",
@@ -222,9 +249,9 @@ export function Itinerary() {
                 <button
                   key={d.id}
                   type="button"
-                  onClick={() => setSelectedDay(d.dayNumber)}
+                  onClick={() => selectDay(d.dayNumber)}
                   aria-pressed={selectedDay === d.dayNumber}
-                  aria-label={`День ${d.dayNumber}${isToday ? ", сегодня" : ""}`}
+                  aria-label={`День ${d.dayNumber} ${visited}/${d.places.length}${isToday ? ", сегодня" : ""}`}
                   className={cn(
                     "flex items-center gap-1.5 min-h-11 px-3.5 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-colors active:scale-95",
                     selectedDay === d.dayNumber

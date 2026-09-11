@@ -27,12 +27,16 @@ const TIME_SECTIONS: { key: string; label: string }[] = [
   { key: "evening", label: "Вечер" },
 ];
 
+// Форматтеры на уровне модуля: Intl сам по себе дорог в создании
+const dateFmt = new Intl.DateTimeFormat("ru-RU", { day: "numeric", month: "short" });
+const weekdayFmt = new Intl.DateTimeFormat("ru-RU", { weekday: "short" });
+
 function dateLabel(iso: string): { date: string; weekday: string } | null {
   const d = new Date(iso);
   if (isNaN(d.getTime())) return null;
   return {
-    date: d.toLocaleDateString("ru-RU", { day: "numeric", month: "short" }),
-    weekday: d.toLocaleDateString("ru-RU", { weekday: "short" }),
+    date: dateFmt.format(d),
+    weekday: weekdayFmt.format(d),
   };
 }
 
@@ -70,6 +74,8 @@ export function DayCard({
     <PlaceRow key={p.id} place={p} accentColor={accent} currency={currency} onOpen={() => onOpenPlace(p)} />
   );
 
+  const contentId = `day-card-content-${day.id}`;
+
   return (
     <div className="relative pl-8">
       {/* Станция на нити маршрута: прошедший день залит, сегодняшний пульсирует, будущий контурный */}
@@ -98,6 +104,8 @@ export function DayCard({
         <div
           role="button"
           tabIndex={0}
+          aria-expanded={expanded}
+          aria-controls={contentId}
           onClick={() => setExpanded((v) => !v)}
           onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setExpanded((v) => !v); } }}
           className="w-full flex items-start gap-3 p-4 hover:bg-accent/40 transition-colors text-left active:bg-accent/60 cursor-pointer"
@@ -124,10 +132,10 @@ export function DayCard({
             <div className="font-semibold text-sm truncate mt-0.5">{day.title}</div>
             <div className="mt-2 h-1.5 rounded-full bg-muted overflow-hidden">
               <motion.div
-                initial={{ width: 0 }}
-                animate={{ width: `${progress}%` }}
+                initial={{ scaleX: 0 }}
+                animate={{ scaleX: Math.min(1, Math.max(0, progress / 100)) }}
                 transition={{ duration: 0.5, ease: "easeOut" }}
-                className="h-full rounded-full"
+                className="h-full w-full origin-left rounded-full"
                 style={{ background: accent }}
               />
             </div>
@@ -165,6 +173,7 @@ export function DayCard({
         <AnimatePresence initial={false}>
           {expanded && (
             <motion.div
+              id={contentId}
               initial={{ height: 0, opacity: 0 }}
               animate={{ height: "auto", opacity: 1 }}
               exit={{ height: 0, opacity: 0 }}

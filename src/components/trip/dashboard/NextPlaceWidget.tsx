@@ -45,9 +45,9 @@ export function NextPlaceWidget({ trip, onGoToItinerary }: { trip: TripSummary; 
             {noPlaces ? "🗺️" : "🎉"}
           </div>
           <div className="flex-1 min-w-0">
-            <h3 className="font-semibold text-sm">
+            <p className="font-semibold text-sm">
               {noPlaces ? "Нет мест в маршруте" : "Все места посещены!"}
-            </h3>
+            </p>
             <p className="text-xs text-muted-foreground">
               {noPlaces ? "Добавьте места, чтобы начать планировать" : "Поздравляем с завершением маршрута"}
             </p>
@@ -93,7 +93,7 @@ export function NextPlaceWidget({ trip, onGoToItinerary }: { trip: TripSummary; 
           <div className="flex items-center gap-1.5 text-[10px] text-primary font-medium uppercase tracking-wide mb-0.5">
             <MapPin className="size-2.5" /> Следующее место
           </div>
-          <h3 className="font-bold text-sm leading-tight truncate">{nextPlace.name}</h3>
+          <p className="font-bold text-sm leading-tight truncate">{nextPlace.name}</p>
           <div className="flex items-center gap-2 text-[11px] text-muted-foreground mt-0.5">
             <span>День {dayOfPlace?.dayNumber} · {dayOfPlace?.city}</span>
             {nextPlace.timeOfDay && <span>· {timeLabel(nextPlace.timeOfDay)}</span>}

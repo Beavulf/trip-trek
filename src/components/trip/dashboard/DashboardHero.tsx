@@ -213,7 +213,7 @@ function WeatherChip({ cityKey }: { cityKey: string }) {
       onClick={() => setActiveTab("weather")}
       className="min-h-11 px-2.5 rounded-xl bg-white/15 hover:bg-white/25 backdrop-blur flex items-center gap-1 text-sm font-semibold transition-colors"
       title={`${weather.label}, ${weather.city}`}
-      aria-label={`Погода ${weather.temperature} градусов — открыть раздел Погода`}
+      aria-label={`Погода ${weather.temperature}° — открыть раздел Погода`}
     >
       <span aria-hidden="true">{weather.emoji}</span> {weather.temperature}°
     </button>

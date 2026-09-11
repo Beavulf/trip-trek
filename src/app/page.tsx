@@ -4,19 +4,6 @@ import dynamic from "next/dynamic";
 import { useTripStore } from "@/lib/trip-store";
 import { AppShell } from "@/components/trip/app-shell";
 import { Dashboard } from "@/components/trip/dashboard";
-import { Timeline } from "@/components/trip/timeline";
-import { Itinerary } from "@/components/trip/itinerary";
-import { Gallery } from "@/components/trip/gallery";
-import { Budget } from "@/components/trip/budget";
-import { RestChill } from "@/components/trip/rest-chill";
-import { Journal } from "@/components/trip/journal";
-import { InfoPanel } from "@/components/trip/info-panel";
-import { AISummary } from "@/components/trip/ai-summary";
-import { Phrasebook } from "@/components/trip/phrasebook";
-import { WeatherPanel } from "@/components/trip/weather-panel";
-import { FoodGuide } from "@/components/trip/food-guide";
-import { Achievements } from "@/components/trip/achievements";
-import { Board } from "@/components/trip/board";
 import { motion } from "framer-motion";
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
@@ -28,6 +15,31 @@ const TripMap = dynamic(() => import("@/components/trip/trip-map"), {
   ssr: false,
   loading: () => <div className="py-20 text-center text-muted-foreground">Загрузка карты…</div>,
 });
+
+// Плейсхолдер на время загрузки чанка вкладки (ленивые импорты ниже).
+const TabLoader = () => (
+  <div className="py-16 flex justify-center">
+    <Loader2 className="size-6 animate-spin text-muted-foreground" />
+  </div>
+);
+
+// Обзор — статически: это вкладка по умолчанию, её чанк нужен к первому кадру
+// (иначе лоадер→контент на холодном кэше даёт layout shift), а гости сюда не попадают
+// (middleware уводит их на /login до загрузки бандла).
+// Каждая прочая вкладка — отдельный чанк: на старте не тащим ~500 KiB неиспользуемого JS.
+const Timeline = dynamic(() => import("@/components/trip/timeline").then(m => m.Timeline), { loading: TabLoader });
+const Itinerary = dynamic(() => import("@/components/trip/itinerary").then(m => m.Itinerary), { loading: TabLoader });
+const Gallery = dynamic(() => import("@/components/trip/gallery").then(m => m.Gallery), { loading: TabLoader });
+const Budget = dynamic(() => import("@/components/trip/budget").then(m => m.Budget), { loading: TabLoader });
+const RestChill = dynamic(() => import("@/components/trip/rest-chill").then(m => m.RestChill), { loading: TabLoader });
+const Journal = dynamic(() => import("@/components/trip/journal").then(m => m.Journal), { loading: TabLoader });
+const InfoPanel = dynamic(() => import("@/components/trip/info-panel").then(m => m.InfoPanel), { loading: TabLoader });
+const AISummary = dynamic(() => import("@/components/trip/ai-summary").then(m => m.AISummary), { loading: TabLoader });
+const Phrasebook = dynamic(() => import("@/components/trip/phrasebook").then(m => m.Phrasebook), { loading: TabLoader });
+const WeatherPanel = dynamic(() => import("@/components/trip/weather-panel").then(m => m.WeatherPanel), { loading: TabLoader });
+const FoodGuide = dynamic(() => import("@/components/trip/food-guide").then(m => m.FoodGuide), { loading: TabLoader });
+const Achievements = dynamic(() => import("@/components/trip/achievements").then(m => m.Achievements), { loading: TabLoader });
+const Board = dynamic(() => import("@/components/trip/board").then(m => m.Board), { loading: TabLoader });
 
 export default function Home() {
   const { activeTab } = useTripStore();

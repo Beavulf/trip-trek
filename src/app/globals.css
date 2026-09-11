@@ -129,6 +129,12 @@
   html {
     scroll-behavior: smooth;
   }
+  /* Убираем задержку двойного тапа на интерактивных элементах */
+  button,
+  a,
+  [role="button"] {
+    touch-action: manipulation;
+  }
   body {
     @apply bg-background text-foreground;
     -webkit-tap-highlight-color: transparent;
@@ -266,6 +272,10 @@
     align-items: center;
     justify-content: center;
     gap: 0.25rem;
+    transition: background 0.15s ease;
+  }
+  .btn-confirm-yes:hover {
+    background: #dc2626;
   }
   .btn-confirm-no {
     min-height: 2.75rem;
@@ -277,6 +287,10 @@
     border-radius: 0.75rem;
     background: var(--secondary);
     color: var(--secondary-foreground);
+    transition: background 0.15s ease;
+  }
+  .btn-confirm-no:hover {
+    background: var(--accent);
   }
   .btn-icon-touch {
     width: 2.75rem;
@@ -481,6 +495,10 @@ body.chat-dock button[aria-label="Быстрое добавление"] {
   .chat-flash {
     animation: none;
     box-shadow: 0 0 0 2px color-mix(in oklch, var(--primary) 45%, transparent);
+  }
+  /* Пинг «сегодня/сейчас» на маршруте замирает — остаётся статичная точка */
+  .animate-ping {
+    animation: none !important;
   }
 }
 

@@ -15,6 +15,9 @@ import { CATEGORY_META, type Place } from "@/lib/types";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
+// Бюджет в человекочитаемом виде (1234.5 → «1 234,5»)
+const budgetFmt = new Intl.NumberFormat("ru-RU", { maximumFractionDigits: 2 });
+
 interface PlaceRowProps {
   place: Place;
   accentColor: string;
@@ -51,7 +54,10 @@ export function PlaceRow({ place, accentColor, currency, onOpen }: PlaceRowProps
   return (
     <motion.div
       layout
+      role="button"
+      tabIndex={0}
       onClick={onOpen}
+      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onOpen(); } }}
       whileTap={{ scale: 0.99 }}
       className={cn(
         "flex items-center gap-2.5 p-2.5 rounded-xl cursor-pointer transition-colors group relative overflow-hidden",
@@ -81,7 +87,7 @@ export function PlaceRow({ place, accentColor, currency, onOpen }: PlaceRowProps
         {meta?.emoji}
       </div>
       <div className="min-w-0 flex-1">
-        <div className={cn("text-sm font-medium leading-tight", visited && "line-through opacity-60")}>{place.name}</div>
+        <div className={cn("text-sm font-medium leading-tight break-words", visited && "line-through opacity-60")}>{place.name}</div>
         {/* Адрес */}
         {place.address && (
           <div className="flex items-start gap-1 text-[10px] text-muted-foreground mt-0.5">
@@ -103,7 +109,7 @@ export function PlaceRow({ place, accentColor, currency, onOpen }: PlaceRowProps
             <span className="flex items-center gap-0.5"><Clock className="size-2.5" /> {timeLabel(place.timeOfDay)}</span>
           )}
           {place.budget ? (
-            <span className="tabular-nums">{currency ?? "$"}{place.budget}</span>
+            <span className="tabular-nums">{currency ?? "$"}{budgetFmt.format(place.budget)}</span>
           ) : null}
           {place.rating ? <span className="flex items-center gap-0.5 text-amber-500"><Star className="size-2.5 fill-current" /> {place.rating}</span> : null}
         </div>
@@ -127,7 +133,7 @@ export function PlaceRow({ place, accentColor, currency, onOpen }: PlaceRowProps
         </div>
       </div>
       {visited && (
-        <span className="shrink-0 text-[9px] font-bold uppercase tracking-wide text-green-600 bg-green-500/10 px-1.5 py-0.5 rounded">
+        <span aria-hidden="true" className="shrink-0 text-[9px] font-bold uppercase tracking-wide text-green-600 bg-green-500/10 px-1.5 py-0.5 rounded">
           ✓
         </span>
       )}

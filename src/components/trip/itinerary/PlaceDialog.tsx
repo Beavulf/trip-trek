@@ -31,6 +31,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { useTripStore } from "@/lib/trip-store";
 import { CATEGORY_META, type Place, type Photo } from "@/lib/types";
 import { useBodyScrollLock } from "@/hooks/use-body-scroll-lock";
+import { useDialogA11y } from "@/hooks/use-dialog-a11y";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { compressImageForUpload, ImageCompressError } from "@/lib/image-compress";
@@ -45,11 +46,14 @@ interface PlaceDialogProps {
 
 export function PlaceDialog({ place, currency, onClose }: PlaceDialogProps) {
   useBodyScrollLock(!!place);
-  if (typeof document === "undefined" || !place) return null;
+  if (typeof document === "undefined") return null;
 
+  // place проверяем внутри AnimatePresence — иначе unmount убивает exit-анимацию
   return createPortal(
     <AnimatePresence>
-      <PlaceDialogBody key={place.id} place={place} currency={currency} onClose={onClose} />
+      {place && (
+        <PlaceDialogBody key={place.id} place={place} currency={currency} onClose={onClose} />
+      )}
     </AnimatePresence>,
     document.body
   );
@@ -83,6 +87,8 @@ function PlaceDialogBody({ place, currency, onClose }: { place: Place; currency?
   const updPhoto = useUpdatePhoto();
   const delPhoto = useDeletePhoto();
   const inputRef = useRef<HTMLInputElement>(null);
+  // Фокус-трап и возврат фокуса; Escape ведёт локальный обработчик ниже (свернуть форму → закрыть)
+  const panelRef = useDialogA11y<HTMLDivElement>(true);
   const [notes, setNotes] = useState(place.notes || "");
   const [uploading, setUploading] = useState(false);
   const [editing, setEditing] = useState(false);
@@ -263,12 +269,16 @@ function PlaceDialogBody({ place, currency, onClose }: { place: Place; currency?
       className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex items-end sm:items-center justify-center sm:p-4"
     >
       <motion.div
+        ref={panelRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label={fresh.name}
         initial={{ y: "100%", opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
         exit={{ y: "100%", opacity: 0 }}
         transition={{ type: "spring", stiffness: 320, damping: 32 }}
         onClick={(e) => e.stopPropagation()}
-        className="bg-card w-full sm:max-w-lg max-h-[88vh] rounded-t-3xl sm:rounded-3xl overflow-y-auto flex flex-col pb-[env(safe-area-inset-bottom)]"
+        className="bg-card w-full sm:max-w-lg max-h-[88vh] rounded-t-3xl sm:rounded-3xl overflow-y-auto overscroll-contain flex flex-col pb-[env(safe-area-inset-bottom)]"
       >
         <div className="sm:hidden flex justify-center pt-2.5 pb-1 shrink-0">
           <div className="w-10 h-1 rounded-full bg-muted-foreground/30" />
@@ -305,7 +315,7 @@ function PlaceDialogBody({ place, currency, onClose }: { place: Place; currency?
           <button
             type="button"
             onClick={onClose}
-            className="size-10 rounded-full hover:bg-accent grid place-items-center shrink-0"
+            className="size-11 rounded-full hover:bg-accent grid place-items-center shrink-0"
             aria-label="Закрыть"
           >
             <X className="size-4" />
@@ -391,16 +401,20 @@ function PlaceDialogBody({ place, currency, onClose }: { place: Place; currency?
                 >
                   <div className="p-3 pt-1 space-y-3 border-t border-border">
                     <div>
-                      <label className="text-xs text-muted-foreground mb-1 block">Название</label>
+                      <label htmlFor="place-name" className="text-xs text-muted-foreground mb-1 block">Название</label>
                       <input
+                        id="place-name"
+                        name="name"
+                        type="text"
+                        autoComplete="off"
                         value={name}
                         onChange={(e) => setName(e.target.value)}
                         className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm input-mobile"
                       />
                     </div>
                     <div>
-                      <label className="text-xs text-muted-foreground mb-1.5 block">Категория</label>
-                      <div className="grid grid-cols-3 gap-1.5">
+                      <div id="place-category-label" className="text-xs text-muted-foreground mb-1.5">Категория</div>
+                      <div role="group" aria-labelledby="place-category-label" className="grid grid-cols-3 gap-1.5">
                         {Object.entries(CATEGORY_META).map(([k, v]) => (
                           <button
                             key={k}
@@ -422,8 +436,8 @@ function PlaceDialogBody({ place, currency, onClose }: { place: Place; currency?
                       </div>
                     </div>
                     <div>
-                      <label className="text-xs text-muted-foreground mb-1.5 block flex items-center gap-1"><CalendarClock className="size-3" /> Время суток</label>
-                      <div className="grid grid-cols-3 gap-1.5">
+                      <div id="place-time-label" className="text-xs text-muted-foreground mb-1.5 flex items-center gap-1"><CalendarClock className="size-3" /> Время суток</div>
+                      <div role="group" aria-labelledby="place-time-label" className="grid grid-cols-3 gap-1.5">
                         {TIMES.map((t) => (
                           <button
                             key={t.value}
@@ -444,10 +458,13 @@ function PlaceDialogBody({ place, currency, onClose }: { place: Place; currency?
                     </div>
                     <div className="grid grid-cols-2 gap-2">
                       <div>
-                        <label className="text-xs text-muted-foreground mb-1 block">Бюджет, {currency ?? "$"}</label>
+                        <label htmlFor="place-budget" className="text-xs text-muted-foreground mb-1 block">Бюджет, {currency ?? "$"}</label>
                         <input
+                          id="place-budget"
+                          name="budget"
                           type="number"
                           inputMode="decimal"
+                          autoComplete="off"
                           value={budget}
                           onChange={(e) => setBudget(e.target.value)}
                           placeholder="0"
@@ -455,18 +472,24 @@ function PlaceDialogBody({ place, currency, onClose }: { place: Place; currency?
                         />
                       </div>
                       <div>
-                        <label className="text-xs text-muted-foreground mb-1 block">Адрес</label>
+                        <label htmlFor="place-address" className="text-xs text-muted-foreground mb-1 block">Адрес</label>
                         <input
+                          id="place-address"
+                          name="address"
+                          type="text"
+                          autoComplete="off"
                           value={address}
                           onChange={(e) => setAddress(e.target.value)}
-                          placeholder="Адрес"
+                          placeholder="Адрес…"
                           className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm input-mobile"
                         />
                       </div>
                     </div>
                     <div>
-                      <label className="text-xs text-muted-foreground mb-1 block">Описание</label>
+                      <label htmlFor="place-description" className="text-xs text-muted-foreground mb-1 block">Описание</label>
                       <textarea
+                        id="place-description"
+                        name="description"
                         value={description}
                         onChange={(e) => setDescription(e.target.value)}
                         placeholder="Чем интересно место…"
@@ -535,6 +558,7 @@ function PlaceDialogBody({ place, currency, onClose }: { place: Place; currency?
                   key={s}
                   type="button"
                   aria-label={`Оценка ${s}`}
+                  aria-pressed={(fresh.rating ?? 0) === s}
                   className="size-11 grid place-items-center active:scale-90 transition-transform"
                   onClick={async () => {
                     try {
@@ -560,10 +584,12 @@ function PlaceDialogBody({ place, currency, onClose }: { place: Place; currency?
 
           {/* Заметки */}
           <div>
-            <div className="text-xs text-muted-foreground mb-1.5 flex items-center gap-1">
+            <label htmlFor="place-notes" className="text-xs text-muted-foreground mb-1.5 flex items-center gap-1">
               <NotebookPen className="size-3" /> Заметки
-            </div>
+            </label>
             <textarea
+              id="place-notes"
+              name="notes"
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               placeholder="Впечатления, советы…"

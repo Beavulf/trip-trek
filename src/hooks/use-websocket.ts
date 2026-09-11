@@ -227,7 +227,23 @@ export function useWebSocket(tripId: string) {
       }
     });
 
+    // bfcache: страница с открытым WebSocket не попадает в back/forward cache.
+    // При уходе со страницы закрываем сокет, при возврате (persisted) — поднимаем
+    // и перезапрашиваем данные: пока страница была заморожена, мир мог измениться.
+    const onPageHide = () => {
+      socket?.disconnect();
+    };
+    const onPageShow = (e: PageTransitionEvent) => {
+      if (!e.persisted) return;
+      socket?.connect();
+      qc.invalidateQueries();
+    };
+    window.addEventListener("pagehide", onPageHide);
+    window.addEventListener("pageshow", onPageShow);
+
     return () => {
+      window.removeEventListener("pagehide", onPageHide);
+      window.removeEventListener("pageshow", onPageShow);
       // Leave the old trip room before disconnecting
       const oldTripId = currentTripIdRef.current;
       if (oldTripId && socket?.connected) {

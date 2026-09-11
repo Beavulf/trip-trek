@@ -17,7 +17,6 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "TripTrek — путешествия с друзьями",
   description: "Планируй путешествия с друзьями: маршрут, карта, бюджет, дневник. Совместное планирование в реальном времени.",
-  keywords: ["travel", "trip planner", "путешествия", "маршрут", "бюджет", "друзья"],
   manifest: "/manifest.webmanifest",
   appleWebApp: {
     capable: true,
@@ -50,15 +49,9 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
+    // Leaflet CSS импортируется внутри клиентских map-компонентов (trip-map, map-picker-client),
+    // чтобы не быть render-blocking для страниц без карты (глобальный <link> с unpkg стоил ~760ms на мобильном LCP)
     <html lang="ru" suppressHydrationWarning data-scroll-behavior="smooth">
-      <head>
-        <link
-          rel="stylesheet"
-          href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
-          integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
-          crossOrigin=""
-        />
-      </head>
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased bg-background text-foreground`}
       >

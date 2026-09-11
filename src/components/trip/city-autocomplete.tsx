@@ -25,6 +25,8 @@ interface CityAutocompleteProps {
   onSelect: (city: CityResult) => void;
   placeholder?: string;
   className?: string;
+  /** Для связи <label for> с инпутом */
+  id?: string;
 }
 
 export function CityAutocomplete({
@@ -33,6 +35,7 @@ export function CityAutocomplete({
   onSelect,
   placeholder = "Начни вводить город…",
   className,
+  id,
 }: CityAutocompleteProps) {
   const [query, setQuery] = useState(value);
   const [results, setResults] = useState<CityResult[]>([]);
@@ -102,7 +105,9 @@ export function CityAutocomplete({
       <div className="relative">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground pointer-events-none" />
         <input
+          id={id}
           type="text"
+          autoComplete="off"
           value={query}
           onChange={(e) => {
             setQuery(e.target.value);
@@ -118,8 +123,10 @@ export function CityAutocomplete({
         )}
         {!loading && query && (
           <button
+            type="button"
             onClick={handleClear}
-            className="absolute right-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground hover:text-foreground"
+            aria-label="Очистить"
+            className="absolute right-3 top-1/2 -translate-y-1/2 size-6 grid place-items-center text-muted-foreground hover:text-foreground"
           >
             <X className="size-4" />
           </button>
