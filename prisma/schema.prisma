@@ -37,11 +37,13 @@ model User {
 }
 
 // === Глобальные настройки приложения (singleton-строка id="app") ===
-// Общий ключ ИИ, который админ задал в /admin → Настройки; используется,
-// если у пользователя нет своего ключа
+// Общий ключ ИИ и адрес API, заданные админом в /admin → Настройки; используются,
+// если у пользователя нет своего ключа. База и модель — настройка сервера целиком
 model AppSettings {
-  id       String  @id @default("app")
-  aiApiKey String?
+  id        String  @id @default("app")
+  aiApiKey  String?
+  aiBaseUrl String? // напр. https://api.z.ai/api/paas/v4 или https://openrouter.ai/api/v1
+  aiModel   String? // напр. glm-4.6, gpt-4o-mini
 }
 
 // === Push подписка (Web Push для уведомлений) ===

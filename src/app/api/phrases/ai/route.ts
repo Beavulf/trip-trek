@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { publish } from "@/lib/ws-bus";
 import { requireTripMember } from "@/lib/api-auth";
-import { resolveAiKey } from "@/lib/ai-key";
+import { resolveAiConfig } from "@/lib/ai-key";
 
 // ИИ-фразы: перевод своей фразы, «ещё фразы» раздела, пак для любого языка.
 // LLM — та же цепочка, что в foods/suggest: OpenAI-совместимый API → ZAI SDK → 503.
@@ -116,8 +116,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "ИИ устал: не больше 10 запросов в час" }, { status: 429 });
     }
 
-    // BYOK: свой ключ юзера → админский → env (resolveAiKey)
-    const { key: aiKey } = await resolveAiKey(user.id);
+    // BYOK: ключ — юзер → админ → env; база/модель — админ → env (resolveAiConfig)
+    const cfg = await resolveAiConfig(user.id);
 
     const trip = await db.trip.findUnique({
       where: { id: tripId },
@@ -133,7 +133,7 @@ export async function POST(req: NextRequest) {
         "Ты — переводчик-разговорник для путешественников. Переведи русскую фразу на указанный язык так, как её сказали бы местные в быту (разговорно, вежливо, коротко). Дай транслитерацию латиницей по слогам, чтобы русскоязычный мог прочитать вслух. " +
         'Отвечай СТРОГО JSON-объектом без markdown: {"foreign": "фраза на языке", "translit": "чтение латиницей"}. Никакого текста до или после.';
       const userPrompt = `Язык: ${langLabel || "язык страны поездки"}. Страна поездки: ${trip.destination || "неизвестна"}. Фраза: «${trimmedText}»`;
-      const content = await generateWithLLM(system, userPrompt, aiKey);
+      const content = await generateWithLLM(system, userPrompt, cfg);
       if (!content) {
         return NextResponse.json({ error: "ИИ недоступен — добавь свой ключ ИИ в настройках профиля или попроси админа" }, { status: 503 });
       }
@@ -172,7 +172,7 @@ ${CATEGORIES.map((c) => `- ${c}: ${CATEGORY_RU[c]}`).join("\n")}
 Составь ${wantCount} новых фраз раздела «${cat ? CATEGORY_RU[cat] : "основы"}». Категория каждой фразы: «${cat ?? "basics"}».
 Уже есть в разговорнике — НЕ повторяй их и близкие по смыслу: ${haveRu.slice(0, 60).join(" | ") || "пусто"}.`;
 
-    const content = await generateWithLLM(system, userPrompt, aiKey);
+    const content = await generateWithLLM(system, userPrompt, cfg);
     if (!content) {
       return NextResponse.json({ error: "ИИ недоступен — добавь свой ключ ИИ в настройках профиля или попроси админа" }, { status: 503 });
     }
@@ -214,10 +214,14 @@ ${CATEGORIES.map((c) => `- ${c}: ${CATEGORY_RU[c]}`).join("\n")}
 }
 
 // Та же цепочка, что в foods/suggest и ai-summary: OpenAI-совместимый API → ZAI SDK → null
-async function generateWithLLM(systemPrompt: string, userPrompt: string, aiKey: string | null): Promise<string | null> {
-  const openaiKey = aiKey;
-  const openaiBase = (process.env.OPENAI_BASE_URL || "https://api.openai.com/v1").replace(/\/$/, "");
-  const openaiModel = process.env.OPENAI_MODEL || "gpt-4o-mini";
+async function generateWithLLM(
+  systemPrompt: string,
+  userPrompt: string,
+  cfg: { key: string | null; baseUrl: string | null; model: string | null }
+): Promise<string | null> {
+  const openaiKey = cfg.key;
+  const openaiBase = (cfg.baseUrl ?? process.env.OPENAI_BASE_URL ?? "https://api.openai.com/v1").replace(/\/$/, "");
+  const openaiModel = cfg.model ?? process.env.OPENAI_MODEL ?? "gpt-4o-mini";
 
   if (openaiKey) {
     try {

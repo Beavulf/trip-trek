@@ -2,33 +2,52 @@ import { db } from "@/lib/db";
 
 export type AiKeySource = "user" | "admin" | "env" | "none";
 
-export interface ResolvedAiKey {
+export interface ResolvedAiConfig {
   key: string | null;
+  baseUrl: string | null;
+  model: string | null;
   source: AiKeySource;
 }
 
 /**
- * Откуда брать ключ для OpenAI-совместимого API (BYOK).
- * Приоритет: свой ключ пользователя → общий ключ админа (AppSettings) → env.
- * Пользовательский ключ берём только по явному userId — в ответ API ключ
- * никогда не возвращается, наружу идёт лишь замаскированный хвост.
+ * Откуда брать конфиг OpenAI-совместимого API (BYOK).
+ *
+ * Ключ: свой ключ пользователя → общий ключ админа (AppSettings) → env.
+ * База и модель: админ (AppSettings) → env — это настройка сервера целиком,
+ * общая для всех ключей (ключ и адрес провайдера должны совпадать, поэтому
+ * админ задаёт их под того провайдера, чьи ключи используются).
+ *
+ * В ответ API конфиг никогда не возвращается целиком — ключ только маской.
  */
-export async function resolveAiKey(userId?: string | null): Promise<ResolvedAiKey> {
+export async function resolveAiConfig(userId?: string | null): Promise<ResolvedAiConfig> {
+  let key = process.env.OPENAI_API_KEY || null;
+  let baseUrl = process.env.OPENAI_BASE_URL || null;
+  let model = process.env.OPENAI_MODEL || null;
+  let source: AiKeySource = key ? "env" : "none";
+
+  const settings = await db.appSettings.findUnique({
+    where: { id: "app" },
+    select: { aiApiKey: true, aiBaseUrl: true, aiModel: true },
+  });
+  if (settings?.aiApiKey) {
+    key = settings.aiApiKey;
+    source = "admin";
+  }
+  if (settings?.aiBaseUrl) baseUrl = settings.aiBaseUrl;
+  if (settings?.aiModel) model = settings.aiModel;
+
   if (userId) {
     const row = await db.user.findUnique({ where: { id: userId }, select: { aiApiKey: true } });
-    if (row?.aiApiKey) return { key: row.aiApiKey, source: "user" };
+    if (row?.aiApiKey) {
+      key = row.aiApiKey;
+      source = "user";
+    }
   }
 
-  const settings = await db.appSettings.findUnique({ where: { id: "app" }, select: { aiApiKey: true } });
-  if (settings?.aiApiKey) return { key: settings.aiApiKey, source: "admin" };
-
-  if (process.env.OPENAI_API_KEY) return { key: process.env.OPENAI_API_KEY, source: "env" };
-
-  return { key: null, source: "none" };
+  return { key, baseUrl, model, source };
 }
 
 /** Замаскированный хвост ключа для показа в UI: «…b7Fk» */
 export function maskKey(key: string): string {
-  const tail = key.slice(-4);
-  return `••••${tail}`;
+  return `••••${key.slice(-4)}`;
 }
