@@ -9,8 +9,9 @@ import { useMemo, useState } from "react";
 import { cn, plural } from "@/lib/utils";
 import { currencySymbol as curSym } from "@/lib/currencies";
 import { MobileBottomSheet } from "./mobile-bottom-sheet";
+import { UserAvatar } from "./user-avatar";
 
-type EventType = "place" | "photo" | "expense" | "journal";
+type EventType = "place" | "photo" | "expense" | "journal" | "member";
 
 interface TimelineEvent {
   id: string;
@@ -24,12 +25,13 @@ interface TimelineEvent {
   emoji?: string;
   photoUrl?: string;
   photoThumb?: string;
-  targetTab: TripTab;
+  /** Куда вести по тапу «перейти»; у служебных событий (вступление в поездку) перехода нет */
+  targetTab?: TripTab;
   dayNumber?: number;
   /** Плановый день маршрута (для мест) — показываем в деталях */
   plannedDay?: number;
   /** Кто совершил действие — аватар с эмодзи и цветом участника */
-  actor?: { name: string; emoji: string; color: string };
+  actor?: { name: string; emoji: string; color: string; avatarUrl?: string | null };
   categoryLabel?: string;
   /** Полный текст для диалога деталей (описание места, запись дневника) */
   fullText?: string | null;
@@ -72,6 +74,12 @@ const TYPE_META: Record<EventType, { sheetTitle: string; cta: string; emptyTitle
     cta: "Открыть дневник",
     emptyTitle: "Записей пока нет",
     emptyHint: "Оставьте заметку в дневнике — она появится в хронике",
+  },
+  member: {
+    sheetTitle: "Новый участник",
+    cta: "Открыть состав",
+    emptyTitle: "Пока только вы",
+    emptyHint: "Пригласите друзей по коду — их вход появится в хронике",
   },
 };
 
@@ -179,7 +187,7 @@ export function Timeline() {
         photoThumb: p.thumbUrl || p.url,
         targetTab: "gallery",
         dayNumber: p.day?.dayNumber,
-        actor: p.user ? { name: p.user.name, emoji: p.user.emoji, color: p.user.color } : undefined,
+        actor: p.user ? { name: p.user.name, emoji: p.user.emoji, color: p.user.color, avatarUrl: p.user.avatarUrl } : undefined,
         address: p.address,
       });
     });
@@ -199,7 +207,7 @@ export function Timeline() {
         emoji: cat?.emoji ?? "💸",
         targetTab: "budget",
         dayNumber: e.day?.dayNumber,
-        actor: e.paidBy ? { name: e.paidBy.name, emoji: e.paidBy.emoji, color: e.paidBy.color } : undefined,
+        actor: e.paidBy ? { name: e.paidBy.name, emoji: e.paidBy.emoji, color: e.paidBy.color, avatarUrl: e.paidBy.avatarUrl } : undefined,
         categoryLabel: cat?.label,
         amount: e.amount,
         originalAmount: e.originalAmount,
@@ -220,9 +228,27 @@ export function Timeline() {
         emoji: "📔",
         targetTab: "journal",
         dayNumber: j.day?.dayNumber,
-        actor: j.user ? { name: j.user.name, emoji: j.user.emoji, color: j.user.color } : undefined,
+        actor: j.user ? { name: j.user.name, emoji: j.user.emoji, color: j.user.color, avatarUrl: j.user.avatarUrl } : undefined,
         fullText: j.content,
         mood: j.mood,
+      });
+    });
+
+    // Вступление в поездку: от joinedAt участника. Владелец (первый день) тоже попадает —
+    // это честная точка старта хроники «кто в компании»
+    trip.participants.forEach((p) => {
+      const ts = p.joinedAt ? new Date(p.joinedAt).getTime() : NaN;
+      if (isNaN(ts)) return;
+      evts.push({
+        id: `member-${p.id}`,
+        type: "member",
+        timestamp: p.joinedAt!,
+        title: `присоединился к поездке · ${p.name}`,
+        icon: MapPin,
+        color: "#f59e0b",
+        emoji: "👋",
+        targetTab: undefined,
+        actor: { name: p.name, emoji: p.emoji, color: p.color, avatarUrl: p.avatarUrl },
       });
     });
 
@@ -279,7 +305,7 @@ export function Timeline() {
           dayNo: null,
           isToday: key === todayKey,
           isYesterday: key === yKey,
-          counts: { place: 0, photo: 0, expense: 0, journal: 0 },
+          counts: { place: 0, photo: 0, expense: 0, journal: 0, member: 0 },
           spent: 0,
           events: [],
         };
@@ -315,6 +341,7 @@ export function Timeline() {
   const loading = tripLoading || expensesLoading || photosLoading || journalsLoading;
 
   const jump = (e: TimelineEvent) => {
+    if (!e.targetTab) return;
     if (e.dayNumber != null) setSelectedDay(e.dayNumber);
     setActiveTab(e.targetTab);
   };
@@ -384,6 +411,7 @@ export function Timeline() {
     if (g.counts.photo) parts.push(`📸 ${g.counts.photo}`);
     if (g.spent) parts.push(`💸 ${currencySymbol}${g.spent.toFixed(g.spent % 1 === 0 ? 0 : 2)}`);
     if (g.counts.journal) parts.push(`📔 ${g.counts.journal}`);
+    if (g.counts.member) parts.push(`👋 ${g.counts.member}`);
     return parts.join(" · ");
   };
 
@@ -420,13 +448,14 @@ export function Timeline() {
               onClick={() => setSheetEvent(newest)}
               className="mt-2 w-full min-h-11 flex items-center gap-2 rounded-xl bg-white/10 hover:bg-white/20 px-2.5 py-1.5 text-left transition-colors active:scale-[0.99] focus-visible:ring-2 focus-visible:ring-white/60"
             >
-              <span
-                className="size-6 rounded-full grid place-items-center text-[11px] shrink-0"
-                style={{ background: `${newest.actor?.color ?? newest.color}44` }}
-                aria-hidden="true"
-              >
-                {newest.actor?.emoji ?? newest.emoji}
-              </span>
+              <UserAvatar
+                name={newest.actor?.name ?? ""}
+                emoji={newest.actor?.emoji ?? newest.emoji ?? "✨"}
+                color={newest.actor?.color ?? newest.color}
+                avatarUrl={newest.actor?.avatarUrl}
+                className="size-6 text-[11px]"
+                textClassName="text-[11px]"
+              />
               <span className="text-xs text-white/90 truncate">
                 <span className="text-white/60">Последнее:</span>{" "}
                 {newest.actor && (
@@ -550,7 +579,6 @@ export function Timeline() {
 
                 <div className="relative pl-4 ml-3 border-l-2 border-border space-y-2">
                   {g.events.map((e, idx) => {
-                    const Icon = e.icon;
                     const isNewest = e.id === newest?.id;
                     return (
                       <motion.button
@@ -573,14 +601,15 @@ export function Timeline() {
                         </span>
                         <div className="rounded-xl bg-card border border-border p-3 card-hover w-full">
                           <div className="flex items-start gap-2.5">
-                            {/* Аватар автора действия (или категории места) */}
-                            <span
-                              className="size-9 rounded-full grid place-items-center text-sm shrink-0 border border-black/5"
-                              style={{ background: `${e.actor?.color ?? e.color}22` }}
-                              aria-hidden="true"
-                            >
-                              {e.actor?.emoji ?? e.emoji ?? <Icon className="size-4" style={{ color: e.color }} />}
-                            </span>
+                            {/* Аватар автора действия (или иконка категории) */}
+                            <UserAvatar
+                              name={e.actor?.name ?? ""}
+                              emoji={e.actor?.emoji ?? e.emoji ?? "✨"}
+                              color={e.actor?.color ?? e.color}
+                              avatarUrl={e.actor?.avatarUrl}
+                              className="size-9 border border-black/5"
+                              textClassName="text-sm"
+                            />
                             <div className="min-w-0 flex-1">
                               <div className="flex items-start justify-between gap-2">
                                 <span className="text-sm font-medium leading-tight line-clamp-2">{e.title}</span>
@@ -671,19 +700,19 @@ function EventSheet({
   const dateStr = isNaN(full.getTime())
     ? "—"
     : full.toLocaleString("ru-RU", { day: "numeric", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit" });
-  const Icon = e.icon;
 
   return (
     <div className="space-y-4">
       {/* Автор и время действия */}
       <div className="flex items-center gap-2.5">
-        <span
-          className="size-10 rounded-full grid place-items-center text-base shrink-0 border border-black/5"
-          style={{ background: `${e.actor?.color ?? e.color}22` }}
-          aria-hidden="true"
-        >
-          {e.actor?.emoji ?? e.emoji ?? <Icon className="size-5" style={{ color: e.color }} />}
-        </span>
+        <UserAvatar
+          name={e.actor?.name ?? ""}
+          emoji={e.actor?.emoji ?? e.emoji ?? "✨"}
+          color={e.actor?.color ?? e.color}
+          avatarUrl={e.actor?.avatarUrl}
+          className="size-10 border border-black/5"
+          textClassName="text-base"
+        />
         <div className="min-w-0">
           <div className="text-sm font-semibold">{e.actor?.name ?? e.meta ?? TYPE_META[e.type].sheetTitle}</div>
           <div className="text-xs text-muted-foreground tabular-nums">{dateStr}</div>
@@ -725,9 +754,13 @@ function EventSheet({
       <button
         type="button"
         onClick={onJump}
-        className="w-full min-h-11 rounded-xl bg-primary text-primary-foreground text-sm font-medium flex items-center justify-center gap-1.5 active:scale-[0.98] transition-transform focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
+        disabled={!e.targetTab}
+        className={cn(
+          "w-full min-h-11 rounded-xl text-sm font-medium flex items-center justify-center gap-1.5 active:scale-[0.98] transition-transform focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1",
+          e.targetTab ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"
+        )}
       >
-        {TYPE_META[e.type].cta} <ChevronRight className="size-4" aria-hidden="true" />
+        {e.targetTab ? <>{TYPE_META[e.type].cta} <ChevronRight className="size-4" aria-hidden="true" /></> : "Событие состава поездки"}
       </button>
     </div>
   );

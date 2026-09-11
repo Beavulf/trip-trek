@@ -67,6 +67,9 @@ export async function GET(req: NextRequest) {
     role: m.role,
     budget: m.budget,
     email: m.user.email,
+    // avatarUrl — аватар вместо эмодзи (лента, бюджет); joinedAt — событие «присоединился» в ленте
+    avatarUrl: m.user.avatarUrl,
+    joinedAt: m.joinedAt,
   }));
 
   return NextResponse.json({

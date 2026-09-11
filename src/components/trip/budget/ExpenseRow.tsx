@@ -8,6 +8,7 @@ import { useDeleteExpense, useTrip } from "@/hooks/use-trip";
 import { useAuth } from "@/hooks/use-auth";
 import { EXPENSE_CATEGORIES, type Expense, type Participant } from "@/lib/types";
 import { currencySymbol } from "@/lib/currencies";
+import { UserAvatar } from "../user-avatar";
 
 interface ExpenseRowProps {
   expense: Expense;
@@ -67,24 +68,31 @@ export function ExpenseRow({ expense, participants }: ExpenseRowProps) {
 
       {/* Контент */}
       <div className="min-w-0 flex-1">
-        {/* Описание + сумма */}
-        <div className="flex items-center justify-between gap-2">
+        {/* Описание + сумма (исходная валюта — мелкой строкой под итоговой, справа) */}
+        <div className="flex items-start justify-between gap-2">
           <span className="text-sm font-medium truncate">{expense.description}</span>
-          <span className="font-semibold text-sm shrink-0 tabular-nums">{sym}{expense.amount.toFixed(2)}</span>
+          <span className="flex flex-col items-end shrink-0">
+            <span className="font-semibold text-sm tabular-nums">{sym}{expense.amount.toFixed(2)}</span>
+            {expense.originalAmount != null && expense.originalCurrency && expense.originalCurrency !== trip?.settings.currency && (
+              <span className="text-[10px] text-muted-foreground/80 tabular-nums">
+                ≈ {expense.originalAmount.toFixed(2)} {expense.originalCurrency}
+              </span>
+            )}
+          </span>
         </div>
-
-        {/* Изначальная сумма в исходной валюте (если конвертировали из другой) */}
-        {expense.originalAmount != null && expense.originalCurrency && expense.originalCurrency !== trip?.settings.currency && (
-          <div className="text-[10px] text-muted-foreground/80 tabular-nums -mt-0.5">
-            ≈ {expense.originalAmount.toFixed(2)} {expense.originalCurrency}
-          </div>
-        )}
 
         {/* Мета: кто заплатил + категория + день */}
         <div className="text-[11px] text-muted-foreground flex items-center gap-1.5 mt-0.5 flex-wrap">
           {paidBy && (
             <span className="flex items-center gap-0.5">
-              <span className="size-3.5 rounded-full grid place-items-center text-[7px]" style={{ background: paidBy.color }}>{paidBy.emoji}</span>
+              <UserAvatar
+                name={paidBy.name}
+                emoji={paidBy.emoji}
+                color={paidBy.color}
+                avatarUrl={paidBy.avatarUrl}
+                className="size-3.5"
+                textClassName="text-[7px]"
+              />
               <span className="font-medium">{paidBy.name}</span>
             </span>
           )}

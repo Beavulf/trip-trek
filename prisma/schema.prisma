@@ -22,6 +22,9 @@ model User {
   plan       String    @default("free") // free / premium
   planExpiry DateTime? // для премиума
   role       String    @default("user") // user / admin
+  // Свой ключ ИИ (BYOK): OpenAI-совместимый. Наружу API отдаёт только замаскированный
+  // хвост. Приоритет при вызове: свой ключ → админский (AppSettings) → env OPENAI_API_KEY
+  aiApiKey   String?
   createdAt  DateTime  @default(now())
 
   memberships TripMember[]
@@ -31,6 +34,14 @@ model User {
   messages    BoardMessage[]
   pushSubs    PushSubscription[]
   feedback    Feedback[]
+}
+
+// === Глобальные настройки приложения (singleton-строка id="app") ===
+// Общий ключ ИИ, который админ задал в /admin → Настройки; используется,
+// если у пользователя нет своего ключа
+model AppSettings {
+  id       String  @id @default("app")
+  aiApiKey String?
 }
 
 // === Push подписка (Web Push для уведомлений) ===

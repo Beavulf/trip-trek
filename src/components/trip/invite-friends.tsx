@@ -162,9 +162,10 @@ export function InviteFriends({ open, onOpenChange }: { open: boolean; onOpenCha
                   className="w-full flex items-center justify-between gap-2 p-3 rounded-2xl bg-muted/60 border border-border hover:border-primary/40 transition-colors"
                   aria-label="Скопировать код приглашения"
                 >
-                  <span className="flex flex-col items-start leading-tight min-w-0">
+                  <span className="flex min-w-0 flex-1 flex-col items-start leading-tight">
                     <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-bold">Код поездки</span>
-                    <span className="font-mono font-black text-lg tracking-[0.2em] truncate">{inviteCode}</span>
+                    {/* min-w-0 + truncate: длинный cuid-код обрезается, не выталкивая кнопку копирования */}
+                    <span className="w-full font-mono font-black text-base tracking-[0.12em] truncate">{inviteCode}</span>
                   </span>
                   <span
                     className={cn(

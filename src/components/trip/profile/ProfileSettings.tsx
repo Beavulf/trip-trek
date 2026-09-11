@@ -3,7 +3,8 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
-import { ArrowRight, Bell, Bug, Crown, Monitor, Moon, Settings, Shield, Sun } from "lucide-react";
+import { ArrowRight, Bell, Bug, ChevronDown, Crown, Loader2, Monitor, Moon, Settings, Shield, Sparkles, Sun, Trash2 } from "lucide-react";
+import { toast } from "sonner";
 import { useTheme } from "next-themes";
 import { cn } from "@/lib/utils";
 import type { UserProfile } from "./types";
@@ -31,6 +32,35 @@ export function ProfileSettings({ profile, setPremiumOpen, onReportBug, isAdmin,
 
   const current = mounted ? (theme ?? "system") : "system";
   const currentLabel = THEME_OPTIONS.find((t) => t.value === current)?.label ?? "Системная";
+
+  // === Свой ключ ИИ (BYOK) ===
+  const [aiOpen, setAiOpen] = useState(false);
+  const [aiKey, setAiKey] = useState("");
+  const [aiTail, setAiTail] = useState(profile.aiKeyTail ?? null);
+  const [aiSaving, setAiSaving] = useState(false);
+
+  const saveAiKey = async (value: string | null) => {
+    setAiSaving(true);
+    try {
+      const r = await fetch("/api/user", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ aiApiKey: value }),
+      });
+      const b = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(b?.error || `Ошибка ${r.status}`);
+      setAiTail(b.aiKeyTail ?? null);
+      setAiKey("");
+      toast.success(value === null ? "Ключ ИИ удалён" : "Ключ ИИ сохранён");
+      if (value === null) setAiOpen(false);
+    } catch (err) {
+      toast.error("Не удалось сохранить ключ", {
+        description: err instanceof Error ? err.message : "Попробуйте ещё раз",
+      });
+    } finally {
+      setAiSaving(false);
+    }
+  };
 
   return (
     <motion.section
@@ -118,6 +148,63 @@ export function ProfileSettings({ profile, setPremiumOpen, onReportBug, isAdmin,
             <div className="text-xs text-muted-foreground">Оповещения о поездках</div>
           </div>
           <PushToggle />
+        </div>
+
+        {/* Свой ключ ИИ — BYOK: переводчик фраз, советы шефа, ИИ-рассказ */}
+        <div>
+          <button
+            type="button"
+            onClick={() => setAiOpen((v) => !v)}
+            className="w-full flex items-center gap-3 p-3.5 text-left hover:bg-accent/50 transition-colors"
+            aria-expanded={aiOpen}
+          >
+            <div className="size-9 rounded-xl bg-secondary grid place-items-center shrink-0">
+              <Sparkles className="size-4.5 text-indigo-500" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="text-sm font-medium">Ключ ИИ</div>
+              <div className="text-xs text-muted-foreground">
+                {aiTail ? `Свой ключ подключён (${aiTail})` : "Подключить свой ключ для ИИ-функций"}
+              </div>
+            </div>
+            <ChevronDown className={cn("size-4 text-muted-foreground shrink-0 transition-transform", aiOpen && "rotate-180")} />
+          </button>
+          {aiOpen && (
+            <div className="px-3.5 pb-3.5 space-y-2">
+              <input
+                type="password"
+                value={aiKey}
+                onChange={(e) => setAiKey(e.target.value)}
+                placeholder="sk-…"
+                autoComplete="off"
+                className="w-full rounded-xl border border-input bg-background px-3 py-2.5 text-sm font-mono"
+              />
+              <p className="text-[10px] text-muted-foreground leading-snug">
+                OpenAI-совместимый ключ — нужен для ИИ-фраз, переводов, советов шефа и рассказа о поездке.
+                Хранится в базе приложения, наружу не отдаётся. Без своего ключа работает общий (если задал админ).
+              </p>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => saveAiKey(aiKey)}
+                  disabled={!aiKey.trim() || aiSaving}
+                  className="min-h-10 rounded-lg bg-primary px-4 text-xs font-medium text-primary-foreground disabled:opacity-50 flex items-center gap-1.5"
+                >
+                  {aiSaving && <Loader2 className="size-3 animate-spin" />} Сохранить
+                </button>
+                {aiTail && (
+                  <button
+                    type="button"
+                    onClick={() => saveAiKey(null)}
+                    disabled={aiSaving}
+                    className="min-h-10 rounded-lg bg-secondary px-3 text-xs text-red-500 font-medium flex items-center gap-1 disabled:opacity-50"
+                  >
+                    <Trash2 className="size-3" /> Убрать
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Сообщить о проблеме */}

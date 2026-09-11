@@ -7,6 +7,10 @@ export interface Participant {
   emoji: string;
   role: string | null;
   budget: number | null;
+  /** Фото профиля — рисуется вместо эмодзи там, где показываем участника */
+  avatarUrl?: string | null;
+  /** Когда вошёл в поездку — событие «присоединился» в ленте */
+  joinedAt?: string;
 }
 
 export interface Place {
@@ -50,7 +54,7 @@ export interface Photo {
   placeId: string | null;
   dayId: string;
   userId: string | null;
-  user: { id: string; name: string; emoji: string; color: string } | null;
+  user: { id: string; name: string; emoji: string; color: string; avatarUrl?: string | null } | null;
   place: Place | null;
   day: { dayNumber: number; city: string; cityKey: string } | null;
   lat: number | null;
@@ -79,7 +83,7 @@ export interface JournalEntry {
   id: string;
   dayId: string;
   userId: string | null;
-  user: { id: string; name: string; emoji: string; color: string } | null;
+  user: { id: string; name: string; emoji: string; color: string; avatarUrl?: string | null } | null;
   day: { dayNumber: number; city: string } | null;
   mood: string | null;
   content: string;

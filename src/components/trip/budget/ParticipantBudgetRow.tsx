@@ -7,6 +7,7 @@ import { cn } from "@/lib/utils";
 import { useUpdateMember, useTrip, getTripId } from "@/hooks/use-trip";
 import { currencySymbol } from "@/lib/currencies";
 import type { Participant } from "@/lib/types";
+import { UserAvatar } from "../user-avatar";
 
 interface ParticipantBudgetRowProps {
   participant: Participant;
@@ -59,9 +60,14 @@ export function ParticipantBudgetRow({ participant, spent }: ParticipantBudgetRo
 
   return (
     <div className="flex items-center gap-2.5 p-2 rounded-lg hover:bg-accent/50">
-      <div className="size-8 rounded-full grid place-items-center text-sm shrink-0" style={{ background: participant.color }}>
-        {participant.emoji}
-      </div>
+      <UserAvatar
+        name={participant.name}
+        emoji={participant.emoji}
+        color={participant.color}
+        avatarUrl={participant.avatarUrl}
+        className="size-8"
+        textClassName="text-sm"
+      />
       <div className="flex-1 min-w-0">
         <div className="text-sm font-medium">{participant.name}</div>
         <div className="text-[11px] text-muted-foreground tabular-nums">потратил {sym}{spent.toFixed(2)}</div>

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { requireUser } from "@/lib/api-auth";
 import { rateLimitMiddleware, userRateLimit } from "@/lib/rate-limit";
+import { publish } from "@/lib/ws-bus";
 
 // POST /api/trips/join?code=CHINA2024 — присоединиться к поездке по invite-коду
 export async function POST(req: NextRequest) {
@@ -76,6 +77,9 @@ export async function POST(req: NextRequest) {
       color: color || "#94a3b8",
     },
   });
+
+  // Живая синхронизация состава: у остальных подтянутся участники и событие в ленте
+  await publish(trip.id, "member:joined", { tripId: trip.id, displayName: member.displayName });
 
   return NextResponse.json({ tripId: trip.id, memberId: member.id });
 }

@@ -95,9 +95,23 @@ export async function PATCH(req: NextRequest) {
 }
 
 // DELETE — удалить фразу (в т.ч. сгенерированную; фразы — общий ресурс поездки)
+// Группами: ?tripId=...&language=zh — все фразы языка (загруженный пак целиком)
 export async function DELETE(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const id = searchParams.get("id");
+  const tripId = searchParams.get("tripId");
+  const language = searchParams.get("language");
+
+  // Групповое удаление по языку
+  if (!id && tripId && language) {
+    const { response } = await requireTripMember(req, tripId);
+    if (response) return response;
+
+    const result = await db.phrase.deleteMany({ where: { tripId, language } });
+    await publish(tripId, "phrase:updated", {});
+    return NextResponse.json({ ok: true, deleted: result.count });
+  }
+
   if (!id) return NextResponse.json({ error: "id required" }, { status: 400 });
 
   const existing = await db.phrase.findUnique({ where: { id }, select: { tripId: true } });

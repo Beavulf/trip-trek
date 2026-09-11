@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { requireTripMember } from "@/lib/api-auth";
 import { currencySymbol } from "@/lib/currencies";
 import { userRateLimit } from "@/lib/rate-limit";
+import { resolveAiKey } from "@/lib/ai-key";
 
 // «Советы шефа»: LLM предлагает знаковые блюда города, которых ещё нет в гиде.
 // Пишет только клиент (пользователь выбирает, что добавить) — БД здесь не трогаем.
@@ -76,7 +77,9 @@ export async function POST(req: NextRequest) {
 
     const content = await generateWithLLM(
       buildSystemPrompt(`${currencySymbol(trip.currency)}25–40`),
-      userPrompt
+      userPrompt,
+      // BYOK: свой ключ юзера → админский → env (resolveAiKey)
+      (await resolveAiKey(user.id)).key
     );
     if (!content) {
       return NextResponse.json(
@@ -96,8 +99,8 @@ export async function POST(req: NextRequest) {
 }
 
 // Та же цепочка, что в ai-summary: OpenAI-совместимый API → ZAI SDK → null
-async function generateWithLLM(systemPrompt: string, userPrompt: string): Promise<string | null> {
-  const openaiKey = process.env.OPENAI_API_KEY;
+async function generateWithLLM(systemPrompt: string, userPrompt: string, aiKey: string | null): Promise<string | null> {
+  const openaiKey = aiKey;
   const openaiBase = (process.env.OPENAI_BASE_URL || "https://api.openai.com/v1").replace(/\/$/, "");
   const openaiModel = process.env.OPENAI_MODEL || "gpt-4o-mini";
 

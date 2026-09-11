@@ -1,7 +1,7 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { BookOpen, Camera, MapPin, TrendingDown, Wallet } from "lucide-react";
+import { Camera, Coffee, MapPin, TrendingDown, Wallet } from "lucide-react";
 import { type TripSummary } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { currencySymbol } from "@/lib/currencies";
@@ -18,7 +18,7 @@ interface DashboardStatsProps {
  * Погода и обратный отсчёт живут в hero, чтобы каждая цифра встречалась один раз.
  */
 export function DashboardStats({ trip, daysRemaining }: DashboardStatsProps) {
-  const { setActiveTab } = useTripStore();
+  const { setActiveTab, setRestView } = useTripStore();
   const sym = currencySymbol(trip.settings.currency);
   const budget = trip.settings.totalBudget;
   const hasBudget = budget > 0;
@@ -82,18 +82,22 @@ export function DashboardStats({ trip, daysRemaining }: DashboardStatsProps) {
         color="#06b6d4"
         onClick={() => setActiveTab("gallery")}
       />
+      {/* Быстрый поиск кафе/баров рядом — сразу открывает вкладку Chill → «Рядом» */}
       <StatCard
-        icon={<BookOpen className="size-5" />}
-        value={trip.totalJournals}
-        label="Записей"
-        color="#8b5cf6"
-        onClick={() => setActiveTab("journal")}
+        icon={<Coffee className="size-5" />}
+        value="Рядом"
+        label="кафе и бары"
+        color="#ef4444"
+        onClick={() => {
+          setRestView("nearby");
+          setActiveTab("rest");
+        }}
       />
     </div>
   );
 }
 
-function StatCard({ icon, value, label, color, onClick }: { icon: React.ReactNode; value: number; label: string; color: string; onClick?: () => void }) {
+function StatCard({ icon, value, label, color, onClick }: { icon: React.ReactNode; value: React.ReactNode; label: string; color: string; onClick?: () => void }) {
   return (
     <motion.button
       onClick={onClick}

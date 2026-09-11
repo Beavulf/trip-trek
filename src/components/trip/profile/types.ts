@@ -5,6 +5,8 @@ export interface UserProfile {
   emoji: string;
   color: string;
   avatarUrl?: string | null;
+  /** Свой ключ ИИ: наружу только замаскированный хвост («••••b7Fk») */
+  aiKeyTail?: string | null;
   plan: string;
   planExpiry: string | null;
   createdAt: string;

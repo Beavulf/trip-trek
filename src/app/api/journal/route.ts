@@ -26,7 +26,7 @@ export async function GET(req: NextRequest) {
     orderBy: { createdAt: "desc" },
     // select по user: include отдал бы email и хеш пароля каждого участника
     include: {
-      user: { select: { id: true, name: true, emoji: true, color: true } },
+      user: { select: { id: true, name: true, emoji: true, color: true, avatarUrl: true } },
       day: { select: { dayNumber: true, city: true } },
     },
   });
@@ -73,7 +73,7 @@ export async function POST(req: NextRequest) {
   const entry = await db.journalEntry.create({
     data: { dayId, tripId, content: trimmed, mood: safeMood, userId: authorId },
     include: {
-      user: { select: { id: true, name: true, emoji: true, color: true } },
+      user: { select: { id: true, name: true, emoji: true, color: true, avatarUrl: true } },
       day: true,
     },
   });
@@ -190,7 +190,7 @@ export async function PATCH(req: NextRequest) {
     where: { id },
     data,
     include: {
-      user: { select: { id: true, name: true, emoji: true, color: true } },
+      user: { select: { id: true, name: true, emoji: true, color: true, avatarUrl: true } },
       day: true,
     },
   });

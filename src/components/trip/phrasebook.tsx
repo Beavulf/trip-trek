@@ -5,7 +5,7 @@
 // ⋯ — копировать/перевести/править. Плюс флешкарт-тренажёр и свои фразы.
 
 import { useMemo, useState } from "react";
-import { usePhrases, useTogglePhraseFavorite, useGeneratePhrases, useAiGenerate, useTrip, useCurrentTripId, type Phrase } from "@/hooks/use-trip";
+import { usePhrases, useTogglePhraseFavorite, useGeneratePhrases, useAiGenerate, useDeletePhraseGroup, useTrip, useCurrentTripId, type Phrase } from "@/hooks/use-trip";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Languages,
@@ -18,6 +18,7 @@ import {
   GraduationCap,
   MoreHorizontal,
   Sparkles,
+  Trash2,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn, plural } from "@/lib/utils";
@@ -132,6 +133,16 @@ export function Phrasebook() {
     const base = favOnly ? phrases.filter((p) => p.favorite) : phrases;
     return key === "all" ? base.length : base.filter((p) => p.category === key).length;
   };
+
+  // Загруженные паки по языкам — для удаления группой в шторке «Загрузить набор»
+  const packs = useMemo(() => {
+    const counts = new Map<string, number>();
+    (phrases ?? []).forEach((p) => {
+      const code = p.language || "";
+      counts.set(code, (counts.get(code) ?? 0) + 1);
+    });
+    return Array.from(counts.entries()).map(([code, count]) => ({ code, count }));
+  }, [phrases]);
 
   const hasFilters = searching || favOnly || category !== "all";
   const actionsPhrase = phrases?.find((p) => p.id === actionsId) ?? null;
@@ -504,12 +515,13 @@ export function Phrasebook() {
         setSelectedLang={setSelectedLang}
         onGenerate={handleGenerate}
         isGenerating={generate.isPending}
+        packs={packs}
       />
     </div>
   );
 }
 
-/* Шторка загрузки набора: 9 языков офлайн-паками + любой язык через ИИ */
+/* Шторка загрузки набора: 9 языков офлайн-паками + любой язык через ИИ + удаление паков */
 function GenerateSheet({
   open,
   onOpenChange,
@@ -518,6 +530,7 @@ function GenerateSheet({
   setSelectedLang,
   onGenerate,
   isGenerating,
+  packs,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
@@ -526,9 +539,29 @@ function GenerateSheet({
   setSelectedLang: (v: string) => void;
   onGenerate: () => void;
   isGenerating: boolean;
+  packs: { code: string; count: number }[];
 }) {
   const ai = useAiGenerate();
+  const deleteGroup = useDeletePhraseGroup();
   const [aiLang, setAiLang] = useState("");
+  const [confirmLang, setConfirmLang] = useState<string | null>(null);
+
+  const packLabel = (code: string) => {
+    if (!code) return "Без языка (старые наборы)";
+    return LANGUAGES.find((l) => l.code === code)?.label ?? code;
+  };
+
+  const handleDeleteGroup = async (code: string) => {
+    try {
+      const r = await deleteGroup.mutateAsync({ tripId, language: code });
+      toast.success(`Удалено ${r.deleted} ${plural(r.deleted, "фраза", "фразы", "фраз")}`, {
+        description: packLabel(code),
+      });
+      setConfirmLang(null);
+    } catch (err) {
+      toast.error("Не удалось удалить набор", { description: err instanceof Error ? err.message : undefined });
+    }
+  };
 
   const handleAiPack = async () => {
     const name = aiLang.trim();
@@ -546,11 +579,57 @@ function GenerateSheet({
   return (
     <MobileBottomSheet
       open={open}
-      onOpenChange={onOpenChange}
+      onOpenChange={(v) => {
+        if (!v) setConfirmLang(null);
+        onOpenChange(v);
+      }}
       title="Загрузить набор"
       titleIcon={<Download className="size-5 text-primary" />}
     >
       <div className="space-y-3">
+        {/* Загруженные паки — можно удалить группой целиком */}
+        {packs.length > 0 && (
+          <div className="space-y-1.5">
+            <p className="text-xs font-medium text-muted-foreground">Уже загружены:</p>
+            {packs.map(({ code, count }) => (
+              <div key={code || "none"} className="flex items-center gap-2 rounded-xl border border-border bg-muted/40 px-3 py-2">
+                <span className="flex-1 min-w-0 text-sm truncate">
+                  {packLabel(code)} <span className="text-xs text-muted-foreground tabular-nums">· {count} {plural(count, "фраза", "фразы", "фраз")}</span>
+                </span>
+                {confirmLang === code ? (
+                  <div className="flex shrink-0 items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteGroup(code)}
+                      disabled={deleteGroup.isPending}
+                      className="min-h-9 rounded-lg bg-red-500 px-3 text-xs font-medium text-white active:scale-95 disabled:opacity-50"
+                    >
+                      {deleteGroup.isPending ? "…" : "Удалить"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setConfirmLang(null)}
+                      className="min-h-9 rounded-lg bg-secondary px-3 text-xs"
+                    >
+                      Нет
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setConfirmLang(code)}
+                    aria-label={`Удалить набор: ${packLabel(code)}`}
+                    title="Удалить набор целиком"
+                    className="grid size-9 shrink-0 place-items-center rounded-lg text-muted-foreground transition-colors hover:bg-red-500/10 hover:text-red-500 active:scale-90"
+                  >
+                    <Trash2 className="size-4" />
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+
         <p className="text-sm text-muted-foreground">
           Готовые наборы — мгновенно и работают офлайн: приветствия, еда, транспорт, покупки, экстренные.
         </p>

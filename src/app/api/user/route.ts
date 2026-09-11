@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { requireUser } from "@/lib/api-auth";
+import { maskKey } from "@/lib/ai-key";
 
 // GET /api/user — профиль текущего пользователя (сессия)
 export async function GET(req: NextRequest) {
@@ -20,6 +21,8 @@ export async function GET(req: NextRequest) {
       plan: true,
       planExpiry: true,
       createdAt: true,
+      // Ключ ИИ наружу не отдаём — ниже превращаем в замаскированный хвост
+      aiApiKey: true,
     },
   });
 
@@ -125,8 +128,11 @@ export async function GET(req: NextRequest) {
   const maxOwnedTrips = isPremium ? null : 1;
   const maxMembersPerTrip = isPremium ? null : 5;
 
+  const { aiApiKey, ...safeUser } = user;
+
   return NextResponse.json({
-    ...user,
+    ...safeUser,
+    aiKeyTail: aiApiKey ? maskKey(aiApiKey) : null,
     isPremium,
     stats: {
       trips: trips.length,
@@ -157,7 +163,7 @@ export async function PATCH(req: NextRequest) {
   const userId = authUser!.id;
 
   const body = await req.json();
-  const { name, emoji, color, avatarUrl } = body;
+  const { name, emoji, color, avatarUrl, aiApiKey } = body;
 
   const data: Record<string, unknown> = {};
   if (typeof name === "string" && name.trim()) data.name = name.trim();
@@ -166,6 +172,10 @@ export async function PATCH(req: NextRequest) {
   // avatarUrl: строка — установить фото, null — убрать фото (вернуться к эмодзи)
   if (typeof avatarUrl === "string") data.avatarUrl = avatarUrl;
   if (avatarUrl === null) data.avatarUrl = null;
+  // Ключ ИИ (BYOK): строка — установить, null — убрать. Валидация мягкая:
+  // ключи бывают разной длины, главное — не логировать и не отдавать наружу
+  if (typeof aiApiKey === "string" && aiApiKey.trim()) data.aiApiKey = aiApiKey.trim();
+  if (aiApiKey === null) data.aiApiKey = null;
 
   if (Object.keys(data).length === 0) {
     return NextResponse.json({ error: "no fields to update" }, { status: 400 });

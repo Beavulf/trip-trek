@@ -5,6 +5,7 @@ import { calculateCurrentDayNumber } from "@/lib/trip-days";
 import { EXPENSE_CATEGORIES, CATEGORY_META } from "@/lib/types";
 import { currencySymbol } from "@/lib/currencies";
 import { userRateLimit } from "@/lib/rate-limit";
+import { resolveAiKey } from "@/lib/ai-key";
 
 // ─── Промпты: автор историй + 6 стилей рассказа ────────────────────────────
 
@@ -208,7 +209,9 @@ export async function POST(req: NextRequest) {
 
     // LLM: OpenAI-compatible (Docker) → ZAI SDK → local draft from trip data
     try {
-      const llm = await generateWithLLM(systemPrompt, userPrompt);
+      // BYOK: свой ключ юзера → админский → env (resolveAiKey)
+      const { key: aiKey } = await resolveAiKey(user!.id);
+      const llm = await generateWithLLM(systemPrompt, userPrompt, aiKey);
       if (llm) {
         return NextResponse.json({ content: llm, type, style, generated: true, source: llmSource });
       }
@@ -251,8 +254,8 @@ export async function POST(req: NextRequest) {
 
 let llmSource: "openai" | "zai" | "local" = "local";
 
-async function generateWithLLM(systemPrompt: string, userPrompt: string): Promise<string | null> {
-  const openaiKey = process.env.OPENAI_API_KEY;
+async function generateWithLLM(systemPrompt: string, userPrompt: string, aiKey: string | null): Promise<string | null> {
+  const openaiKey = aiKey;
   const openaiBase = (process.env.OPENAI_BASE_URL || "https://api.openai.com/v1").replace(/\/$/, "");
   const openaiModel = process.env.OPENAI_MODEL || "gpt-4o-mini";
 

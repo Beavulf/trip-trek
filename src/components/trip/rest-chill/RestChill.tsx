@@ -62,6 +62,16 @@ export function RestChill() {
   const [greeting, setGreeting] = useState<{ text: string; emoji: string } | null>(null);
   const [dialogPlace, setDialogPlace] = useState<Place | null>(null);
   const { setSelectedDay, setActiveTab, setTripSwitcherOpen } = useTripStore();
+  // Под view, запрошенный извне (кнопка «Рядом» на Обзоре): применяем и сбрасываем
+  const restView = useTripStore((s) => s.restView);
+  const setRestView = useTripStore((s) => s.setRestView);
+  useEffect(() => {
+    if (restView) {
+      setView(restView);
+      setRestView(null);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [restView]);
 
   // Час зависит от устройства — считаем только на клиенте, чтобы не ловить hydration mismatch.
   useEffect(() => {

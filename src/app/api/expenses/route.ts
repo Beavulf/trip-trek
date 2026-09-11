@@ -13,11 +13,11 @@ export async function GET(req: NextRequest) {
   const { response } = await requireTripMember(req, tripId);
   if (response) return response;
 
-  // Include day (для UI «День N» в ExpenseRow)
+  // Include day (для UI «День N» в ExpenseRow) + avatarUrl плательщика (аватар в списках)
   const expenses = await db.expense.findMany({
     where: { tripId },
     include: {
-      paidBy: { select: { id: true, name: true, emoji: true, color: true } },
+      paidBy: { select: { id: true, name: true, emoji: true, color: true, avatarUrl: true } },
       day: { select: { dayNumber: true, city: true } },
     },
     orderBy: { createdAt: "desc" },

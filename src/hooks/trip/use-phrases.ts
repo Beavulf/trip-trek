@@ -106,6 +106,23 @@ export function useDeletePhrase() {
   });
 }
 
+// Удалить загруженный пак целиком — все фразы языка в поездке
+export function useDeletePhraseGroup() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ tripId, language }: { tripId: string; language: string }) => {
+      const r = await fetch(
+        `/api/phrases?tripId=${encodeURIComponent(tripId)}&language=${encodeURIComponent(language)}`,
+        { method: "DELETE" }
+      );
+      const body = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(body?.error || `Ошибка ${r.status}`);
+      return body as { ok: boolean; deleted: number };
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["phrases"] }),
+  });
+}
+
 // ИИ-фразы: перевод своей фразы, «ещё фразы» раздела, пак для любого языка.
 // 10 запросов в час (лимит сервера) — вызов только по явному действию пользователя.
 

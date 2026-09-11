@@ -6,6 +6,7 @@ import { ArrowRight, Scale, Info, ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Balance, Settlement } from "@/lib/budget";
 import { MarkSettledButton } from "./MarkSettledButton";
+import { UserAvatar } from "../user-avatar";
 
 interface SettlementSectionProps {
   balances: Balance[];
@@ -75,9 +76,14 @@ export function SettlementSection({ balances, settlements, totalSpent, participa
         {balances.map((b) => {
           return (
             <div key={b.participant.id} className="flex items-center gap-2.5 text-sm">
-              <div className="size-8 rounded-full grid place-items-center text-xs shrink-0" style={{ background: b.participant.color }}>
-                {b.participant.emoji}
-              </div>
+              <UserAvatar
+                name={b.participant.name}
+                emoji={b.participant.emoji}
+                color={b.participant.color}
+                avatarUrl={b.participant.avatarUrl}
+                className="size-8"
+                textClassName="text-xs"
+              />
               <div className="flex-1 min-w-0">
                 <div className="font-medium truncate">{b.participant.name}</div>
                 <button
@@ -172,17 +178,27 @@ export function SettlementSection({ balances, settlements, totalSpent, participa
             <div key={i} className="bg-muted/40 rounded-xl px-3 py-2.5">
               {/* Главная строка: от → кому + сумма */}
               <div className="flex items-center gap-2">
-                <div className="size-7 rounded-full grid place-items-center text-[10px] shrink-0" style={{ background: s.from.color }}>
-                  {s.from.emoji}
-                </div>
+                <UserAvatar
+                  name={s.from.name}
+                  emoji={s.from.emoji}
+                  color={s.from.color}
+                  avatarUrl={s.from.avatarUrl}
+                  className="size-7"
+                  textClassName="text-[10px]"
+                />
                 <div className="flex-1 min-w-0">
                   <div className="text-xs font-medium truncate">{s.from.name}</div>
                   <div className="text-[10px] text-red-500">должен</div>
                 </div>
                 <ArrowRight className="size-3.5 text-muted-foreground shrink-0" />
-                <div className="size-7 rounded-full grid place-items-center text-[10px] shrink-0" style={{ background: s.to.color }}>
-                  {s.to.emoji}
-                </div>
+                <UserAvatar
+                  name={s.to.name}
+                  emoji={s.to.emoji}
+                  color={s.to.color}
+                  avatarUrl={s.to.avatarUrl}
+                  className="size-7"
+                  textClassName="text-[10px]"
+                />
                 <div className="flex-1 min-w-0">
                   <div className="text-xs font-medium truncate">{s.to.name}</div>
                   <div className="text-[10px] text-green-600">получит</div>

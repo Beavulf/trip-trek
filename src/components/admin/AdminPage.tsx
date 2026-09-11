@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
-import { ChevronLeft, LayoutDashboard, Loader2, Map, MessagesSquare, Users } from "lucide-react";
+import { ChevronLeft, LayoutDashboard, Loader2, Map, MessagesSquare, Settings, Users } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { useAdminStats } from "@/hooks/use-admin-stats";
 import { cn } from "@/lib/utils";
@@ -11,15 +11,17 @@ import { OverviewTab } from "./OverviewTab";
 import { UsersTab } from "./UsersTab";
 import { TripsTab } from "./TripsTab";
 import { FeedbackTab } from "./FeedbackTab";
+import { SettingsTab } from "./SettingsTab";
 import { Stamp, type FeedbackStatus } from "./shared";
 
-type AdminTab = "overview" | "users" | "trips" | "feedback";
+type AdminTab = "overview" | "users" | "trips" | "feedback" | "settings";
 
 const TABS = [
   { key: "overview", label: "Обзор", icon: LayoutDashboard },
   { key: "users", label: "Юзеры", icon: Users },
   { key: "trips", label: "Поездки", icon: Map },
   { key: "feedback", label: "Отзывы", icon: MessagesSquare },
+  { key: "settings", label: "Настройки", icon: Settings },
 ] as const;
 
 export function AdminPage() {
@@ -147,6 +149,7 @@ export function AdminPage() {
         {tab === "feedback" && (
           <FeedbackTab statusFilter={feedbackFilter} onFilterChange={setFeedbackFilter} counts={stats?.feedback || { new: 0, inProgress: 0, resolved: 0 }} />
         )}
+        {tab === "settings" && <SettingsTab />}
 
         <p className="text-center font-mono text-[10px] uppercase tracking-widest text-muted-foreground/70 pt-1">
           TripTrek · служба контроля

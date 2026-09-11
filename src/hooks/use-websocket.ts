@@ -92,6 +92,14 @@ export function useWebSocket(tripId: string) {
       }
     });
 
+    // Новый участник присоединился — подтянуть состав (и событие в ленте)
+    socket.on("member:joined", (data: { tripId: string }) => {
+      if (data.tripId === tripId) {
+        qc.invalidateQueries({ queryKey: ["trip"] });
+        qc.invalidateQueries({ queryKey: ["trips"] });
+      }
+    });
+
     socket.on("expense:deleted", (data: { tripId: string }) => {
       if (data.tripId === tripId) {
         qc.invalidateQueries({ queryKey: ["expenses"] });

@@ -28,7 +28,7 @@ export async function GET(req: NextRequest) {
     orderBy: { takenAt: "desc" },
     include: {
       place: true,
-      user: { select: { id: true, name: true, color: true, emoji: true } },
+      user: { select: { id: true, name: true, color: true, emoji: true, avatarUrl: true } },
       day: { select: { dayNumber: true, city: true, cityKey: true } },
     },
   });

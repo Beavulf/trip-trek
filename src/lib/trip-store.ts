@@ -44,6 +44,10 @@ interface TripState {
   setMapFocusTarget: (
     t: { lat: number; lng: number; placeId: string | null } | null,
   ) => void;
+  // Под view вкладки Chill («route»/«wishlist»/«nearby»): Обзор открывает «Рядом»
+  // одной кнопкой. Транзиентное — сбрасывается после consumption в RestChill.
+  restView: "route" | "wishlist" | "nearby" | null;
+  setRestView: (v: "route" | "wishlist" | "nearby" | null) => void;
 }
 
 export const useTripStore = create<TripState>()(
@@ -76,6 +80,8 @@ export const useTripStore = create<TripState>()(
       setMapOnlyChill: (v) => set({ mapOnlyChill: v }),
       mapFocusTarget: null,
       setMapFocusTarget: (t) => set({ mapFocusTarget: t }),
+      restView: null,
+      setRestView: (v) => set({ restView: v }),
     }),
     {
       name: "triptrek-store",
