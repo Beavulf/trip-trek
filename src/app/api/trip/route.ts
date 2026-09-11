@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { requireTripMember } from "@/lib/api-auth";
 import { calculateCurrentDayNumber } from "@/lib/trip-days";
+import { publish } from "@/lib/ws-bus";
 
 // GET /api/trip?tripId=... — сводка поездки
 export async function GET(req: NextRequest) {
@@ -107,4 +108,29 @@ export async function GET(req: NextRequest) {
     totalJournals: journals,
     days,
   });
+}
+
+// PATCH /api/trip?tripId=... { status } — статус поездки меняет только владелец
+const TRIP_STATUSES = ["planning", "active", "completed"];
+
+export async function PATCH(req: NextRequest) {
+  const { searchParams } = new URL(req.url);
+  const tripId = searchParams.get("tripId") || "";
+  if (!tripId) return NextResponse.json({ error: "tripId required" }, { status: 400 });
+
+  const { user, membership, response } = await requireTripMember(req, tripId);
+  if (response) return response;
+  if (membership!.role !== "owner") {
+    return NextResponse.json({ error: "Статус меняет только владелец поездки" }, { status: 403 });
+  }
+
+  const body = await req.json().catch(() => ({}));
+  const { status } = body as { status?: string };
+  if (!status || !TRIP_STATUSES.includes(status)) {
+    return NextResponse.json({ error: "status: planning | active | completed" }, { status: 400 });
+  }
+
+  const updated = await db.trip.update({ where: { id: tripId }, data: { status } });
+  publish(tripId, "trip:updated", {});
+  return NextResponse.json({ ok: true, status: updated.status });
 }

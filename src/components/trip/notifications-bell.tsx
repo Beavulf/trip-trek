@@ -43,6 +43,7 @@ const TYPE_ICON: Record<string, React.ReactNode> = {
   member_removed: <UserMinus className="size-4 text-rose-500" />,
   member_banned: <ShieldBan className="size-4 text-rose-500" />,
   member_unbanned: <ShieldCheck className="size-4 text-emerald-500" />,
+  member_left: <UserMinus className="size-4 text-sky-500" />,
   trip_deleted: <Trash2 className="size-4 text-rose-500" />,
   feedback_reply: <MessageSquareReply className="size-4 text-emerald-500" />,
   admin_message: <Mail className="size-4 text-sky-500" />,

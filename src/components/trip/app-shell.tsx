@@ -49,6 +49,7 @@ import { InviteFriends } from "./invite-friends";
 import { ShareCard } from "./share-card";
 import { BugReportSheet } from "./bug-report-sheet";
 import { NotificationsBell } from "./notifications-bell";
+import { TripInfoSheet } from "./trip-info-sheet";
 import { useAdminStats } from "@/hooks/use-admin-stats";
 
 const TABS = [
@@ -78,6 +79,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   const [premiumOpen, setPremiumOpen] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
   const [bugOpen, setBugOpen] = useState(false);
+  const [infoOpen, setInfoOpen] = useState(false);
   const { data: session } = useSession();
   const isPremium = (session?.user as { plan?: string } | undefined)?.plan === "premium";
   const isAdmin = session?.user?.isAdmin === true;
@@ -199,6 +201,9 @@ export function AppShell({ children }: { children: ReactNode }) {
             <HeaderIconBtn onClick={() => setInviteOpen(true)} label="Пригласить друзей">
               <UserPlus className="size-4" />
             </HeaderIconBtn>
+            <HeaderIconBtn onClick={() => setInfoOpen(true)} label="О поездке">
+              <Info className="size-4" />
+            </HeaderIconBtn>
             <HeaderIconBtn onClick={() => setShareOpen(true)} label="Карточка поездки">
               <Share2 className="size-4" />
             </HeaderIconBtn>
@@ -248,6 +253,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                     onShare={() => setShareOpen(true)}
                     onReportBug={() => setBugOpen(true)}
                     onAdmin={() => router.push("/admin")}
+                    onTripInfo={() => setInfoOpen(true)}
                   />
                 )}
               </AnimatePresence>
@@ -371,6 +377,12 @@ export function AppShell({ children }: { children: ReactNode }) {
       <QuickAddSheet open={quickOpen} onOpenChange={setQuickOpen} />
       <GlobalSearch open={searchOpen} onOpenChange={setSearchOpen} />
       <InviteFriends open={inviteOpen} onOpenChange={setInviteOpen} />
+      <TripInfoSheet
+        open={infoOpen}
+        onOpenChange={setInfoOpen}
+        onInvite={() => setInviteOpen(true)}
+        onShare={() => setShareOpen(true)}
+      />
       <ShareCard open={shareOpen} onOpenChange={setShareOpen} />
       <PremiumModal open={premiumOpen} onOpenChange={setPremiumOpen} />
       <BugReportSheet open={bugOpen} onOpenChange={setBugOpen} />
@@ -390,6 +402,7 @@ function MobileMoreSheet({
   onShare,
   onReportBug,
   onAdmin,
+  onTripInfo,
 }: {
   isPremium: boolean;
   isAdmin: boolean;
@@ -400,6 +413,7 @@ function MobileMoreSheet({
   onShare: () => void;
   onReportBug: () => void;
   onAdmin: () => void;
+  onTripInfo: () => void;
 }) {
   const { theme, setTheme } = useTheme();
   if (typeof document === "undefined") return null;
@@ -455,6 +469,14 @@ function MobileMoreSheet({
           </div>
 
           <div className="p-2">
+            <MoreItem
+              icon={<Info className="size-4" />}
+              label="О поездке"
+              onClick={() => {
+                onClose();
+                onTripInfo();
+              }}
+            />
             <MoreItem
               icon={<Bug className="size-4" />}
               label="Сообщить о проблеме"

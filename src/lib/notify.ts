@@ -10,6 +10,7 @@ export type NotificationType =
   | "member_removed"
   | "member_banned"
   | "member_unbanned"
+  | "member_left"
   | "trip_deleted"
   | "feedback_reply"
   | "admin_message"
