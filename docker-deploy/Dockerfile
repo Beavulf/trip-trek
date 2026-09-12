@@ -48,9 +48,12 @@ COPY --from=builder /app/src/lib ./src/lib
 COPY --from=builder /app/next.config.ts ./next.config.ts
 COPY --from=builder /app/tsconfig.json ./tsconfig.json
 
-# Non-root: образ oven/bun включает пользователя bun
+# Non-root: приложение читает root-owned статику (файлы мир-читаемые), а пишет
+# только в uploads и в node_modules/.prisma + @prisma (prisma generate в
+# entrypoint). chown только записываемых путей: полный `chown -R /app`
+# через файловую прослойку Docker Desktop на Windows занимал десятки минут.
 RUN mkdir -p /app/public/uploads/avatars /app/public/uploads/foods \
-  && chown -R bun:bun /app
+  && chown -R bun:bun /app/public/uploads /app/node_modules/.prisma /app/node_modules/@prisma /app/node_modules/prisma
 USER bun
 
 COPY --chown=bun:bun docker-deploy/entrypoint.sh /entrypoint.sh
