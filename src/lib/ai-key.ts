@@ -51,3 +51,19 @@ export async function resolveAiConfig(userId?: string | null): Promise<ResolvedA
 export function maskKey(key: string): string {
   return `••••${key.slice(-4)}`;
 }
+
+/**
+ * База OpenAI-совместимого API без хвостового слэша. Если провайдер указан
+ * голым хостом (https://api.deepseek.com) — добавляем /v1: почти все
+ * OpenAI-совместимые API живут под /v1, а в пути с версией смысла нет.
+ */
+export function openaiChatUrl(baseUrl: string | null | undefined): string {
+  const base = (baseUrl ?? process.env.OPENAI_BASE_URL ?? "https://api.openai.com/v1").trim().replace(/\/+$/, "");
+  try {
+    const u = new URL(base);
+    if (u.pathname === "" || u.pathname === "/") return `${base}/v1`;
+  } catch {
+    // не URL — отдаём как есть, провайдер вернёт понятную ошибку
+  }
+  return base;
+}

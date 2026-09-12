@@ -173,8 +173,12 @@ export async function PATCH(req: NextRequest) {
   if (typeof avatarUrl === "string") data.avatarUrl = avatarUrl;
   if (avatarUrl === null) data.avatarUrl = null;
   // Ключ ИИ (BYOK): строка — установить, null — убрать. Валидация мягкая:
-  // ключи бывают разной длины, главное — не логировать и не отдавать наружу
-  if (typeof aiApiKey === "string" && aiApiKey.trim()) data.aiApiKey = aiApiKey.trim();
+  // ключи бывают разной длины, главное — не логировать и не отдавать наружу.
+  // Чистим мусор вставки: проболы/переводы строк внутри, кавычки по краям.
+  if (typeof aiApiKey === "string") {
+    const cleaned = aiApiKey.trim().replace(/\s+/g, "").replace(/^["'`]+|["'`]+$/g, "");
+    if (cleaned) data.aiApiKey = cleaned;
+  }
   if (aiApiKey === null) data.aiApiKey = null;
 
   if (Object.keys(data).length === 0) {
@@ -184,7 +188,8 @@ export async function PATCH(req: NextRequest) {
   const user = await db.user.update({
     where: { id: userId },
     data,
-    select: { id: true, name: true, emoji: true, color: true, avatarUrl: true },
+    // aiApiKey нужен только чтобы отдать маску aiKeyTail — сам ключ наружу не идёт
+    select: { id: true, name: true, emoji: true, color: true, avatarUrl: true, aiApiKey: true },
   });
 
   if (data.name || data.emoji || data.color) {
@@ -198,5 +203,10 @@ export async function PATCH(req: NextRequest) {
     });
   }
 
-  return NextResponse.json(user);
+  const { aiApiKey: _key, ...safeUser } = user;
+  return NextResponse.json({
+    ...safeUser,
+    // Клиент сразу показывает «Свой ключ подключён (…хвост)» без перезагрузки
+    aiKeyTail: _key ? maskKey(_key) : null,
+  });
 }

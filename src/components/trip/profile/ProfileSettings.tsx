@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
-import { ArrowRight, Bell, Bug, ChevronDown, Crown, Loader2, Monitor, Moon, Settings, Shield, Sparkles, Sun, Trash2 } from "lucide-react";
+import { ArrowRight, Bell, Bug, Check, ChevronDown, Crown, Loader2, Monitor, Moon, Settings, Shield, Sparkles, Sun, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { useTheme } from "next-themes";
 import { cn } from "@/lib/utils";
@@ -38,8 +38,27 @@ export function ProfileSettings({ profile, setPremiumOpen, onReportBug, isAdmin,
   const [aiKey, setAiKey] = useState("");
   const [aiTail, setAiTail] = useState(profile.aiKeyTail ?? null);
   const [aiSaving, setAiSaving] = useState(false);
+  const [aiChecking, setAiChecking] = useState(false);
+  const [aiStatus, setAiStatus] = useState<{ ok: boolean; message: string } | null>(null);
 
-  const saveAiKey = async (value: string | null) => {
+  const checkAiKey = async () => {
+    setAiChecking(true);
+    try {
+      const r = await fetch("/api/user/ai-key-check", { method: "POST" });
+      const b = await r.json().catch(() => ({}));
+      setAiStatus(
+        b.ok
+          ? { ok: true, message: `Ключ работает — модель «${b.model}» отвечает` }
+          : { ok: false, message: b.error || `Ошибка ${r.status}` }
+      );
+    } catch {
+      setAiStatus({ ok: false, message: "Не удалось выполнить проверку" });
+    } finally {
+      setAiChecking(false);
+    }
+  };
+
+  const saveAiKey = async (value: string | null, check = false) => {
     setAiSaving(true);
     try {
       const r = await fetch("/api/user", {
@@ -52,7 +71,12 @@ export function ProfileSettings({ profile, setPremiumOpen, onReportBug, isAdmin,
       setAiTail(b.aiKeyTail ?? null);
       setAiKey("");
       toast.success(value === null ? "Ключ ИИ удалён" : "Ключ ИИ сохранён");
-      if (value === null) setAiOpen(false);
+      setAiStatus(null);
+      if (value === null) {
+        setAiOpen(false);
+      } else if (check) {
+        await checkAiKey();
+      }
     } catch (err) {
       toast.error("Не удалось сохранить ключ", {
         description: err instanceof Error ? err.message : "Попробуйте ещё раз",
@@ -186,23 +210,47 @@ export function ProfileSettings({ profile, setPremiumOpen, onReportBug, isAdmin,
               <div className="flex gap-2">
                 <button
                   type="button"
-                  onClick={() => saveAiKey(aiKey)}
-                  disabled={!aiKey.trim() || aiSaving}
+                  onClick={() => saveAiKey(aiKey, true)}
+                  disabled={!aiKey.trim() || aiSaving || aiChecking}
                   className="min-h-10 rounded-lg bg-primary px-4 text-xs font-medium text-primary-foreground disabled:opacity-50 flex items-center gap-1.5"
                 >
-                  {aiSaving && <Loader2 className="size-3 animate-spin" />} Сохранить
+                  {aiSaving ? <Loader2 className="size-3 animate-spin" /> : <Sparkles className="size-3" />}
+                  Сохранить и проверить
                 </button>
                 {aiTail && (
-                  <button
-                    type="button"
-                    onClick={() => saveAiKey(null)}
-                    disabled={aiSaving}
-                    className="min-h-10 rounded-lg bg-secondary px-3 text-xs text-red-500 font-medium flex items-center gap-1 disabled:opacity-50"
-                  >
-                    <Trash2 className="size-3" /> Убрать
-                  </button>
+                  <>
+                    <button
+                      type="button"
+                      onClick={checkAiKey}
+                      disabled={aiSaving || aiChecking}
+                      className="min-h-10 rounded-lg bg-secondary border border-border px-3 text-xs font-medium flex items-center gap-1 disabled:opacity-50"
+                    >
+                      {aiChecking ? <Loader2 className="size-3 animate-spin" /> : <Check className="size-3" />}
+                      Проверить
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => saveAiKey(null)}
+                      disabled={aiSaving || aiChecking}
+                      className="min-h-10 rounded-lg bg-secondary px-3 text-xs text-red-500 font-medium flex items-center gap-1 disabled:opacity-50"
+                    >
+                      <Trash2 className="size-3" /> Убрать
+                    </button>
+                  </>
                 )}
               </div>
+              {aiStatus && (
+                <p
+                  className={cn(
+                    "text-[11px] leading-snug rounded-lg px-2.5 py-2",
+                    aiStatus.ok ? "bg-green-500/10 text-green-600" : "bg-amber-500/10 text-amber-600"
+                  )}
+                  role="status"
+                >
+                  {aiStatus.ok ? "✓ " : "⚠ "}
+                  {aiStatus.message}
+                </p>
+              )}
             </div>
           )}
         </div>

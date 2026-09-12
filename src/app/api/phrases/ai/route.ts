@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { publish } from "@/lib/ws-bus";
 import { requireTripMember } from "@/lib/api-auth";
-import { resolveAiConfig } from "@/lib/ai-key";
+import { resolveAiConfig, openaiChatUrl } from "@/lib/ai-key";
 
 // ИИ-фразы: перевод своей фразы, «ещё фразы» раздела, пак для любого языка.
 // LLM — та же цепочка, что в foods/suggest: OpenAI-совместимый API → ZAI SDK → 503.
@@ -220,26 +220,34 @@ async function generateWithLLM(
   cfg: { key: string | null; baseUrl: string | null; model: string | null }
 ): Promise<string | null> {
   const openaiKey = cfg.key;
-  const openaiBase = (cfg.baseUrl ?? process.env.OPENAI_BASE_URL ?? "https://api.openai.com/v1").replace(/\/$/, "");
+  const openaiBase = openaiChatUrl(cfg.baseUrl);
   const openaiModel = cfg.model ?? process.env.OPENAI_MODEL ?? "gpt-4o-mini";
 
   if (openaiKey) {
     try {
-      const r = await fetch(`${openaiBase}/chat/completions`, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${openaiKey}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          model: openaiModel,
-          messages: [
-            { role: "system", content: systemPrompt },
-            { role: "user", content: userPrompt },
-          ],
-          temperature: 0.7,
-        }),
-      });
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 60_000); // не висим дольше минуты
+      let r: Response;
+      try {
+        r = await fetch(`${openaiBase}/chat/completions`, {
+          method: "POST",
+          signal: controller.signal,
+          headers: {
+            Authorization: `Bearer ${openaiKey}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            model: openaiModel,
+            messages: [
+              { role: "system", content: systemPrompt },
+              { role: "user", content: userPrompt },
+            ],
+            temperature: 0.7,
+          }),
+        });
+      } finally {
+        clearTimeout(timeout);
+      }
       if (!r.ok) {
         const t = await r.text().catch(() => "");
         console.error(`[phrases/ai] OpenAI ${r.status}: ${t.slice(0, 200)}`);

@@ -3,7 +3,7 @@ import { db } from "@/lib/db";
 import { requireTripMember } from "@/lib/api-auth";
 import { currencySymbol } from "@/lib/currencies";
 import { userRateLimit } from "@/lib/rate-limit";
-import { resolveAiConfig } from "@/lib/ai-key";
+import { resolveAiConfig, openaiChatUrl } from "@/lib/ai-key";
 
 // «Советы шефа»: LLM предлагает знаковые блюда города, которых ещё нет в гиде.
 // Пишет только клиент (пользователь выбирает, что добавить) — БД здесь не трогаем.
@@ -106,7 +106,7 @@ async function generateWithLLM(
   cfg: { key: string | null; baseUrl: string | null; model: string | null }
 ): Promise<string | null> {
   const openaiKey = cfg.key;
-  const openaiBase = (cfg.baseUrl ?? process.env.OPENAI_BASE_URL ?? "https://api.openai.com/v1").replace(/\/$/, "");
+  const openaiBase = openaiChatUrl(cfg.baseUrl);
   const openaiModel = cfg.model ?? process.env.OPENAI_MODEL ?? "gpt-4o-mini";
 
   if (openaiKey) {
