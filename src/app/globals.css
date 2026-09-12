@@ -381,6 +381,16 @@
   to { stroke-dashoffset: -14; } /* 5+9 из dashArray — ровно один период */
 }
 
+/* Пока карту тащат (класс вешает слушатель movestart в trip-map.tsx),
+   «постоянные» анимации замирают: их repaint каждый кадр складывается
+   с перерисовкой тайлов и даёт лаги перетаскивания на телефонах.
+   play-state, а не animation:none — без прыжка пунктира в начало. */
+.leaflet-container.map-anim-paused .trip-pin-current .trip-pin-pin,
+.leaflet-container.map-anim-paused .locate-dot-core,
+.leaflet-container.map-anim-paused .leaflet-pane-route-today path[stroke-dasharray] {
+  animation-play-state: paused !important;
+}
+
 /* Точка геолокации */
 .locate-dot {
   background: transparent;

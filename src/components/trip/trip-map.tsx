@@ -60,24 +60,36 @@ const TILE_LAYERS: Record<MapLayerKey, { url: string; attr: string }> = {
 
 const TIME_RANK: Record<string, number> = { morning: 0, afternoon: 1, evening: 2 };
 
+// Кэш иконок: makeIcon создаёт новый L.DivIcon на каждый вызов, а без кэша
+// каждый ререндер карты (рефетч дней, фильтры) заменял DOM всех маркеров.
+const pinIconCache = new Map<string, L.DivIcon>();
+const photoIconCache = new Map<string, L.DivIcon>();
+
 // Кастомный пин места
 function makeIcon(category: string, status: string, emoji: string) {
+  const cacheKey = `${category}|${status}|${emoji}`;
+  const cached = pinIconCache.get(cacheKey);
+  if (cached) return cached;
   let color = "#94a3b8"; // planned — серый
   if (status === "visited") color = "#22c55e";
   else if (status === "current") color = "#f97316";
   const pulse = status === "current" ? "trip-pin-current" : "";
-  return L.divIcon({
+  const icon = L.divIcon({
     className: `trip-pin ${pulse}`,
     html: `<div class="trip-pin-pin" style="background:${color}"><span>${emoji}</span></div>`,
     iconSize: [32, 32],
     iconAnchor: [16, 32],
   });
+  pinIconCache.set(cacheKey, icon);
+  return icon;
 }
 
 // Фото-пин (круглая миниатюра) — безопасный HTML
 function makePhotoIcon(thumbUrl: string) {
+  const cached = photoIconCache.get(thumbUrl);
+  if (cached) return cached;
   const safeUrl = thumbUrl.replace(/"/g, "&quot;").replace(/'/g, "&#39;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-  return L.divIcon({
+  const icon = L.divIcon({
     className: "trip-photo-pin",
     html: `<div style="
       width:40px;height:40px;border-radius:50%;overflow:hidden;
@@ -88,6 +100,8 @@ function makePhotoIcon(thumbUrl: string) {
     iconAnchor: [20, 20],
     popupAnchor: [0, -20],
   });
+  photoIconCache.set(thumbUrl, icon);
+  return icon;
 }
 
 // Точка геолокации
@@ -354,6 +368,27 @@ export default function TripMap() {
     };
   }, [fullscreen]);
 
+  // Пока карту тащат — замирают «постоянные» анимации (пульс пинов, бегущий
+  // пунктир, пульс геоточки): их repaint каждый кадр складывается с
+  // перерисовкой тайлов и даёт лаги перетаскивания на телефонах.
+  // ref появляется асинхронно (и карта может монтироваться после спиннера
+  // загрузки) — ждём его с повторными попытками.
+  useEffect(() => {
+    let tries = 0;
+    const iv = setInterval(() => {
+      const map = mapRef.current;
+      if (map) {
+        clearInterval(iv);
+        const el = map.getContainer();
+        map.on("movestart", () => el.classList.add("map-anim-paused"));
+        map.on("moveend", () => el.classList.remove("map-anim-paused"));
+      } else if (++tries > 40) {
+        clearInterval(iv);
+      }
+    }, 250);
+    return () => clearInterval(iv);
+  }, []);
+
   useEffect(() => {
     if (!fullscreen) return;
     document.body.classList.add("map-fs");
@@ -546,6 +581,7 @@ export default function TripMap() {
             key={tileLayer}
             attribution={TILE_LAYERS[tileLayer].attr}
             url={TILE_LAYERS[tileLayer].url}
+            keepBuffer={4}
           />
 
           {/* Нити маршрута по дням */}
@@ -667,14 +703,16 @@ export default function TripMap() {
                 <span className="absolute left-1/2 top-1/2 size-3 -translate-x-1/2 -translate-y-1/2 rounded-full bg-primary ring-4 ring-white/70 shadow-md" />
               </div>
             </div>
-            <div className="absolute top-[3.75rem] left-1/2 -translate-x-1/2 z-[600] bg-card/90 backdrop-blur text-foreground text-xs font-medium px-3 py-2 rounded-full shadow-lg border border-border whitespace-nowrap">
+            {/* Без backdrop-blur поверх карты: на телефонах пересчёт блюра
+                движущейся подложки каждый кадр — главный источник лагов drag */}
+            <div className="absolute top-[3.75rem] left-1/2 -translate-x-1/2 z-[600] bg-card/90 text-foreground text-xs font-medium px-3 py-2 rounded-full shadow-lg border border-border whitespace-nowrap">
               Перетащите карту — точка в прицеле
             </div>
             <div className="absolute bottom-3 inset-x-3 z-[650] flex gap-2">
               <button
                 type="button"
                 onClick={() => setAddMode(false)}
-                className="min-h-12 px-4 rounded-xl bg-card/90 backdrop-blur border border-border text-sm font-medium grid place-items-center"
+                className="min-h-12 px-4 rounded-xl bg-card/90 border border-border text-sm font-medium grid place-items-center"
               >
                 Отмена
               </button>
@@ -692,7 +730,7 @@ export default function TripMap() {
 
         {/* Рельса мест внизу */}
         {!addMode && (
-          <div className="absolute bottom-2 left-2 right-2 z-[600] rounded-2xl bg-card/85 backdrop-blur-md border border-border shadow-lg overflow-hidden">
+          <div className="absolute bottom-2 left-2 right-2 z-[600] rounded-2xl bg-card/90 border border-border shadow-lg overflow-hidden">
             <button
               type="button"
               onClick={() => setRailCollapsed((v) => !v)}
@@ -745,7 +783,7 @@ export default function TripMap() {
         {/* Пусто после фильтров */}
         {!addMode && !onlyPhotos && filtered.length === 0 && allPlaces.length > 0 && (
           <div className="absolute inset-0 z-[560] grid place-items-center pointer-events-none px-6">
-            <div className="pointer-events-auto rounded-2xl bg-card/95 backdrop-blur border border-border shadow-xl px-4 py-4 text-center max-w-[250px]">
+            <div className="pointer-events-auto rounded-2xl bg-card/95 border border-border shadow-xl px-4 py-4 text-center max-w-[250px]">
               <div className="text-2xl">🔍</div>
               <p className="text-sm font-semibold mt-1">Ничего не найдено</p>
               <p className="text-xs text-muted-foreground mt-0.5">
@@ -899,7 +937,7 @@ function MapFab({
         "relative size-11 rounded-full grid place-items-center shadow-lg border transition-all active:scale-90",
         primary
           ? "bg-primary text-primary-foreground border-primary/50 shadow-primary/30"
-          : "bg-card/90 backdrop-blur text-foreground border-border hover:bg-accent",
+          : "bg-card/90 text-foreground border-border hover:bg-accent",
         desktopOnly && "max-sm:hidden",
         className
       )}
@@ -932,7 +970,7 @@ function CityChip({
       aria-pressed={active}
       className={cn(
         "flex items-center min-h-11 px-3 rounded-full text-xs font-medium whitespace-nowrap transition-colors shadow-sm border",
-        active ? "text-white border-transparent" : "bg-card/90 backdrop-blur border-border text-foreground hover:bg-accent"
+        active ? "text-white border-transparent" : "bg-card/90 border-border text-foreground hover:bg-accent"
       )}
       style={active ? { background: accent ?? "#f97316" } : undefined}
     >
