@@ -71,3 +71,6 @@ prisma/db/
 .playwright-mcp/
 .tmp-audit/
 pub-login-*.png
+
+# локальный запуск с секретами (не для репозитория)
+docker-deploy/docker-compose.local.yml
