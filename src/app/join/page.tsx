@@ -1,9 +1,9 @@
 "use client";
 
-import { Suspense, useState, useEffect, useCallback } from "react";
+import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
-import { ArrowRight, Loader2, Plane, MapPin } from "lucide-react";
+import { ArrowRight, Calendar, Loader2, LogIn, MapPin, UserPlus, Users } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/use-auth";
 import { setTripId } from "@/hooks/use-trip";
@@ -17,22 +17,31 @@ function memberLabel(n: number) {
   return `${n} участников`;
 }
 
+interface JoinTrip {
+  id: string;
+  title: string;
+  destination: string;
+  coverColor: string;
+  coverEmoji: string;
+  startDate: string;
+  totalDays: number;
+  members: { displayName: string; emoji: string; color: string }[];
+}
+
 function JoinPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const qc = useQueryClient();
-  const { data: session } = useAuth();
+  const { data: session, status } = useAuth();
   const [code, setCode] = useState("");
   const [looking, setLooking] = useState(false);
   const [joining, setJoining] = useState(false);
-  const [preview, setPreview] = useState<{
-    title: string;
-    coverEmoji: string;
-    coverColor: string;
-    members: { displayName: string; emoji: string; color: string }[];
-  } | null>(null);
+  const [needAuth, setNeedAuth] = useState(false);
+  const [preview, setPreview] = useState<JoinTrip | null>(null);
 
   const userId = (session?.user as { id?: string } | undefined)?.id || "";
+  // ?join=1 приходит из логина: сессия есть — присоединяемся без лишнего клика
+  const autoJoin = searchParams.get("join") === "1";
 
   const lookupTrip = useCallback(async (rawCode: string) => {
     if (rawCode.trim().length < 3) {
@@ -64,11 +73,10 @@ function JoinPageContent() {
     void lookupTrip(urlCode);
   }, [searchParams, lookupTrip]);
 
-  const joinTrip = async () => {
+  const joinTrip = useCallback(async () => {
     if (!userId) {
-      toast.error("Войдите чтобы присоединиться");
-      const returnTo = `/join?code=${encodeURIComponent(code.trim())}`;
-      router.push(`/login?callbackUrl=${encodeURIComponent(returnTo)}`);
+      // Не тост, а тихий показ блока входа — он и так на экране под превью
+      setNeedAuth(true);
       return;
     }
     setJoining(true);
@@ -78,24 +86,44 @@ function JoinPageContent() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           displayName: (session?.user as { name?: string })?.name || "Я",
-          emoji: "👤",
-          color: "#94a3b8",
+          emoji: (session?.user as { emoji?: string })?.emoji || "👤",
+          color: (session?.user as { color?: string })?.color || "#94a3b8",
         }),
       });
+      if (res.status === 401) {
+        setNeedAuth(true);
+        return;
+      }
       const data = await res.json();
       if (data.error) throw new Error(data.error);
 
       setTripId(data.tripId);
       qc.invalidateQueries({ queryKey: ["trips"] });
       qc.invalidateQueries({ queryKey: ["trip"] });
-      toast.success("Вы присоединились к поездке! 🎉");
-      router.push("/");
+      toast.success(data.alreadyMember ? "Ты уже участник этой поездки 👋" : "Вы присоединились к поездке! 🎉");
+      router.replace("/");
     } catch (e) {
       toast.error((e as Error).message || "Не удалось присоединиться");
     } finally {
       setJoining(false);
     }
+  }, [userId, code, session, qc, router]);
+
+  // Возврат из логина: код + сессия на месте — жмём «присоединиться» за друга
+  const autoJoinTried = useRef(false);
+  useEffect(() => {
+    if (!autoJoin || autoJoinTried.current || joining) return;
+    if (status !== "authenticated" || !preview || !userId) return;
+    autoJoinTried.current = true;
+    void joinTrip();
+  }, [autoJoin, status, preview, userId, joining, joinTrip]);
+
+  const loginUrl = (mode: "login" | "register") => {
+    const returnTo = `/join?code=${encodeURIComponent(code.trim())}&join=1`;
+    return `/login?callbackUrl=${encodeURIComponent(returnTo)}&mode=${mode}`;
   };
+
+  const showAuth = status === "unauthenticated" || needAuth;
 
   return (
     <div className="min-h-screen flex items-center justify-center p-4 bg-gradient-to-br from-orange-500 via-rose-500 to-violet-600 relative overflow-hidden">
@@ -113,7 +141,7 @@ function JoinPageContent() {
             animate={{ scale: 1, opacity: 1 }}
             className="size-16 rounded-2xl bg-white/20 backdrop-blur grid place-items-center text-white mx-auto mb-3 shadow-lg"
           >
-            <Plane className="size-8" />
+            <MapPin className="size-8" />
           </motion.div>
           <h1 className="text-2xl font-bold text-white">Присоединиться</h1>
           <p className="text-white/70 text-sm mt-1">Введите код поездки от друга</p>
@@ -161,34 +189,83 @@ function JoinPageContent() {
                     >
                       {preview.coverEmoji}
                     </div>
-                    <div>
-                      <div className="font-bold text-sm">{preview.title}</div>
-                      <div className="text-[11px] text-muted-foreground">
+                    <div className="min-w-0">
+                      <div className="font-bold text-sm truncate">{preview.title}</div>
+                      <div className="text-[11px] text-muted-foreground truncate">
+                        {preview.destination}
+                        {" · "}
                         {memberLabel(preview.members.length)}
                       </div>
                     </div>
                   </div>
-                  <div className="flex -space-x-2">
-                    {preview.members.slice(0, 5).map((m, i) => (
-                      <div
-                        key={i}
-                        className="size-7 rounded-full grid place-items-center text-xs border-2 border-background"
-                        style={{ background: m.color }}
-                        title={m.displayName}
-                      >
-                        {m.emoji}
-                      </div>
-                    ))}
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="flex items-center gap-1.5 text-[11px] text-muted-foreground min-w-0">
+                      <Calendar className="size-3.5 shrink-0" />
+                      {new Date(preview.startDate).toLocaleDateString("ru-RU", { day: "numeric", month: "long" })}
+                      {" · "}
+                      {preview.totalDays} дн.
+                    </span>
+                    <span className="flex -space-x-2 shrink-0">
+                      {preview.members.slice(0, 5).map((m, i) => (
+                        <span
+                          key={i}
+                          className="size-7 rounded-full grid place-items-center text-xs border-2 border-background"
+                          style={{ background: m.color }}
+                          title={m.displayName}
+                        >
+                          {m.emoji}
+                        </span>
+                      ))}
+                    </span>
                   </div>
-                  <button
-                    type="button"
-                    onClick={joinTrip}
-                    disabled={looking || joining}
-                    className="w-full min-h-11 rounded-xl bg-primary text-primary-foreground py-3 font-medium flex items-center justify-center gap-2 disabled:opacity-50"
-                  >
-                    {joining ? <Loader2 className="size-4 animate-spin" /> : <ArrowRight className="size-4" />}
-                    Присоединиться
-                  </button>
+
+                  {status === "loading" ? (
+                    <div className="flex items-center justify-center py-2 text-xs text-muted-foreground gap-2">
+                      <Loader2 className="size-4 animate-spin" /> Проверяем вход…
+                    </div>
+                  ) : showAuth ? (
+                    /* Не в аккаунте: вход/регистрация прямо здесь — после входа
+                       (?join=1) присоединение произойдёт автоматически */
+                    <div className="space-y-2">
+                      <a
+                        href={loginUrl("login")}
+                        className="w-full min-h-12 rounded-xl bg-primary text-primary-foreground py-3 font-medium flex items-center justify-center gap-2 active:scale-[0.98] transition-transform"
+                      >
+                        <LogIn className="size-4" />
+                        Войти и присоединиться
+                      </a>
+                      <a
+                        href={loginUrl("register")}
+                        className="w-full min-h-11 rounded-xl bg-secondary border border-border py-2.5 text-sm font-medium flex items-center justify-center gap-2 hover:bg-accent transition-colors"
+                      >
+                        <UserPlus className="size-4" />
+                        Создать аккаунт
+                      </a>
+                      <p className="text-[11px] text-muted-foreground text-center leading-snug">
+                        Аккаунт нужен, чтобы поездка увидела, кто ты.
+                        После входа присоединимся автоматически — ссылка больше не понадобится.
+                      </p>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={joinTrip}
+                      disabled={looking || joining}
+                      className="w-full min-h-12 rounded-xl bg-primary text-primary-foreground py-3 font-medium flex items-center justify-center gap-2 disabled:opacity-50"
+                    >
+                      {joining ? (
+                        <>
+                          <Loader2 className="size-4 animate-spin" />
+                          Присоединяемся…
+                        </>
+                      ) : (
+                        <>
+                          <ArrowRight className="size-4" />
+                          Присоединиться
+                        </>
+                      )}
+                    </button>
+                  )}
                 </div>
               </motion.div>
             )}

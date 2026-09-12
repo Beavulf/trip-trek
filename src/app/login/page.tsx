@@ -18,7 +18,10 @@ function LoginPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const callbackUrl = useMemo(() => safeCallback(searchParams.get("callbackUrl")), [searchParams]);
-  const [mode, setMode] = useState<"login" | "register">("login");
+  // ?mode=register — со страницы приглашения: друг без аккаунта сразу попадает в форму регистрации
+  const [mode, setMode] = useState<"login" | "register">(
+    searchParams.get("mode") === "register" ? "register" : "login"
+  );
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [passwordConfirm, setPasswordConfirm] = useState("");

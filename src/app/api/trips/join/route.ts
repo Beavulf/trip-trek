@@ -97,12 +97,12 @@ export async function POST(req: NextRequest) {
   return NextResponse.json({ tripId: trip.id, memberId: member.id });
 }
 
-// GET /api/trips/join?code=CHINA2024 — получить инфо о поездке по коду (для preview)
-// Только для авторизованных + rate-limit: код инвайт-страницы перебирают боты
+// GET /api/trips/join?code=CHINA2024 — превью поездки по invite-коду.
+// Доступно и без входа: друг должен видеть, куда его зовут, ДО регистрации —
+// иначе страница приглашения для неавторизованных выглядела как «неверный код».
+// Отдаём минимум (название, обложка, участники) + rate-limit по IP:
+// код инвайт-страницы перебирают боты.
 export async function GET(req: NextRequest) {
-  const { response } = await requireUser(req);
-  if (response) return response;
-
   const limited = rateLimitMiddleware(req, "join-get", 30, 60_000);
   if (limited) return limited;
 
