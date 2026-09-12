@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
-import bcrypt from "bcryptjs";
 import { db } from "@/lib/db";
 import { requireAdmin } from "@/lib/api-auth";
 import { logAdmin } from "@/lib/admin-log";
 import { notifyUser } from "@/lib/notify";
 import { userRateLimit } from "@/lib/rate-limit";
+import { changePassword, validatePasswordPolicy } from "@/lib/password";
 
 // Никогда не отдаём password и служебные поля
 const SAFE_SELECT = {
@@ -101,6 +101,9 @@ export async function PATCH(req: NextRequest) {
     password?: string;
     message?: string;
   };
+  // Пароль пишем отдельным changePassword (passwordChangedAt + сжигание ссылок сброса),
+  // поэтому в общий data он не попадает
+  let newPassword: string | undefined;
 
   if (!id) return NextResponse.json({ error: "id required" }, { status: 400 });
 
@@ -112,7 +115,6 @@ export async function PATCH(req: NextRequest) {
     email?: string;
     emoji?: string;
     color?: string;
-    password?: string;
   } = {};
 
   if (plan !== undefined) {
@@ -164,13 +166,12 @@ export async function PATCH(req: NextRequest) {
     data.color = color.toLowerCase();
   }
   if (password !== undefined) {
-    if (typeof password !== "string" || password.length < 8) {
-      return NextResponse.json({ error: "Пароль минимум 8 символов" }, { status: 400 });
+    // Политика та же, что при регистрации; запись — через единый changePassword
+    const policyError = validatePasswordPolicy(password);
+    if (policyError) {
+      return NextResponse.json({ error: policyError }, { status: 400 });
     }
-    if (!/[a-z]/i.test(password) || !/\d/.test(password)) {
-      return NextResponse.json({ error: "Пароль должен содержать буквы и цифры" }, { status: 400 });
-    }
-    data.password = await bcrypt.hash(password, 10);
+    newPassword = password;
   }
 
   // Сообщение от админа — не меняет профиль, только уведомление
@@ -181,7 +182,7 @@ export async function PATCH(req: NextRequest) {
     if (message.length > 2000) {
       return NextResponse.json({ error: "Сообщение: до 2000 символов" }, { status: 400 });
     }
-    if (Object.keys(data).length === 0) {
+    if (Object.keys(data).length === 0 && !newPassword) {
       const target = await db.user.findUnique({ where: { id }, select: { name: true } });
       if (!target) return NextResponse.json({ error: "Пользователь не найден" }, { status: 404 });
       await notifyUser(id, {
@@ -194,7 +195,7 @@ export async function PATCH(req: NextRequest) {
     }
   }
 
-  if (Object.keys(data).length === 0) {
+  if (Object.keys(data).length === 0 && !newPassword) {
     return NextResponse.json({ error: "no fields to update" }, { status: 400 });
   }
 
@@ -227,13 +228,11 @@ export async function PATCH(req: NextRequest) {
     if (data.role) {
       await logAdmin(admin!.id, "user.role", { type: "user", id, label }, { role: data.role });
     }
-    if (data.password) {
+    // Пароль — отдельной единой точкой записи: хеш, passwordChangedAt (выкидывает
+    // другие сессии), сжигание ссылок сброса и уведомление пользователю внутри.
+    if (newPassword) {
+      await changePassword(id, newPassword);
       await logAdmin(admin!.id, "user.password", { type: "user", id, label });
-      await notifyUser(id, {
-        type: "password",
-        title: "Пароль вашего аккаунта изменён админом",
-        body: "Если вы этого не ожидали — свяжитесь с админом через «Сообщить о проблеме».",
-      });
     }
     const profileFields = [data.name, data.email, data.emoji, data.color].filter((v) => v !== undefined);
     if (profileFields.length > 0) {

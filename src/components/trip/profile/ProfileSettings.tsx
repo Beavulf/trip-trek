@@ -3,12 +3,13 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
-import { ArrowRight, Bell, Bug, Check, ChevronDown, Crown, Loader2, Monitor, Moon, Settings, Shield, Sparkles, Sun, Trash2 } from "lucide-react";
+import { ArrowRight, Bell, Bug, Check, ChevronDown, Crown, KeyRound, Loader2, Monitor, Moon, Settings, Shield, Sparkles, Sun, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { useTheme } from "next-themes";
 import { cn } from "@/lib/utils";
 import type { UserProfile } from "./types";
 import { PushToggle } from "./PushToggle";
+import { PasswordField } from "@/components/auth/password-field";
 
 interface ProfileSettingsProps {
   profile: UserProfile;
@@ -83,6 +84,53 @@ export function ProfileSettings({ profile, setPremiumOpen, onReportBug, isAdmin,
       });
     } finally {
       setAiSaving(false);
+    }
+  };
+
+  // === Смена пароля ===
+  const [pwdOpen, setPwdOpen] = useState(false);
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [pwdConfirm, setPwdConfirm] = useState("");
+  const [pwdSaving, setPwdSaving] = useState(false);
+
+  // Та же политика, что на сервере: ≥8 символов, буквы и цифры
+  const checkPassword = (p: string) => p.length >= 8 && /[a-z]/i.test(p) && /\d/.test(p);
+
+  const changePassword = async () => {
+    if (pwdSaving) return;
+    if (!currentPassword) {
+      toast.error("Введите текущий пароль");
+      return;
+    }
+    if (!checkPassword(newPassword)) {
+      toast.error("Новый пароль: минимум 8 символов, буквы и цифры");
+      return;
+    }
+    if (newPassword !== pwdConfirm) {
+      toast.error("Пароли не совпадают");
+      return;
+    }
+    setPwdSaving(true);
+    try {
+      const r = await fetch("/api/user/password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ currentPassword, newPassword }),
+      });
+      const b = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(b?.error || `Ошибка ${r.status}`);
+      toast.success("Пароль изменён. Другие устройства вышли из аккаунта");
+      setCurrentPassword("");
+      setNewPassword("");
+      setPwdConfirm("");
+      setPwdOpen(false);
+    } catch (err) {
+      toast.error("Не удалось изменить пароль", {
+        description: err instanceof Error ? err.message : "Попробуйте ещё раз",
+      });
+    } finally {
+      setPwdSaving(false);
     }
   };
 
@@ -251,6 +299,74 @@ export function ProfileSettings({ profile, setPremiumOpen, onReportBug, isAdmin,
                   {aiStatus.message}
                 </p>
               )}
+            </div>
+          )}
+        </div>
+
+        {/* Смена пароля: текущее устройство остаётся, прочие сессии выходят */}
+        <div>
+          <button
+            type="button"
+            onClick={() => setPwdOpen((v) => !v)}
+            className="w-full flex items-center gap-3 p-3.5 text-left hover:bg-accent/50 transition-colors"
+            aria-expanded={pwdOpen}
+          >
+            <div className="size-9 rounded-xl bg-secondary grid place-items-center shrink-0">
+              <KeyRound className="size-4.5 text-muted-foreground" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="text-sm font-medium">Безопасность</div>
+              <div className="text-xs text-muted-foreground">Сменить пароль для входа</div>
+            </div>
+            <ChevronDown className={cn("size-4 text-muted-foreground shrink-0 transition-transform", pwdOpen && "rotate-180")} />
+          </button>
+          {pwdOpen && (
+            <div className="px-3.5 pb-3.5 space-y-2">
+              <div>
+                <label className="text-[10px] text-muted-foreground mb-1 block">Текущий пароль</label>
+                <PasswordField
+                  value={currentPassword}
+                  onChange={setCurrentPassword}
+                  autoComplete="current-password"
+                />
+              </div>
+              <div>
+                <label className="text-[10px] text-muted-foreground mb-1 block">Новый пароль</label>
+                <PasswordField
+                  value={newPassword}
+                  onChange={setNewPassword}
+                  autoComplete="new-password"
+                  status={newPassword ? checkPassword(newPassword) : undefined}
+                />
+                {newPassword && !checkPassword(newPassword) && (
+                  <p className="text-[10px] text-amber-500 mt-1">Минимум 8 символов, буквы и цифры</p>
+                )}
+              </div>
+              <div>
+                <label className="text-[10px] text-muted-foreground mb-1 block">Подтвердите новый пароль</label>
+                <PasswordField
+                  value={pwdConfirm}
+                  onChange={setPwdConfirm}
+                  autoComplete="new-password"
+                  status={pwdConfirm ? pwdConfirm === newPassword : undefined}
+                  onKeyDown={(e) => e.key === "Enter" && changePassword()}
+                />
+                {pwdConfirm && pwdConfirm !== newPassword && (
+                  <p className="text-[10px] text-red-500 mt-1">Пароли не совпадают</p>
+                )}
+              </div>
+              <button
+                type="button"
+                onClick={changePassword}
+                disabled={pwdSaving || !currentPassword || !newPassword || !pwdConfirm}
+                className="min-h-10 rounded-lg bg-primary px-4 text-xs font-medium text-primary-foreground disabled:opacity-50 flex items-center gap-1.5"
+              >
+                {pwdSaving ? <Loader2 className="size-3 animate-spin" /> : <KeyRound className="size-3" />}
+                Изменить пароль
+              </button>
+              <p className="text-[10px] text-muted-foreground leading-snug">
+                После смены пароля со всех других устройств произойдёт выход из аккаунта.
+              </p>
             </div>
           )}
         </div>

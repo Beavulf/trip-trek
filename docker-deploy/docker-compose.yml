@@ -36,6 +36,9 @@ services:
       - HOSTNAME=0.0.0.0
     volumes:
       - triptrek-uploads:/app/public/uploads
+    # host.docker.internal -> хост: там слушает postfix :25 (письма сброса пароля)
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     depends_on:
       db:
         condition: service_healthy

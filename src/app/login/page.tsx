@@ -3,8 +3,9 @@
 import { Suspense, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
-import { Loader2, Plane, UserPlus, LogIn, Globe, Eye, EyeOff } from "lucide-react";
+import { Loader2, Plane, UserPlus, LogIn, Globe } from "lucide-react";
 import { toast } from "sonner";
+import { PasswordField } from "@/components/auth/password-field";
 
 const EMOJIS = ["🦊", "🐻", "🐼", "🦁", "🐯", "🐨", "🐸", "🐵", "🦉", "🐧", "🦄", "🐲"];
 const COLORS = ["#f97316", "#06b6d4", "#8b5cf6", "#ec4899", "#10b981", "#f59e0b", "#ef4444", "#3b82f6"];
@@ -25,8 +26,6 @@ function LoginPageContent() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [passwordConfirm, setPasswordConfirm] = useState("");
-  const [showPassword, setShowPassword] = useState(false);
-  const [showPasswordConfirm, setShowPasswordConfirm] = useState(false);
   const [name, setName] = useState("");
   const [emoji, setEmoji] = useState("🦊");
   const [color, setColor] = useState("#f97316");
@@ -38,8 +37,10 @@ function LoginPageContent() {
       return;
     }
     if (mode === "register") {
-      if (password.length < 4) {
-        toast.error("Пароль минимум 4 символа");
+      // Та же политика, что на сервере (register API): не даём юзеру
+      // заполнить форму и получить ошибку на кнопке
+      if (password.length < 8 || !/[a-z]/i.test(password) || !/\d/.test(password)) {
+        toast.error("Пароль минимум 8 символов, буквы и цифры");
         return;
       }
       if (password !== passwordConfirm) {
@@ -194,52 +195,23 @@ function LoginPageContent() {
             </div>
             <div>
               <label className="text-xs text-muted-foreground mb-1 block">Пароль</label>
-              <div className="relative">
-                <input
-                  type={showPassword ? "text" : "password"}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && submit()}
-                  placeholder="••••••"
-                  className="w-full rounded-xl border border-input bg-background px-3 py-2.5 pr-10 text-sm"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(v => !v)}
-                  aria-label="Показать или скрыть пароль"
-                  className="absolute right-1 top-1/2 -translate-y-1/2 p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-accent"
-                >
-                  {showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
-                </button>
-              </div>
+              <PasswordField
+                value={password}
+                onChange={setPassword}
+                autoComplete={mode === "register" ? "new-password" : "current-password"}
+                onKeyDown={(e) => e.key === "Enter" && submit()}
+              />
             </div>
             {mode === "register" && (
               <div>
                 <label className="text-xs text-muted-foreground mb-1 block">Подтвердите пароль</label>
-                <div className="relative">
-                  <input
-                    type={showPasswordConfirm ? "text" : "password"}
-                    value={passwordConfirm}
-                    onChange={(e) => setPasswordConfirm(e.target.value)}
-                    onKeyDown={(e) => e.key === "Enter" && submit()}
-                    placeholder="••••••"
-                    className={`w-full rounded-xl border bg-background px-3 py-2.5 pr-10 text-sm ${
-                      passwordConfirm && passwordConfirm !== password
-                        ? "border-red-500"
-                        : passwordConfirm && passwordConfirm === password
-                        ? "border-green-500"
-                        : "border-input"
-                    }`}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowPasswordConfirm(v => !v)}
-                    aria-label="Показать или скрыть пароль"
-                    className="absolute right-1 top-1/2 -translate-y-1/2 p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-accent"
-                  >
-                    {showPasswordConfirm ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
-                  </button>
-                </div>
+                <PasswordField
+                  value={passwordConfirm}
+                  onChange={setPasswordConfirm}
+                  autoComplete="new-password"
+                  status={passwordConfirm ? passwordConfirm === password : undefined}
+                  onKeyDown={(e) => e.key === "Enter" && submit()}
+                />
                 {passwordConfirm && passwordConfirm !== password && (
                   <p className="text-[10px] text-red-500 mt-1">Пароли не совпадают</p>
                 )}
@@ -263,6 +235,16 @@ function LoginPageContent() {
               )}
               {loading ? "Загрузка…" : mode === "login" ? "Войти" : "Зарегистрироваться"}
             </button>
+
+            {mode === "login" && (
+              <button
+                type="button"
+                onClick={() => router.push("/reset-password")}
+                className="w-full text-xs text-muted-foreground hover:text-primary py-1 transition-colors"
+              >
+                Забыли пароль?
+              </button>
+            )}
           </div>
 
           <p className="text-[11px] text-muted-foreground text-center mt-4">

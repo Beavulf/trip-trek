@@ -15,10 +15,10 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ user: null });
   }
 
-  let decoded: { id: string };
+  let decoded: { id: string; iat?: number };
   try {
     const secret = getJwtSecret();
-    decoded = jwt.verify(token, secret) as { id: string };
+    decoded = jwt.verify(token, secret) as { id: string; iat?: number };
   } catch {
     // Invalid token
     return NextResponse.json({ user: null });
@@ -29,10 +29,17 @@ export async function GET(req: NextRequest) {
   try {
     const row = await db.user.findUnique({
       where: { id: decoded.id },
-      select: { id: true, name: true, email: true, emoji: true, color: true, avatarUrl: true, plan: true, planExpiry: true, role: true },
+      select: { id: true, name: true, email: true, emoji: true, color: true, avatarUrl: true, plan: true, planExpiry: true, role: true, passwordChangedAt: true },
     });
 
     if (!row) return NextResponse.json({ user: null });
+
+    // Пароль сменён после выпуска токена — сессия недействительна. iat в JWT —
+    // СЕКУНДЫ, passwordChangedAt — миллисекунды: сравниваем в секундах, иначе
+    // токен, перевыпущенный в ту же секунду, что смена пароля, считается протухшим.
+    if (row.passwordChangedAt && decoded.iat && decoded.iat < Math.floor(row.passwordChangedAt.getTime() / 1000)) {
+      return NextResponse.json({ user: null });
+    }
 
     return NextResponse.json({
       user: {

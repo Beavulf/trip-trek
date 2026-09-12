@@ -16,6 +16,9 @@ model User {
   email      String    @unique
   name       String
   password   String // bcrypt hash
+  // Момент последней смены пароля: JWT с iat раньше него невалиден (см. custom-session) —
+  // смена пароля выкидывает другие сессии. null = пароль не меняли, сессии не трогаем.
+  passwordChangedAt DateTime?
   emoji      String    @default("👤")
   color      String    @default("#94a3b8")
   avatarUrl  String? // фото пользователя (загруженное)
@@ -37,6 +40,21 @@ model User {
   adminLogs     AdminLog[]
   tripBans      TripBan[]
   notifications UserNotification[]
+  resetTokens   PasswordResetToken[]
+}
+
+// === Токены сброса пароля: одноразовые, TTL 60 минут. В БД — только sha256-хеш,
+// сырой токен живёт лишь в ссылке из письма. Использованный/просроченный удаляется ===
+model PasswordResetToken {
+  id        String   @id @default(cuid())
+  userId    String
+  tokenHash String   @unique // sha256(сырого токена) — утечка БД не даёт рабочих ссылок
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
 }
 
 // === Глобальные настройки приложения (singleton-строка id="app") ===

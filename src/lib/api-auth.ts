@@ -50,9 +50,28 @@ export async function getUserFromRequest(req: NextRequest): Promise<AuthUser | n
     if (!token) return null;
 
     const secret = getJwtSecret();
-    const decoded = jwt.verify(token, secret) as AuthUser;
+    const decoded = jwt.verify(token, secret) as AuthUser & { iat?: number };
 
     if (!decoded?.id) return null;
+
+    // Пароль сменён после выпуска токена — сессия недействительна (та же проверка,
+    // что в custom-session). Сверяем здесь — это единая точка входа всех API-роутов:
+    // иначе «выход других устройств» был бы только визуальным, а украденный токен
+    // продолжал бы работать с данными все 30 дней. iat — секунды, passwordChangedAt —
+    // миллисекунды: сравниваем в секундах. Прецедент чтения из БД — requireAdmin
+    // (роль тоже сверяется, т.к. токены живут 30 дней).
+    const row = await db.user.findUnique({
+      where: { id: decoded.id },
+      select: { passwordChangedAt: true },
+    });
+    if (!row) return null; // пользователь удалён — разлогин
+    if (
+      row.passwordChangedAt &&
+      decoded.iat &&
+      decoded.iat < Math.floor(row.passwordChangedAt.getTime() / 1000)
+    ) {
+      return null;
+    }
 
     return decoded;
   } catch {

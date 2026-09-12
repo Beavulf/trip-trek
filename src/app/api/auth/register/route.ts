@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import bcrypt from "bcryptjs";
 import { db } from "@/lib/db";
 import { rateLimitMiddleware } from "@/lib/rate-limit";
 import { getAppConfig } from "@/lib/app-config";
+import { validatePasswordPolicy, hashPassword } from "@/lib/password";
+import { sendMail } from "@/lib/mail/mailer";
+import { welcomeEmail } from "@/lib/mail/templates";
 
 // POST /api/auth/register — регистрация
 export async function POST(req: NextRequest) {
@@ -25,13 +27,16 @@ export async function POST(req: NextRequest) {
     if (!email || !password || !name) {
       return NextResponse.json({ error: "email, password, name обязательны" }, { status: 400 });
     }
+    // Формат email: это же значение потом уходит адресатом в SMTP (письма сброса),
+    // так что мусор/CRLF отсекаем на входе. Тот же regex, что в admin PATCH.
+    if (typeof email !== "string" || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+      return NextResponse.json({ error: "Некорректный email" }, { status: 400 });
+    }
 
     // P0: password must be at least 8 chars with at least one letter and one digit
-    if (typeof password !== "string" || password.length < 8) {
-      return NextResponse.json({ error: "Пароль минимум 8 символов" }, { status: 400 });
-    }
-    if (!/[a-z]/i.test(password) || !/\d/.test(password)) {
-      return NextResponse.json({ error: "Пароль должен содержать буквы и цифры" }, { status: 400 });
+    const policyError = validatePasswordPolicy(password);
+    if (policyError) {
+      return NextResponse.json({ error: policyError }, { status: 400 });
     }
 
     const existing = await db.user.findUnique({ where: { email } });
@@ -39,10 +44,14 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Этот email уже зарегистрирован" }, { status: 400 });
     }
 
-    const hashedPassword = await bcrypt.hash(password, 10);
+    const hashedPassword = await hashPassword(password);
     const user = await db.user.create({
       data: { name, email, password: hashedPassword },
     });
+
+    // Приветственное письмо — fire-and-forget: SMTP не ждём, регистрацию не роняем.
+    // Без SMTP_HOST mailer молча (с предупреждением в лог) пропустит отправку.
+    void sendMail({ to: user.email, ...welcomeEmail(name) });
 
     // Если есть tripId или inviteCode — добавляем в поездку
     let trip: { id: string } | null = null;
