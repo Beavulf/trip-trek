@@ -1,0 +1,82 @@
+# Глоссарий TripTrek
+
+Зачем: в коде, UI и docs смешиваются русские и английские названия одних и тех же
+сущностей. Это словарь соответствий, чтобы агент не тратил время на сопоставление.
+Детали моделей — `prisma/schema.prisma`, архитектура — [architecture.md](architecture.md).
+
+## Фичи главного экрана (табы SPA)
+
+| В коде | В UI (рус.) | Что это |
+|---|---|---|
+| `dashboard` | Обзор | сводка поездки |
+| `timeline` | Лента | хронологическая лента событий/дней |
+| `itinerary` | Маршрут | план по дням: города, места, время |
+| `map` | Карта | leaflet: места, фото с гео, маршрут |
+| `budget` | Бюджет | траты, делёж, долги + плановый бюджет |
+| `gallery` | Галерея | фото (лайтбокс, избранное) |
+| `board` | Чат | групповой чат поездки (BoardMessage) |
+| `journal` | Дневник | записи по дням с настроением (mood) |
+| `food` | Гастрогид / Еда | блюда, «хочу попробовать», попытки |
+| `phrases` | Разговорник | фразы (ru + локальный язык, транскрипция, озвучка) |
+| `info` | Справка | полезная инфа: визы, транспорт, сим-карты |
+| `checklist` | Чек-лист | подготовка к поездке |
+| `achievements` | Награды / бейджи | достижения по прогрессу (живые данные, не модель в БД) |
+| `rest-chill` | Отдых / Чилл | категории отдыха (`chill-categories.ts`) |
+| `weather` | Погода | Open-Meteo по городам дней |
+| `ai-summary` | ИИ-итоги | саммари поездки от LLM |
+| `template` | Шаблоны | готовые поездки (`trip-templates.ts`, «из шаблона») |
+
+## Доменные сущности
+
+| Термин | Смысл |
+|---|---|
+| **Trip** (поездка) | центральная сущность; всё остальное каскадно висит на ней |
+| **TripMember** (участник) | связь User↔Trip; роль `owner` (владелец) или `member`; свой `displayName`/emoji/цвет в рамках поездки |
+| **Day** (день) | день поездки: `dayNumber`, город, `cityKey` (ключ города для погоды/координат) |
+| **Place** (место) | точка маршрута: координаты, категория, `timeOfDay`, статус (`planned`→посещено, `visitedAt`), порядок `order` |
+| **Expense** (трата) | `amount` в валюте поездки; введённое юзером — `originalAmount/`+`originalCurrency`; делёж `splitWith` (csv userId, пусто = личная) + `excludeSelf` |
+| **Долг / settlement** | расчёт «кто кому сколько должен» (`src/lib/budget/`: split → balances → settle); переводы идемпотентны по `settlementKey` |
+| **BudgetPlan** | плановый бюджет по категории (уникален tripId+category) — не путать с расходами |
+| **BoardMessage** | сообщение чата: реакции (JSON `{"👍":[userId]}`), ответы (`replyToId`), закрепление |
+| **JournalEntry** | запись дневника (день + автор + mood) |
+| **Phrase** | фраза разговорника; колонки `ru`/`cn`/`pinyin` исторические, язык — `language` (zh, ja, fr…) |
+| **FoodItem** | блюдо гастрогида; голоса «хочу попробовать» — `wantedBy` (JSON-массив userId в строке) |
+| **inviteCode** | код/ссылка приглашения в поездку (`/join/[code]`) |
+| **TripBan** | бан юзера в конкретной поездке (утёкшая инвайт-ссылка) |
+| **currentDayNumber** | «сегодня N-й день поездки» — считать только через `src/lib/trip-days.ts` |
+| **TripTab** | активный таб SPA (zustand store `src/lib/trip-store.ts`, persist) |
+
+## Пользователи, планы, ИИ
+
+| Термин | Смысл |
+|---|---|
+| **User** | глобальный аккаунт (email, bcrypt, emoji/цвет/аватар) |
+| **plan** | `free` / `premium`; премиум действителен пока не истёк `planExpiry`; проверка — только `isPremiumUser()` |
+| **free-лимиты** | `freeTripLimit`, `freeMemberLimit` из `AppSettings` (настраивает админ) |
+| **BYOK** | Bring Your Own Key: свой LLM-ключ юзера (`User.aiApiKey`), наружу только маска |
+| **Цепочка ИИ-ключей** | юзер (BYOK) → админский в `AppSettings` → `env OPENAI_API_KEY` (`src/lib/ai-key.ts`) |
+| **aiBaseUrl / aiModel** | OpenAI-совместимый эндпоинт и модель (напр. `glm-4.6`), задаются админом |
+| **AppSettings** | singleton-строка `id="app"`: ключи ИИ + конфиг приложения; до записи — дефолты кода |
+| **role** | `user` / `admin`; админ-роль всегда проверяется чтением из БД, не из токена |
+| **AdminLog** | журнал действий админов (кто/что/когда; ключи и пароли в meta запрещены) |
+| **Feedback** | баг-репорт/идея/вопрос из приложения (+ответ админа → уведомление) |
+| **UserNotification** | колокольчик в шапке; типы: premium, password, member_removed, member_banned, trip_deleted, feedback_reply, admin_message, ownership |
+| **PasswordResetToken** | одноразовый токен сброса; в БД только sha256-хеш, TTL 60 мин |
+
+## Инфраструктура и рантайм
+
+| Термин | Смысл |
+|---|---|
+| **custom server / server.ts** | единый bun-процесс: Next HTTP + socket.io + `/uploads`; не «next start» |
+| **ws-bus / publish()** | серверная шина realtime: API-роут → `publish(tripId, event)` → room trip-комнаты |
+| **TripRooms / rooms** | серверный учёт «какой сокет в какой поездке» |
+| **uploads / UPLOADS_ROOT** | файловое хранилище на диске (фото/аватары); в проде — докер-том `triptrek-uploads`; раздаётся мимо Next (`server/static-uploads.ts`) |
+| **storage пайплайн** | `src/lib/storage/`: sharp-сжатие, превью, лимиты — единственный способ сохранять файлы |
+| **outbound.ts** | обёртка внешних HTTP (таймаут+ретрай+кэш): Nominatim, Open-Meteo, курсы, LLM |
+| **rate limits** | in-memory (`rate-limit.ts`): login 5/15мин/IP, register 3/ч/IP, ИИ 10/ч/user+trip; обнуляются рестартом |
+| **VAPID / web-push** | серверные пуши в браузер; ключи в env `VAPID_*` |
+| **mailer** | nodemailer через постфикс-релей; `rejectUnauthorized: false` — только для самоподписанного серта локального релея |
+| **Caddy** | обратный прокси на VPS: TLS Let's Encrypt, 80/443 → app:3000 |
+| **standalone** | режим сборки Next (`output: "standalone"`); рантайм-файлы (uploads) в неё не попадают |
+| **ADR** | `docs/adr/0001–0008` — архитектурные решения и их мотивы |
+| **worklog.md** | журнал сессий разработки: что менялось и зачем (история — искать здесь) |
