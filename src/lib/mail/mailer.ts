@@ -29,6 +29,10 @@ async function getTransporter(): Promise<Transporter> {
     auth: process.env.SMTP_USER
       ? { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS }
       : undefined,
+    // Postfix хоста анонсирует STARTTLS с самоподписанным сертификатом — это
+    // локальный релей внутри одной машины, проверять подпись нечего и не нужно.
+    // Без этого nodemailer рвёт рукопожатие с «self signed certificate».
+    tls: { rejectUnauthorized: false },
     connectionTimeout: 10_000,
     greetingTimeout: 10_000,
   });
