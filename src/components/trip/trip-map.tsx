@@ -6,8 +6,7 @@ import { useRoute, useCurrentTripId } from "@/hooks/use-trip";
 import { usePhotosGeo } from "@/hooks/trip/use-photos";
 import { useTripStore } from "@/lib/trip-store";
 import { CATEGORY_META, type Place, type Day, type Photo } from "@/lib/types";
-import { MapContainer, TileLayer, Marker, Popup, CircleMarker } from "react-leaflet";
-import L from "leaflet";
+import { Marker, Popup, CircleMarker } from "react-leaflet";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   CheckCircle2,
@@ -40,62 +39,9 @@ import { LayersSheet, type MapLayerKey } from "./map/layers-sheet";
 import { isChillCategory } from "@/lib/chill-categories";
 import { resolveCityCoords, decodeCustomKey } from "@/lib/city-coords";
 import { peekMapFocus, ackMapFocus, subscribeMapFocus } from "@/lib/map-bus";
-import { TILE_LAYERS } from "@/lib/map-layers";
 import { RouteThreads } from "./map/route-threads";
-
-// Кэш иконок: makeIcon создаёт новый L.DivIcon на каждый вызов, а без кэша
-// каждый ререндер карты (рефетч дней, фильтры) заменял DOM всех маркеров.
-const pinIconCache = new Map<string, L.DivIcon>();
-const photoIconCache = new Map<string, L.DivIcon>();
-
-// Кастомный пин места
-function makeIcon(category: string, status: string, emoji: string) {
-  const cacheKey = `${category}|${status}|${emoji}`;
-  const cached = pinIconCache.get(cacheKey);
-  if (cached) return cached;
-  let color = "#94a3b8"; // planned — серый
-  if (status === "visited") color = "#22c55e";
-  else if (status === "current") color = "#f97316";
-  const pulse = status === "current" ? "trip-pin-current" : "";
-  const icon = L.divIcon({
-    className: `trip-pin ${pulse}`,
-    html: `<div class="trip-pin-pin" style="background:${color}"><span>${emoji}</span></div>`,
-    iconSize: [32, 32],
-    iconAnchor: [16, 32],
-  });
-  pinIconCache.set(cacheKey, icon);
-  return icon;
-}
-
-// Фото-пин (круглая миниатюра) — безопасный HTML
-function makePhotoIcon(thumbUrl: string) {
-  const cached = photoIconCache.get(thumbUrl);
-  if (cached) return cached;
-  const safeUrl = thumbUrl.replace(/"/g, "&quot;").replace(/'/g, "&#39;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-  const icon = L.divIcon({
-    className: "trip-photo-pin",
-    html: `<div style="
-      width:40px;height:40px;border-radius:50%;overflow:hidden;
-      border:3px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,0.3);
-      background:#000;
-    "><img src="${safeUrl}" style="width:100%;height:100%;object-fit:cover;" /></div>`,
-    iconSize: [40, 40],
-    iconAnchor: [20, 20],
-    popupAnchor: [0, -20],
-  });
-  photoIconCache.set(thumbUrl, icon);
-  return icon;
-}
-
-// Точка геолокации
-function makeLocateIcon() {
-  return L.divIcon({
-    className: "locate-dot",
-    html: `<div class="locate-dot-core"></div>`,
-    iconSize: [18, 18],
-    iconAnchor: [9, 9],
-  });
-}
+import { MapCanvas, type MapCanvasHandle } from "./map/canvas";
+import { makeIcon, makePhotoIcon, makeLocateIcon } from "./map/icons";
 
 export default function TripMap() {
   const tripId = useCurrentTripId();
@@ -127,7 +73,7 @@ export default function TripMap() {
   const [locating, setLocating] = useState(false);
   const [fullscreen, setFullscreen] = useState(false);
   const { resolvedTheme } = useTheme();
-  const mapRef = useRef<L.Map | null>(null);
+  const canvasRef = useRef<MapCanvasHandle>(null);
   // Колесо мыши зумит только на десктопе (на мобильном колесо нет, а страница не должна скроллиться «в карту»)
   const [isDesktop, setIsDesktop] = useState(false);
   useEffect(() => {
@@ -174,8 +120,10 @@ export default function TripMap() {
     ? "В Китае OpenStreetMap может грузиться медленно без VPN. Для навигации на месте удобнее приложение Amap (高德地图) или Baidu Maps."
     : "Метки хранятся в поездке и видны всем участникам.";
 
-  // Центр при первом монтировании: город фильтра / первое место / первый день
-  const initialCenter = useMemo(() => {
+  // Центр при первом монтировании: город фильтра / первое место / первый день.
+  // Считается на каждый рендер (дёшево) без memo: MapContainer читает center
+  // только при создании инстанса, дальнейшие значения ни на что не влияют.
+  const initialCenter = (() => {
     if (mapCityFilter) {
       const c = resolveCityCoords(mapCityFilter) ?? decodeCustomKey(mapCityFilter);
       if (c) return { lat: c.lat, lng: c.lng };
@@ -189,7 +137,7 @@ export default function TripMap() {
       if (place) return { lat: place.lat, lng: place.lng };
     }
     return { lat: 20, lng: 0 };
-  }, []);
+  })();
 
   // Подгонка вида при смене города
   const cityFocus = useMemo(() => {
@@ -200,24 +148,6 @@ export default function TripMap() {
     const c = resolveCityCoords(mapCityFilter) ?? decodeCustomKey(mapCityFilter);
     return { pts, fallback: c ? { lat: c.lat, lng: c.lng } : null };
   }, [mapCityFilter, allPlaces]);
-
-  // Все полёты делаем из родителя через mapRef: эффекты внутри MapContainer
-  // срабатывают до расчёта размера контейнера и flyTo молча не происходит.
-  // Ретраи: карта может монтироваться дольше задержки (динамический импорт,
-  // спиннер загрузки) — одиночный таймаут молча терял полёт.
-  const flyWhenReady = (fn: (map: L.Map) => void, delay = 250) => {
-    const attempt = (left: number) => {
-      const m = mapRef.current;
-      if (m) {
-        fn(m);
-        return;
-      }
-      if (left <= 0) return;
-      setTimeout(() => attempt(left - 1), 100);
-    };
-    const t = setTimeout(() => attempt(20), delay);
-    return t;
-  };
 
   // Стартовый вид: подгоняем под весь маршрут, как только пришли дни
   // (первый рендер компонента происходит ещё на спиннере загрузки).
@@ -230,12 +160,7 @@ export default function TripMap() {
   useEffect(() => {
     if (fittedOnce.current || mountPts.length === 0) return;
     fittedOnce.current = true;
-    flyWhenReady((m) => {
-      const bounds = L.latLngBounds(mountPts.map((p) => [p.lat, p.lng] as [number, number]));
-      // fitBounds, а не flyToBounds: анимированный полёт сразу после
-      // инициализации карты молча не срабатывает, мгновенный setView — надёжный
-      m.fitBounds(bounds, { padding: [40, 40], animate: false });
-    }, 300);
+    canvasRef.current?.fitPoints(mountPts, { padding: [40, 40] });
   }, [mountPts]);
 
   // Смена города — подгоняем вид на его места
@@ -244,77 +169,45 @@ export default function TripMap() {
     if (lastCity.current === mapCityFilter) return;
     lastCity.current = mapCityFilter;
     if (!mapCityFilter || !cityFocus) return;
-    flyWhenReady((m) => {
-      if (cityFocus.pts.length === 0) {
-        if (cityFocus.fallback) m.flyTo([cityFocus.fallback.lat, cityFocus.fallback.lng], 12, { duration: 0.8 });
-        return;
-      }
-      flyToPts(m, cityFocus.pts, 13);
-    });
+    if (cityFocus.pts.length === 0) {
+      if (cityFocus.fallback) canvasRef.current?.focusOn(cityFocus.fallback, { zoomBoost: 12, duration: 0.8 });
+      return;
+    }
+    canvasRef.current?.flyToPoints(cityFocus.pts, 13);
   }, [mapCityFilter, cityFocus]);
 
   // Фокус из других вкладок (галерея, лента, диалог места) — шина map-bus.
   // Цель ждёт в шине до монтирования карты и потребляется ровно один раз (ack сразу,
   // полёт планирует flyWhenReady). Задержка 450 — позже mount-fitBounds (300, мгновенный):
   // фокусный полёт приходит последним и оставляет вид на цели.
+  // Цель может прийти раньше канваса (спиннер) — доставку повторяем, пока не ack
   useEffect(() => {
-    const unsub = subscribeMapFocus(() => {
+    const deliver = () => {
       const req = peekMapFocus();
       if (!req) return;
+      const canvas = canvasRef.current;
+      if (!canvas) return;
       ackMapFocus(req);
       // Если передано место — ведём себя как тап по маркеру: перелёт + карточка
       const targetPlace = req.placeId
         ? allPlaces.find((x) => x.place.id === req.placeId)?.place
         : undefined;
       if (targetPlace) setSelectedPlace(targetPlace);
-      flyWhenReady((m) => {
-        if (targetPlace) {
-          m.flyTo([targetPlace.lat, targetPlace.lng], Math.max(m.getZoom(), 15), { duration: 0.7 });
-        } else {
-          m.flyTo([req.lat, req.lng], Math.max(m.getZoom(), 16), { duration: 1 });
-        }
-      }, 450);
-    });
-    return unsub;
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- flyWhenReady стабилен (замыкание на mapRef)
+      canvas.focusOn(
+        targetPlace ? { lat: targetPlace.lat, lng: targetPlace.lng } : { lat: req.lat, lng: req.lng },
+        targetPlace ? { zoomBoost: 15, duration: 0.7 } : { zoomBoost: 16, duration: 1 }
+      );
+    };
+    const unsub = subscribeMapFocus(deliver);
+    const iv = setInterval(deliver, 300);
+    return () => {
+      unsub();
+      clearInterval(iv);
+    };
   }, [allPlaces]);
 
-  // Полноэкранный режим: Leaflet не знает, что контейнер изменился —
-  // пересчитываем размер после css-перехода, иначе тайлы не дорастянутся.
   // Шапку и FAB прячем классом на body: обёртка вкладки от framer-motion
   // создаёт stacking context, внутри которого любой z-index ниже шапки.
-  useEffect(() => {
-    const map = mapRef.current;
-    if (!map) return;
-    const t1 = setTimeout(() => map.invalidateSize(), 80);
-    const t2 = setTimeout(() => map.invalidateSize(), 420);
-    return () => {
-      clearTimeout(t1);
-      clearTimeout(t2);
-    };
-  }, [fullscreen]);
-
-  // Пока карту тащат — замирают «постоянные» анимации (пульс пинов, бегущий
-  // пунктир, пульс геоточки): их repaint каждый кадр складывается с
-  // перерисовкой тайлов и даёт лаги перетаскивания на телефонах.
-  // ref появляется асинхронно (и карта может монтироваться после спиннера
-  // загрузки) — ждём его с повторными попытками.
-  useEffect(() => {
-    let tries = 0;
-    const iv = setInterval(() => {
-      const map = mapRef.current;
-      if (map) {
-        clearInterval(iv);
-        const el = map.getContainer();
-        map.on("movestart", () => el.classList.add("map-anim-paused"));
-        map.on("moveend", () => el.classList.remove("map-anim-paused"));
-      } else if (++tries > 40) {
-        clearInterval(iv);
-      }
-    }, 250);
-    return () => clearInterval(iv);
-  }, []);
-
   useEffect(() => {
     if (!fullscreen) return;
     document.body.classList.add("map-fs");
@@ -394,8 +287,7 @@ export default function TripMap() {
 
   const openPlace = (place: Place) => {
     setSelectedPlace(place);
-    const map = mapRef.current;
-    if (map) map.flyTo([place.lat, place.lng], Math.max(map.getZoom(), 15), { duration: 0.7 });
+    canvasRef.current?.focusOn({ lat: place.lat, lng: place.lng }, { zoomBoost: 15, duration: 0.7 });
   };
 
   // Вид сам подгонится под город в эффекте на mapCityFilter
@@ -403,11 +295,6 @@ export default function TripMap() {
 
   // «Показать весь маршрут» — вся поездка целиком, независимо от фильтров
   const fitAll = () => {
-    const map = mapRef.current;
-    if (!map) return;
-    // сразу после выхода из полного экрана размер мог измениться,
-    // а fitBounds считает его сам — пересчитываем принудительно
-    map.invalidateSize();
     const pts = [
       ...allPlaces.map((x) => ({ lat: x.place.lat, lng: x.place.lng })),
       ...(filters.showPhotos && geoPhotos
@@ -418,23 +305,11 @@ export default function TripMap() {
       toast.info("На карте пока нет меток");
       return;
     }
-    // мгновенно: анимированный полёт здесь избыточен и капризен
-    if (pts.length === 1) {
-      map.setView([pts[0].lat, pts[0].lng], Math.max(map.getZoom(), 12), { animate: false });
-      return;
-    }
-    map.fitBounds(L.latLngBounds(pts.map((p) => [p.lat, p.lng] as [number, number])), {
-      padding: [48, 48],
-      animate: false,
-    });
+    canvasRef.current?.fitPoints(pts);
   };
 
   // Кнопки +/− : мгновенный шаг зума
-  const zoomBy = (d: number) => {
-    const map = mapRef.current;
-    if (!map) return;
-    map.setZoom(map.getZoom() + d, { animate: false });
-  };
+  const zoomBy = (d: number) => canvasRef.current?.zoomBy(d);
 
   const locate = () => {
     if (locating) return;
@@ -448,7 +323,7 @@ export default function TripMap() {
         const p = { lat: pos.coords.latitude, lng: pos.coords.longitude };
         setMyLoc(p);
         setLocating(false);
-        mapRef.current?.flyTo([p.lat, p.lng], Math.max(mapRef.current?.getZoom() ?? 13, 15), { duration: 0.9 });
+        canvasRef.current?.focusOn(p, { zoomBoost: 15, duration: 0.9 });
       },
       () => {
         setLocating(false);
@@ -463,9 +338,8 @@ export default function TripMap() {
   const startAddMode = () => setAddMode(true);
 
   const confirmAdd = () => {
-    const map = mapRef.current;
-    if (!map) return;
-    const c = map.getCenter();
+    const c = canvasRef.current?.getCenter();
+    if (!c) return;
     const dayForPlace = mapCityFilter
       ? days?.find((d) => d.cityKey === mapCityFilter)?.id
       : undefined;
@@ -495,21 +369,13 @@ export default function TripMap() {
               )
         )}
       >
-        <MapContainer
-          ref={mapRef}
-          center={[initialCenter.lat, initialCenter.lng]}
+        <MapCanvas
+          ref={canvasRef}
+          layer={tileLayer}
+          center={initialCenter}
           zoom={mapCityFilter ? 12 : 8}
-          scrollWheelZoom={isDesktop}
-          zoomControl={false}
-          className="w-full h-full bg-muted"
+          fullscreen={fullscreen}
         >
-          <TileLayer
-            key={tileLayer}
-            attribution={TILE_LAYERS[tileLayer].attr}
-            url={TILE_LAYERS[tileLayer].url}
-            keepBuffer={4}
-          />
-
           {/* Нити маршрута по дням */}
           {!filters.onlyPhotos && (
             <RouteThreads places={filtered} currentDayNumber={route?.meta.currentDayNumber} />
@@ -550,7 +416,7 @@ export default function TripMap() {
               </Popup>
             </Marker>
           ))}
-        </MapContainer>
+        </MapCanvas>
 
         {/* Верхняя плавающая строка: города + фильтры */}
         {!addMode && (
@@ -816,20 +682,6 @@ export default function TripMap() {
       )}
     </div>
   );
-}
-
-// ---- Вспомогательные ----
-
-function flyToPts(map: L.Map, pts: { lat: number; lng: number }[], minZoom: number) {
-  if (pts.length === 0) return;
-  if (pts.length === 1) {
-    map.flyTo([pts[0].lat, pts[0].lng], Math.max(map.getZoom(), minZoom), { duration: 0.8 });
-    return;
-  }
-  map.flyToBounds(L.latLngBounds(pts.map((p) => [p.lat, p.lng] as [number, number])), {
-    duration: 0.8,
-    padding: [48, 48],
-  });
 }
 
 /** Плавающая круглая кнопка на карте */
