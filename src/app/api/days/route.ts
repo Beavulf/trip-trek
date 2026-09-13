@@ -136,11 +136,11 @@ export async function PATCH(req: NextRequest) {
   if (response) return response;
 
   const data: Record<string, unknown> = {};
-  if (typeof city === "string") data.city = city;
-  if (typeof cityKey === "string") data.cityKey = cityKey;
-  if (typeof title === "string") data.title = title;
-  if (typeof summary === "string") data.summary = summary;
-  if (typeof accentColor === "string") data.accentColor = accentColor;
+  if (typeof city === "string") data.city = city.slice(0, 100);
+  if (typeof cityKey === "string") data.cityKey = cityKey.slice(0, 100);
+  if (typeof title === "string") data.title = title.slice(0, 200);
+  if (typeof summary === "string") data.summary = summary.slice(0, 2000);
+  if (typeof accentColor === "string") data.accentColor = accentColor.slice(0, 32);
 
   if (Object.keys(data).length === 0) {
     return NextResponse.json({ error: "no fields to update" }, { status: 400 });

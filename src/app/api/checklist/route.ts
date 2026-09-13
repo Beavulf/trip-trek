@@ -13,6 +13,7 @@ export async function GET(req: NextRequest) {
   if (response) return response;
 
   const items = await db.checklistItem.findMany({
+    take: 1000,
     where: { tripId },
     orderBy: [{ category: "asc" }, { order: "asc" }],
   });
@@ -27,7 +28,7 @@ export async function POST(req: NextRequest) {
   if (response) return response;
   if (!text || !tripId) return NextResponse.json({ error: "text, tripId required" }, { status: 400 });
   const order = await db.checklistItem.count({ where: { tripId, category: category || "preparation" } });
-  const item = await db.checklistItem.create({ data: { text, category: category || "preparation", tripId, order } });
+  const item = await db.checklistItem.create({ data: { text: text.slice(0, 500), category: (category || "preparation").slice(0, 50), tripId, order } });
   publish(tripId, "checklist:updated", {});
   return NextResponse.json(item);
 }
@@ -44,8 +45,8 @@ export async function PATCH(req: NextRequest) {
 
   const data: Record<string, unknown> = {};
   if (typeof done === "boolean") data.done = done;
-  if (typeof text === "string") data.text = text;
-  if (typeof category === "string") data.category = category;
+  if (typeof text === "string") data.text = text.slice(0, 500);
+  if (typeof category === "string") data.category = category.slice(0, 50);
   const item = await db.checklistItem.update({ where: { id }, data });
   publish(item.tripId, "checklist:updated", { itemId: id, done });
   return NextResponse.json(item);

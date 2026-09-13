@@ -15,6 +15,7 @@ export async function GET(req: NextRequest) {
 
   // Include day (для UI «День N» в ExpenseRow) + avatarUrl плательщика (аватар в списках)
   const expenses = await db.expense.findMany({
+    take: 1000,
     where: { tripId },
     include: {
       paidBy: { select: { id: true, name: true, emoji: true, color: true, avatarUrl: true } },
@@ -87,7 +88,7 @@ export async function POST(req: NextRequest) {
   const expense = await db.expense.create({
     data: {
       amount: parsedAmount,
-      category,
+      category: String(category).slice(0, 50),
       description: description.trim().slice(0, 500),
       paidById,
       dayId: dayId || null,

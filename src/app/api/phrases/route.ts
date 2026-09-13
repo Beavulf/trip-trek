@@ -24,6 +24,7 @@ export async function GET(req: NextRequest) {
   if (favorite) where.favorite = true;
 
   const phrases = await db.phrase.findMany({
+    take: 1000,
     where,
     orderBy: [{ category: "asc" }, { order: "asc" }],
   });

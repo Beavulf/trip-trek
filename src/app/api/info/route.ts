@@ -17,6 +17,7 @@ export async function GET(req: NextRequest) {
   if (type) where.type = type;
 
   const items = await db.infoItem.findMany({
+    take: 1000,
     where,
     orderBy: [{ type: "asc" }, { order: "asc" }],
   });
@@ -32,7 +33,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "type, title, content, tripId required" }, { status: 400 });
   }
   const order = await db.infoItem.count({ where: { tripId, type } });
-  const item = await db.infoItem.create({ data: { type, title, content, icon: icon || null, tripId, order } });
+  const item = await db.infoItem.create({ data: { type: type.slice(0, 50), title: title.slice(0, 200), content: content.slice(0, 10000), icon: typeof icon === "string" ? icon.slice(0, 8) : null, tripId, order } });
   publish(tripId, "info:updated", {});
   return NextResponse.json(item);
 }
@@ -48,10 +49,10 @@ export async function PATCH(req: NextRequest) {
   if (response) return response;
 
   const data: Record<string, unknown> = {};
-  if (typeof title === "string") data.title = title;
-  if (typeof content === "string") data.content = content;
-  if (icon !== undefined) data.icon = icon;
-  if (typeof type === "string") data.type = type;
+  if (typeof title === "string") data.title = title.slice(0, 200);
+  if (typeof content === "string") data.content = content.slice(0, 10000);
+  if (icon !== undefined) data.icon = typeof icon === "string" ? icon.slice(0, 8) : icon;
+  if (typeof type === "string") data.type = type.slice(0, 50);
   const item = await db.infoItem.update({ where: { id }, data });
   publish(item.tripId, "info:updated", {});
   return NextResponse.json(item);

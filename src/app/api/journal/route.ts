@@ -22,6 +22,7 @@ export async function GET(req: NextRequest) {
   if (dayId) where.dayId = dayId;
 
   const entries = await db.journalEntry.findMany({
+    take: 1000,
     where,
     orderBy: { createdAt: "desc" },
     // select по user: include отдал бы email и хеш пароля каждого участника

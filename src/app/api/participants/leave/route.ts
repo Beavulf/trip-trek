@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { requireUser } from "@/lib/api-auth";
 import { notifyUser } from "@/lib/notify";
-import { publish } from "@/lib/ws-bus";
+import { publish, evictUserFromTrip } from "@/lib/ws-bus";
 import { userRateLimit } from "@/lib/rate-limit";
 
 // POST /api/participants/leave {tripId} — выйти из поездки по собственной воле.

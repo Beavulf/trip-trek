@@ -23,7 +23,7 @@ export async function POST(req: NextRequest) {
   const nextOrder = order ?? (maxOrder._max.order ?? -1) + 1;
 
   const place = await db.place.create({
-    data: { name, description: description || null, category: category || "sight", lat, lng, dayId, tripId, timeOfDay: timeOfDay || null, budget: budget ?? null, address: address || null, order: nextOrder, status: "planned" },
+      data: { name: String(name).slice(0, 200), description: description ? String(description).slice(0, 2000) : null, category: (category || "sight").slice(0, 50), lat, lng, dayId, tripId, timeOfDay: timeOfDay ? String(timeOfDay).slice(0, 20) : null, budget: budget ?? null, address: address ? String(address).slice(0, 300) : null, order: nextOrder, status: "planned" },
   });
   publish(tripId, "place:created", { placeName: name, userName: userName || "Кто-то" });
   return NextResponse.json(place);

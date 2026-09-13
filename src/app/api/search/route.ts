@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { requireTripMember } from "@/lib/api-auth";
 import { currencySymbol } from "@/lib/currencies";
+import { userRateLimit } from "@/lib/rate-limit";
 
 // GET /api/search?q=…&tripId=… — поиск только внутри поездки участника.
 // Фильтрация в JS: SQLite LIKE регистронезависим только для ASCII,
@@ -16,8 +17,13 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "tripId required" }, { status: 400 });
   }
 
-  const { response } = await requireTripMember(req, tripId);
+  const { user, response } = await requireTripMember(req, tripId);
   if (response) return response;
+
+  // Поиск грузит все таблицы поездки и фильтрует в JS — без лимита один
+  // участник мог крутить это безостановочно (аудит 2026-09-12)
+  const limited = userRateLimit(req, user!.id, "search", 30, 60_000);
+  if (limited) return limited;
 
   const trip = await db.trip.findUnique({ where: { id: tripId }, select: { currency: true } });
   const sym = currencySymbol(trip?.currency);

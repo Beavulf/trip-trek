@@ -39,6 +39,7 @@ export async function GET(req: NextRequest) {
   if (response) return response;
 
   const messages = await db.boardMessage.findMany({
+    take: 1000,
     where: { tripId },
     orderBy: { createdAt: "asc" },
     include: MSG_INCLUDE,

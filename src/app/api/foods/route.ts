@@ -22,6 +22,7 @@ export async function GET(req: NextRequest) {
   if (city && city !== "all") where.city = city;
 
   const foods = await db.foodItem.findMany({
+    take: 1000,
     where,
     orderBy: [{ city: "asc" }, { order: "asc" }],
   });
@@ -61,11 +62,11 @@ export async function POST(req: NextRequest) {
     data: {
       tripId,
       name: name.trim(),
-      nameCn: nameCn || null,
-      description: description || "",
-      city: city.trim(),
-      place: place || null,
-      price: price || null,
+      nameCn: nameCn ? String(nameCn).slice(0, 100) : null,
+      description: (description || "").slice(0, 2000),
+      city: city.trim().slice(0, 100),
+      place: place ? String(place).slice(0, 200) : null,
+      price: price ? String(price).slice(0, 50) : null,
       emoji: emoji || "🍽️",
       order: (maxOrder?.order ?? 0) + 1,
     },

@@ -43,13 +43,13 @@ export async function POST(req: NextRequest) {
 
   const trip = await db.trip.create({
     data: {
-      title,
-      destination: destination || "Unknown",
+      title: String(title).slice(0, 100),
+      destination: (destination || "Unknown").slice(0, 100),
       startDate: new Date(startDate || Date.now()),
       endDate: endDate ? new Date(endDate) : null,
       totalDays: totalDays || 12,
       totalBudget: totalBudget || 1100,
-      currency: currency || "USD",
+      currency: (currency || "USD").slice(0, 8),
       members: {
         create: {
           userId: user!.id,

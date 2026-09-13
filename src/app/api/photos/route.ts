@@ -24,6 +24,7 @@ export async function GET(req: NextRequest) {
   if (userId) where.userId = userId;
 
   const photos = await db.photo.findMany({
+    take: 1000,
     where,
     orderBy: { takenAt: "desc" },
     include: {
@@ -68,10 +69,10 @@ export async function POST(req: NextRequest) {
 
   const placeId = (formData.get("placeId") as string) || null;
   const userId = user!.id;
-  const caption = (formData.get("caption") as string) || null;
+  const caption = ((formData.get("caption") as string) || "").slice(0, 300) || null;
   const lat = formData.get("lat") ? parseFloat(formData.get("lat") as string) : null;
   const lng = formData.get("lng") ? parseFloat(formData.get("lng") as string) : null;
-  const address = (formData.get("address") as string) || null;
+  const address = ((formData.get("address") as string) || "").slice(0, 300) || null;
 
   // Единая политика хранилища: magic bytes, лимит 20MB, sharp-обработка
   // (EXIF/GPS выпиливаются), никакого raw-fallback
