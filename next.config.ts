@@ -8,19 +8,30 @@ const nextConfig: NextConfig = {
   // recharts (+d3) дублировался в чанках `/` и `/admin` — по копии ~390KB raw
   // (аудит перфоманса 2026-09-13). Общая cache-group: оба маршрута делят один чанк.
   // Работает при webpack-сборке (Dockerfile собирает через `next build --webpack`).
+  // Без мутаций входного конфига: bun server.ts (dev) получает его замороженным —
+  // присваивание падает с «Attempted to assign to readonly property».
   webpack(config) {
-    config.optimization.splitChunks = config.optimization.splitChunks ?? {};
-    config.optimization.splitChunks.cacheGroups = {
-      ...(config.optimization.splitChunks.cacheGroups ?? {}),
-      recharts: {
-        name: "recharts",
-        test: /[\\/]node_modules[\\/](recharts|d3-[a-z-]+|victory-vendor|internmap|decimal.js-light|eventemitter3)[\\/]/,
-        priority: 20,
-        reuseExistingChunk: true,
-        enforce: true,
+    const base =
+      config.optimization?.splitChunks && typeof config.optimization.splitChunks === "object"
+        ? (config.optimization.splitChunks as Record<string, unknown>)
+        : {};
+    const splitChunks = {
+      ...base,
+      cacheGroups: {
+        ...((base.cacheGroups as Record<string, unknown>) ?? {}),
+        recharts: {
+          name: "recharts",
+          test: /[\\/]node_modules[\\/](recharts|d3-[a-z-]+|victory-vendor|internmap|decimal.js-light|eventemitter3)[\\/]/,
+          priority: 20,
+          reuseExistingChunk: true,
+          enforce: true,
+        },
       },
     };
-    return config;
+    return {
+      ...config,
+      optimization: { ...config.optimization, splitChunks },
+    };
   },
   // P1 hardening: базовые защитные заголовки для всех ответов
   async headers() {
