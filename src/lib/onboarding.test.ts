@@ -1,16 +1,16 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
-  TAB_HINTS,
+  TAB_TOURS,
   TOUR_STEPS,
-  clearSeenHints,
+  clearSeenTabTours,
   readLocalTourDone,
-  readSeenHints,
+  readSeenTabTours,
   writeLocalTourDone,
-  writeSeenHint,
+  writeSeenTabTour,
 } from "./onboarding";
 
 // Валидные ключи вкладок — дублируем список здесь сознательно: тест ловит дрейф,
-// если в trip-store появится/переименуется вкладка, а подсказка за ней не уследила
+// если в trip-store появится/переименуется вкладка, а обучалка за ней не уследила
 const TRIP_TAB_KEYS = [
   "dashboard",
   "timeline",
@@ -49,7 +49,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-describe("TOUR_STEPS", () => {
+describe("TOUR_STEPS (welcome-тур)", () => {
   it("компактен: ровно 5 шагов по одной мысли", () => {
     expect(TOUR_STEPS).toHaveLength(5);
   });
@@ -72,21 +72,42 @@ describe("TOUR_STEPS", () => {
   });
 });
 
-describe("TAB_HINTS", () => {
-  it("id и вкладки уникальны, вкладки существуют, тексты непустые", () => {
-    const ids = TAB_HINTS.map((h) => h.id);
-    const tabs = TAB_HINTS.map((h) => h.tab);
-    expect(new Set(ids).size).toBe(ids.length);
+describe("TAB_TOURS (обучалки вкладок)", () => {
+  it("вкладки существуют, не дублируются и их немного (самое важное)", () => {
+    const tabs = TAB_TOURS.map((t) => t.tab);
     expect(new Set(tabs).size).toBe(tabs.length);
-    for (const h of TAB_HINTS) {
-      expect(TRIP_TAB_KEYS).toContain(h.tab);
-      expect(h.title.trim()).not.toBe("");
-      expect(h.text.trim()).not.toBe("");
-    }
+    for (const t of TAB_TOURS) expect(TRIP_TAB_KEYS).toContain(t.tab);
+    expect(TAB_TOURS.length).toBeLessThanOrEqual(8);
   });
 
-  it("подсказки только на сложных вкладках — их немного", () => {
-    expect(TAB_HINTS.length).toBeLessThanOrEqual(5);
+  it("у каждой обучалки 2–4 шага, у шагов уникальные id, непустые тексты и известная иконка", () => {
+    const allIds: string[] = [];
+    for (const t of TAB_TOURS) {
+      expect(t.eyebrow.trim()).not.toBe("");
+      expect(t.steps.length).toBeGreaterThanOrEqual(2);
+      expect(t.steps.length).toBeLessThanOrEqual(4);
+      for (const s of t.steps) {
+        allIds.push(s.id);
+        expect(s.title.trim()).not.toBe("");
+        expect(s.text.trim()).not.toBe("");
+      }
+    }
+    expect(new Set(allIds).size).toBe(allIds.length);
+  });
+
+  it("ключевые фичи из ТЗ покрыты обучалками", () => {
+    const tabs = TAB_TOURS.map((t) => t.tab);
+    for (const tab of ["itinerary", "map", "budget", "rest", "phrases", "timeline", "dashboard"]) {
+      expect(tabs).toContain(tab);
+    }
+    // дни от даты старта, цветные линии, долги, «Рядом», языковой пакет, владелец
+    const allText = TAB_TOURS.flatMap((t) => t.steps.map((s) => s.text)).join(" ");
+    expect(allText).toContain("дата старта");
+    expect(allText).toContain("цвет дня");
+    expect(allText).toContain("Расчёт между друзьями");
+    expect(allText).toContain("Рядом");
+    expect(allText).toContain("настройках речи");
+    expect(allText).toContain("передать владение");
   });
 });
 
@@ -111,32 +132,32 @@ describe("локальная тень тура", () => {
   });
 });
 
-describe("просмотренные подсказки", () => {
-  it("без window — null (не гидрировано), без записи — пустой список", () => {
+describe("показанные обучалки вкладок", () => {
+  it("без window — null (не читано), без записи — пустой список", () => {
     vi.unstubAllGlobals();
-    expect(readSeenHints("u1")).toBeNull();
+    expect(readSeenTabTours("u1")).toBeNull();
     stubLocalStorage();
-    expect(readSeenHints("u1")).toEqual([]);
+    expect(readSeenTabTours("u1")).toEqual([]);
   });
 
   it("битый JSON и не-строки не роняют чтение", () => {
-    window.localStorage.setItem("triptrek-hints-seen:u1", "{oops");
-    expect(readSeenHints("u1")).toEqual([]);
-    window.localStorage.setItem("triptrek-hints-seen:u1", JSON.stringify(["a", 42, null, "b"]));
-    expect(readSeenHints("u1")).toEqual(["a", "b"]);
+    window.localStorage.setItem("triptrek-tabtour-seen:u1", "{oops");
+    expect(readSeenTabTours("u1")).toEqual([]);
+    window.localStorage.setItem("triptrek-tabtour-seen:u1", JSON.stringify(["map", 42, null, "budget"]));
+    expect(readSeenTabTours("u1")).toEqual(["map", "budget"]);
   });
 
-  it("writeSeenHint добавляет с дедупликацией и персистит", () => {
-    expect(writeSeenHint("u1", "map")).toEqual(["map"]);
-    expect(writeSeenHint("u1", "map")).toEqual(["map"]);
-    expect(writeSeenHint("u1", "budget")).toEqual(["map", "budget"]);
-    expect(readSeenHints("u1")).toEqual(["map", "budget"]);
-    expect(writeSeenHint("u2", "map")).toEqual(["map"]); // ключи по пользователям
+  it("writeSeenTabTour добавляет с дедупликацией и персистит", () => {
+    expect(writeSeenTabTour("u1", "map")).toEqual(["map"]);
+    expect(writeSeenTabTour("u1", "map")).toEqual(["map"]);
+    expect(writeSeenTabTour("u1", "budget")).toEqual(["map", "budget"]);
+    expect(readSeenTabTours("u1")).toEqual(["map", "budget"]);
+    expect(writeSeenTabTour("u2", "map")).toEqual(["map"]); // ключи по пользователям
   });
 
-  it("clearSeenHints стирает список («пройти заново»)", () => {
-    writeSeenHint("u1", "map");
-    clearSeenHints("u1");
-    expect(readSeenHints("u1")).toEqual([]);
+  it("clearSeenTabTours стирает список («пройти заново»)", () => {
+    writeSeenTabTour("u1", "map");
+    clearSeenTabTours("u1");
+    expect(readSeenTabTours("u1")).toEqual([]);
   });
 });

@@ -3,9 +3,8 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { useCallback, useState } from "react";
 import {
-  clearSeenHints,
+  clearSeenTabTours,
   readLocalTourDone,
-  readSeenHints,
   writeLocalTourDone,
 } from "@/lib/onboarding";
 import { useAuth } from "./use-auth";
@@ -28,19 +27,18 @@ export function useOnboarding() {
   const completed = session?.user ? session.user.onboardingCompletedAt != null : false;
 
   const [localDone] = useState(() => readLocalTourDone(userId));
-  const [seenHints, setSeenHints] = useState<string[] | null>(() => readSeenHints(userId));
 
   /**
    * Отметить обучение пройденным (true) или сбросить (false, «Пройти заново»).
    * Локальную тень пишем оптимистично: тур не должен вернуться из-за обрыва сети.
+   * Сброс также очищает обучалки вкладок — «заново» значит заново всё.
    */
   const setOnboardingCompleted = useCallback(
     async (value: boolean) => {
       if (userId) {
         writeLocalTourDone(userId, value);
-        if (!value) clearSeenHints(userId);
+        if (!value) clearSeenTabTours(userId);
       }
-      if (!value) setSeenHints([]);
       try {
         const r = await fetch("/api/user", {
           method: "PATCH",
@@ -59,5 +57,5 @@ export function useOnboarding() {
     [userId, qc]
   );
 
-  return { userId, status, completed, localDone, seenHints, setOnboardingCompleted };
+  return { userId, status, completed, localDone, setOnboardingCompleted };
 }

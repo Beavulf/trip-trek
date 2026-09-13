@@ -5,19 +5,35 @@
 
 import { motion, useReducedMotion } from "framer-motion";
 import {
+  ArrowLeftRight,
+  BookOpen,
+  CalendarPlus,
   Check,
+  Coffee,
+  Crosshair,
+  Crown,
   Images,
+  Languages,
   LayoutDashboard,
   ListChecks,
   Map as MapIcon,
   MapPin,
+  Maximize2,
   MessagesSquare,
   Plus,
+  Receipt,
+  Route,
+  Rss,
+  SlidersHorizontal,
+  Sparkles,
+  Star,
   UserPlus,
+  Users,
+  Volume2,
   Wallet,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import type { TourStep } from "@/lib/onboarding";
+import type { TourStep, TabTourIcon } from "@/lib/onboarding";
 
 function WelcomeArt() {
   const reduced = useReducedMotion();
@@ -71,10 +87,11 @@ function TabsArt() {
 
 function QuickAddArt() {
   const reduced = useReducedMotion();
+  // В quick-add места нет — они добавляются на Маршруте и Карте
   const chips = [
-    { icon: MapPin, label: "Место" },
     { icon: Wallet, label: "Трата" },
     { icon: Images, label: "Фото" },
+    { icon: BookOpen, label: "Заметка" },
   ];
   return (
     <div className="flex items-center gap-5">
@@ -183,4 +200,68 @@ export function TourArt({ art }: { art: TourStep["art"] }) {
     case "done":
       return <DoneArt />;
   }
+}
+
+// === Иллюстрации обучалок вкладок ===
+
+const TAB_ICONS: Record<TabTourIcon, typeof LayoutDashboard> = {
+  layout: LayoutDashboard,
+  rss: Rss,
+  calendar: CalendarPlus,
+  list: ListChecks,
+  "map-pin": MapPin,
+  map: MapIcon,
+  route: Route,
+  sliders: SlidersHorizontal,
+  crosshair: Crosshair,
+  wallet: Wallet,
+  receipt: Receipt,
+  users: Users,
+  arrows: ArrowLeftRight,
+  coffee: Coffee,
+  star: Star,
+  languages: Languages,
+  sparkles: Sparkles,
+  maximize: Maximize2,
+  volume: Volume2,
+  "user-plus": UserPlus,
+  crown: Crown,
+  filter: SlidersHorizontal,
+};
+
+/**
+ * Иллюстрация шага обучалки вкладки: крупная градиентная плитка с иконкой фичи
+ * + пилюли с реальными подписями UI («Добавить день», «Перевели»…). Кодом, в
+ * токенах темы — тот же принцип, что и у welcome-арта.
+ */
+export function TabStepArt({ icon, chips }: { icon: TabTourIcon; chips?: string[] }) {
+  const reduced = useReducedMotion();
+  const Icon = TAB_ICONS[icon] ?? LayoutDashboard;
+  return (
+    <div className="relative flex flex-col items-center justify-center gap-3 px-6">
+      <motion.div
+        initial={reduced ? false : { scale: 0.8, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1 }}
+        transition={{ type: "spring", stiffness: 300, damping: 20 }}
+        className="grid size-16 place-items-center rounded-3xl bg-gradient-to-br from-orange-500 via-rose-500 to-violet-500 text-white shadow-xl shadow-orange-500/25"
+      >
+        <Icon className="size-8" strokeWidth={2} />
+      </motion.div>
+      {chips && chips.length > 0 && (
+        <div className="flex max-w-full flex-wrap items-center justify-center gap-1.5">
+          {chips.slice(0, 3).map((label, i) => (
+            <motion.span
+              key={label}
+              initial={reduced ? false : { opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.2 + i * 0.1, duration: 0.25, ease: "easeOut" }}
+              className="max-w-40 truncate rounded-full border border-border bg-card/95 px-2.5 py-1 text-[11px] font-medium shadow-sm"
+            >
+              {label}
+            </motion.span>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 }
