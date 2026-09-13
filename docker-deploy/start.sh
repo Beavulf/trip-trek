@@ -9,9 +9,18 @@ echo ""
 if [ ! -f .env ]; then
   echo "Creating .env from .env.example…"
   cp .env.example .env
-  SECRET=$(openssl rand -base64 32 2>/dev/null || echo "change-this-secret-$(date +%s)")
+  # Секрета-фолбэка больше нет: предсказуемый change-this-secret-<ts> проходил
+  # прод-гард entrypoint и становился ключом всех сессий (аудит 2026-09-12)
+  if ! command -v openssl >/dev/null 2>&1; then
+    echo "FATAL: openssl required to generate NEXTAUTH_SECRET (openssl rand -base64 32)"
+    exit 1
+  fi
+  SECRET=$(openssl rand -base64 32)
   if command -v sed >/dev/null 2>&1; then
     sed -i.bak "s|NEXTAUTH_SECRET=.*|NEXTAUTH_SECRET=$SECRET|g" .env && rm -f .env.bak
+  else
+    echo "FATAL: sed required to write NEXTAUTH_SECRET into .env"
+    exit 1
   fi
   echo "Created .env (NEXTAUTH_URL=http://localhost:3000)"
   echo ""

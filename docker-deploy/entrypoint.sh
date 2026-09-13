@@ -1,14 +1,19 @@
 #!/bin/sh
 set -e
 
-# P0 #1: fail fast in production if NEXTAUTH_SECRET is missing or insecure
+# P0 #1: fail fast in production if NEXTAUTH_SECRET is missing or insecure.
+# Сравнение по префиксам change-this-*/change-me-* закрывает и предсказуемый
+# фолбэк start.sh (change-this-secret-<unix ts>), и placeholder из .env.example
+# (аудит 2026-09-12)
 if [ "$NODE_ENV" = "production" ]; then
-  if [ -z "$NEXTAUTH_SECRET" ] || [ "$NEXTAUTH_SECRET" = "change-this-in-production" ] || [ "$NEXTAUTH_SECRET" = "fallback-dev-secret" ]; then
-    echo "[triptrek] FATAL: NEXTAUTH_SECRET is not set or is an insecure default."
-    echo "[triptrek] Generate a secure key with: openssl rand -hex 32"
-    echo "[triptrek] and set it as NEXTAUTH_SECRET in your environment."
-    exit 1
-  fi
+  case "$NEXTAUTH_SECRET" in
+    ""|"fallback-dev-secret"|change-this-*|change-me-*)
+      echo "[triptrek] FATAL: NEXTAUTH_SECRET is not set or is an insecure default."
+      echo "[triptrek] Generate a secure key with: openssl rand -hex 32"
+      echo "[triptrek] and set it as NEXTAUTH_SECRET in your environment."
+      exit 1
+      ;;
+  esac
 fi
 
 echo "[triptrek] prisma generate…"

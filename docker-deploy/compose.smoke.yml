@@ -1,9 +1,11 @@
 # Локальный e2e-смоук стека без Caddy/TLS (домена на машине нет):
 #   cd docker-deploy && docker compose -f docker-compose.yml -f compose.smoke.yml up -d --build
-# Caddy не стартует (профиль tls не активирован), app публикует 3000 напрямую.
+# Caddy не стартует (профиль tls не активирован), app публикует 3000 напрямую —
+# ТОЛЬКО на loopback: без Caddy лимитеры доверяют первому X-Forwarded-For, и
+# внешне доступный :3000 делал лимиты обходными (аудит 2026-09-12).
 services:
   caddy:
     profiles: ["tls"]
   app:
     ports:
-      - "3000:3000"
+      - "127.0.0.1:3000:3000"
