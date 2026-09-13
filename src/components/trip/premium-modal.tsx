@@ -41,7 +41,12 @@ export function PremiumModal({ open, onOpenChange }: { open: boolean; onOpenChan
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ plan }),
       });
-      if (!r.ok) throw new Error("upgrade failed");
+      if (!r.ok) {
+        // 403 из гейта selfUpgradeEnabled (аудит 2026-09-12): показываем
+        // серверную причину, а не общий «не удалось»
+        const err = await r.json().catch(() => ({}));
+        throw new Error(err.error || "upgrade failed");
+      }
       const data = await r.json();
       toast.success(data.message || "Premium активирован! 🎉", {
         description: "Все лимиты сняты",
@@ -49,8 +54,8 @@ export function PremiumModal({ open, onOpenChange }: { open: boolean; onOpenChan
       qc.invalidateQueries({ queryKey: ["limits"] });
       qc.invalidateQueries({ queryKey: ["user-profile"] });
       onOpenChange(false);
-    } catch {
-      toast.error("Не удалось активировать Premium");
+    } catch (e) {
+      toast.error((e as Error).message || "Не удалось активировать Premium");
     } finally {
       setLoading(null);
     }

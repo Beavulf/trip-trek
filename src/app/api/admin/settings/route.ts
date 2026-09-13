@@ -14,7 +14,7 @@ export async function GET(req: NextRequest) {
   const [settings, appConfig] = await Promise.all([
     db.appSettings.findUnique({
       where: { id: "app" },
-      select: { aiApiKey: true, aiBaseUrl: true, aiModel: true },
+      select: { aiApiKey: true, aiBaseUrl: true, aiModel: true, selfUpgradeEnabled: true },
     }),
     getAppConfig(),
   ]);
@@ -23,6 +23,7 @@ export async function GET(req: NextRequest) {
     aiKeyTail: settings?.aiApiKey ? maskKey(settings.aiApiKey) : null,
     aiBaseUrl: settings?.aiBaseUrl ?? "",
     aiModel: settings?.aiModel ?? "",
+    selfUpgradeEnabled: settings?.selfUpgradeEnabled ?? false,
     appConfig,
   });
 }
@@ -35,10 +36,11 @@ export async function PUT(req: NextRequest) {
   if (response) return response;
 
   const body = await req.json().catch(() => ({}));
-  const { aiApiKey, aiBaseUrl, aiModel, appConfig } = body as {
+  const { aiApiKey, aiBaseUrl, aiModel, selfUpgradeEnabled, appConfig } = body as {
     aiApiKey?: string | null;
     aiBaseUrl?: string | null;
     aiModel?: string | null;
+    selfUpgradeEnabled?: boolean;
     appConfig?: {
       registrationEnabled?: boolean;
       freeTripLimit?: number;
@@ -50,6 +52,7 @@ export async function PUT(req: NextRequest) {
     aiApiKey?: string | null;
     aiBaseUrl?: string | null;
     aiModel?: string | null;
+    selfUpgradeEnabled?: boolean;
     registrationEnabled?: boolean;
     freeTripLimit?: number;
     freeMemberLimit?: number;
@@ -87,6 +90,13 @@ export async function PUT(req: NextRequest) {
   if (aiModel !== undefined) {
     data.aiModel = typeof aiModel === "string" && aiModel.trim() ? aiModel.trim() : null;
     aiTouched = true;
+  }
+  if (selfUpgradeEnabled !== undefined) {
+    if (typeof selfUpgradeEnabled !== "boolean") {
+      return NextResponse.json({ error: "selfUpgradeEnabled: boolean" }, { status: 400 });
+    }
+    data.selfUpgradeEnabled = selfUpgradeEnabled;
+    aiTouched = true; // попадает в тот же лог settings.ai — это тоже настройка ИИ-демо
   }
 
   let appTouched = false;

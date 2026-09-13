@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { TRIP_TEMPLATES } from "@/lib/trip-templates";
 import { requireUser } from "@/lib/api-auth";
+import { isPremiumUser } from "@/lib/premium";
+import { getPlanLimits } from "@/lib/app-config";
 
 // POST /api/trips/from-template — создать поездку из шаблона (owner = session)
 export async function POST(req: NextRequest) {
@@ -25,8 +27,9 @@ export async function POST(req: NextRequest) {
     const user = await db.user.findUnique({ where: { id: userId } });
     if (!user) return NextResponse.json({ error: "user not found" }, { status: 404 });
 
-    const isPremium = user.plan === "premium" && (!user.planExpiry || user.planExpiry > new Date());
-    const maxTrips = isPremium ? Infinity : 1;
+    // Лимит из AppSettings, а не хардкод «1»: админ управляет freeTripLimit
+    // (аудит 2026-09-12: здесь константа расходилась с настройкой)
+    const maxTrips = isPremiumUser(user) ? Infinity : (await getPlanLimits()).maxTrips;
 
     // Create trip with all template data
     // дата старта от клиента (YYYY-MM-DD), иначе — сегодня

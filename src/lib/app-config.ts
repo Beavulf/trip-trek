@@ -1,4 +1,5 @@
 import { db } from "@/lib/db";
+import { isPremiumUser } from "@/lib/premium";
 
 // Конфиг приложения, которым управляет админ из /admin → Настройки.
 // Хранится в singleton-строке AppSettings(id="app"); до первой записи
@@ -39,4 +40,25 @@ export async function getAppConfig(): Promise<AppConfig> {
 export async function getPlanLimits(): Promise<PlanLimits> {
   const cfg = await getAppConfig();
   return { maxTrips: cfg.freeTripLimit, maxMembers: cfg.freeMemberLimit };
+}
+
+/**
+ * Единый гейт создания поездки по лимиту free-плана.
+ * Аудит 2026-09-12: проверка была только в /api/limits и from-template, а
+ * POST /api/trips и /api/trip/import создавали поездки без лимита —
+ * теперь все пути создания зовут этот хелпер.
+ */
+export async function tripCreateGate(
+  userId: string
+): Promise<{ ok: true } | { ok: false; current: number; maxTrips: number }> {
+  const ownerUser = await db.user.findUnique({
+    where: { id: userId },
+    select: { plan: true, planExpiry: true },
+  });
+  if (!ownerUser || !isPremiumUser(ownerUser)) {
+    const count = await db.tripMember.count({ where: { userId, role: "owner" } });
+    const { maxTrips } = await getPlanLimits();
+    if (count >= maxTrips) return { ok: false, current: count, maxTrips };
+  }
+  return { ok: true };
 }

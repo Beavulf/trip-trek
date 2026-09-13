@@ -69,6 +69,9 @@ model AppSettings {
   registrationEnabled Boolean @default(true) // закрыть регистрацию новых аккаунтов
   freeTripLimit       Int     @default(1) // поездок у free-плана
   freeMemberLimit     Int     @default(5) // участников в поездке free-владельца
+  // Self-upgrade премиума без оплаты (демо-режим). Дефолт false: аудит 2026-09-12 —
+  // самовыдача снимала лимиты тарифа. Включается из админки, когда появится оплата.
+  selfUpgradeEnabled  Boolean @default(false)
 }
 
 // === Журнал действий админа: кто и что менял из панели ===

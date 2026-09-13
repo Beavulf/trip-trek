@@ -29,6 +29,9 @@ export async function POST(req: NextRequest) {
         : "Ключ не задан — ни свой, ни общий.",
     });
   }
+  if (!cfg.key) {
+    return NextResponse.json({ ok: false, error: "Ключ не задан" }, { status: 400 });
+  }
 
   const base = openaiChatUrl(cfg.baseUrl);
   const model = cfg.model ?? process.env.OPENAI_MODEL ?? "gpt-4o-mini";

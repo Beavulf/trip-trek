@@ -2,11 +2,26 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { requireUser } from "@/lib/api-auth";
 
-// POST /api/user/upgrade — активировать Premium себе
+// POST /api/user/upgrade — активировать Premium себе.
+// Гейт: self-upgrade включается флагом selfUpgradeEnabled в AppSettings
+// (админка). По умолчанию ВЫКЛЮЧЕН — оплаты нет, а самовыдача премиума
+// снимала лимиты free-тарифа (аудит 2026-09-12). Когда появится платёжный
+// провайдер — вызов его вебхука будет рядом с этим флагом.
 export async function POST(req: NextRequest) {
   const { user: authUser, response } = await requireUser(req);
   if (response) return response;
   const userId = authUser!.id;
+
+  const settings = await db.appSettings.findUnique({
+    where: { id: "app" },
+    select: { selfUpgradeEnabled: true },
+  });
+  if (!settings?.selfUpgradeEnabled) {
+    return NextResponse.json(
+      { error: "Активация Premium временно недоступна. Обратитесь к администратору." },
+      { status: 403 }
+    );
+  }
 
   const body = await req.json().catch(() => ({}));
   const { plan } = body;

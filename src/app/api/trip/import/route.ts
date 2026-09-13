@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { requireUser } from "@/lib/api-auth";
+import { tripCreateGate } from "@/lib/app-config";
 import { userRateLimit } from "@/lib/rate-limit";
 
 // POST /api/trip/import — импорт поездки из JSON-бэкапа (формат backup v2.0)
@@ -171,6 +172,16 @@ export async function POST(req: NextRequest) {
     select: { name: true, emoji: true, color: true },
   });
   if (!user) return NextResponse.json({ error: "user not found" }, { status: 404 });
+
+  // Импорт создаёт НОВУЮ поездку — значит, подчиняется лимиту free-плана
+  // (аудит 2026-09-12: единственный путь создания без проверки)
+  const gate = await tripCreateGate(userId);
+  if (!gate.ok) {
+    return NextResponse.json(
+      { error: "Лимит поездок исчерпан", upgrade: true, current: gate.current, max: gate.maxTrips },
+      { status: 403 }
+    );
+  }
 
   let body: BackupV2;
   try {

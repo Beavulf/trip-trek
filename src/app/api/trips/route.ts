@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { requireUser } from "@/lib/api-auth";
+import { tripCreateGate } from "@/lib/app-config";
 
 // GET /api/trips — только поездки текущего пользователя (из сессии, не из query)
 export async function GET(req: NextRequest) {
@@ -39,6 +40,21 @@ export async function POST(req: NextRequest) {
 
   if (!title) {
     return NextResponse.json({ error: "title required" }, { status: 400 });
+  }
+
+  // Лимит free-плана — как в /api/limits. Аудит 2026-09-12: здесь создания
+  // шли без проверки, и лимит обходился этим путём
+  const gate = await tripCreateGate(user!.id);
+  if (!gate.ok) {
+    return NextResponse.json(
+      {
+        error: "Лимит поездок исчерпан",
+        upgrade: true,
+        current: gate.current,
+        max: gate.maxTrips,
+      },
+      { status: 403 }
+    );
   }
 
   const trip = await db.trip.create({
