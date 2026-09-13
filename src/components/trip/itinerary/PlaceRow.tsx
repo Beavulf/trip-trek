@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { useUpdatePlace } from "@/hooks/use-trip";
 import { useTripStore, type TripTab } from "@/lib/trip-store";
+import { focusOnMap } from "@/lib/map-bus";
 import { CATEGORY_META, type Place } from "@/lib/types";
 import { timeLabel } from "@/lib/time-of-day";
 import { googleDirectionsUrl } from "@/lib/place-links";
@@ -30,7 +31,7 @@ interface PlaceRowProps {
 
 export function PlaceRow({ place, accentColor, currency, onOpen }: PlaceRowProps) {
   const update = useUpdatePlace();
-  const { setActiveTab, setMapFocusTarget } = useTripStore();
+  const { setActiveTab } = useTripStore();
   const meta = CATEGORY_META[place.category];
   const visited = place.status === "visited";
   const isCurrent = place.status === "current";
@@ -49,7 +50,7 @@ export function PlaceRow({ place, accentColor, currency, onOpen }: PlaceRowProps
 
   const showOnMap = (e: React.MouseEvent) => {
     e.stopPropagation();
-    setMapFocusTarget({ lat: place.lat, lng: place.lng, placeId: place.id });
+    focusOnMap({ lat: place.lat, lng: place.lng, placeId: place.id });
     setActiveTab("map" as TripTab);
   };
 

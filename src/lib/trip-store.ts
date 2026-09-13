@@ -40,10 +40,6 @@ interface TripState {
   setMapOnlyUnvisited: (v: boolean) => void;
   mapOnlyChill: boolean;
   setMapOnlyChill: (v: boolean) => void;
-  mapFocusTarget: { lat: number; lng: number; placeId: string | null } | null;
-  setMapFocusTarget: (
-    t: { lat: number; lng: number; placeId: string | null } | null,
-  ) => void;
   // Под view вкладки Chill («route»/«wishlist»/«nearby»): Обзор открывает «Рядом»
   // одной кнопкой. Транзиентное — сбрасывается после consumption в RestChill.
   restView: "route" | "wishlist" | "nearby" | null;
@@ -78,8 +74,6 @@ export const useTripStore = create<TripState>()(
       setMapOnlyUnvisited: (v) => set({ mapOnlyUnvisited: v }),
       mapOnlyChill: false,
       setMapOnlyChill: (v) => set({ mapOnlyChill: v }),
-      mapFocusTarget: null,
-      setMapFocusTarget: (t) => set({ mapFocusTarget: t }),
       restView: null,
       setRestView: (v) => set({ restView: v }),
     }),

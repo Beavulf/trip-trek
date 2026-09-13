@@ -5,8 +5,9 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Check, X } from "lucide-react";
 import { useBodyScrollLock } from "@/hooks/use-body-scroll-lock";
 import { cn } from "@/lib/utils";
+import type { MapLayerKey } from "@/lib/map-layers";
 
-export type MapLayerKey = "voyager" | "satellite" | "light" | "dark";
+export type { MapLayerKey };
 
 interface LayersSheetProps {
   open: boolean;

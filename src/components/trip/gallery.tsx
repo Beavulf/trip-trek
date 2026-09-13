@@ -2,6 +2,7 @@
 
 import { usePhotos, useDeletePhoto, useUpdatePhoto, useTrip, useCurrentTripId } from "@/hooks/use-trip";
 import { useTripStore } from "@/lib/trip-store";
+import { focusOnMap } from "@/lib/map-bus";
 import { useAuth } from "@/hooks/use-auth";
 import { motion, useReducedMotion } from "framer-motion";
 import { Camera, Columns3, LayoutGrid, MapPin, Star } from "lucide-react";
@@ -41,7 +42,6 @@ export function Gallery() {
   const upd = useUpdatePhoto();
   const { setTripSwitcherOpen } = useTripStore();
   const setActiveTab = useTripStore((s) => s.setActiveTab);
-  const setMapFocusTarget = useTripStore((s) => s.setMapFocusTarget);
   const { data: session } = useAuth();
   const currentUserId = (session?.user as { id?: string } | undefined)?.id || "";
   const myRole = trip?.participants?.find((p) => p.id === currentUserId)?.role;
@@ -225,7 +225,7 @@ export function Gallery() {
       toast.info("У этого фото нет геометки");
       return;
     }
-    setMapFocusTarget({ lat, lng, placeId: photo.placeId });
+    focusOnMap({ lat, lng, placeId: photo.placeId ?? undefined });
     setActiveTab("map");
     setLightbox(null);
   };

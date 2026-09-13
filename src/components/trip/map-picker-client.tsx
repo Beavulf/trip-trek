@@ -5,6 +5,7 @@ import "leaflet/dist/leaflet.css";
 import { useEffect, useState } from "react";
 import { MapContainer, TileLayer, Marker, useMapEvents, useMap } from "react-leaflet";
 import L from "leaflet";
+import { TILE_LAYERS } from "@/lib/map-layers";
 
 function makePickerIcon() {
   return L.divIcon({
@@ -35,8 +36,9 @@ export default function PickerClient({
       zoomControl={true}
     >
       <TileLayer
-        url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
-        attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>'
+        // Общая подложка из lib/map-layers — раньше пикер держал свой CARTO-ключ
+        url={TILE_LAYERS.voyager.url}
+        attribution={TILE_LAYERS.voyager.attr}
       />
       <PickerMarker pos={pos} setPos={setPos} icon={icon} />
       <RecenterOn pos={pos} />

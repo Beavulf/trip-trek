@@ -38,26 +38,8 @@ import { LayersSheet, type MapLayerKey } from "./map/layers-sheet";
 import { isChillCategory } from "@/lib/chill-categories";
 import { resolveCityCoords, decodeCustomKey } from "@/lib/city-coords";
 import { timeSortRank } from "@/lib/time-of-day";
-
-const TILE_LAYERS: Record<MapLayerKey, { url: string; attr: string }> = {
-  voyager: {
-    // CARTO с 2025 требует apikey — используем классический OSM
-    url: "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
-    attr: "&copy; OpenStreetMap contributors",
-  },
-  satellite: {
-    url: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
-    attr: "&copy; Esri",
-  },
-  light: {
-    url: "https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}",
-    attr: "&copy; Esri",
-  },
-  dark: {
-    url: "https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}",
-    attr: "&copy; Esri",
-  },
-};
+import { peekMapFocus, ackMapFocus, subscribeMapFocus } from "@/lib/map-bus";
+import { TILE_LAYERS } from "@/lib/map-layers";
 
 // Кэш иконок: makeIcon создаёт новый L.DivIcon на каждый вызов, а без кэша
 // каждый ререндер карты (рефетч дней, фильтры) заменял DOM всех маркеров.
@@ -126,8 +108,6 @@ export default function TripMap() {
     setMapOnlyUnvisited,
     mapOnlyChill,
     setMapOnlyChill,
-    mapFocusTarget,
-    setMapFocusTarget,
     setTripSwitcherOpen,
     setActiveTab,
   } = useTripStore();
@@ -297,33 +277,31 @@ export default function TripMap() {
     });
   }, [mapCityFilter, cityFocus]);
 
-  // Фокус из других вкладок (галерея, диалог места).
-  // Задержка больше старта монтирования (fitBounds на 300мс, мгновенный):
-  // фокусный полёт должен прийти последним и оставить вид на цели.
+  // Фокус из других вкладок (галерея, лента, диалог места) — шина map-bus.
+  // Цель ждёт в шине до монтирования карты и потребляется ровно один раз (ack сразу,
+  // полёт планирует flyWhenReady). Задержка 450 — позже mount-fitBounds (300, мгновенный):
+  // фокусный полёт приходит последним и оставляет вид на цели.
   useEffect(() => {
-    if (!mapFocusTarget) return;
-    // Если передано место — ведём себя как тап по маркеру: перелёт + карточка
-    const targetPlace = mapFocusTarget.placeId
-      ? allPlaces.find((x) => x.place.id === mapFocusTarget.placeId)?.place
-      : undefined;
-    if (targetPlace) {
+    const unsub = subscribeMapFocus(() => {
+      const req = peekMapFocus();
+      if (!req) return;
+      ackMapFocus(req);
+      // Если передано место — ведём себя как тап по маркеру: перелёт + карточка
+      const targetPlace = req.placeId
+        ? allPlaces.find((x) => x.place.id === req.placeId)?.place
+        : undefined;
+      if (targetPlace) setSelectedPlace(targetPlace);
       flyWhenReady((m) => {
-        setSelectedPlace(targetPlace);
-        m.flyTo([targetPlace.lat, targetPlace.lng], Math.max(m.getZoom(), 15), { duration: 0.7 });
+        if (targetPlace) {
+          m.flyTo([targetPlace.lat, targetPlace.lng], Math.max(m.getZoom(), 15), { duration: 0.7 });
+        } else {
+          m.flyTo([req.lat, req.lng], Math.max(m.getZoom(), 16), { duration: 1 });
+        }
       }, 450);
-    } else {
-      flyWhenReady((m) => {
-        m.flyTo([mapFocusTarget.lat, mapFocusTarget.lng], Math.max(m.getZoom(), 16), { duration: 1 });
-      }, 450);
-    }
-  }, [mapFocusTarget]);
-
-  // Под consume сигнала «показать это место» из галереи/диалога места
-  useEffect(() => {
-    if (!mapFocusTarget) return;
-    const t = setTimeout(() => setMapFocusTarget(null), 50);
-    return () => clearTimeout(t);
-  }, [mapFocusTarget, setMapFocusTarget]);
+    });
+    return unsub;
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- flyWhenReady стабилен (замыкание на mapRef)
+  }, [allPlaces]);
 
   // Полноэкранный режим: Leaflet не знает, что контейнер изменился —
   // пересчитываем размер после css-перехода, иначе тайлы не дорастянутся.

@@ -29,6 +29,7 @@ import {
 } from "@/hooks/use-trip";
 import { useAuth } from "@/hooks/use-auth";
 import { useTripStore } from "@/lib/trip-store";
+import { focusOnMap } from "@/lib/map-bus";
 import { CATEGORY_META, CATEGORY_SHORT, type Place, type Photo } from "@/lib/types";
 import { TIME_SLOTS, timeLabel } from "@/lib/time-of-day";
 import { googleDirectionsUrl } from "@/lib/place-links";
@@ -74,7 +75,7 @@ function PlaceDialogBody({ place, currency, onClose }: { place: Place; currency?
   const [editing, setEditing] = useState(false);
   const [lightboxIdx, setLightboxIdx] = useState<number | null>(null);
   const { data: days } = useRouteDays();
-  const { setActiveTab, setMapFocusTarget } = useTripStore();
+  const { setActiveTab } = useTripStore();
   const { data: placePhotos } = usePhotos(undefined, place.id);
 
   // Поля формы редактирования
@@ -223,8 +224,8 @@ function PlaceDialogBody({ place, currency, onClose }: { place: Place; currency?
     }
   };
 
-  const focusOnMap = () => {
-    setMapFocusTarget({ lat: fresh.lat, lng: fresh.lng, placeId: fresh.id });
+  const focusOnMapHandler = () => {
+    focusOnMap({ lat: fresh.lat, lng: fresh.lng, placeId: fresh.id });
     setActiveTab("map");
     onClose();
   };
@@ -334,7 +335,7 @@ function PlaceDialogBody({ place, currency, onClose }: { place: Place; currency?
             </a>
             <button
               type="button"
-              onClick={focusOnMap}
+              onClick={focusOnMapHandler}
               className="rounded-xl py-3 text-sm font-medium bg-secondary text-secondary-foreground flex items-center justify-center gap-2 hover:bg-accent min-h-11"
             >
               <MapPin className="size-4" />
@@ -633,7 +634,7 @@ function PlaceDialogBody({ place, currency, onClose }: { place: Place; currency?
             const lat = ph.lat ?? fresh.lat;
             const lng = ph.lng ?? fresh.lng;
             if (lat != null && lng != null) {
-              setMapFocusTarget({ lat, lng, placeId: fresh.id });
+              focusOnMap({ lat, lng, placeId: fresh.id });
               setActiveTab("map");
               setLightboxIdx(null);
               onClose();
