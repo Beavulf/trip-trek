@@ -40,12 +40,21 @@ export async function POST(req: NextRequest) {
       data: { avatarUrl: url },
     });
 
-    // Старый файл аватара больше не нужен
+    // Старый файл аватара больше не нужен — но только если на него больше
+    // НИКТО не ссылается: URL аватарки виден соучастникам по поездке, и «забрать»
+    // чужой URL себе через PATCH /api/user с последующей загрузкой новой
+    // аватарки удаляло бы чужой файл (аудит 2026-09-12)
     if (prev?.avatarUrl) {
-      try {
-        await storageRemove(prev.avatarUrl);
-      } catch {
-        // не критично
+      const [otherUser, otherPhoto] = await Promise.all([
+        db.user.findFirst({ where: { avatarUrl: prev.avatarUrl, id: { not: userId } }, select: { id: true } }),
+        db.photo.findFirst({ where: { url: prev.avatarUrl }, select: { id: true } }),
+      ]);
+      if (!otherUser && !otherPhoto) {
+        try {
+          await storageRemove(prev.avatarUrl);
+        } catch {
+          // не критично
+        }
       }
     }
 

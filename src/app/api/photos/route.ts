@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { publish } from "@/lib/ws-bus";
-import { requireTripMember } from "@/lib/api-auth";
+import { requireTripMember, requireUser } from "@/lib/api-auth";
 import { put as storagePut, remove as storageRemove, StorageError } from "@/lib/storage";
 import { userRateLimit } from "@/lib/rate-limit";
 
@@ -37,6 +37,12 @@ export async function GET(req: NextRequest) {
 
 // POST — загрузка фото
 export async function POST(req: NextRequest) {
+  // requireUser ДО парсинга multipart: анонимный запрос не должен заставлять
+  // сервер буферизовать 20MB в памяти (аудит 2026-09-12). tripId лежит в форме,
+  // поэтому membership-проверка — только после parse.
+  const auth = await requireUser(req);
+  if (auth.response) return auth.response;
+
   const formData = await req.formData();
   const file = formData.get("file") as File | null;
   const dayId = formData.get("dayId") as string;
@@ -94,7 +100,13 @@ export async function POST(req: NextRequest) {
       address,
       takenAt: new Date(),
     },
-    include: { place: true, user: true, day: true },
+    // user — проекцией, а не целиком: include user:true тянет в ответ весь ряд
+    // юзера вместе с хешем пароля (привычка из journal/photos GET)
+    include: {
+      place: true,
+      day: true,
+      user: { select: { id: true, name: true, emoji: true, color: true, avatarUrl: true } },
+    },
   });
   publish(tripId, "photo:added", {
     userId: user!.id,

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { publish } from "@/lib/ws-bus";
-import { requireTripMember } from "@/lib/api-auth";
+import { requireTripMember, requireUser } from "@/lib/api-auth";
 import { put as storagePut, remove as storageRemove, StorageError } from "@/lib/storage";
 import { userRateLimit } from "@/lib/rate-limit";
 
@@ -102,6 +102,11 @@ export async function PATCH(req: NextRequest) {
   const contentType = req.headers.get("content-type") || "";
 
   if (contentType.includes("multipart/form-data")) {
+    // requireUser ДО парсинга: анонимный запрос не должен заставлять сервер
+    // буферизовать тело в памяти (аудит 2026-09-12); tripId лежит в форме,
+    // поэтому membership-проверка — только после parse
+    const auth = await requireUser(req);
+    if (auth.response) return auth.response;
     const formData = await req.formData();
     const file = formData.get("file") as File | null;
     const id = formData.get("id") as string;
@@ -141,6 +146,9 @@ export async function PATCH(req: NextRequest) {
   }
 
   // JSON PATCH — частичное обновление: отметки, рейтинг, фото, редактирование полей, голос «хочу»
+  // requireUser до парсинга тела — по той же причине, что и в multipart-ветке
+  const auth = await requireUser(req);
+  if (auth.response) return auth.response;
   const body = await req.json();
   const { id, tried, rating, imageUrl, want } = body;
   if (!id) return NextResponse.json({ error: "id required" }, { status: 400 });

@@ -169,8 +169,16 @@ export async function PATCH(req: NextRequest) {
   if (typeof name === "string" && name.trim()) data.name = name.trim();
   if (typeof emoji === "string") data.emoji = emoji;
   if (typeof color === "string" && color.match(/^#[0-9a-fA-F]{6}$/)) data.color = color;
-  // avatarUrl: строка — установить фото, null — убрать фото (вернуться к эмодзи)
-  if (typeof avatarUrl === "string") data.avatarUrl = avatarUrl;
+  // avatarUrl: строка — установить фото, null — убрать фото (вернуться к эмодзи).
+  // Принимаем только пути аватарок этого инстанса: произвольная строка позже
+  // уходила аргументом в storageRemove при следующей загрузке аватара, и через
+  // это можно было удалить чужой файл (аудит 2026-09-12).
+  if (typeof avatarUrl === "string") {
+    if (!avatarUrl.startsWith("/uploads/avatars/avatar-")) {
+      return NextResponse.json({ error: "avatarUrl: недопустимый путь" }, { status: 400 });
+    }
+    data.avatarUrl = avatarUrl;
+  }
   if (avatarUrl === null) data.avatarUrl = null;
   // Ключ ИИ (BYOK): строка — установить, null — убрать. Валидация мягкая:
   // ключи бывают разной длины, главное — не логировать и не отдавать наружу.
