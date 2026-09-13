@@ -18,7 +18,6 @@ function memberLabel(n: number) {
 }
 
 interface JoinTrip {
-  id: string;
   title: string;
   destination: string;
   coverColor: string;

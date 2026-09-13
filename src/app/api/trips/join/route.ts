@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { requireUser } from "@/lib/api-auth";
-import { rateLimitMiddleware, userRateLimit } from "@/lib/rate-limit";
-import { getPlanLimits } from "@/lib/app-config";
+import { rateLimitMiddleware } from "@/lib/rate-limit";
+import { checkCanJoinTrip } from "@/lib/trip-join";
 import { publish } from "@/lib/ws-bus";
 
 // POST /api/trips/join?code=CHINA2024 — присоединиться к поездке по invite-коду
@@ -44,39 +44,17 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Invalid invite code" }, { status: 404 });
   }
 
-  // Забаненному в этой поездке вход закрыт (утёкшая ссылка и т.п.)
-  const ban = await db.tripBan.findUnique({
-    where: { tripId_userId: { tripId: trip.id, userId } },
-  });
-  if (ban) {
+  // Бан, повторное членство и лимит владельца — общая логика с register
+  // (аудит 2026-09-12: расхождение путей join и register и было дырой)
+  const check = await checkCanJoinTrip(trip.id, userId);
+  if (!check.ok) {
     return NextResponse.json(
-      { error: "Вас заблокировали в этой поездке. Свяжись с владельцем или админом.", banned: true },
-      { status: 403 }
+      { error: check.error, ...(check.extra ?? {}) },
+      { status: check.status }
     );
   }
-
-  // Проверить не участник ли уже
-  const existing = trip.members.find((m) => m.userId === userId);
-  if (existing) {
+  if (trip.members.some((m) => m.userId === userId)) {
     return NextResponse.json({ tripId: trip.id, alreadyMember: true });
-  }
-
-  // Проверить лимит участников по плану ВЛАДЕЛЬЦА поездки
-  const owner = trip.members.find((m) => m.role === "owner");
-  if (owner) {
-    const ownerUser = await db.user.findUnique({ where: { id: owner.userId } });
-    const isOwnerPremium = ownerUser?.plan === "premium" && (!ownerUser?.planExpiry || ownerUser.planExpiry > new Date());
-    const { maxMembers: freeMaxMembers } = await getPlanLimits();
-    const maxMembers = isOwnerPremium ? Infinity : freeMaxMembers;
-
-    if (trip.members.length >= maxMembers) {
-      return NextResponse.json({
-        error: `Лимит участников (${maxMembers}) исчерпан. Владелец поездки может перейти на Premium.`,
-        upgrade: true,
-        current: trip.members.length,
-        max: maxMembers === Infinity ? null : maxMembers,
-      }, { status: 403 });
-    }
   }
 
   // Добавить участника
@@ -116,7 +94,6 @@ export async function GET(req: NextRequest) {
   const trip = await db.trip.findUnique({
     where: { inviteCode: code },
     select: {
-      id: true,
       title: true,
       destination: true,
       coverColor: true,
@@ -130,7 +107,6 @@ export async function GET(req: NextRequest) {
   }) || await db.trip.findUnique({
     where: { inviteCode: code.toUpperCase() },
     select: {
-      id: true,
       title: true,
       destination: true,
       coverColor: true,
@@ -144,7 +120,6 @@ export async function GET(req: NextRequest) {
   }) || await db.trip.findUnique({
     where: { inviteCode: code.toLowerCase() },
     select: {
-      id: true,
       title: true,
       destination: true,
       coverColor: true,

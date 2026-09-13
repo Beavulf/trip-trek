@@ -22,7 +22,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const { email, password, name, tripId, inviteCode } = await req.json();
+    const { email, password, name } = await req.json();
 
     if (!email || !password || !name) {
       return NextResponse.json({ error: "email, password, name обязательны" }, { status: 400 });
@@ -58,32 +58,10 @@ export async function POST(req: NextRequest) {
     // Без SMTP_HOST mailer молча (с предупреждением в лог) пропустит отправку.
     void sendMail({ to: user.email, ...welcomeEmail(name) });
 
-    // Если есть tripId или inviteCode — добавляем в поездку
-    let trip: { id: string } | null = null;
-    if (tripId) {
-      trip = await db.trip.findUnique({ where: { id: tripId }, select: { id: true } });
-    } else if (inviteCode) {
-      trip = await db.trip.findUnique({ where: { inviteCode }, select: { id: true } });
-    }
-
-    if (trip) {
-      // Проверяем не вступил ли уже
-      const existingMember = await db.tripMember.findUnique({
-        where: { tripId_userId: { tripId: trip.id, userId: user.id } },
-      });
-      if (!existingMember) {
-        await db.tripMember.create({
-          data: {
-            tripId: trip.id,
-            userId: user.id,
-            role: "member",
-            displayName: name,
-            emoji: "👤",
-            color: "#94a3b8",
-          },
-        });
-      }
-    }
+    // Вступление в поездку — ТОЛЬКО через POST /api/trips/join по invite-коду
+    // (join page делает это после логина). Автоджойн здесь по tripId/inviteCode
+    // удалён по аудиту 2026-09-12: путь обходил инвайт-код, проверку бана и
+    // лимит участников владельца. Клиент поля и не передавал — код был мёртвым.
 
     return NextResponse.json({ id: user.id, name: user.name, email: user.email });
   } catch (e) {
