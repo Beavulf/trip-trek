@@ -163,7 +163,7 @@ export async function PATCH(req: NextRequest) {
   const userId = authUser!.id;
 
   const body = await req.json();
-  const { name, emoji, color, avatarUrl, aiApiKey } = body;
+  const { name, emoji, color, avatarUrl, aiApiKey, onboardingCompleted } = body;
 
   const data: Record<string, unknown> = {};
   if (typeof name === "string" && name.trim()) data.name = name.trim();
@@ -188,6 +188,10 @@ export async function PATCH(req: NextRequest) {
     if (cleaned) data.aiApiKey = cleaned;
   }
   if (aiApiKey === null) data.aiApiKey = null;
+  // Обучение: true — тур пройден или пропущен, false — сброс («Пройти заново» в профиле)
+  if (typeof onboardingCompleted === "boolean") {
+    data.onboardingCompletedAt = onboardingCompleted ? new Date() : null;
+  }
 
   if (Object.keys(data).length === 0) {
     return NextResponse.json({ error: "no fields to update" }, { status: 400 });
@@ -197,7 +201,7 @@ export async function PATCH(req: NextRequest) {
     where: { id: userId },
     data,
     // aiApiKey нужен только чтобы отдать маску aiKeyTail — сам ключ наружу не идёт
-    select: { id: true, name: true, emoji: true, color: true, avatarUrl: true, aiApiKey: true },
+    select: { id: true, name: true, emoji: true, color: true, avatarUrl: true, aiApiKey: true, onboardingCompletedAt: true },
   });
 
   if (data.name || data.emoji || data.color) {
@@ -216,5 +220,6 @@ export async function PATCH(req: NextRequest) {
     ...safeUser,
     // Клиент сразу показывает «Свой ключ подключён (…хвост)» без перезагрузки
     aiKeyTail: _key ? maskKey(_key) : null,
+    onboardingCompleted: safeUser.onboardingCompletedAt != null,
   });
 }

@@ -28,6 +28,9 @@ model User {
   // Свой ключ ИИ (BYOK): OpenAI-совместимый. Наружу API отдаёт только замаскированный
   // хвост. Приоритет при вызове: свой ключ → админский (AppSettings) → env OPENAI_API_KEY
   aiApiKey   String?
+  // Обучение (welcome-tour): момент завершения/пропуска. null = не показывали
+  // (или сброшено кнопкой «Пройти заново» в профиле) — тур откроется при входе на /
+  onboardingCompletedAt DateTime?
   createdAt  DateTime  @default(now())
 
   memberships   TripMember[]

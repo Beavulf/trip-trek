@@ -3,10 +3,11 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
-import { ArrowRight, Bell, Bug, Check, ChevronDown, Crown, KeyRound, Loader2, Monitor, Moon, Settings, Shield, Sparkles, Sun, Trash2 } from "lucide-react";
+import { ArrowRight, Bell, Bug, Check, ChevronDown, Crown, GraduationCap, KeyRound, Loader2, Monitor, Moon, Settings, Shield, Sparkles, Sun, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { useTheme } from "next-themes";
 import { cn } from "@/lib/utils";
+import { useOnboarding } from "@/hooks/use-onboarding";
 import type { UserProfile } from "./types";
 import { PushToggle } from "./PushToggle";
 import { PasswordField } from "@/components/auth/password-field";
@@ -33,6 +34,21 @@ export function ProfileSettings({ profile, setPremiumOpen, onReportBug, isAdmin,
 
   const current = mounted ? (theme ?? "system") : "system";
   const currentLabel = THEME_OPTIONS.find((t) => t.value === current)?.label ?? "Системная";
+
+  // === Обучение: «Пройти заново» — сброс отметки на аккаунте и переход на главную ===
+  const { setOnboardingCompleted } = useOnboarding();
+  const [tourReplaying, setTourReplaying] = useState(false);
+  const replayOnboarding = async () => {
+    if (tourReplaying) return;
+    setTourReplaying(true);
+    const ok = await setOnboardingCompleted(false);
+    setTourReplaying(false);
+    if (!ok) {
+      toast.error("Не удалось запустить обучение", { description: "Проверьте связь и попробуйте ещё раз" });
+      return;
+    }
+    router.push("/");
+  };
 
   // === Свой ключ ИИ (BYOK) ===
   const [aiOpen, setAiOpen] = useState(false);
@@ -370,6 +386,23 @@ export function ProfileSettings({ profile, setPremiumOpen, onReportBug, isAdmin,
             </div>
           )}
         </div>
+
+        {/* Обучение — пройти заново */}
+        <button
+          type="button"
+          onClick={replayOnboarding}
+          disabled={tourReplaying}
+          className="w-full flex items-center gap-3 p-3.5 text-left hover:bg-accent/50 transition-colors disabled:opacity-60"
+        >
+          <div className="size-9 rounded-xl bg-secondary grid place-items-center shrink-0">
+            <GraduationCap className="size-4.5 text-muted-foreground" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="text-sm font-medium">Обучение</div>
+            <div className="text-xs text-muted-foreground">Короткий тур по приложению</div>
+          </div>
+          {tourReplaying ? <Loader2 className="size-4 text-muted-foreground shrink-0 animate-spin" /> : <ArrowRight className="size-4 text-muted-foreground shrink-0" />}
+        </button>
 
         {/* Сообщить о проблеме */}
         <button

@@ -14,6 +14,8 @@ interface AuthUser {
   planExpiry?: string | null;
   isPremium?: boolean;
   isAdmin?: boolean;
+  // null = обучение (welcome-tour) ещё не показывали этому аккаунту
+  onboardingCompletedAt?: string | null;
 }
 
 interface AuthSession {

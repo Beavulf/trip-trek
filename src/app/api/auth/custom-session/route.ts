@@ -29,7 +29,7 @@ export async function GET(req: NextRequest) {
   try {
     const row = await db.user.findUnique({
       where: { id: decoded.id },
-      select: { id: true, name: true, email: true, emoji: true, color: true, avatarUrl: true, plan: true, planExpiry: true, role: true, passwordChangedAt: true },
+      select: { id: true, name: true, email: true, emoji: true, color: true, avatarUrl: true, plan: true, planExpiry: true, role: true, passwordChangedAt: true, onboardingCompletedAt: true },
     });
 
     if (!row) return NextResponse.json({ user: null });
@@ -53,6 +53,8 @@ export async function GET(req: NextRequest) {
         planExpiry: row.planExpiry,
         isPremium: isPremiumUser(row),
         isAdmin: row.role === "admin",
+        // null = обучение ещё не показывали (welcome-tour сам решит, открываться ли)
+        onboardingCompletedAt: row.onboardingCompletedAt,
       },
     });
   } catch (e) {

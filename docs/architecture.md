@@ -161,6 +161,11 @@ S3» — ADR-0003.
   одноразовый токен (в БД только sha256-хеш, TTL 60 мин) → письмо → `reset-password`.
   Смена пароля в профиле: `user/password` — инвалидирует все сессии через
   `passwordChangedAt`.
+- Обучение: `User.onboardingCompletedAt` (`null` = welcome-tour покажется при
+  входе на `/`). Мутация — `PATCH /api/user {onboardingCompleted: boolean}`;
+  шаги и подсказки — `src/lib/onboarding.ts`, компоненты —
+  `src/components/trip/onboarding/`, статус на устройстве дублируется в
+  localStorage (защита от повторного открытия, пока PATCH в пути).
 - Почта: `src/lib/mail/mailer.ts` (nodemailer через постфикс-релей; для
   самоподписанного STARTTLS-серта стоит `tls.rejectUnauthorized: false` — только
   для локального релея) + шаблоны `templates.ts`.

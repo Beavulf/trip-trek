@@ -50,6 +50,8 @@ import { ShareCard } from "./share-card";
 import { BugReportSheet } from "./bug-report-sheet";
 import { NotificationsBell } from "./notifications-bell";
 import { TripInfoSheet } from "./trip-info-sheet";
+import { WelcomeTour } from "./onboarding/welcome-tour";
+import { TabHints } from "./onboarding/tab-hints";
 import { useAdminStats } from "@/hooks/use-admin-stats";
 
 const TABS = [
@@ -350,6 +352,8 @@ export function AppShell({ children }: { children: ReactNode }) {
       </header>
 
       <main className="flex-1 mx-auto w-full max-w-7xl px-3 sm:px-4 py-4 pb-28 sm:pb-10 relative z-0 safe-bottom">
+        {/* Контекстная подсказка при первом открытии сложной вкладки — поверх контента, без сдвига */}
+        <TabHints />
         {children}
       </main>
 
@@ -400,6 +404,8 @@ export function AppShell({ children }: { children: ReactNode }) {
       <ShareCard open={shareOpen} onOpenChange={setShareOpen} />
       <PremiumModal open={premiumOpen} onOpenChange={setPremiumOpen} />
       <BugReportSheet open={bugOpen} onOpenChange={setBugOpen} />
+      {/* Обучение: сам открывается, если на аккаунте ещё нет отметки «пройдено» */}
+      <WelcomeTour />
       <PWAUpdateNotification />
     </div>
   );

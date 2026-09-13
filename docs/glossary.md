@@ -65,6 +65,7 @@
 | **Feedback** | баг-репорт/идея/вопрос из приложения (+ответ админа → уведомление) |
 | **UserNotification** | колокольчик в шапке; типы: premium, password, member_removed, member_banned, trip_deleted, feedback_reply, admin_message, ownership |
 | **PasswordResetToken** | одноразовый токен сброса; в БД только sha256-хеш, TTL 60 мин |
+| **Обучение (welcome-tour)** | приветственный тур при первом входе + разовые подсказки вкладок; статус на аккаунте — `onboardingCompletedAt`, «Пройти заново» — в профиле (`src/components/trip/onboarding/`) |
 
 ## Инфраструктура и рантайм
 
