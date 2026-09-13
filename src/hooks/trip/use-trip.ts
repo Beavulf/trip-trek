@@ -49,7 +49,6 @@ export function useUpdateTripDates() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["trip"] });
-      qc.invalidateQueries({ queryKey: ["days"] });
     },
   });
 }

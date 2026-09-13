@@ -7,6 +7,8 @@ export interface Participant {
   emoji: string;
   role: string | null;
   budget: number | null;
+  /** Email участника: отдаётся только владельцу поездки (PII, аудит 2026-09-13) */
+  email?: string | null;
   /** Фото профиля — рисуется вместо эмодзи там, где показываем участника */
   avatarUrl?: string | null;
   /** Когда вошёл в поездку — событие «присоединился» в ленте */
@@ -55,7 +57,7 @@ export interface Photo {
   dayId: string;
   userId: string | null;
   user: { id: string; name: string; emoji: string; color: string; avatarUrl?: string | null } | null;
-  place: Place | null;
+  place: { name: string; lat: number | null; lng: number | null } | null;
   day: { dayNumber: number; city: string; cityKey: string } | null;
   lat: number | null;
   lng: number | null;
@@ -91,6 +93,23 @@ export interface JournalEntry {
   updatedAt?: string;
 }
 
+/**
+ * Слим-день из GET /api/trip: мета дня + счётчики, БЕЗ массива мест.
+ * Дни с местами — это модель чтения GET /api/route (см. Day + useRouteDays).
+ */
+export interface TripDay {
+  id: string;
+  dayNumber: number;
+  date: string;
+  city: string;
+  cityKey: string;
+  title: string;
+  summary: string | null;
+  accentColor: string | null;
+  placesCount: number;
+  visitedCount: number;
+}
+
 export interface TripSummary {
   settings: {
     id: string;
@@ -123,7 +142,7 @@ export interface TripSummary {
   remainingBudget: number;
   totalPhotos: number;
   totalJournals: number;
-  days: Day[];
+  days: TripDay[];
 }
 
 export interface Weather {

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, memo } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 import {
@@ -31,7 +31,7 @@ import {
   type BoardMessage,
 } from "@/hooks/use-trip";
 import { useAuth } from "@/hooks/use-auth";
-import { getSocket } from "@/hooks/use-websocket";
+import { getSocket, SOCKET_READY_EVENT } from "@/hooks/use-websocket";
 
 /* Быстрые «штампы» — тап отправляет эмодзи сообщением, без клавиатуры */
 const STAMPS = ["👍", "😂", "❤️", "🔥", "🎉", "🤔"];
@@ -194,6 +194,9 @@ function ChatDock({
   const [typing, setTyping] = useState<Record<string, number>>({});
   // Новые сообщения, пока лента прокручена вверх
   const [newCount, setNewCount] = useState(0);
+  // Порционный рендер (аудит 2026-09-13): история до 1000 сообщений целиком
+  // в DOM на мобильном = секунды маунта и джанки на каждом WS-инвалиде
+  const [renderLimit, setRenderLimit] = useState(100);
 
   const participants = trip?.participants ?? [];
   const me = participants.find((p) => p.id === currentUserId);
@@ -344,17 +347,29 @@ function ChatDock({
     }
   };
   useEffect(() => {
-    const s = getSocket();
-    if (!s) return;
+    // Подписка переживает пересоздание сокета: attach перевешивается на новый
+    // инстанс по событию SOCKET_READY_EVENT (аудит 2026-09-13 — «печатает» умирал
+    // после смены поездки/реконнекта, когда эффект с []-deps держал старый сокет)
+    let s = getSocket();
     const handler = (d: { userName?: string }) => {
       if (!d?.userName) return;
       setTyping((prev) => ({ ...prev, [d.userName as string]: Date.now() }));
     };
-    s.on("board:typing", handler);
-    return () => {
-      s.off("board:typing", handler);
+    const attach = () => {
+      const fresh = getSocket();
+      if (fresh && fresh !== s) {
+        s?.off("board:typing", handler);
+        s = fresh;
+      }
+      s?.on("board:typing", handler);
     };
-  }, []);
+    attach();
+    window.addEventListener(SOCKET_READY_EVENT, attach);
+    return () => {
+      window.removeEventListener(SOCKET_READY_EVENT, attach);
+      s?.off("board:typing", handler);
+    };
+  }, [tripId]);
   useEffect(() => {
     const t = setInterval(() => {
       setTyping((prev) => {
@@ -374,22 +389,36 @@ function ChatDock({
     () => (searching ? messages.filter((m) => m.content.toLowerCase().includes(q)) : messages),
     [messages, q, searching]
   );
+  // Рендерим последние renderLimit сообщений; «Показать ещё» открывает более ранние
+  const rendered = useMemo(
+    () => (visible.length > renderLimit ? visible.slice(visible.length - renderLimit) : visible),
+    [visible, renderLimit]
+  );
   const pinned = useMemo(() => messages.filter((m) => m.pinned), [messages]);
 
-  const jumpTo = (id: string) => {
+  const jumpTo = useCallback((id: string) => {
     if (searching) {
       setSearchOpen(false);
       setQuery("");
     }
-    // setTimeout вместо rAF: работает и в фоновой вкладке
-    window.setTimeout(() => {
+    const scrollAndFlash = () => {
       const el = document.getElementById(`msg-${id}`);
-      if (!el) return;
+      if (!el) return false;
       el.scrollIntoView({ block: "center", behavior: reduceMotion ? "auto" : "smooth" });
       setHighlightId(id);
       window.setTimeout(() => setHighlightId(null), 1900);
+      return true;
+    };
+    // setTimeout вместо rAF: работает и в фоновой вкладке
+    window.setTimeout(() => {
+      // Сообщение может не быть отрендерено (порционный рендер длинной истории) —
+      // тогда показываем всю историю и скроллим повторно
+      if (!scrollAndFlash()) {
+        setRenderLimit(Number.MAX_SAFE_INTEGER);
+        window.setTimeout(scrollAndFlash, 120);
+      }
     }, 60);
-  };
+  }, [searching, reduceMotion]);
 
   const send = async (override?: string) => {
     const raw = override ?? content;
@@ -439,10 +468,27 @@ function ChatDock({
 
   const canDelete = (m: BoardMessage) => m.userId === currentUserId || myRole === "owner";
 
-  const openMenu = (m: BoardMessage, rect: DOMRect, own: boolean) => {
+  const openMenu = useCallback((m: BoardMessage, rect: DOMRect, own: boolean) => {
     setConfirmDelete(false);
     setMenu({ id: m.id, rect, own });
-  };
+  }, []);
+
+  // Стабильный колбэк: MessageRow обёрнут в memo, инлайн-стрелки обесценили бы его
+  const handleToggleReaction = useCallback(
+    (m: BoardMessage, emoji: string) => {
+      vibrate(8);
+      toggleReaction.mutate(
+        { id: m.id, reaction: emoji },
+        {
+          onError: (err) =>
+            toast.error("Не удалось поставить реакцию", {
+              description: err instanceof Error ? err.message : "Попробуйте ещё раз",
+            }),
+        }
+      );
+    },
+    [toggleReaction]
+  );
 
   const closeMenu = () => {
     setMenu(null);
@@ -617,8 +663,19 @@ function ChatDock({
             )
           ) : (
             <div className="max-w-3xl mx-auto space-y-0.5">
-              {visible.map((m, i) => {
-                const prev = i > 0 ? visible[i - 1] : null;
+              {!searching && rendered.length < visible.length && (
+                <div className="flex justify-center py-2">
+                  <button
+                    type="button"
+                    onClick={() => setRenderLimit((n) => (n === Number.MAX_SAFE_INTEGER ? n : n + 200))}
+                    className="inline-flex min-h-9 items-center rounded-lg bg-muted/70 border border-border px-4 text-[11px] text-muted-foreground font-medium hover:bg-accent transition-colors"
+                  >
+                    Показать ещё · ранние {visible.length - rendered.length}
+                  </button>
+                </div>
+              )}
+              {rendered.map((m, i) => {
+                const prev = i > 0 ? rendered[i - 1] : null;
                 const dayChanged = !prev || !sameDay(prev.createdAt, m.createdAt);
                 const newGroup =
                   !prev ||
@@ -633,21 +690,11 @@ function ChatDock({
                       message={m}
                       newGroup={newGroup}
                       isOwn={m.userId === currentUserId}
+                      currentUserId={currentUserId}
                       highlight={highlightId === m.id}
                       onTapBubble={openMenu}
                       onJumpTo={jumpTo}
-                      onToggleReaction={(emoji) => {
-                        vibrate(8);
-                        toggleReaction.mutate(
-                          { id: m.id, reaction: emoji },
-                          {
-                            onError: (err) =>
-                              toast.error("Не удалось поставить реакцию", {
-                                description: err instanceof Error ? err.message : "Попробуйте ещё раз",
-                              }),
-                          }
-                        );
-                      }}
+                      onToggleReaction={handleToggleReaction}
                     />
                   </div>
                 );
@@ -909,10 +956,13 @@ function fitTextarea(el: HTMLTextAreaElement) {
 
 /* ==================================================================== */
 
-function MessageRow({
+// memo: при каждом WS-инвалиде перерисовываются только изменившиеся строки,
+// а не вся история (аудит 2026-09-13)
+const MessageRow = memo(function MessageRow({
   message: m,
   newGroup,
   isOwn,
+  currentUserId,
   highlight,
   onTapBubble,
   onJumpTo,
@@ -921,13 +971,13 @@ function MessageRow({
   message: BoardMessage;
   newGroup: boolean;
   isOwn: boolean;
+  /** id текущего юзера пропом: раньше каждая строка читала localStorage на рендере */
+  currentUserId: string;
   highlight: boolean;
   onTapBubble: (m: BoardMessage, rect: DOMRect, own: boolean) => void;
   onJumpTo: (id: string) => void;
-  onToggleReaction: (emoji: string) => void;
+  onToggleReaction: (m: BoardMessage, emoji: string) => void;
 }) {
-  const myId =
-    typeof window !== "undefined" ? localStorage.getItem("triptrek-current-user-id") : null;
   const emojiOnly = EMOJI_ONLY.test(m.content);
 
   /* Тап по пузырю открывает меню над сообщением.
@@ -1043,12 +1093,12 @@ function MessageRow({
         {reactionEntries.length > 0 && (
           <div className={cn("flex flex-wrap gap-1 mt-1", isOwn && "justify-end")}>
             {reactionEntries.map(([emoji, ids]) => {
-              const mine = !!myId && ids.includes(myId);
+              const mine = !!currentUserId && ids.includes(currentUserId);
               return (
                 <button
                   key={emoji}
                   type="button"
-                  onClick={() => onToggleReaction(emoji)}
+                  onClick={() => onToggleReaction(m, emoji)}
                   aria-label={`Реакция ${emoji}, ${ids.length} — ${mine ? "убрать" : "поставить"}`}
                   aria-pressed={mine}
                   className={cn(
@@ -1070,7 +1120,7 @@ function MessageRow({
       </div>
     </div>
   );
-}
+});
 
 function renderContent(text: string, isOwn: boolean) {
   return text.split(URL_SPLIT).map((part, i) =>

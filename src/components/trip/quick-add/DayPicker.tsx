@@ -1,7 +1,7 @@
 "use client";
 
 import { useTrip } from "@/hooks/use-trip";
-import type { Day } from "@/lib/types";
+import type { TripDay } from "@/lib/types";
 
 export function DayPicker({ value, onChange }: { value: string; onChange: (id: string) => void }) {
   const { data: trip } = useTrip();
@@ -18,7 +18,7 @@ export function DayPicker({ value, onChange }: { value: string; onChange: (id: s
       onChange={(e) => onChange(e.target.value)}
       className="w-full rounded-lg border border-input bg-background px-3 py-2.5 text-base input-mobile min-h-11"
     >
-      {trip.days.map((d: Day) => (
+      {trip.days.map((d: TripDay) => (
         <option key={d.id} value={d.id}>
           День {d.dayNumber} · {d.city} — {d.title}
         </option>

@@ -20,7 +20,19 @@ export async function GET(req: NextRequest) {
       ],
     },
     orderBy: { takenAt: "desc" },
-    include: {
+    // select маркерных полей: раньше отдавались полные строки фото без лимита,
+    // а карте нужны только координаты и миниатюра (аудит перфоманса 2026-09-13)
+    take: 1000,
+    select: {
+      id: true,
+      lat: true,
+      lng: true,
+      url: true,
+      thumbUrl: true,
+      caption: true,
+      address: true,
+      placeId: true,
+      dayId: true,
       user: { select: { id: true, name: true, emoji: true, color: true } },
       day: { select: { dayNumber: true, city: true, cityKey: true } },
     },

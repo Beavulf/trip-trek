@@ -22,7 +22,9 @@ export function useNotifications(enabled: boolean) {
     },
     enabled,
     staleTime: 15_000,
-    refetchInterval: 30_000,
+    // Основной канал бейджа — WS-событие notification (use-websocket);
+    // поллинг — страховка на случай разрыва сокета (аудит перфоманса 2026-09-13)
+    refetchInterval: 60_000,
     refetchOnWindowFocus: true,
   });
 }

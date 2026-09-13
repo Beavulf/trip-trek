@@ -1,15 +1,18 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import dynamic from "next/dynamic";
 import { useTrip, useCurrentTripId } from "@/hooks/use-trip";
 import { BookOpen, Camera, Plus as PlusIcon, Wallet } from "lucide-react";
 import { useAuth as useSession } from "@/hooks/use-auth";
 import { cn } from "@/lib/utils";
 import { MobileBottomSheet } from "../mobile-bottom-sheet";
-import { PhotoForm } from "./PhotoForm";
 import { ExpenseForm } from "./ExpenseForm";
 import { JournalForm } from "./JournalForm";
 import { useTripStore } from "@/lib/trip-store";
+
+// exifr (~100 KB) живёт в PhotoForm — в первичный бандл не тянем (аудит 2026-09-13)
+const PhotoForm = dynamic(() => import("./PhotoForm").then((m) => m.PhotoForm), { ssr: false });
 
 type Mode = "photo" | "expense" | "journal";
 

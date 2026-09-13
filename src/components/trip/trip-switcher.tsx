@@ -162,7 +162,6 @@ export function TripSwitcher() {
     qc.invalidateQueries({ queryKey: ["route"] });
     qc.invalidateQueries({ queryKey: ["expenses"] });
     qc.invalidateQueries({ queryKey: ["budget-plan"] });
-    qc.invalidateQueries({ queryKey: ["days"] });
     qc.invalidateQueries({ queryKey: ["photos"] });
   }, [currentTripId, trips, qc, pendingTripId, setPendingTripId]);
 
@@ -206,7 +205,6 @@ export function TripSwitcher() {
       qc.invalidateQueries({ queryKey: ["trips"] });
       qc.invalidateQueries({ queryKey: ["trip"] });
       qc.invalidateQueries({ queryKey: ["route"] });
-      qc.invalidateQueries({ queryKey: ["days"] });
       toast.success("Поездка создана! 🎉");
       setOpen(false);
       setView("list");
@@ -223,7 +221,6 @@ export function TripSwitcher() {
     setOpen(false);
     qc.invalidateQueries({ queryKey: ["trip"] });
     qc.invalidateQueries({ queryKey: ["route"] });
-    qc.invalidateQueries({ queryKey: ["days"] });
     qc.invalidateQueries({ queryKey: ["expenses"] });
     qc.invalidateQueries({ queryKey: ["photos"] });
     qc.invalidateQueries({ queryKey: ["journal"] });

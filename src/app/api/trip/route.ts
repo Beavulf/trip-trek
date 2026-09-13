@@ -5,6 +5,10 @@ import { calculateCurrentDayNumber } from "@/lib/trip-days";
 import { publish } from "@/lib/ws-bus";
 
 // GET /api/trip?tripId=... — сводка поездки
+// Слим-формат (аудит перфоманса 2026-09-13): дни отдаются БЕЗ мест — только
+// мета дня и счётчики (placesCount/visitedCount). Дни с местами читает
+// GET /api/route (useRoute/useRouteDays); раньше одни и те же дни+места
+// приезжали дважды, и оба ответа инвалидовались на каждое событие.
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const tripId = searchParams.get("tripId") || "";
@@ -13,33 +17,50 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "Trip not found" }, { status: 404 });
   }
 
-  const { response } = await requireTripMember(req, tripId);
+  const { user, membership, response } = await requireTripMember(req, tripId);
   if (response) return response;
 
   const trip = await db.trip.findUnique({ where: { id: tripId } });
   if (!trip) return NextResponse.json({ error: "Trip not found" }, { status: 404 });
 
-  const [members, days, places, photos, expenses, journals] = await Promise.all([
-    db.tripMember.findMany({ where: { tripId }, include: { user: true }, orderBy: { joinedAt: "asc" } }),
-    db.day.findMany({
-      where: { tripId },
-      orderBy: { dayNumber: "asc" },
-      include: {
-        places: { where: { tripId }, orderBy: { order: "asc" }, select: { id: true, name: true, category: true, status: true, timeOfDay: true, budget: true, rating: true, dayId: true, lat: true, lng: true, address: true, description: true, notes: true, visitedAt: true } },
-        _count: { select: { places: true, photos: true, expenses: true } },
-      },
-    }),
-    db.place.findMany({ where: { tripId } }),
-    db.photo.count({ where: { tripId } }),
-    db.expense.findMany({ where: { tripId }, include: { paidBy: true, day: { select: { dayNumber: true, city: true } } } }),
-    db.journalEntry.count({ where: { tripId } }),
-  ]);
+  const [members, days, visitedByDay, totalPlaces, visitedPlaces, expenseAgg, photos, journals] =
+    await Promise.all([
+      db.tripMember.findMany({
+        where: { tripId },
+        orderBy: { joinedAt: "asc" },
+        // select на user вместо include user:true — в память сервера не тянет
+        // лишние поля ряда юзера (сегодня там даже bcrypt-хеш)
+        include: { user: { select: { name: true, email: true, avatarUrl: true } } },
+      }),
+      db.day.findMany({
+        where: { tripId },
+        orderBy: { dayNumber: "asc" },
+        select: {
+          id: true,
+          dayNumber: true,
+          date: true,
+          city: true,
+          cityKey: true,
+          title: true,
+          summary: true,
+          accentColor: true,
+          _count: { select: { places: true, photos: true, expenses: true } },
+        },
+      }),
+      db.place.groupBy({ by: ["dayId"], _count: { _all: true }, where: { tripId, status: "visited" } }),
+      db.place.count({ where: { tripId } }),
+      db.place.count({ where: { tripId, status: "visited" } }),
+      // P1 #5: settlement (переводы между участниками) не считается тратой;
+      // aggregate вместо findMany со всеми строками — нужен только итог
+      db.expense.aggregate({
+        _sum: { amount: true },
+        where: { tripId, category: { not: "settlement" } },
+      }),
+      db.photo.count({ where: { tripId } }),
+      db.journalEntry.count({ where: { tripId } }),
+    ]);
 
-  const visitedPlaces = places.filter((p) => p.status === "visited").length;
-  // P1 #5: унифицированный фильтр — settlement (переводы между участниками)
-  // НЕ считается как реальная трата. Это компенсация долгов, не расход.
-  const realExpenses = expenses.filter((e) => e.category !== "settlement");
-  const totalSpent = realExpenses.reduce((sum, e) => sum + e.amount, 0);
+  const totalSpent = expenseAgg._sum.amount ?? 0;
 
   // totalBudget = сумма бюджетов участников (если у всех есть budget), иначе из настроек
   const allHaveBudget = members.length > 0 && members.every((m) => m.budget != null);
@@ -52,14 +73,17 @@ export async function GET(req: NextRequest) {
   const currentDayNumber = calculateCurrentDayNumber(trip.startDate, trip.totalDays);
   const start = new Date(trip.startDate);
   const nowUTC = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
-  const startUTC = Date.UTC(start.getUTCFullYear(), start.getUTCMonth(), start.getUTCDate());
+  const startUTC = Date.UTC(start.getUTCFullYear(), start.getUTCDate());
   const diffDays = Math.floor((nowUTC - startUTC) / (1000 * 60 * 60 * 24));
 
   const dayProgress = Math.min(100, Math.round(((diffDays + 1) / trip.totalDays) * 100));
-  const placeProgress = places.length > 0 ? Math.round((visitedPlaces / places.length) * 100) : 0;
+  const placeProgress = totalPlaces > 0 ? Math.round((visitedPlaces / totalPlaces) * 100) : 0;
 
   // Формируем participants-совместимый формат
   const isReplacementOnly = (s: string) => /^[\uFFFD\s]*$/.test(s);
+  // PII (аудит 2026-09-13): email участников — только владельцу, а не всем подряд
+  const isOwner = membership!.role === "owner";
+  const visitedMap = new Map(visitedByDay.map((v) => [v.dayId, v._count._all]));
   const participants = members.map((m) => ({
     id: m.userId,
     name: isReplacementOnly(m.displayName) ? m.user.name : m.displayName,
@@ -67,7 +91,7 @@ export async function GET(req: NextRequest) {
     emoji: m.emoji,
     role: m.role,
     budget: m.budget,
-    email: m.user.email,
+    email: isOwner ? m.user.email : null,
     // avatarUrl — аватар вместо эмодзи (лента, бюджет); joinedAt — событие «присоединился» в ленте
     avatarUrl: m.user.avatarUrl,
     joinedAt: m.joinedAt,
@@ -96,17 +120,28 @@ export async function GET(req: NextRequest) {
       status: trip.status,
     },
     participants,
-    // members с вложенным user (bcrypt-хеш, email) наружу не отдаём — только participants
+    // members с вложенным user наружу не отдаём — только participants
     currentDayNumber,
     dayProgress,
     placeProgress,
     visitedPlaces,
-    totalPlaces: places.length,
+    totalPlaces,
     totalSpent,
     remainingBudget: calculatedBudget - totalSpent,
     totalPhotos: photos,
     totalJournals: journals,
-    days,
+    days: days.map((d) => ({
+      id: d.id,
+      dayNumber: d.dayNumber,
+      date: d.date,
+      city: d.city,
+      cityKey: d.cityKey,
+      title: d.title,
+      summary: d.summary,
+      accentColor: d.accentColor,
+      placesCount: d._count.places,
+      visitedCount: visitedMap.get(d.id) ?? 0,
+    })),
   });
 }
 

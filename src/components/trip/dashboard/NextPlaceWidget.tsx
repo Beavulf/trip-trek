@@ -2,17 +2,28 @@
 
 import { motion } from "framer-motion";
 import { ChevronRight, MapPin } from "lucide-react";
-import { CATEGORY_META, type TripSummary } from "@/lib/types";
+import { CATEGORY_META, type TripSummary, type Day } from "@/lib/types";
 import { timeLabel } from "@/lib/time-of-day";
 
-export function NextPlaceWidget({ trip, onGoToItinerary }: { trip: TripSummary; onGoToItinerary: () => void }) {
+export function NextPlaceWidget({
+  trip,
+  days,
+  onGoToItinerary,
+}: {
+  trip: TripSummary;
+  /** Дни с местами — модель чтения /api/route (у слим-дней из /api/trip мест нет) */
+  days: Day[];
+  onGoToItinerary: () => void;
+}) {
+  // Пока /api/route не догрузился — рисовать «нет мест» рано
+  if (!days.length) return null;
   // Находим следующее непосещённое место текущего дня (или следующего дня)
-  const currentDay = trip.days.find((d) => d.dayNumber === trip.currentDayNumber);
+  const currentDay = days.find((d) => d.dayNumber === trip.currentDayNumber);
   let nextPlace = currentDay?.places.find((p) => p.status !== "visited");
 
   // Если в текущем дне нет — ищем в следующих днях
   if (!nextPlace) {
-    const upcomingDays = trip.days.filter((d) => d.dayNumber >= trip.currentDayNumber);
+    const upcomingDays = days.filter((d) => d.dayNumber >= trip.currentDayNumber);
     for (const d of upcomingDays) {
       const found = d.places.find((p) => p.status !== "visited");
       if (found) {
@@ -67,7 +78,7 @@ export function NextPlaceWidget({ trip, onGoToItinerary }: { trip: TripSummary; 
   }
 
   const meta = CATEGORY_META[nextPlace.category];
-  const dayOfPlace = trip.days.find((d) => d.id === nextPlace.dayId);
+  const dayOfPlace = days.find((d) => d.id === nextPlace.dayId);
 
   return (
     <motion.button

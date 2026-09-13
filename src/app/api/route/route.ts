@@ -33,9 +33,40 @@ export async function GET(req: NextRequest) {
   const days = await db.day.findMany({
     where: { tripId },
     orderBy: { dayNumber: "asc" },
-    include: {
-      places: { where: { tripId }, orderBy: { order: "asc" } },
-      photos: { where: { tripId }, orderBy: { takenAt: "desc" }, take: 8 },
+    select: {
+      id: true,
+      dayNumber: true,
+      date: true,
+      city: true,
+      cityKey: true,
+      title: true,
+      summary: true,
+      accentColor: true,
+      // select вместо полных строк: createdAt/updatedAt/tripId клиент не читает,
+      // а это ~4KB на поездку из 45 мест (аудит перфоманса 2026-09-13)
+      places: {
+        where: { tripId },
+        orderBy: { order: "asc" },
+        select: {
+          id: true,
+          name: true,
+          description: true,
+          notes: true,
+          category: true,
+          lat: true,
+          lng: true,
+          dayId: true,
+          timeOfDay: true,
+          status: true,
+          budget: true,
+          address: true,
+          rating: true,
+          visitedAt: true,
+          order: true,
+        },
+      },
+      // photos из read-model выпилены: ни один клиентский потребитель day.photos
+      // их не читает — фото грузятся хуками usePhotos/usePhotosGeo
       _count: { select: { places: true, photos: true, expenses: true } },
     },
   });

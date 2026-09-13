@@ -25,7 +25,7 @@ export interface MemberRow {
   color: string;
   role: string | null;
   joinedAt?: string;
-  email?: string;
+  email?: string | null;
   avatarUrl?: string | null;
 }
 

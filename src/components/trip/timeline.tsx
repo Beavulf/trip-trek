@@ -1,6 +1,7 @@
 "use client";
 
 import { useTrip, useExpenses, usePhotos, useJournal, useCurrentTripId } from "@/hooks/use-trip";
+import { useRouteDays } from "@/hooks/trip/use-route";
 import { CATEGORY_META, EXPENSE_CATEGORIES, type Day, type Photo } from "@/lib/types";
 import { useTripStore, type TripTab } from "@/lib/trip-store";
 import { BookOpen, Camera, ChevronRight, Images, MapPin, Rss, Wallet } from "lucide-react";
@@ -124,6 +125,8 @@ interface DayGroup {
 export function Timeline() {
   const tripId = useCurrentTripId();
   const { data: trip, isLoading: tripLoading, isError: tripError, refetch } = useTrip();
+  // Дни с местами — модель чтения /api/route (у слим-дней из /api/trip мест нет)
+  const { data: routeDays } = useRouteDays();
   const { data: expenses, isLoading: expensesLoading } = useExpenses();
   const { data: photos, isLoading: photosLoading } = usePhotos();
   const { data: journals, isLoading: journalsLoading } = useJournal();
@@ -137,18 +140,18 @@ export function Timeline() {
 
   // Акцент текущего дня — hero перекликается с дашбордом
   const accent = useMemo(() => {
-    if (!trip) return "#f97316";
-    return trip.days.find((d) => d.dayNumber === trip.currentDayNumber)?.accentColor || "#f97316";
-  }, [trip]);
+    if (!routeDays) return "#f97316";
+    return routeDays.find((d) => d.dayNumber === trip?.currentDayNumber)?.accentColor || "#f97316";
+  }, [routeDays, trip]);
 
   const events = useMemo<TimelineEvent[]>(() => {
-    if (!trip) return [];
+    if (!trip || !routeDays) return [];
     const evts: TimelineEvent[] = [];
     const photoList = Array.isArray(photos) ? photos : [];
     const expenseList = Array.isArray(expenses) ? expenses : [];
     const journalList = Array.isArray(journals) ? journals : [];
 
-    trip.days.forEach((day) => {
+    routeDays.forEach((day) => {
       day.places.forEach((p) => {
         if (p.status === "visited") {
           const meta = CATEGORY_META[p.category];
@@ -319,15 +322,15 @@ export function Timeline() {
     return Array.from(map.values());
   }, [displayed]);
 
-  // Привязка календарного дня к «Дню N» поездки — по дате из trip.days
+  // Привязка календарного дня к «Дню N» поездки — по дате из модели чтения
   const dayByDate = useMemo(() => {
     const m = new Map<string, Day>();
-    trip?.days.forEach((d) => {
+    (routeDays ?? []).forEach((d) => {
       const k = (d.date || "").slice(0, 10);
       if (k) m.set(k, d);
     });
     return m;
-  }, [trip]);
+  }, [routeDays]);
 
   const newest = events[0];
   const fresh = newest ? Date.now() - new Date(newest.timestamp).getTime() < 24 * 60 * 60 * 1000 : false;

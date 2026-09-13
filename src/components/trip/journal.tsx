@@ -18,7 +18,7 @@ import { cn, plural } from "@/lib/utils";
 import { dayDateFor } from "@/lib/trip-days";
 import { MOODS, MOOD_META, isValidMood } from "@/lib/moods";
 import { useTripStore } from "@/lib/trip-store";
-import type { Day, JournalEntry, TripSummary } from "@/lib/types";
+import type { JournalEntry, TripDay, TripSummary } from "@/lib/types";
 import {
   useJournal,
   useAddJournal,
@@ -90,6 +90,8 @@ export function Journal() {
   const [moodFilter, setMoodFilter] = useState<string | null>(null);
   // Шторка записи
   const [sheetId, setSheetId] = useState<string | null>(null);
+  // Порционный рендер глав (аудит 2026-09-13): длинный дневник не маунтим целиком
+  const [dayGroupLimit, setDayGroupLimit] = useState(5);
 
   /* Черновик живёт в localStorage по поездке. При смене поездки состояние
      сбрасываем (не early-return): иначе текст из поездки A уедет в черновик B */
@@ -558,7 +560,7 @@ export function Journal() {
         ) : null)
       ) : (
         <div className="space-y-5">
-          {grouped.map(({ day, list }) => (
+          {grouped.slice(0, dayGroupLimit).map(({ day, list }) => (
             <div key={day.id} id={`journal-day-${day.id}`} className="scroll-mt-[110px]">
               {/* Заголовок главы — прилипает под шапкой */}
               <div className="sticky sticky-under-shell z-10 -mx-1 px-1 py-1.5 mb-1 bg-background/85 backdrop-blur-sm rounded-xl flex items-center gap-2">
@@ -654,6 +656,17 @@ export function Journal() {
               </div>
             </div>
           ))}
+          {grouped.length > dayGroupLimit && (
+            <div className="flex justify-center pt-1">
+              <button
+                type="button"
+                onClick={() => setDayGroupLimit((n) => n + 5)}
+                className="inline-flex min-h-11 items-center rounded-xl bg-secondary border border-border px-5 text-xs font-medium active:scale-95 transition-transform"
+              >
+                Показать ещё дни · осталось {grouped.length - dayGroupLimit}
+              </button>
+            </div>
+          )}
         </div>
       )}
 
@@ -767,7 +780,7 @@ function DayChips({
   onChange,
   currentDayNumber,
 }: {
-  days: Day[];
+  days: TripDay[];
   value: string;
   onChange: (id: string) => void;
   currentDayNumber?: number;

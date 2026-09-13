@@ -91,6 +91,10 @@ return NextResponse.json(result);
 
 Поток: API-роут → `publish(tripId, event, payload)` (`ws-bus.ts`) → `io.to(room)`
 → `socket.io-client` в браузере → хуки инвалидируют query → рефetch.
+Инвалидации тяжёлых ключей в `use-websocket.ts` идут через дебаунс ~400 мс:
+burst событий (загрузка N фото = N `photo:added`) схлопывается в одну волну
+рефетчей. Reconnect бесконечный (backoff до 30 c) — realtime не умирает после
+сетевой паузы (аудит перфоманса 2026-09-13).
 
 События (полный актуальный список — `grep -r "publish(tripId"` src):
 `trip:updated`, `place:created|updated|deleted`, `photo:added`, `expense:added`,

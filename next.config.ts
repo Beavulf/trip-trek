@@ -5,6 +5,23 @@ const nextConfig: NextConfig = {
   reactStrictMode: false,
   // Не палим стек (X-Powered-By: Next.js)
   poweredByHeader: false,
+  // recharts (+d3) дублировался в чанках `/` и `/admin` — по копии ~390KB raw
+  // (аудит перфоманса 2026-09-13). Общая cache-group: оба маршрута делят один чанк.
+  // Работает при webpack-сборке (Dockerfile собирает через `next build --webpack`).
+  webpack(config) {
+    config.optimization.splitChunks = config.optimization.splitChunks ?? {};
+    config.optimization.splitChunks.cacheGroups = {
+      ...(config.optimization.splitChunks.cacheGroups ?? {}),
+      recharts: {
+        name: "recharts",
+        test: /[\\/]node_modules[\\/](recharts|d3-[a-z-]+|victory-vendor|internmap|decimal.js-light|eventemitter3)[\\/]/,
+        priority: 20,
+        reuseExistingChunk: true,
+        enforce: true,
+      },
+    };
+    return config;
+  },
   // P1 hardening: базовые защитные заголовки для всех ответов
   async headers() {
     return [

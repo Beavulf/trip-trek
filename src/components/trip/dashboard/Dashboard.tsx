@@ -1,6 +1,7 @@
 "use client";
 
 import { useTrip, useCurrentTripId } from "@/hooks/use-trip";
+import { useRouteDays } from "@/hooks/trip/use-route";
 import { useTripStore } from "@/lib/trip-store";
 import { currencySymbol } from "@/lib/currencies";
 import { DashboardHero } from "./DashboardHero";
@@ -29,6 +30,10 @@ const CITY_EMOJI: Record<string, string> = {
 export function Dashboard() {
   const tripId = useCurrentTripId();
   const { data: trip, isLoading, isError, refetch } = useTrip();
+  // Дни с местами — из модели чтения /api/route; /api/trip отдаёт дни без мест
+  // (слим-формат, аудит перфоманса 2026-09-13)
+  const { data: routeDays } = useRouteDays();
+  const days = routeDays ?? [];
   const { setActiveTab, setSelectedDay, setTripSwitcherOpen } = useTripStore();
 
   if (!tripId) {
@@ -73,7 +78,7 @@ export function Dashboard() {
     );
   }
 
-  const currentDay = trip.days.find((d) => d.dayNumber === trip.currentDayNumber);
+  const currentDay = days.find((d) => d.dayNumber === trip.currentDayNumber);
   const currentCityKey = currentDay?.cityKey ?? "";
   const cityEmoji = CITY_EMOJI[currentCityKey] ?? "🏙️";
   const sym = currencySymbol(trip.settings.currency);
@@ -111,7 +116,7 @@ export function Dashboard() {
 
       <DashboardStats trip={trip} daysRemaining={daysRemaining} />
 
-      <NextPlaceWidget trip={trip} onGoToItinerary={() => { setSelectedDay(null); setActiveTab("itinerary"); }} />
+      <NextPlaceWidget trip={trip} days={days} onGoToItinerary={() => { setSelectedDay(null); setActiveTab("itinerary"); }} />
 
       <TodayList trip={trip} currentDay={currentDay} isBefore={isBefore} isAfter={isAfter} sym={sym} />
 

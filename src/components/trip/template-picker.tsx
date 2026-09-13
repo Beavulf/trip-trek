@@ -62,7 +62,6 @@ export function TemplatePicker({ open, onOpenChange }: TemplatePickerProps) {
       qc.invalidateQueries({ queryKey: ["trips"] });
       qc.invalidateQueries({ queryKey: ["trip"] });
       qc.invalidateQueries({ queryKey: ["route"] });
-      qc.invalidateQueries({ queryKey: ["days"] });
       toast.success(data.message || "Поездка создана! 🎉");
       onOpenChange(false);
       setSelectedTemplate(null);

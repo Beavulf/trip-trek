@@ -3,7 +3,7 @@
 import { motion } from "framer-motion";
 import { CheckCircle2, Circle, ListChecks, MapPin, Navigation } from "lucide-react";
 import { useUpdatePlace } from "@/hooks/use-trip";
-import { CATEGORY_META, type Place, type TripSummary } from "@/lib/types";
+import { CATEGORY_META, type Day, type Place, type TripSummary } from "@/lib/types";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { useTripStore } from "@/lib/trip-store";
@@ -12,7 +12,7 @@ import { googleDirectionsUrl } from "@/lib/place-links";
 
 interface TodayListProps {
   trip: TripSummary;
-  currentDay: TripSummary["days"][number] | undefined;
+  currentDay: Day | undefined;
   isBefore: boolean;
   isAfter: boolean;
   sym: string;

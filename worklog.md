@@ -1,5 +1,44 @@
 # TripTrek China — Work Log
 
+## Session 2026-09-13 (3) — Перформанс-фиксы по аудиту (payload, штормы, бандл)
+
+**Задача**: починить находки аудита производительности (`docs/audit-performance.md`): инвалидационные штормы, двойной read-model, PII-утечку email, тяжёлые списки на мобильных, лишний первичный бандл. Полный список находок и цифры «до» — в аудите.
+
+### Сервер
+
+- **`GET /api/trip` — слим-формат**: дни отдаются БЕЗ мест (мета дня + `placesCount`/`visitedCount`), счётчики считаются `count`/`aggregate` вместо `findMany` полных строк (траты больше не грузятся целиком ради одной суммы, `paidBy: true` с полными рядами User — тоже). **`email` участников теперь отдаётся только владельцу** (PII: раньше email всех участников уезжал каждому и рендерился в «О поездке»). Payload «China 2024»: 20.8 KB → ~2 KB.
+- **`GET /api/route`**: выпилены встроенные `photos: { take: 8 }` (ни один клиентский потребитель `day.photos` их не читал), места — селектом без `createdAt/updatedAt/tripId` (~4 KB на 45 мест).
+- **`GET /api/photos`**: `include place` → селект `{name, lat, lng}` (лайтбокс показывает только имя места). **`GET /api/photos/geo`**: селект маркерных полей + кап 1000 (было без лимита, полными строками).
+- **`GET /api/days` удалён** (легаси, читателей ноль; POST/PATCH/DELETE мутации остались).
+
+### Клиент
+
+- **`use-websocket.ts`**: инвалидации через дебаунс 400 мс (загрузка 10 фото = 1 волна рефетчей вместо ~10×4 GET); reconnect бесконечный (backoff до 30 c) вместо 10 попыток ≈ 20 c; WS-событие `notification` инвалидирует бейдж (поллинг `useNotifications` 30 c → 60 c как страховка); при каждом `connect` диспетчится `triptrek:socket-ready`.
+- **Двойной read-model разобран**: дашборд (currentDay/TodayList/NextPlace), лента и галерея (гео-фолбэк мест) читают дни с местами из `useRouteDays()`; `RouteRail` перешёл на `placesCount`/`visitedCount` слим-дней.
+- **Легаси-ключ `["days"]` похоронен**: убран из `invalidateRouteData`, use-websocket, use-trip, trip-switcher, template-picker, ProfilePage; `queryKeys.days` удалён.
+- **Чат**: порционный рендер (последние 100 + «Показать ещё», jumpTo при необходимости разворачивает всю историю), `MessageRow` в `memo` с `currentUserId` пропом — чтение `localStorage` в рендере каждой строки убрано; `board:typing` переживает пересоздание сокета (подписка перевешивается по `socket-ready`).
+- **Галерея**: порционный рендер (60 + «Показать ещё», индексы лайтбокса не ломаются), плитки без per-tile framer-motion mount-анимации; `PhotoForm` (exifr ~100 KB) — `dynamic()` и в галерее, и в QuickAddSheet.
+- **Дневник**: порционный рендер глав (5 групп + «Показать ещё»).
+- **Budget**: `byCategory`/`dailyData` в `useMemo` (перерисовка recharts на каждый чих вкладки); хуки вынесены выше ранних return'ов (rules-of-hooks).
+- **app-shell**: `QuickAddSheet`, `PremiumModal`, `InviteFriends`, `ShareCard`, `BugReportSheet` — `next/dynamic` + условный маунт (открываются по действию юзера).
+- **PWA**: минутный `setInterval(reg.update())` → проверка на `visibilitychange` не чаще раза в 15 мин; регистрация SW в providers корректно обрабатывает «страница уже загружена» (once-листенер вместо вечного).
+
+### Сборка/зависимости
+
+- `next.config.ts`: webpack cache-group `recharts` — один общий чанк вместо дублей в `/` и `/admin` (прод собирается `next build --webpack` в Dockerfile).
+- Мёртвые deps удалены: `@mdxeditor/editor`, `react-syntax-highlighter`, `@dnd-kit/*`, `@tanstack/react-table`, `embla-carousel-react` + `ui/carousel.tsx` (никто не импортировал).
+- **Замер после**: первичный JS `/` — 386 → **315 KB gzip** (−18%), chunks 21 → 20; в сборке остался один крупный вендор-чанк (recharts 341 KB raw) вместо двух ~388 KB.
+
+### Доки
+
+- `docs/api.md` (строки `trip`, `route`, `days`, `photos`, `photos/geo`), `docs/architecture.md` §4 (дебаунс + reconnect), `docs/audit-performance.md` (статус фиксов).
+
+### Проверено
+
+`bunx tsc --noEmit` чисто, vitest 66/66, `next build --webpack` зелёный, eslint — только 13 pre-existing `set-state-in-effect` (не трогали). Браузерный смоук — в конце сессии.
+
+---
+
 ## Session 2026-09-13 (2) — Обучалки вкладок вместо плашек-подсказок
 
 **Фидбек владельца**: welcome-тура мало — не рассказаны дни маршрута, карта (линии/фильтры/добавление с карты), бюджет каждого и долги, «Рядом» в Chill, паки фраз и TTS, Лента, права владельца. Верхняя плашка-подсказка «ваще плохо» → заменить полноценными интерактивными обучалками.

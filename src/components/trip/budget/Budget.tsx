@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Plus, UserCircle, Pencil, Loader2, Wallet, ChevronDown } from "lucide-react";
 import { useExpenses, useTrip, useCurrentTripId } from "@/hooks/use-trip";
 import { useAuth } from "@/hooks/use-auth";
@@ -47,6 +47,41 @@ export function Budget() {
   const [historyFilter, setHistoryFilter] = useState<HistoryFilter>("all");
   const [showAllHistory, setShowAllHistory] = useState(false);
   const currentUserId = (session?.user as { id?: string } | undefined)?.id || "";
+
+  // useMemo: новые identity на каждый рендер перерисовывали recharts-графики
+  // при любом чихе вкладки, включая ввод траты (аудит 2026-09-13).
+  // Хуки — ДО всех ранних return'ов, иначе rules-of-hooks.
+  const realExpenses = useMemo(
+    () => (expenses ?? []).filter((e) => e.category !== "settlement"),
+    [expenses]
+  );
+  const byCategory = useMemo(
+    () =>
+      Object.keys(EXPENSE_CATEGORIES)
+        .map((key) => {
+          const sum = realExpenses.filter((e) => e.category === key).reduce((s, e) => s + e.amount, 0);
+          return {
+            key,
+            label: EXPENSE_CATEGORIES[key].label,
+            emoji: EXPENSE_CATEGORIES[key].emoji,
+            color: EXPENSE_CATEGORIES[key].color,
+            value: sum,
+          };
+        })
+        .filter((x) => x.value > 0),
+    [realExpenses]
+  );
+
+  const dailyData = useMemo(
+    () =>
+      (trip?.days ?? [])
+        .map((d) => {
+          const sum = realExpenses.filter((e) => e.dayId === d.id).reduce((s, e) => s + e.amount, 0);
+          return { day: `Д${d.dayNumber}`, amount: Math.round(sum), city: d.city };
+        })
+        .filter((d) => d.amount > 0),
+    [trip?.days, realExpenses]
+  );
 
   if (!tripId) {
     return (
@@ -108,32 +143,12 @@ export function Budget() {
     );
   }
 
-  const realExpenses = expenses.filter((e) => e.category !== "settlement");
   const settlementCount = expenses.length - realExpenses.length;
   const totalSpent = realExpenses.reduce((s, e) => s + e.amount, 0);
   const remaining = trip.settings.totalBudget - totalSpent;
   const budgetPct = trip.settings.totalBudget > 0 ? (totalSpent / trip.settings.totalBudget) * 100 : 0;
   const daysLeft = daysLeftInTrip(trip.settings.startDate, trip.settings.totalDays, trip.trip?.status);
 
-  const byCategory = Object.keys(EXPENSE_CATEGORIES)
-    .map((key) => {
-      const sum = realExpenses.filter((e) => e.category === key).reduce((s, e) => s + e.amount, 0);
-      return {
-        key,
-        label: EXPENSE_CATEGORIES[key].label,
-        emoji: EXPENSE_CATEGORIES[key].emoji,
-        color: EXPENSE_CATEGORIES[key].color,
-        value: sum,
-      };
-    })
-    .filter((x) => x.value > 0);
-
-  const dailyData = trip.days
-    .map((d) => {
-      const sum = realExpenses.filter((e) => e.dayId === d.id).reduce((s, e) => s + e.amount, 0);
-      return { day: `Д${d.dayNumber}`, amount: Math.round(sum), city: d.city };
-    })
-    .filter((d) => d.amount > 0);
   const dayColor = (cityName: string) =>
     trip.days.find((d) => d.city === cityName)?.accentColor ?? "#0ea5e9";
 

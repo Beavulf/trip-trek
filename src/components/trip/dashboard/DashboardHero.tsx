@@ -9,7 +9,7 @@ import {
   Plane,
   Users,
 } from "lucide-react";
-import type { TripSummary } from "@/lib/types";
+import type { Day, TripSummary } from "@/lib/types";
 import { plural } from "@/lib/utils";
 import { useAuth } from "@/hooks/use-auth";
 import { useWeather } from "@/hooks/use-trip";
@@ -18,7 +18,7 @@ import { DatesEditor } from "./DatesEditor";
 
 interface DashboardHeroProps {
   trip: TripSummary;
-  currentDay: TripSummary["days"][number] | undefined;
+  currentDay: Day | undefined;
   cityEmoji: string;
   isBefore: boolean;
   isAfter: boolean;

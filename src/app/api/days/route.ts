@@ -3,28 +3,8 @@ import { db } from "@/lib/db";
 import { requireTripMember } from "@/lib/api-auth";
 import { dayDateFor, dayEndFor } from "@/lib/trip-days";
 
-// GET /api/days?tripId=...
-export async function GET(req: NextRequest) {
-  const { searchParams } = new URL(req.url);
-  const tripId = searchParams.get("tripId") || "";
-  if (!tripId) {
-    return NextResponse.json({ error: "tripId required" }, { status: 400 });
-  }
-
-  const { response } = await requireTripMember(req, tripId);
-  if (response) return response;
-
-  const days = await db.day.findMany({
-    where: { tripId },
-    orderBy: { dayNumber: "asc" },
-    include: {
-      places: { where: { tripId }, orderBy: { order: "asc" } },
-      photos: { where: { tripId }, orderBy: { takenAt: "desc" }, take: 8 },
-      _count: { select: { places: true, photos: true, expenses: true } },
-    },
-  });
-  return NextResponse.json(days);
-}
+// GET удалён (аудит перфоманса 2026-09-13): модель чтения дней+мест —
+// GET /api/route (useRoute/useRouteDays). Здесь остались только мутации.
 
 // POST /api/days — добавить новый день
 export async function POST(req: NextRequest) {

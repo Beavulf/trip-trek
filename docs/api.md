@@ -46,7 +46,7 @@
 | `trips/[tripId]/members/[memberId]` | PATCH | M(owner) | — | роль/имя участника, передача владения (ownership → уведомление) |
 | `trips/join` | GET, POST | U | 30/мин/IP + userRateLimit | превью поездки по инвайт-коду / вступление (проверяет TripBan, freeMemberLimit) |
 | `trips/from-template` | POST | U | — | создать поездку из шаблона (`src/lib/trip-templates.ts`) |
-| `trip` | GET, PATCH | M | — | данные текущей поездки (общие поля) |
+| `trip` | GET, PATCH | M | — | сводка поездки: участники, счётчики, дни-мета БЕЗ мест (слим-формат, аудит 2026-09-13); `email` участников — только владельцу; дни с местами — `route` |
 | `trip/dates` | PATCH | O | — | сдвиг дат/дней поездки |
 | `trip/budget` | PATCH | M | — | общий бюджет/валюта поездки |
 | `trip/import` | POST | U | userRateLimit | импорт JSON-бэкапа → новая поездка |
@@ -62,13 +62,13 @@
 
 | Роут | Методы | WS-событие | Что делает |
 |---|---|---|---|
-| `route` | GET | — | модель чтения маршрута: дни+места+мета поездки одним запросом (`useRoute`); клиент читает маршрут отсюда, а не из `days`+`trip` параллельно |
-| `days` | GET, POST, PATCH, DELETE | `trip:updated` | дни поездки (город, даты); GET оставлен для совместимости — SPA читает через `route` |
+| `route` | GET | — | модель чтения маршрута: дни+места+мета поездки одним запросом (`useRoute`); единственный источник дней с местами — дашборд, лента и галерея тоже читают его через `useRouteDays` |
+| `days` | POST, PATCH, DELETE | `trip:updated` | мутации дней (город, даты); GET удалён (аудит 2026-09-13) — читайте `route` |
 | `places` | POST | `place:created` | новое место (день, координаты, категория) |
 | `places/[id]` | PATCH, DELETE | `place:updated/deleted` | правка/удаление места, статус visited |
-| `photos` | GET, POST, DELETE | `photo:added` | галерея; POST — загрузка файла (storage, EXIF-гео) |
+| `photos` | GET, POST, DELETE | `photo:added` | галерея; POST — загрузка файла (storage, EXIF-гео); GET отдаёт `place` проекцией {name, lat, lng} |
 | `photos/[id]` | PATCH | `photo:added` | подпись/избранное |
-| `photos/geo` | GET | — | фото с координатами (слой на карте) |
+| `photos/geo` | GET | — | фото с координатами для карты: селект маркерных полей, кап 1000 |
 | `expenses` | GET, POST, DELETE | `expense:added` | траты, делёж (`src/lib/budget/`), погашения (settlementKey) |
 | `budget-plan` | GET, PATCH | `budget:updated` | плановый бюджет по категориям |
 | `board` | GET, POST, PATCH, DELETE | `board:added` | чат поездки (реакции JSON, ответы, pin) |

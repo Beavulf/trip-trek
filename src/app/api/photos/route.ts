@@ -28,7 +28,9 @@ export async function GET(req: NextRequest) {
     where,
     orderBy: { takenAt: "desc" },
     include: {
-      place: true,
+      // place — только поля, которые читает клиент (lightbox: название места);
+      // полный ряд Place здесь не нужен (аудит перфоманса 2026-09-13)
+      place: { select: { name: true, lat: true, lng: true } },
       user: { select: { id: true, name: true, color: true, emoji: true, avatarUrl: true } },
       day: { select: { dayNumber: true, city: true, cityKey: true } },
     },
@@ -104,7 +106,6 @@ export async function POST(req: NextRequest) {
     // user — проекцией, а не целиком: include user:true тянет в ответ весь ряд
     // юзера вместе с хешем пароля (привычка из journal/photos GET)
     include: {
-      place: true,
       day: true,
       user: { select: { id: true, name: true, emoji: true, color: true, avatarUrl: true } },
     },

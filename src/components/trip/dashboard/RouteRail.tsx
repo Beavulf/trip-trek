@@ -38,7 +38,7 @@ export function RouteRail({ trip }: { trip: TripSummary }) {
       <div className="chip-rail no-scrollbar">
         <div className="flex items-start">
           {trip.days.map((d, i) => {
-            const visited = d.places.filter((p) => p.status === "visited").length;
+            const visited = d.visitedCount;
             const isCurrent = d.dayNumber === trip.currentDayNumber;
             const isPast = d.dayNumber < trip.currentDayNumber;
             const accent = d.accentColor ?? "#f97316";
@@ -48,8 +48,8 @@ export function RouteRail({ trip }: { trip: TripSummary }) {
             const metaText = isCurrent
               ? "сегодня"
               : isPast
-                ? (d.places.length > 0 ? `${visited}/${d.places.length}` : "прошёл")
-                : (d.places.length > 0 ? `${d.places.length} ${plural(d.places.length, "место", "места", "мест")}` : "—");
+                ? (d.placesCount > 0 ? `${visited}/${d.placesCount}` : "прошёл")
+                : (d.placesCount > 0 ? `${d.placesCount} ${plural(d.placesCount, "место", "места", "мест")}` : "—");
             const meta = isCurrent ? (
               <span className="text-primary font-semibold">{metaText}</span>
             ) : (

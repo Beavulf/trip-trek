@@ -35,24 +35,29 @@ import {
   Shield,
 } from "lucide-react";
 import { useState, useEffect, useRef, type ReactNode } from "react";
+import dynamic from "next/dynamic";
 import { createPortal } from "react-dom";
 import { useTheme } from "next-themes";
 import { useAuth as useSession } from "@/hooks/use-auth";
 import { useRouter } from "next/navigation";
 import { useWebSocket } from "@/hooks/use-websocket";
-import { QuickAddSheet } from "./quick-add";
 import { GlobalSearch } from "./global-search";
 import { TripSwitcher } from "./trip-switcher";
-import { PremiumModal } from "./premium-modal";
-import { PWAUpdateNotification } from "./pwa-update";
-import { InviteFriends } from "./invite-friends";
-import { ShareCard } from "./share-card";
-import { BugReportSheet } from "./bug-report-sheet";
 import { NotificationsBell } from "./notifications-bell";
+import { PWAUpdateNotification } from "./pwa-update";
 import { TripInfoSheet } from "./trip-info-sheet";
 import { WelcomeTour } from "./onboarding/welcome-tour";
 import { TabTour } from "./onboarding/tab-tour";
 import { useAdminStats } from "@/hooks/use-admin-stats";
+
+// Оверлеи, открываемые действием юзера, грузим по требованию — в первичном
+// бандле им делать нечего (аудит 2026-09-13: qrcode/react в InviteFriends,
+// exifar-цепочка в QuickAddSheet и т.д.)
+const QuickAddSheet = dynamic(() => import("./quick-add").then((m) => m.QuickAddSheet), { ssr: false });
+const PremiumModal = dynamic(() => import("./premium-modal").then((m) => m.PremiumModal), { ssr: false });
+const InviteFriends = dynamic(() => import("./invite-friends").then((m) => m.InviteFriends), { ssr: false });
+const ShareCard = dynamic(() => import("./share-card").then((m) => m.ShareCard), { ssr: false });
+const BugReportSheet = dynamic(() => import("./bug-report-sheet").then((m) => m.BugReportSheet), { ssr: false });
 
 const TABS = [
   { key: "dashboard", label: "Обзор", icon: LayoutDashboard },
@@ -390,18 +395,18 @@ export function AppShell({ children }: { children: ReactNode }) {
         </div>
       </footer>
 
-      <QuickAddSheet open={quickOpen} onOpenChange={setQuickOpen} />
+      {quickOpen && <QuickAddSheet open onOpenChange={setQuickOpen} />}
       <GlobalSearch open={searchOpen} onOpenChange={setSearchOpen} />
-      <InviteFriends open={inviteOpen} onOpenChange={setInviteOpen} />
+      {inviteOpen && <InviteFriends open onOpenChange={setInviteOpen} />}
       <TripInfoSheet
         open={infoOpen}
         onOpenChange={setInfoOpen}
         onInvite={() => setInviteOpen(true)}
         onShare={() => setShareOpen(true)}
       />
-      <ShareCard open={shareOpen} onOpenChange={setShareOpen} />
-      <PremiumModal open={premiumOpen} onOpenChange={setPremiumOpen} />
-      <BugReportSheet open={bugOpen} onOpenChange={setBugOpen} />
+      {shareOpen && <ShareCard open onOpenChange={setShareOpen} />}
+      {premiumOpen && <PremiumModal open onOpenChange={setPremiumOpen} />}
+      {bugOpen && <BugReportSheet open onOpenChange={setBugOpen} />}
       {/* Обучение: welcome-тур при первом входе + обучалки вкладок при первом визите */}
       <WelcomeTour />
       <TabTour />

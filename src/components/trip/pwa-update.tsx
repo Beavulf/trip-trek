@@ -43,16 +43,24 @@ export function PWAUpdateNotification() {
       window.location.reload();
     });
 
-    // Проверяем обновления каждые 60 секунд
-    const interval = setInterval(() => {
+    // Проверяем обновления не минутным таймером (фоновый трафик/батарея на
+    // мобильных — аудит 2026-09-13), а при возврате во вкладку и не чаще раза в 15 мин
+    let lastCheck = Date.now();
+    const checkForUpdate = () => {
+      if (Date.now() - lastCheck < 15 * 60_000) return;
+      lastCheck = Date.now();
       navigator.serviceWorker.getRegistrations().then((registrations) => {
         registrations.forEach((reg) => {
           reg.update().catch(() => {});
         });
-      });
-    }, 60000);
+      }).catch(() => {});
+    };
+    const onVisibilityChange = () => {
+      if (document.visibilityState === "visible") checkForUpdate();
+    };
+    document.addEventListener("visibilitychange", onVisibilityChange);
 
-    return () => clearInterval(interval);
+    return () => document.removeEventListener("visibilitychange", onVisibilityChange);
   }, []);
 
   const handleUpdate = () => {

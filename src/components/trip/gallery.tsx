@@ -1,18 +1,22 @@
 "use client";
 
 import { usePhotos, useDeletePhoto, useUpdatePhoto, useTrip, useCurrentTripId } from "@/hooks/use-trip";
+import { useRouteDays } from "@/hooks/trip/use-route";
 import { useTripStore } from "@/lib/trip-store";
 import { focusOnMap } from "@/lib/map-bus";
 import { useAuth } from "@/hooks/use-auth";
 import { motion, useReducedMotion } from "framer-motion";
 import { Camera, Columns3, LayoutGrid, MapPin, Star } from "lucide-react";
+import dynamic from "next/dynamic";
 import { useState, useMemo } from "react";
 import { toast } from "sonner";
 import type { Photo } from "@/lib/types";
 import { cn, plural } from "@/lib/utils";
 import { PhotoLightbox } from "./photo-lightbox";
 import { MobileBottomSheet } from "./mobile-bottom-sheet";
-import { PhotoForm } from "./quick-add/PhotoForm";
+
+// PhotoForm тянет exifr (~100 KB) — грузим только при открытии формы (аудит 2026-09-13)
+const PhotoForm = dynamic(() => import("./quick-add/PhotoForm").then((m) => m.PhotoForm), { ssr: false });
 
 type Dimension = "day" | "city" | "person";
 type LayoutMode = "masonry" | "compact";
@@ -38,6 +42,8 @@ export function Gallery() {
   const tripId = useCurrentTripId();
   const { data: photos, isLoading, isError, refetch } = usePhotos();
   const { data: trip, isLoading: tripLoading, isError: tripError, refetch: refetchTrip } = useTrip();
+  // Гео-фолбэк для фото без координат — ищем место в модели чтения /api/route
+  const { data: routeDays } = useRouteDays();
   const del = useDeletePhoto();
   const upd = useUpdatePhoto();
   const { setTripSwitcherOpen } = useTripStore();
@@ -54,6 +60,9 @@ export function Gallery() {
   const [favOnly, setFavOnly] = useState(false);
   const [layout, setLayout] = useState<LayoutMode>("masonry");
   const [addOpen, setAddOpen] = useState(false);
+  // Порционный рендер (аудит 2026-09-13): сотни motion-плиток на мобильном
+  // блокировали поток на секунды; индексы slice сохраняются — лайтбокс не ломается
+  const [visibleCount, setVisibleCount] = useState(60);
 
   const all = useMemo(() => (Array.isArray(photos) ? photos : []), [photos]);
   const total = all.length;
@@ -120,6 +129,7 @@ export function Gallery() {
   }, [all]);
 
   const strip = useMemo(() => filtered.slice(0, 12), [filtered]);
+  const shown = filtered.slice(0, visibleCount);
   const hasActiveFilters = favOnly || !!chipValue;
 
   const accent = useMemo(() => {
@@ -215,7 +225,7 @@ export function Gallery() {
     let lng = photo.lng;
     // У фото нет своей геометки, но привязано место — летим к координатам места
     if ((lat == null || lng == null) && photo.placeId) {
-      const place = trip?.days.flatMap((d) => d.places).find((p) => p.id === photo.placeId);
+      const place = (routeDays ?? []).flatMap((d) => d.places).find((p) => p.id === photo.placeId);
       if (place) {
         lat = place.lat;
         lng = place.lng;
@@ -484,12 +494,10 @@ export function Gallery() {
         </div>
       ) : layout === "masonry" ? (
         <div className="masonry-grid">
-          {filtered.map((photo, i) => (
-            <motion.button
+          {shown.map((photo, i) => (
+            <button
               key={photo.id}
               type="button"
-              initial={reduceMotion ? false : { opacity: 0 }}
-              animate={{ opacity: 1 }}
               onClick={() => setLightbox(i)}
               className="masonry-item relative rounded-xl overflow-hidden bg-muted block w-full cursor-pointer active:scale-[0.98] transition-transform"
             >
@@ -523,18 +531,16 @@ export function Gallery() {
                 </span>
                 {photo.caption && <span className="text-white text-xs line-clamp-1">{photo.caption}</span>}
               </span>
-            </motion.button>
+            </button>
           ))}
         </div>
       ) : (
         /* Компактный режим: контактный лист 3×N — быстро просмотреть много кадров */
         <div className="grid grid-cols-3 gap-0.5">
-          {filtered.map((photo, i) => (
-            <motion.button
+          {shown.map((photo, i) => (
+            <button
               key={photo.id}
               type="button"
-              initial={reduceMotion ? false : { opacity: 0 }}
-              animate={{ opacity: 1 }}
               onClick={() => setLightbox(i)}
               className="relative aspect-square overflow-hidden bg-muted active:scale-[0.97] transition-transform"
               aria-label={photo.caption || "Фото"}
@@ -550,8 +556,20 @@ export function Gallery() {
               {photo.isFavorite && (
                 <Star className="absolute top-1 left-1 size-3.5 fill-yellow-300 text-yellow-300 drop-shadow" aria-hidden="true" />
               )}
-            </motion.button>
+            </button>
           ))}
+        </div>
+      )}
+
+      {shown.length < filtered.length && (
+        <div className="flex justify-center pt-2 pb-4">
+          <button
+            type="button"
+            onClick={() => setVisibleCount((n) => n + 60)}
+            className="inline-flex min-h-11 items-center gap-1.5 rounded-xl bg-secondary border border-border px-5 text-xs font-medium active:scale-95 transition-transform"
+          >
+            Показать ещё · осталось {filtered.length - shown.length} фото
+          </button>
         </div>
       )}
 
