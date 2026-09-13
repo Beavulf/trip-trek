@@ -2,12 +2,9 @@
 
 import {
   useCreatePlace,
-  useGeocode,
   useRouteDays,
 } from "@/hooks/use-trip";
-import { CATEGORY_META } from "@/lib/types";
-import { TIME_SLOTS, timeLabel } from "@/lib/time-of-day";
-import { formatLatLng, coordKey } from "@/lib/utils";
+import { useReverseGeocode } from "@/hooks/trip/use-geocode";
 import {
   Loader2,
   Check,
@@ -16,11 +13,14 @@ import {
   Plus,
   Map as MapIcon,
 } from "lucide-react";
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
 import { useBodyScrollLock } from "@/hooks/use-body-scroll-lock";
+import { formatLatLng, coordKey } from "@/lib/utils";
+import { PlaceForm } from "./place-form";
+import { parseBudget, type PlaceDraft } from "@/lib/place-draft";
 import { MapPicker } from "./map-picker";
 
 export interface AddPlaceData {
@@ -105,56 +105,52 @@ function AddPlaceForm({
 }) {
   const { data: days } = useRouteDays();
   const create = useCreatePlace();
-  const geocode = useGeocode();
 
-  const [name, setName] = useState(initial.name || "");
-  const [category, setCategory] = useState("sight");
-  const [timeOfDay, setTimeOfDay] = useState("");
-  const [budget, setBudget] = useState("");
-  const [description, setDescription] = useState("");
-  const [address, setAddress] = useState(initial.address || "");
-  const [dayId, setDayId] = useState(initial.dayId || "");
+  const [draft, setDraft] = useState<PlaceDraft>({
+    name: initial.name || "",
+    category: "sight",
+    timeOfDay: "",
+    budget: "",
+    address: initial.address || "",
+    description: "",
+    dayId: initial.dayId || "",
+  });
   const [lat, setLat] = useState(initial.lat);
   const [lng, setLng] = useState(initial.lng);
   const [mapOpen, setMapOpen] = useState(false);
-  // Флаг — уже геокодировали текущую точку (пусто при mount → форсим геокодирование при первом открытии)
-  const [geocodedFor, setGeocodedFor] = useState<string>("");
+  // Адрес, введённый пользователем (или пришедший с пикера) — приоритетнее геокода
+  const [addressOverride, setAddressOverride] = useState<string | null>(initial.address ?? null);
 
-  // Reverse geocoding при первоначальном монтировании, если адреса нет
-  useEffect(() => {
-    if (initial.address || !initial.lat || !initial.lng) return;
-    const key = coordKey(initial.lat, initial.lng);
-    if (geocodedFor === key) return;
-    geocode.mutate(
-      { lat: initial.lat, lng: initial.lng },
-      {
-        onSuccess: (res) => setAddress(res.address),
-        onError: () => setAddress(formatLatLng(initial.lat, initial.lng)),
-      }
-    );
-    setGeocodedFor(key);
-  }, []);
+  // Адрес по координатам: кэшируемый query (по координатам) вместо мутации
+  // с ручной дедупликацией; пока грузится — показываем координаты
+  const { data: geo, isPending: geoPending } = useReverseGeocode(initial.lat, initial.lng, !initial.address);
+  const shownAddress = addressOverride ?? geo?.address ?? formatLatLng(lat, lng);
+
+  const patchDraft = (patch: Partial<PlaceDraft>) => {
+    setDraft((d) => ({ ...d, ...patch }));
+    if ("address" in patch) setAddressOverride(patch.address ?? null);
+  };
 
   const submit = async () => {
-    if (!name.trim()) {
+    if (!draft.name.trim()) {
       toast.error("Введите название места");
       return;
     }
-    if (!dayId) {
+    if (!draft.dayId) {
       toast.error("Выберите день");
       return;
     }
     try {
       await create.mutateAsync({
-        name: name.trim(),
-        description: description.trim() || undefined,
-        category,
+        name: draft.name.trim(),
+        description: draft.description.trim() || undefined,
+        category: draft.category,
         lat,
         lng,
-        dayId,
-        timeOfDay: timeOfDay || undefined,
-        budget: budget ? parseFloat(budget) : undefined,
-        address: address.trim() || undefined,
+        dayId: draft.dayId,
+        timeOfDay: draft.timeOfDay || undefined,
+        budget: parseBudget(draft.budget) ?? undefined,
+        address: shownAddress.trim() || undefined,
       });
       toast.success("Место добавлено! 📍");
       onDone();
@@ -170,114 +166,40 @@ function AddPlaceForm({
       {/* координаты */}
       <div className="rounded-lg bg-muted/50 px-3 py-2 text-[11px] text-muted-foreground flex items-center gap-1.5">
         <MapPin className="size-3 shrink-0" />
-        {geocode.isPending ? (
+        {geoPending ? (
           <span className="flex items-center gap-1"><Loader2 className="size-3 animate-spin" /> Определяем адрес…</span>
         ) : (
-          <span className="truncate">{address || formatLatLng(lat, lng)}</span>
+          <span className="truncate">{shownAddress}</span>
         )}
       </div>
 
-      {/* название */}
+      <PlaceForm value={draft} onChange={patchDraft} />
+
+      {/* день создания — только в этой форме */}
       <div>
-        <label className="text-xs text-muted-foreground mb-1 block">Название *</label>
-        <input
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          placeholder="Например, Уличная еда на углу"
-          autoFocus
-          className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm"
-        />
+        <label className="text-xs text-muted-foreground mb-1 block">День *</label>
+        <select
+          value={draft.dayId}
+          onChange={(e) => patchDraft({ dayId: e.target.value })}
+          className="w-full rounded-lg border border-input bg-background px-2 py-2 text-sm"
+        >
+          <option value="">Выбрать…</option>
+          {days?.map((d) => (
+            <option key={d.id} value={d.id}>День {d.dayNumber} · {d.city}</option>
+          ))}
+        </select>
       </div>
 
-      {/* день + категория */}
-      <div className="grid grid-cols-2 gap-2">
-        <div>
-          <label className="text-xs text-muted-foreground mb-1 block">День *</label>
-          <select
-            value={dayId}
-            onChange={(e) => setDayId(e.target.value)}
-            className="w-full rounded-lg border border-input bg-background px-2 py-2 text-sm"
-          >
-            <option value="">Выбрать…</option>
-            {days?.map((d) => (
-              <option key={d.id} value={d.id}>День {d.dayNumber} · {d.city}</option>
-            ))}
-          </select>
-        </div>
-        <div>
-          <label className="text-xs text-muted-foreground mb-1 block">Категория</label>
-          <select
-            value={category}
-            onChange={(e) => setCategory(e.target.value)}
-            className="w-full rounded-lg border border-input bg-background px-2 py-2 text-sm"
-          >
-            {Object.entries(CATEGORY_META).map(([k, v]) => (
-              <option key={k} value={k}>{v.emoji} {v.label}</option>
-            ))}
-          </select>
-        </div>
-      </div>
-
-      {/* время + бюджет */}
-      <div className="grid grid-cols-2 gap-2">
-        <div>
-          <label className="text-xs text-muted-foreground mb-1 block">Время суток</label>
-          <select
-            value={timeOfDay}
-            onChange={(e) => setTimeOfDay(e.target.value)}
-            className="w-full rounded-lg border border-input bg-background px-2 py-2 text-sm"
-          >
-            <option value="">Любое</option>
-            {TIME_SLOTS.map((s) => (
-              <option key={s.key} value={s.key}>{timeLabel(s.key, { emoji: true })}</option>
-            ))}
-          </select>
-        </div>
-        <div>
-          <label className="text-xs text-muted-foreground mb-1 block">Бюджет $</label>
-          <input
-            type="number"
-            inputMode="decimal"
-            value={budget}
-            onChange={(e) => setBudget(e.target.value)}
-            placeholder="0"
-            className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm"
-          />
-        </div>
-      </div>
-
-      {/* адрес (редактируемый) + кнопка карты */}
+      {/* кнопка карты — уточнить точку */}
       <div>
-        <label className="text-xs text-muted-foreground mb-1 block flex items-center gap-1"><MapPin className="size-3" /> Адрес</label>
-        <div className="flex gap-1.5">
-          <input
-            value={address}
-            onChange={(e) => setAddress(e.target.value)}
-            placeholder="Адрес места"
-            className="flex-1 min-w-0 rounded-lg border border-input bg-background px-3 py-2 text-sm"
-          />
-          <button
-            type="button"
-            onClick={() => setMapOpen(true)}
-            className="shrink-0 size-11 rounded-lg bg-secondary border border-border hover:bg-accent grid place-items-center"
-            title="Выбрать на карте"
-            aria-label="Выбрать на карте"
-          >
-            <MapIcon className="size-4" />
-          </button>
-        </div>
-      </div>
-
-      {/* описание */}
-      <div>
-        <label className="text-xs text-muted-foreground mb-1 block">Заметка</label>
-        <textarea
-          value={description}
-          onChange={(e) => setDescription(e.target.value)}
-          placeholder="Что понравилось, что попробовать…"
-          rows={2}
-          className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm resize-none"
-        />
+        <div className="text-xs text-muted-foreground mb-1 block">Точка на карте</div>
+        <button
+          type="button"
+          onClick={() => setMapOpen(true)}
+          className="w-full min-h-11 rounded-lg bg-secondary border border-border hover:bg-accent flex items-center justify-center gap-1.5 text-sm"
+        >
+          <MapIcon className="size-4" /> Выбрать на карте
+        </button>
       </div>
 
       <div className="flex gap-2 pt-1">
@@ -289,7 +211,7 @@ function AddPlaceForm({
         </button>
         <button
           onClick={submit}
-          disabled={create.isPending || !name.trim() || !dayId}
+          disabled={create.isPending || !draft.name.trim() || !draft.dayId}
           className="flex-1 rounded-lg bg-primary text-primary-foreground py-2.5 min-h-11 font-medium flex items-center justify-center gap-2 disabled:opacity-50"
         >
           {create.isPending ? <Loader2 className="size-4 animate-spin" /> : <Check className="size-4" />}
@@ -305,7 +227,7 @@ function AddPlaceForm({
         onPick={(r) => {
           setLat(r.lat);
           setLng(r.lng);
-          setAddress(r.address);
+          patchDraft({ address: r.address });
         }}
       />
     </div>

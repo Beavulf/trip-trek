@@ -5,7 +5,7 @@ import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { Check, Loader2, MapPin, X, Navigation } from "lucide-react";
 import { useBodyScrollLock } from "@/hooks/use-body-scroll-lock";
-import { useGeocode } from "@/hooks/use-trip";
+import { fetchGeocode } from "@/hooks/trip/use-geocode";
 import { formatLatLng } from "@/lib/utils";
 import dynamic from "next/dynamic";
 
@@ -43,7 +43,7 @@ export function MapPicker({
     lat: initialLat,
     lng: initialLng,
   });
-  const geocode = useGeocode();
+  const [resolving, setResolving] = useState(false);
 
   useEffect(() => {
     if (open) {
@@ -54,8 +54,10 @@ export function MapPicker({
   if (!open || typeof document === "undefined") return null;
 
   const handleConfirm = async () => {
+    setResolving(true);
     try {
-      const res = await geocode.mutateAsync({ lat: pos.lat, lng: pos.lng });
+      // Разовый императивный запрос: адрес нужен «здесь и сейчас», кэш query тут не помогает
+      const res = await fetchGeocode(pos.lat, pos.lng);
       onPick({ lat: pos.lat, lng: pos.lng, address: res.address });
       onOpenChange(false);
     } catch {
@@ -65,6 +67,8 @@ export function MapPicker({
         address: formatLatLng(pos.lat, pos.lng),
       });
       onOpenChange(false);
+    } finally {
+      setResolving(false);
     }
   };
 
@@ -119,15 +123,15 @@ export function MapPicker({
             </button>
             <button
               onClick={handleConfirm}
-              disabled={geocode.isPending}
+              disabled={resolving}
               className="flex-1 rounded-lg bg-primary text-primary-foreground py-3 font-medium flex items-center justify-center gap-2 disabled:opacity-50"
             >
-              {geocode.isPending ? (
+              {resolving ? (
                 <Loader2 className="size-4 animate-spin" />
               ) : (
                 <Check className="size-4" />
               )}
-              {geocode.isPending ? "Определяем адрес…" : "Подтвердить"}
+              {resolving ? "Определяем адрес…" : "Подтвердить"}
             </button>
           </div>
         </div>

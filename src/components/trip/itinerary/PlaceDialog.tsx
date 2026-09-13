@@ -1,10 +1,9 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  CalendarClock,
   Camera,
   CheckCircle2,
   ChevronDown,
@@ -30,8 +29,8 @@ import {
 import { useAuth } from "@/hooks/use-auth";
 import { useTripStore } from "@/lib/trip-store";
 import { focusOnMap } from "@/lib/map-bus";
-import { CATEGORY_META, CATEGORY_SHORT, type Place, type Photo } from "@/lib/types";
-import { TIME_SLOTS, timeLabel } from "@/lib/time-of-day";
+import { CATEGORY_META, type Place, type Photo } from "@/lib/types";
+import { diffPlaceDraft, draftFromPlace, type PlaceDraft } from "@/lib/place-draft";
 import { googleDirectionsUrl } from "@/lib/place-links";
 import { useBodyScrollLock } from "@/hooks/use-body-scroll-lock";
 import { useDialogA11y } from "@/hooks/use-dialog-a11y";
@@ -39,6 +38,7 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { compressImageForUpload, ImageCompressError } from "@/lib/image-compress";
 import { PhotoLightbox } from "../photo-lightbox";
+import { PlaceForm } from "../place-form";
 
 interface PlaceDialogProps {
   place: Place | null;
@@ -78,17 +78,13 @@ function PlaceDialogBody({ place, currency, onClose }: { place: Place; currency?
   const { setActiveTab } = useTripStore();
   const { data: placePhotos } = usePhotos(undefined, place.id);
 
-  // Поля формы редактирования
-  const [name, setName] = useState(place.name);
-  const [category, setCategory] = useState(place.category);
-  const [timeOfDay, setTimeOfDay] = useState(place.timeOfDay || "");
-  const [budget, setBudget] = useState(place.budget != null ? String(place.budget) : "");
-  const [address, setAddress] = useState(place.address || "");
-  const [description, setDescription] = useState(place.description || "");
+  // Черновик редактирования; база для диффа — свежая версия места из кэша
+  const [draft, setDraft] = useState<PlaceDraft>(() => draftFromPlace(place));
 
   // Свежая версия места из кэша дней — статус/рейтинг/заметки отражаются сразу
   const fresh: Place =
     days?.flatMap((d) => d.places).find((p) => p.id === place.id) ?? place;
+  const baseDraft = useMemo(() => draftFromPlace(fresh), [fresh]);
 
   useEffect(() => {
     setNotes(fresh.notes || "");
@@ -109,14 +105,7 @@ function PlaceDialogBody({ place, currency, onClose }: { place: Place; currency?
     return () => window.removeEventListener("keydown", onKey);
   }, [editing]);
 
-  const resetForm = () => {
-    setName(fresh.name);
-    setCategory(fresh.category);
-    setTimeOfDay(fresh.timeOfDay || "");
-    setBudget(fresh.budget != null ? String(fresh.budget) : "");
-    setAddress(fresh.address || "");
-    setDescription(fresh.description || "");
-  };
+  const resetForm = () => setDraft(baseDraft);
 
   const day = days?.find((d) => d.id === fresh.dayId) ?? days?.find((d) => d.id === place.dayId);
   const photos = Array.isArray(placePhotos) ? placePhotos : [];
@@ -157,13 +146,7 @@ function PlaceDialogBody({ place, currency, onClose }: { place: Place; currency?
   const meta = CATEGORY_META[fresh.category];
   const visited = fresh.status === "visited";
 
-  const editDirty =
-    name.trim() !== fresh.name ||
-    category !== fresh.category ||
-    timeOfDay !== (fresh.timeOfDay || "") ||
-    budget !== (fresh.budget != null ? String(fresh.budget) : "") ||
-    address !== (fresh.address || "") ||
-    description !== (fresh.description || "");
+  const editDirty = Object.keys(diffPlaceDraft(baseDraft, draft)).length > 0;
 
   const saveNotes = async () => {
     try {
@@ -175,20 +158,12 @@ function PlaceDialogBody({ place, currency, onClose }: { place: Place; currency?
   };
 
   const saveEdits = async () => {
-    if (!name.trim()) {
+    if (!draft.name.trim()) {
       toast.error("Название не может быть пустым");
       return;
     }
     try {
-      await update.mutateAsync({
-        id: fresh.id,
-        name: name.trim(),
-        category,
-        timeOfDay: timeOfDay || null,
-        budget: budget.trim() ? parseFloat(budget) : null,
-        address: address.trim() || null,
-        description: description.trim() || null,
-      });
+      await update.mutateAsync({ id: fresh.id, ...diffPlaceDraft(baseDraft, draft) });
       toast.success("Изменения сохранены");
       setEditing(false);
     } catch (e) {
@@ -381,103 +356,11 @@ function PlaceDialogBody({ place, currency, onClose }: { place: Place; currency?
                   className="overflow-hidden"
                 >
                   <div className="p-3 pt-1 space-y-3 border-t border-border">
-                    <div>
-                      <label htmlFor="place-name" className="text-xs text-muted-foreground mb-1 block">Название</label>
-                      <input
-                        id="place-name"
-                        name="name"
-                        type="text"
-                        autoComplete="off"
-                        value={name}
-                        onChange={(e) => setName(e.target.value)}
-                        className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm input-mobile"
-                      />
-                    </div>
-                    <div>
-                      <div id="place-category-label" className="text-xs text-muted-foreground mb-1.5">Категория</div>
-                      <div role="group" aria-labelledby="place-category-label" className="grid grid-cols-3 gap-1.5">
-                        {Object.entries(CATEGORY_META).map(([k, v]) => (
-                          <button
-                            key={k}
-                            type="button"
-                            title={v.label}
-                            onClick={() => setCategory(k)}
-                            aria-pressed={category === k}
-                            className={cn(
-                              "flex flex-col items-center gap-0.5 rounded-lg py-1.5 min-h-11 text-[10px] font-medium transition-colors border",
-                              category === k
-                                ? "border-primary bg-primary/10 text-primary"
-                                : "border-border bg-secondary/50 hover:bg-accent"
-                            )}
-                          >
-                            <span className="text-base leading-none" aria-hidden="true">{v.emoji}</span>
-                            {CATEGORY_SHORT[k] ?? v.label}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                    <div>
-                      <div id="place-time-label" className="text-xs text-muted-foreground mb-1.5 flex items-center gap-1"><CalendarClock className="size-3" /> Время суток</div>
-                      <div role="group" aria-labelledby="place-time-label" className="grid grid-cols-3 gap-1.5">
-                        {TIME_SLOTS.map((s) => (
-                          <button
-                            key={s.key}
-                            type="button"
-                            onClick={() => setTimeOfDay(timeOfDay === s.key ? "" : s.key)}
-                            aria-pressed={timeOfDay === s.key}
-                            className={cn(
-                              "rounded-lg py-2 min-h-11 text-xs font-medium transition-colors border",
-                              timeOfDay === s.key
-                                ? "border-primary bg-primary/10 text-primary"
-                                : "border-border bg-secondary/50 hover:bg-accent"
-                            )}
-                          >
-                            {timeLabel(s.key, { emoji: true })}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                    <div className="grid grid-cols-2 gap-2">
-                      <div>
-                        <label htmlFor="place-budget" className="text-xs text-muted-foreground mb-1 block">Бюджет, {currency ?? "$"}</label>
-                        <input
-                          id="place-budget"
-                          name="budget"
-                          type="number"
-                          inputMode="decimal"
-                          autoComplete="off"
-                          value={budget}
-                          onChange={(e) => setBudget(e.target.value)}
-                          placeholder="0"
-                          className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm input-mobile"
-                        />
-                      </div>
-                      <div>
-                        <label htmlFor="place-address" className="text-xs text-muted-foreground mb-1 block">Адрес</label>
-                        <input
-                          id="place-address"
-                          name="address"
-                          type="text"
-                          autoComplete="off"
-                          value={address}
-                          onChange={(e) => setAddress(e.target.value)}
-                          placeholder="Адрес…"
-                          className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm input-mobile"
-                        />
-                      </div>
-                    </div>
-                    <div>
-                      <label htmlFor="place-description" className="text-xs text-muted-foreground mb-1 block">Описание</label>
-                      <textarea
-                        id="place-description"
-                        name="description"
-                        value={description}
-                        onChange={(e) => setDescription(e.target.value)}
-                        placeholder="Чем интересно место…"
-                        rows={2}
-                        className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm input-mobile resize-none"
-                      />
-                    </div>
+                    <PlaceForm
+                      value={draft}
+                      onChange={(patch) => setDraft((d) => ({ ...d, ...patch }))}
+                      currency={currency}
+                    />
                     {editDirty && (
                       <div className="flex gap-2">
                         <button

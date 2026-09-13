@@ -57,13 +57,3 @@ export function useDeletePlace() {
     onSuccess: () => invalidateRouteData(qc),
   });
 }
-
-export function useGeocode() {
-  return useMutation({
-    mutationFn: async ({ lat, lng }: { lat: number; lng: number }) => {
-      const r = await fetch(`/api/geocode?lat=${lat}&lng=${lng}`);
-      if (!r.ok) throw new Error("geocode failed");
-      return r.json() as Promise<{ address: string; short: string; fallback?: boolean }>;
-    },
-  });
-}
