@@ -24,12 +24,15 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ trip
 
 // PATCH /api/trips/[id] — обновить поездку. Только владелец:
 // название, даты, валюта и статус — настройки поездки, участник не должен их менять.
+// totalBudget здесь сознательно НЕТ: совместное редактирование бюджета участников
+// идёт через PATCH /api/trip/budget ( member-level, UI-карандаш у всех членов) —
+// решение по аудиту 2026-09-12, чтобы у поля был один путь.
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ tripId: string }> }) {
   const { tripId } = await params;
   const { response } = await requireTripOwner(req, tripId);
   if (response) return response;
   const body = await req.json();
-  const allowed = ["title", "destination", "startDate", "endDate", "totalDays", "totalBudget", "currency", "status", "coverColor", "coverEmoji"];
+  const allowed = ["title", "destination", "startDate", "endDate", "totalDays", "currency", "status", "coverColor", "coverEmoji"];
   const data: Record<string, unknown> = {};
   for (const k of allowed) {
     if (k in body) {

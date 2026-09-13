@@ -65,14 +65,20 @@ export async function POST(req: NextRequest) {
 }
 
 export async function GET(req: NextRequest) {
-  const { response } = await requireUser(req);
+  const { user, response } = await requireUser(req);
   if (response) return response;
 
   const tripId = new URL(req.url).searchParams.get("tripId");
   if (!tripId) return NextResponse.json({ error: "tripId required" }, { status: 400 });
 
-  const { response: memberResp } = await requireTripMember(req, tripId);
-  if (memberResp) return memberResp;
+  // Список банов — только владельцу (как POST/DELETE в этом же файле): email
+  // забаненных не должен утекать обычным участникам (аудит 2026-09-12)
+  const callerMembership = await db.tripMember.findUnique({
+    where: { tripId_userId: { tripId, userId: user!.id } },
+  });
+  if (!callerMembership || callerMembership.role !== "owner") {
+    return NextResponse.json({ error: "Список банов доступен только владельцу поездки" }, { status: 403 });
+  }
 
   const bans = await db.tripBan.findMany({
     where: { tripId },
@@ -81,7 +87,7 @@ export async function GET(req: NextRequest) {
       id: true,
       reason: true,
       createdAt: true,
-      user: { select: { id: true, name: true, emoji: true, color: true, avatarUrl: true, email: true } },
+      user: { select: { id: true, name: true, emoji: true, color: true, avatarUrl: true } },
     },
   });
   return NextResponse.json(bans);
