@@ -45,7 +45,7 @@ bun run build            # production-сборка standalone
 | `src/components/trip/` | фичи главного экрана: itinerary, budget/, map/, gallery, board (чат), journal, food/, phrases/, timeline, dashboard/… |
 | `src/components/admin/`, `auth/`, `ui/` | админка, логин/регистрация, shadcn-кит |
 | `src/hooks/trip/` | `use-*.ts` — слой данных клиента (TanStack Query) над API |
-| `src/lib/` | серверная логика: `api-auth.ts`, `rate-limit.ts`, `ws-bus.ts`, `ai-key.ts`, `premium.ts`, `notify.ts`, `mail/`, `storage/`, `budget/`, `outbound.ts`, `db.ts` (Prisma-клиент), `trip-days.ts`, `trip-export.ts`, `trip-templates.ts`, `app-config.ts` |
+| `src/lib/` | серверная логика: `api-auth.ts`, `rate-limit.ts`, `ws-bus.ts`, `ai-key.ts`, `premium.ts`, `notify.ts`, `mail/`, `storage/`, `budget/`, `outbound.ts`, `db.ts` (Prisma-клиент), `trip-days.ts`, `trip-export.ts`, `trip-templates.ts`, `app-config.ts`; доменные модули маршрута: `time-of-day.ts`, `place-fields.ts` (контракт записи Place), `place-draft.ts`, `route.ts`, `route-threads.ts`, `map-filters.ts`, `map-bus.ts`, `map-layers.ts`, `query-keys.ts`, `place-links.ts` |
 | `prisma/` | `schema.prisma`, миграции, seed, скрипты переноса |
 | `docker-deploy/` | прод: Dockerfile, compose, Caddy, `DEPLOY.md` (runbook), бэкапы |
 | `docs/` | `architecture.md`, `api.md`, `glossary.md`, `adr/0001–0008`, аудиты фич `audit-*.md`, `PRODUCTION_PLAN.md` |
@@ -116,6 +116,15 @@ WS-handshake требует валидный JWT (`server/ws-auth.ts`), анон
   не дублируй математику с датами (уже расходились floor/ceil).
 - В экспенсе `amount` всегда в валюте поездки; введённая пользователем валюта — в
   `originalAmount/originalCurrency`. Долги гасятся через `settlementKey` (идемпотентность).
+- Маршрут на клиенте читается только через `useRoute()`/`useRouteDays()` (GET `/api/route`);
+  не ходи в `/api/days`+`/api/trip` параллельно и не resurrectь ключ `["days"]` — он выведен из
+  обращения. Инвалидации дней — через `invalidateRouteData` (`src/lib/query-keys.ts`).
+- Порядок и подписи слотов времени — только `src/lib/time-of-day.ts`; поля записи Place —
+  только `PLACE_PATCHABLE`/`pickPatchablePlace`. Фокус «показать место на карте» — через
+  `focusOnMap` (`src/lib/map-bus.ts`), не через стор.
+- Императивный Leaflet (`L.*`, тайминги полётов) живёт только в `src/components/trip/map/`
+  (`canvas.tsx`, `icons.ts`, `route-threads.tsx`) и `map-picker-client.tsx`. Компонентам карты
+  нужен полёт — проси у `MapCanvasHandle` (focusOn/fitPoints/flyToPoints/zoomBy/getCenter).
 
 ## Поддержание документации (обязательное правило)
 

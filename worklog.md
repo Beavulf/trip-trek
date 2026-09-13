@@ -1,5 +1,34 @@
 # TripTrek China — Work Log
 
+## Session 2026-09-13 — Углубление карты и маршрутов (фазы 0–6 плана)
+
+**План**: docs/plans/2026-09-12-map-routes-deepening-plan.md (аудит кандидатов №1–7). Всё выполнено и запушено.
+
+### Что сделано (коммиты)
+
+- cd9d1a2 **Фаза 0**: vitest (node-env), первые тесты trip-days/city-coords — 19 шт. Функции с историей багов (P0 #3, P1 #6) теперь под защитой.
+- 4f43c3d **Фаза 1**: src/lib/time-of-day.ts — единый источник слотов времени (TIME_SLOTS, timeSortRank, timeLabel, daySections). 7 ручных таблиц удалены (TIME_RANK на карте, TIME_SECTIONS в DayCard, TIMES в диалоге, две timeLabel, TimeChip, option-список).
+- 8b866ca **Фаза 2**: src/lib/place-fields.ts — PLACE_PATCHABLE + pickPatchablePlace (капы/нормализация как в POST). PATCH-белый список и Record<string,unknown> в хуке удалены. Попутно place-links.ts, formatLatLng/coordKey, CATEGORY_SHORT → types.ts.
+- ce0079f **Фаза 3**: GET /api/route — модель чтения маршрута (дни+места+мета одним запросом). Хуки useRoute/useRouteDays; useDays удалён (9 потребителей переехали, ключ ['days'] мёртв). Селекторы buildRoutePlaces/Cities/countVisited → lib/route.ts. Контракт ключей — lib/query-keys.ts, WS/switcher-инвалидации включают ['route'].
+- 70c94e3/6ed3eb0/e31591c/ef7f991 **Фаза 4**: lib/map-layers.ts (пикер больше не на мёртвом CARTO), lib/map-bus.ts (фокус exactly-once вместо mapFocusTarget+таймер 50мс — источник revert-flight), RouteThreads → lib/route-threads.ts + map/route-threads.tsx, MapCanvas (map/canvas.tsx) — очередь команд FIFO вместо таймерного фольклора; иконки → map/icons.ts. trip-map.tsx: 1071 → 760 строк, без L.*.
+- d6ac9b7 **Фаза 5**: lib/place-draft.ts (PlaceDraft + diffPlaceDraft = готовый PATCH-патч), place-form.tsx — одна форма для create/edit; useReverseGeocode-query с кэшем по координатам (geocodedFor-дедупликация и set-state-in-effect ушли вместе с эффектом).
+- 67b4dc4 **Фаза 6**: MobileBottomSheet доглублен (header/panelRef/role/aria/ширина/паддинги, обратно совместим) — filters/layers/add-place/DaySheet/PlaceDialog на нём; EmptyHero вместо трёх копий; мёртвая ветка AddDayButton удалена.
+
+### Результаты
+
+- Тесты: 0 → **53** (vitest, bun run test), все зелёные; tsc clean.
+- ESLint: ошибки только преждесуществующие (13 set-state-in-effect в зонах вне аудита); 2 моих эффекта отрефакторены до чистоты.
+- trip-map.tsx 1071 → ~760 строк; L.*-код только в map/ (canvas/icons/route-threads).
+- Добавление поля Place: ~14 файлов → schema + форма (+1 строка в PLACE_PATCHABLE при необходимости API-доступа).
+- Двойной fetch /api/days+/api/trip на карте/маршруте устранён (один /api/route).
+
+### Не сделано (сознательно)
+
+- **Фаза 3b** (ужать /api/trip, мигрировать dashboard с trip.days на useRoute) — вне скоупа аудита, отдельная ветка.
+- map-picker.tsx (fullscreen-выбор точки) НЕ переведён на Sheet-примитив — это полноэкранный паттерн, не bottom-sheet.
+
+---
+
 ## Current Project Status
 
 **Phase**: 17 (Security Hardening по аудиту 2026-09-12 — 27 находок закрыты) — COMPLETED
