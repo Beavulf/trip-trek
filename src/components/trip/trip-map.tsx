@@ -5,7 +5,8 @@ import "leaflet/dist/leaflet.css";
 import { useRoute, useCurrentTripId } from "@/hooks/use-trip";
 import { usePhotosGeo } from "@/hooks/trip/use-photos";
 import { useTripStore } from "@/lib/trip-store";
-import { CATEGORY_META, type Place, type Day, type Photo } from "@/lib/types";import { MapContainer, TileLayer, Marker, Popup, Polyline, CircleMarker, Pane } from "react-leaflet";
+import { CATEGORY_META, type Place, type Day, type Photo } from "@/lib/types";
+import { MapContainer, TileLayer, Marker, Popup, CircleMarker } from "react-leaflet";
 import L from "leaflet";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
@@ -37,9 +38,9 @@ import { FiltersSheet, type MapFilters } from "./map/filters-sheet";
 import { LayersSheet, type MapLayerKey } from "./map/layers-sheet";
 import { isChillCategory } from "@/lib/chill-categories";
 import { resolveCityCoords, decodeCustomKey } from "@/lib/city-coords";
-import { timeSortRank } from "@/lib/time-of-day";
 import { peekMapFocus, ackMapFocus, subscribeMapFocus } from "@/lib/map-bus";
 import { TILE_LAYERS } from "@/lib/map-layers";
+import { RouteThreads } from "./map/route-threads";
 
 // Кэш иконок: makeIcon создаёт новый L.DivIcon на каждый вызов, а без кэша
 // каждый ререндер карты (рефетч дней, фильтры) заменял DOM всех маркеров.
@@ -951,71 +952,5 @@ function PhotoPopupContent({ photo, onOpenFullscreen }: { photo: Photo; onOpenFu
         📷 На весь экран
       </button>
     </div>
-  );
-}
-
-/**
- * Нити маршрута: полилинии между местами дня в цвете дня.
- * Сплошная линия — оба места посещены, пунктир — впереди.
- * Сегменты сегодняшнего дня рендерим в отдельной панели — её пунктир
- * «бежит» (CSS .leaflet-pane-route-today), className у path в setStyle
- * не попадает, поэтому панель вместо класса.
- */
-function RouteThreads({
-  places,
-  currentDayNumber,
-}: {
-  places: { place: Place; day: Day }[];
-  currentDayNumber?: number;
-}) {
-  const byDay = useMemo(() => {
-    const m = new Map<string, { day: Day; pts: Place[] }>();
-    for (const { place, day } of places) {
-      if (!m.has(day.id)) m.set(day.id, { day, pts: [] });
-      m.get(day.id)!.pts.push(place);
-    }
-    return [...m.values()];
-  }, [places]);
-
-  const others: ReactNode[] = [];
-  const today: ReactNode[] = [];
-
-  byDay.forEach(({ day, pts }) => {
-    // Порядок обхода: время суток, затем исходный порядок списка
-    const sorted = pts
-      .map((p, i) => ({ p, i, r: timeSortRank(p.timeOfDay) }))
-      .sort((a, b) => a.r - b.r || a.i - b.i)
-      .map((x) => x.p);
-    const isToday = day.dayNumber === currentDayNumber;
-    const color = day.accentColor ?? "#f97316";
-    sorted.slice(0, -1).forEach((a, i) => {
-      const b = sorted[i + 1];
-      const done = a.status === "visited" && b.status === "visited";
-      const segment = (
-        <Polyline
-          key={`${a.id}-${b.id}`}
-          positions={[
-            [a.lat, a.lng],
-            [b.lat, b.lng],
-          ]}
-          pathOptions={{
-            color,
-            weight: isToday ? 4 : 2.5,
-            opacity: isToday ? 0.85 : 0.55,
-            dashArray: done ? undefined : "5 9",
-            lineCap: "round",
-            interactive: false,
-          }}
-        />
-      );
-      (isToday ? today : others).push(segment);
-    });
-  });
-
-  return (
-    <>
-      {others}
-      {today.length > 0 && <Pane name="route-today">{today}</Pane>}
-    </>
   );
 }
