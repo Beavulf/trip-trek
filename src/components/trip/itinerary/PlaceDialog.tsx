@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Camera,
@@ -32,8 +31,8 @@ import { focusOnMap } from "@/lib/map-bus";
 import { CATEGORY_META, type Place, type Photo } from "@/lib/types";
 import { diffPlaceDraft, draftFromPlace, type PlaceDraft } from "@/lib/place-draft";
 import { googleDirectionsUrl } from "@/lib/place-links";
-import { useBodyScrollLock } from "@/hooks/use-body-scroll-lock";
 import { useDialogA11y } from "@/hooks/use-dialog-a11y";
+import { MobileBottomSheet } from "../mobile-bottom-sheet";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { compressImageForUpload, ImageCompressError } from "@/lib/image-compress";
@@ -48,28 +47,42 @@ interface PlaceDialogProps {
 }
 
 export function PlaceDialog({ place, currency, onClose }: PlaceDialogProps) {
-  useBodyScrollLock(!!place);
-  if (typeof document === "undefined") return null;
+  // Последнее не-null место держим до конца exit-анимации — иначе unmount её убивает.
+  // Обновляем прямо в рендере (легальный паттерн «track previous»), а не в эффекте.
+  const [shown, setShown] = useState<Place | null>(null);
+  if (place && place !== shown) setShown(place);
 
-  // place проверяем внутри AnimatePresence — иначе unmount убивает exit-анимацию
-  return createPortal(
-    <AnimatePresence>
-      {place && (
-        <PlaceDialogBody key={place.id} place={place} currency={currency} onClose={onClose} />
-      )}
-    </AnimatePresence>,
-    document.body
+  if (typeof document === "undefined" || !shown) return null;
+
+  return (
+    <PlaceDialogBody
+      key={shown.id}
+      place={shown}
+      open={!!place}
+      currency={currency}
+      onClose={onClose}
+    />
   );
 }
 
-function PlaceDialogBody({ place, currency, onClose }: { place: Place; currency?: string; onClose: () => void }) {
+function PlaceDialogBody({
+  place,
+  open,
+  currency,
+  onClose,
+}: {
+  place: Place;
+  open: boolean;
+  currency?: string;
+  onClose: () => void;
+}) {
   const update = useUpdatePlace();
   const upload = useUploadPhoto();
   const updPhoto = useUpdatePhoto();
   const delPhoto = useDeletePhoto();
   const inputRef = useRef<HTMLInputElement>(null);
   // Фокус-трап и возврат фокуса; Escape ведёт локальный обработчик ниже (свернуть форму → закрыть)
-  const panelRef = useDialogA11y<HTMLDivElement>(true);
+  const panelRef = useDialogA11y<HTMLDivElement>(open);
   const [notes, setNotes] = useState(place.notes || "");
   const [uploading, setUploading] = useState(false);
   const [editing, setEditing] = useState(false);
@@ -217,29 +230,16 @@ function PlaceDialogBody({ place, currency, onClose }: { place: Place; currency?
 
   return (
     <>
-    <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      onClick={onClose}
-      className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex items-end sm:items-center justify-center sm:p-4"
-    >
-      <motion.div
-        ref={panelRef}
-        role="dialog"
-        aria-modal="true"
-        aria-label={fresh.name}
-        initial={{ y: "100%", opacity: 0 }}
-        animate={{ y: 0, opacity: 1 }}
-        exit={{ y: "100%", opacity: 0 }}
-        transition={{ type: "spring", stiffness: 320, damping: 32 }}
-        onClick={(e) => e.stopPropagation()}
-        className="bg-card w-full sm:max-w-lg max-h-[88vh] rounded-t-3xl sm:rounded-3xl overflow-y-auto overscroll-contain flex flex-col pb-[env(safe-area-inset-bottom)]"
-      >
-        <div className="sm:hidden flex justify-center pt-2.5 pb-1 shrink-0">
-          <div className="w-10 h-1 rounded-full bg-muted-foreground/30" />
-        </div>
-
+    <MobileBottomSheet
+      open={open}
+      onOpenChange={onClose}
+      maxWidthClass="sm:max-w-lg"
+      maxHeightClass="max-h-[88vh]"
+      contentClassName="p-4 sm:p-5 space-y-4"
+      panelRef={panelRef}
+      role="dialog"
+      ariaLabel={fresh.name}
+      header={
         <div className="sticky top-0 bg-card/95 backdrop-blur px-4 sm:px-5 py-3 border-b border-border flex items-start gap-3 shrink-0 z-10">
           <div
             className="size-11 sm:size-12 rounded-xl grid place-items-center text-xl sm:text-2xl shrink-0"
@@ -277,8 +277,9 @@ function PlaceDialogBody({ place, currency, onClose }: { place: Place; currency?
             <X className="size-4" />
           </button>
         </div>
-
-        <div className="p-4 sm:p-5 space-y-4">
+      }
+    >
+      <div className="space-y-4">
           {fresh.description && !editing && (
             <p className="text-sm text-muted-foreground leading-relaxed">{fresh.description}</p>
           )}
@@ -500,9 +501,8 @@ function PlaceDialogBody({ place, currency, onClose }: { place: Place; currency?
           </div>
 
           <DeletePlaceButton placeId={fresh.id} placeName={fresh.name} onDeleted={onClose} />
-        </div>
-      </motion.div>
-    </motion.div>
+      </div>
+    </MobileBottomSheet>
 
       {/* Лайтбокс — вне overlay, чтобы клики YARL не всплывали и не закрывали диалог */}
       {lightboxIdx !== null && (

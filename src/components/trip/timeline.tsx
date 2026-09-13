@@ -9,6 +9,7 @@ import { useMemo, useState } from "react";
 import { cn, plural } from "@/lib/utils";
 import { currencySymbol as curSym } from "@/lib/currencies";
 import { MobileBottomSheet } from "./mobile-bottom-sheet";
+import { EmptyHero } from "./empty-hero";
 import { UserAvatar } from "./user-avatar";
 
 type EventType = "place" | "photo" | "expense" | "journal" | "member";
@@ -348,20 +349,13 @@ export function Timeline() {
 
   if (!tripId) {
     return (
-      <div className="space-y-4 animate-fade-up pb-20">
-        <div className="rounded-3xl p-5 bg-gradient-to-br from-orange-500 to-rose-500 text-white shadow-xl text-center">
-          <div className="text-5xl mb-3">📰</div>
-          <h1 className="text-xl font-bold">Нет активной поездки</h1>
-          <p className="text-white/80 text-sm mt-1">Создай или присоединись к поездке</p>
-          <button
-            type="button"
-            onClick={() => setActiveTab("dashboard")}
-            className="mt-4 rounded-xl bg-white/20 backdrop-blur px-4 py-3 text-sm font-medium active:scale-95 min-h-11"
-          >
-            На главную →
-          </button>
-        </div>
-      </div>
+      <EmptyHero
+        emoji="📰"
+        title="Нет активной поездки"
+        text="Создай или присоединись к поездке"
+        actionLabel="На главную →"
+        onAction={() => setActiveTab("dashboard")}
+      />
     );
   }
 

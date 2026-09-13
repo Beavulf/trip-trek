@@ -42,6 +42,7 @@ import { peekMapFocus, ackMapFocus, subscribeMapFocus } from "@/lib/map-bus";
 import { RouteThreads } from "./map/route-threads";
 import { MapCanvas, type MapCanvasHandle } from "./map/canvas";
 import { makeIcon, makePhotoIcon, makeLocateIcon } from "./map/icons";
+import { EmptyHero } from "./empty-hero";
 
 export default function TripMap() {
   const tripId = useCurrentTripId();
@@ -227,20 +228,13 @@ export default function TripMap() {
   // Пустые состояния
   if (!tripId) {
     return (
-      <div className="space-y-4 animate-fade-up pb-20">
-        <div className="rounded-3xl p-5 bg-gradient-to-br from-orange-500 to-rose-500 text-white shadow-xl text-center">
-          <div className="text-5xl mb-3">🗺️</div>
-          <h1 className="text-xl font-bold">Нет активной поездки</h1>
-          <p className="text-white/80 text-sm mt-1">Выбери поездку, чтобы открыть карту</p>
-          <button
-            type="button"
-            onClick={() => setTripSwitcherOpen(true)}
-            className="mt-4 rounded-xl bg-white/20 backdrop-blur px-4 py-3 text-sm font-medium active:scale-95 min-h-11"
-          >
-            Мои поездки →
-          </button>
-        </div>
-      </div>
+      <EmptyHero
+        emoji="🗺️"
+        title="Нет активной поездки"
+        text="Выбери поездку, чтобы открыть карту"
+        actionLabel="Мои поездки →"
+        onAction={() => setTripSwitcherOpen(true)}
+      />
     );
   }
 
@@ -262,22 +256,13 @@ export default function TripMap() {
 
   if (!isLoading && (!days || days.length === 0)) {
     return (
-      <div className="space-y-4 animate-fade-up pb-20">
-        <div className="rounded-3xl p-5 bg-gradient-to-br from-orange-500 to-rose-500 text-white shadow-xl text-center">
-          <div className="text-5xl mb-3">🗺️</div>
-          <h1 className="text-xl font-bold">Карта пуста</h1>
-          <p className="text-white/80 text-sm mt-1">
-            Добавьте дни в маршрут, чтобы увидеть места на карте
-          </p>
-          <button
-            type="button"
-            onClick={() => setActiveTab("itinerary")}
-            className="mt-4 rounded-xl bg-white/20 backdrop-blur px-4 py-3 text-sm font-medium active:scale-95 min-h-11"
-          >
-            К маршруту →
-          </button>
-        </div>
-      </div>
+      <EmptyHero
+        emoji="🗺️"
+        title="Карта пуста"
+        text="Добавьте дни в маршрут, чтобы увидеть места на карте"
+        actionLabel="К маршруту →"
+        onAction={() => setActiveTab("itinerary")}
+      />
     );
   }
 

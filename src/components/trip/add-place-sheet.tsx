@@ -8,17 +8,14 @@ import { useReverseGeocode } from "@/hooks/trip/use-geocode";
 import {
   Loader2,
   Check,
-  X,
   MapPin,
   Plus,
   Map as MapIcon,
 } from "lucide-react";
 import { useState } from "react";
-import { createPortal } from "react-dom";
-import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
-import { useBodyScrollLock } from "@/hooks/use-body-scroll-lock";
 import { formatLatLng, coordKey } from "@/lib/utils";
+import { MobileBottomSheet } from "./mobile-bottom-sheet";
 import { PlaceForm } from "./place-form";
 import { parseBudget, type PlaceDraft } from "@/lib/place-draft";
 import { MapPicker } from "./map-picker";
@@ -42,55 +39,26 @@ export function AddPlaceSheet({
   initial: AddPlaceData | null;
   onCreated?: () => void;
 }) {
-  useBodyScrollLock(open);
-  if (!open || typeof document === "undefined") return null;
+  if (!initial) return null;
 
-  return createPortal(
-    <AnimatePresence>
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        exit={{ opacity: 0 }}
-        onClick={() => onOpenChange(false)}
-        className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex items-end sm:items-center justify-center sm:p-4"
-      >
-        <motion.div
-          initial={{ y: "100%", opacity: 0 }}
-          animate={{ y: 0, opacity: 1 }}
-          exit={{ y: "100%", opacity: 0 }}
-          transition={{ type: "spring", stiffness: 320, damping: 32 }}
-          onClick={(e) => e.stopPropagation()}
-          className="bg-card w-full sm:max-w-md max-h-[92vh] rounded-t-3xl sm:rounded-3xl overflow-y-auto flex flex-col"
-        >
-          {/* handle */}
-          <div className="sm:hidden flex justify-center pt-2.5 pb-1 shrink-0">
-            <div className="w-10 h-1 rounded-full bg-muted-foreground/30" />
-          </div>
-
-          <div className="sticky top-0 bg-card/95 backdrop-blur px-4 sm:px-5 py-3 border-b border-border flex items-center justify-between shrink-0">
-            <h2 className="font-bold text-base sm:text-lg flex items-center gap-2">
-              <Plus className="size-5 text-primary" /> Новое место
-            </h2>
-            <button onClick={() => onOpenChange(false)} className="size-11 rounded-full hover:bg-accent grid place-items-center" aria-label="Закрыть">
-              <X className="size-4" />
-            </button>
-          </div>
-
-          {initial && (
-            <AddPlaceForm
-              key={`${coordKey(initial.lat, initial.lng)}-${open}`}
-              initial={initial}
-              onDone={() => {
-                onOpenChange(false);
-                onCreated?.();
-              }}
-              onCancel={() => onOpenChange(false)}
-            />
-          )}
-        </motion.div>
-      </motion.div>
-    </AnimatePresence>,
-    document.body
+  return (
+    <MobileBottomSheet
+      open={open}
+      onOpenChange={onOpenChange}
+      title="Новое место"
+      titleIcon={<Plus className="size-5 text-primary" />}
+      contentClassName="space-y-3"
+    >
+      <AddPlaceForm
+        key={`${coordKey(initial.lat, initial.lng)}-${open}`}
+        initial={initial}
+        onDone={() => {
+          onOpenChange(false);
+          onCreated?.();
+        }}
+        onCancel={() => onOpenChange(false)}
+      />
+    </MobileBottomSheet>
   );
 }
 
@@ -162,7 +130,7 @@ function AddPlaceForm({
   };
 
   return (
-    <div className="p-4 sm:p-5 space-y-3 overflow-y-auto">
+    <div className="space-y-3">
       {/* координаты */}
       <div className="rounded-lg bg-muted/50 px-3 py-2 text-[11px] text-muted-foreground flex items-center gap-1.5">
         <MapPin className="size-3 shrink-0" />

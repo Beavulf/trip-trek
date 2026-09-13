@@ -1,10 +1,8 @@
 "use client";
 
-import { createPortal } from "react-dom";
-import { motion, AnimatePresence } from "framer-motion";
-import { Check, X } from "lucide-react";
-import { useBodyScrollLock } from "@/hooks/use-body-scroll-lock";
+import { Check } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { MobileBottomSheet } from "../mobile-bottom-sheet";
 import type { MapLayerKey } from "@/lib/map-layers";
 
 export type { MapLayerKey };
@@ -65,106 +63,80 @@ export function LayersSheet({
   isDarkTheme,
   note,
 }: LayersSheetProps) {
-  useBodyScrollLock(open);
-  if (!open || typeof document === "undefined") return null;
+  if (!open) return null;
 
-  return createPortal(
-    <AnimatePresence>
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        exit={{ opacity: 0 }}
-        onClick={() => onOpenChange(false)}
-        className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex items-end sm:items-center justify-center sm:p-4"
+  return (
+    <MobileBottomSheet
+      open={open}
+      onOpenChange={onOpenChange}
+      title="Стиль карты"
+      contentClassName="space-y-3"
+    >
+      {/* Авто — следует за темой */}
+      <button
+        type="button"
+        onClick={() => onAutoTheme(true)}
+        aria-pressed={autoTheme}
+        className={cn(
+          "w-full flex items-center gap-3 rounded-2xl border p-3 text-left transition-colors min-h-11",
+          autoTheme ? "border-primary bg-primary/10" : "border-border hover:bg-accent/50"
+        )}
       >
-        <motion.div
-          initial={{ y: "100%", opacity: 0 }}
-          animate={{ y: 0, opacity: 1 }}
-          exit={{ y: "100%", opacity: 0 }}
-          transition={{ type: "spring", stiffness: 320, damping: 32 }}
-          onClick={(e) => e.stopPropagation()}
-          className="bg-card w-full sm:max-w-md rounded-t-3xl sm:rounded-3xl overflow-y-auto max-h-[88vh] pb-[env(safe-area-inset-bottom)]"
+        <span
+          className="size-12 rounded-xl grid place-items-center text-xl shrink-0"
+          style={{
+            background: isDarkTheme
+              ? "linear-gradient(135deg,#14181f,#2c313b)"
+              : "linear-gradient(135deg,#f6f3ee,#cfe3d8)",
+          }}
         >
-          <div className="sm:hidden flex justify-center pt-2.5 pb-1">
-            <div className="w-10 h-1 rounded-full bg-muted-foreground/30" />
-          </div>
-          <div className="sticky top-0 bg-card/95 backdrop-blur px-4 py-3 border-b border-border flex items-center justify-between">
-            <h2 className="font-bold text-base">Стиль карты</h2>
-            <button onClick={() => onOpenChange(false)} className="size-11 rounded-full hover:bg-accent grid place-items-center" aria-label="Закрыть">
-              <X className="size-4" />
-            </button>
-          </div>
+          {isDarkTheme ? "🌙" : "☀️"}
+        </span>
+        <span className="flex-1 min-w-0">
+          <span className="block text-sm font-semibold">Как в приложении</span>
+          <span className="block text-xs text-muted-foreground mt-0.5">
+            Меняется вместе с темой — сейчас {isDarkTheme ? "тёмная" : "светлая"}
+          </span>
+        </span>
+        {autoTheme && <SelectedMark />}
+      </button>
 
-          <div className="p-4 space-y-3">
-            {/* Авто — следует за темой */}
+      {/* Ручные подложки */}
+      <div className="grid grid-cols-2 gap-2">
+        {LAYER_CARDS.map((l) => {
+          const selected = !autoTheme && manualLayer === l.key;
+          return (
             <button
+              key={l.key}
               type="button"
-              onClick={() => onAutoTheme(true)}
-              aria-pressed={autoTheme}
+              onClick={() => onManualLayer(l.key)}
+              aria-pressed={selected}
               className={cn(
-                "w-full flex items-center gap-3 rounded-2xl border p-3 text-left transition-colors min-h-11",
-                autoTheme ? "border-primary bg-primary/10" : "border-border hover:bg-accent/50"
+                "relative rounded-2xl border p-2.5 text-left transition-colors",
+                selected ? "border-primary bg-primary/5" : "border-border hover:bg-accent/50"
               )}
             >
               <span
-                className="size-12 rounded-xl grid place-items-center text-xl shrink-0"
-                style={{
-                  background: isDarkTheme
-                    ? "linear-gradient(135deg,#14181f,#2c313b)"
-                    : "linear-gradient(135deg,#f6f3ee,#cfe3d8)",
-                }}
-              >
-                {isDarkTheme ? "🌙" : "☀️"}
+                className="block h-16 rounded-xl border border-black/5"
+                style={{ background: l.preview }}
+              />
+              <span className="flex items-center gap-1.5 mt-2">
+                <span className="text-sm" aria-hidden="true">{l.badge}</span>
+                <span className="text-sm font-semibold">{l.label}</span>
+                {selected && <SelectedMark className="ml-auto" />}
               </span>
-              <span className="flex-1 min-w-0">
-                <span className="block text-sm font-semibold">Как в приложении</span>
-                <span className="block text-xs text-muted-foreground mt-0.5">
-                  Меняется вместе с темой — сейчас {isDarkTheme ? "тёмная" : "светлая"}
-                </span>
-              </span>
-              {autoTheme && <SelectedMark />}
+              <span className="block text-[11px] text-muted-foreground mt-0.5">{l.hint}</span>
             </button>
+          );
+        })}
+      </div>
 
-            {/* Ручные подложки */}
-            <div className="grid grid-cols-2 gap-2">
-              {LAYER_CARDS.map((l) => {
-                const selected = !autoTheme && manualLayer === l.key;
-                return (
-                  <button
-                    key={l.key}
-                    type="button"
-                    onClick={() => onManualLayer(l.key)}
-                    aria-pressed={selected}
-                    className={cn(
-                      "relative rounded-2xl border p-2.5 text-left transition-colors",
-                      selected ? "border-primary bg-primary/5" : "border-border hover:bg-accent/50"
-                    )}
-                  >
-                    <span
-                      className="block h-16 rounded-xl border border-black/5"
-                      style={{ background: l.preview }}
-                    />
-                    <span className="flex items-center gap-1.5 mt-2">
-                      <span className="text-sm" aria-hidden="true">{l.badge}</span>
-                      <span className="text-sm font-semibold">{l.label}</span>
-                      {selected && <SelectedMark className="ml-auto" />}
-                    </span>
-                    <span className="block text-[11px] text-muted-foreground mt-0.5">{l.hint}</span>
-                  </button>
-                );
-              })}
-            </div>
-
-            {note && (
-              <p className="text-[11px] text-muted-foreground leading-relaxed px-1">
-                💡 {note}
-              </p>
-            )}
-          </div>
-        </motion.div>
-      </motion.div>
-    </AnimatePresence>,
-    document.body
+      {note && (
+        <p className="text-[11px] text-muted-foreground leading-relaxed px-1">
+          💡 {note}
+        </p>
+      )}
+    </MobileBottomSheet>
   );
 }
 

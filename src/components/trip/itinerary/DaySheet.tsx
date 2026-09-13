@@ -1,12 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { createPortal } from "react-dom";
-import { motion, AnimatePresence } from "framer-motion";
-import { CalendarPlus, Loader2, MapPin, Pencil, X } from "lucide-react";
+import { CalendarPlus, Loader2, MapPin, Pencil } from "lucide-react";
 import { useAddDay, useRouteDays, useUpdateDay } from "@/hooks/use-trip";
-import { useBodyScrollLock } from "@/hooks/use-body-scroll-lock";
 import { useDialogA11y } from "@/hooks/use-dialog-a11y";
+import { MobileBottomSheet } from "../mobile-bottom-sheet";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { CityAutocomplete } from "../city-autocomplete";
@@ -52,8 +50,7 @@ export function DaySheet({ day, open, onOpenChange }: DaySheetProps) {
   // (эффект идёт после рендера — без ключа поле мигает старым городом)
   const [citySession, setCitySession] = useState(0);
 
-  useBodyScrollLock(open);
-  // Фокус-трап, Escape, возврат фокуса на триггер
+  // Фокус-трап, Escape, возврат фокуса на триггер (scroll-lock — в примитиве)
   const panelRef = useDialogA11y<HTMLDivElement>(open, () => onOpenChange(false));
 
   // Пересобираем форму при открытии (и при смене редактируемого дня)
@@ -112,44 +109,20 @@ export function DaySheet({ day, open, onOpenChange }: DaySheetProps) {
     }
   };
 
-  if (typeof document === "undefined") return null;
+  // open проверяет примитив внутри AnimatePresence — exit-анимация не ломается
+  return (
+    <MobileBottomSheet
+      open={open}
+      onOpenChange={onOpenChange}
+      titleIcon={isEdit ? <Pencil className="size-5 text-primary" /> : <CalendarPlus className="size-5 text-primary" />}
+      title={isEdit ? `День ${day!.dayNumber}` : "Новый день"}
+      panelRef={panelRef}
+      role="dialog"
+      ariaLabel={isEdit ? `Редактирование дня ${day!.dayNumber}` : "Новый день"}
+      maxHeightClass="max-h-[90vh]"
+      contentClassName="space-y-3"
+    >
 
-  // open проверяем внутри AnimatePresence — иначе unmount убивает exit-анимацию
-  return createPortal(
-    <AnimatePresence>
-      {open && (
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        exit={{ opacity: 0 }}
-        onClick={() => onOpenChange(false)}
-        className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex items-end sm:items-center justify-center sm:p-4"
-      >
-        <motion.div
-          ref={panelRef}
-          role="dialog"
-          aria-modal="true"
-          aria-label={isEdit ? `Редактирование дня ${day!.dayNumber}` : "Новый день"}
-          initial={{ y: "100%", opacity: 0 }}
-          animate={{ y: 0, opacity: 1 }}
-          exit={{ y: "100%", opacity: 0 }}
-          transition={{ type: "spring", stiffness: 320, damping: 32 }}
-          onClick={(e) => e.stopPropagation()}
-          className="bg-card w-full sm:max-w-md rounded-t-3xl sm:rounded-3xl overflow-y-auto overscroll-contain max-h-[90vh] pb-[env(safe-area-inset-bottom)]"
-        >
-          <div className="sm:hidden flex justify-center pt-2.5 pb-1">
-            <div className="w-10 h-1 rounded-full bg-muted-foreground/30" />
-          </div>
-          <div className="sticky top-0 bg-card/95 backdrop-blur px-4 py-3 border-b border-border flex items-center justify-between">
-            <h2 className="font-bold text-base flex items-center gap-2">
-              {isEdit ? <Pencil className="size-5 text-primary" /> : <CalendarPlus className="size-5 text-primary" />}
-              {isEdit ? `День ${day!.dayNumber}` : "Новый день"}
-            </h2>
-            <button onClick={() => onOpenChange(false)} className="size-11 rounded-full hover:bg-accent grid place-items-center" aria-label="Закрыть">
-              <X className="size-4" />
-            </button>
-          </div>
-          <div className="p-4 space-y-3">
             {!isEdit && (
               <div className="rounded-xl px-3 py-2 text-xs font-medium flex items-center gap-2" style={{ background: `${color}18`, color }}>
                 <CalendarPlus className="size-3.5 shrink-0" />
@@ -241,29 +214,20 @@ export function DaySheet({ day, open, onOpenChange }: DaySheetProps) {
               {pending ? <Loader2 className="size-4 animate-spin" /> : isEdit ? <Pencil className="size-4" /> : <CalendarPlus className="size-4" />}
               {pending ? "Сохранение…" : isEdit ? "Сохранить день" : "Добавить день"}
             </button>
-          </div>
-        </motion.div>
-      </motion.div>
-      )}
-    </AnimatePresence>,
-    document.body
+    </MobileBottomSheet>
   );
 }
 
 /** Кнопка-триггер «Добавить день» — пунктирная плашка в конце маршрута */
-export function AddDayButton({ onClick }: { onClick?: () => void }) {
-  const [open, setOpen] = useState(false);
+export function AddDayButton({ onClick }: { onClick: () => void }) {
   return (
-    <>
-      <button
-        type="button"
-        onClick={() => (onClick ? onClick() : setOpen(true))}
-        className="w-full flex items-center justify-center gap-2 py-3.5 rounded-2xl border-2 border-dashed border-border hover:border-primary hover:text-primary transition-colors active:scale-[0.98] min-h-11"
-      >
-        <CalendarPlus className="size-5" />
-        <span className="text-sm font-medium">Добавить день</span>
-      </button>
-      {!onClick && <DaySheet open={open} onOpenChange={setOpen} />}
-    </>
+    <button
+      type="button"
+      onClick={onClick}
+      className="w-full flex items-center justify-center gap-2 py-3.5 rounded-2xl border-2 border-dashed border-border hover:border-primary hover:text-primary transition-colors active:scale-[0.98] min-h-11"
+    >
+      <CalendarPlus className="size-5" />
+      <span className="text-sm font-medium">Добавить день</span>
+    </button>
   );
 }
