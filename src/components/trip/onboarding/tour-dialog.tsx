@@ -107,7 +107,8 @@ export function TourDialog({
         transition={{ type: "spring", stiffness: 320, damping: 30 }}
         className="w-full max-w-sm overflow-hidden rounded-3xl border border-border bg-card shadow-2xl sm:max-w-md"
       >
-        {/* Иллюстрация шага: слайд по направлению навигации */}
+        {/* Иллюстрация шага: слайд по направлению навигации; слой растянут на всю
+            высоту рамки, иначе арт прилипает к верхнему краю */}
         <div className="px-5 pt-5">
           <div className="relative h-36 overflow-hidden rounded-2xl border border-border bg-gradient-to-br from-primary/10 via-transparent to-violet-500/10 sm:h-40">
             <AnimatePresence initial={false} mode="popLayout">
@@ -117,7 +118,7 @@ export function TourDialog({
                 animate={{ opacity: 1, x: 0 }}
                 exit={reduced ? { opacity: 0 } : { opacity: 0, x: -48 * dir }}
                 transition={{ duration: 0.22, ease: "easeOut" }}
-                className="grid place-items-center"
+                className="absolute inset-0 flex items-center justify-center"
               >
                 {current.art}
               </motion.div>
