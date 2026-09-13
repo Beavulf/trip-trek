@@ -127,7 +127,7 @@
 
 Кандидат №7 (Speculative) — делать последним, можно выкинуть из скоупа.
 
-1. Доглубить существующий `mobile-bottom-sheet.tsx` → `Sheet`: portal + backdrop + drag-handle + sticky header + scroll-lock (`use-body-scroll-lock` уже есть) + a11y (`use-dialog-a11y` уже есть); интерфейс `open / onClose / title / children`.
+1. Доглубить существующий `mobile-bottom-sheet.tsx` → `Sheet`: portal + backdrop + drag-handle + sticky header + scroll-lock (`use-body-scroll-lock` уже есть) + a11y (`use-dialog-a11y` уже есть); интерфейс `open / onClose / title / children`. Примитив уже стандарт для остальных зон (gallery, journal, info-panel, phrasebook, admin-табы) — шесть панелей карты/маршрута единственные держат свои `createPortal`-копии. *(Поправка 2026-09-13: в исходном аудите неверно указано, что примитив использует только timeline.)*
 2. Перевести шесть панелей: `filters-sheet.tsx:52-85`, `layers-sheet.tsx:70-94`, `add-place-sheet.tsx:46-75`, `PlaceDialog.tsx:264-323`, `DaySheet.tsx:121-151`, `map-picker.tsx:70-90`.
 3. Мелочи:
    - герой «нет активной поездки» ×3 → один `EmptyTrip` (`trip-map.tsx:410-425`, `Itinerary.tsx:71-86`, `timeline.tsx:350-365`);

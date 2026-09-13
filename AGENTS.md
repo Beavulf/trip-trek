@@ -25,6 +25,7 @@ realtime). Один пользователь-владелец кода, прод
 ```bash
 bun server.ts            # dev-сервер целиком (Next + WS + uploads) на :3000
 bun run lint             # ESLint
+bun run test / :watch    # vitest — юнит-тесты чистых функций (src/**/*.test.ts, node-env)
 bun run db:up / db:down  # Postgres в docker (docker-compose.dev.yml)
 bun run db:migrate       # prisma migrate dev
 bun run db:generate      # prisma generate (после правок schema.prisma)
