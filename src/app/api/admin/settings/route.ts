@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { requireAdmin } from "@/lib/api-auth";
 import { logAdmin } from "@/lib/admin-log";
-import { maskKey } from "@/lib/ai-key";
+import { maskKey, validateAiBaseUrl } from "@/lib/ai-key";
 import { getAppConfig } from "@/lib/app-config";
 
 // GET /api/admin/settings — глобальные настройки. Ключ наружу не отдаётся,
@@ -45,6 +45,8 @@ export async function PUT(req: NextRequest) {
       registrationEnabled?: boolean;
       freeTripLimit?: number;
       freeMemberLimit?: number;
+      aiAlertCallsPerDay?: number;
+      aiAlertTokensPerDay?: number;
     };
   };
 
@@ -56,6 +58,8 @@ export async function PUT(req: NextRequest) {
     registrationEnabled?: boolean;
     freeTripLimit?: number;
     freeMemberLimit?: number;
+    aiAlertCallsPerDay?: number;
+    aiAlertTokensPerDay?: number;
   } = {};
 
   let aiTouched = false;
@@ -69,19 +73,13 @@ export async function PUT(req: NextRequest) {
   if (aiBaseUrl !== undefined) {
     // https-only: на этот адрес уходят Bearer-ключи пользователей — произвольный
     // scheme/host делал из сервера прокси утечки ключей (аудит 2026-09-12).
-    // http://localhost разрешён только в dev (мок-провайдеры).
+    // Валидация одна с профилем юзера (validateAiBaseUrl); localhost — только dev.
     if (typeof aiBaseUrl === "string" && aiBaseUrl.trim()) {
-      const raw = aiBaseUrl.trim();
-      try {
-        const u = new URL(raw);
-        const isLocal = u.hostname === "localhost" || u.hostname === "127.0.0.1";
-        if (u.protocol !== "https:" && !(isLocal && process.env.NODE_ENV !== "production")) {
-          return NextResponse.json({ error: "aiBaseUrl: только https" }, { status: 400 });
-        }
-        data.aiBaseUrl = raw;
-      } catch {
-        return NextResponse.json({ error: "aiBaseUrl: некорректный URL" }, { status: 400 });
+      const checked = validateAiBaseUrl(aiBaseUrl.trim());
+      if (!checked.ok) {
+        return NextResponse.json({ error: `aiBaseUrl: ${checked.error}` }, { status: 400 });
       }
+      data.aiBaseUrl = checked.value;
     } else {
       data.aiBaseUrl = null;
     }
@@ -108,11 +106,11 @@ export async function PUT(req: NextRequest) {
       data.registrationEnabled = appConfig.registrationEnabled;
       appTouched = true;
     }
-    for (const key of ["freeTripLimit", "freeMemberLimit"] as const) {
+    for (const key of ["freeTripLimit", "freeMemberLimit", "aiAlertCallsPerDay", "aiAlertTokensPerDay"] as const) {
       const v = appConfig[key];
       if (v !== undefined) {
-        if (typeof v !== "number" || !Number.isInteger(v) || v < 0 || v > 1000) {
-          return NextResponse.json({ error: `${key}: целое число 0–1000` }, { status: 400 });
+        if (typeof v !== "number" || !Number.isInteger(v) || v < 0 || v > 1_000_000) {
+          return NextResponse.json({ error: `${key}: целое число 0–1000000` }, { status: 400 });
         }
         if (key === "freeMemberLimit" && v < 1) {
           return NextResponse.json({ error: "freeMemberLimit: минимум 1" }, { status: 400 });
@@ -146,6 +144,8 @@ export async function PUT(req: NextRequest) {
       registrationEnabled: settings.registrationEnabled,
       freeTripLimit: settings.freeTripLimit,
       freeMemberLimit: settings.freeMemberLimit,
+      aiAlertCallsPerDay: settings.aiAlertCallsPerDay,
+      aiAlertTokensPerDay: settings.aiAlertTokensPerDay,
     });
   }
 
@@ -158,6 +158,8 @@ export async function PUT(req: NextRequest) {
       registrationEnabled: settings.registrationEnabled ?? true,
       freeTripLimit: settings.freeTripLimit ?? 1,
       freeMemberLimit: settings.freeMemberLimit ?? 5,
+      aiAlertCallsPerDay: settings.aiAlertCallsPerDay ?? 0,
+      aiAlertTokensPerDay: settings.aiAlertTokensPerDay ?? 0,
     },
   });
 }

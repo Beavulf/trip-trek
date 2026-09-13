@@ -50,10 +50,12 @@ export function ProfileSettings({ profile, setPremiumOpen, onReportBug, isAdmin,
     router.push("/");
   };
 
-  // === Свой ключ ИИ (BYOK) ===
+  // === Свой ключ ИИ (BYOK): ключ + опционально свой адрес провайдера и модель ===
   const [aiOpen, setAiOpen] = useState(false);
   const [aiKey, setAiKey] = useState("");
   const [aiTail, setAiTail] = useState(profile.aiKeyTail ?? null);
+  const [aiBase, setAiBase] = useState(profile.aiBaseUrl ?? "");
+  const [aiModel, setAiModel] = useState(profile.aiModel ?? "");
   const [aiSaving, setAiSaving] = useState(false);
   const [aiChecking, setAiChecking] = useState(false);
   const [aiStatus, setAiStatus] = useState<{ ok: boolean; message: string } | null>(null);
@@ -78,16 +80,24 @@ export function ProfileSettings({ profile, setPremiumOpen, onReportBug, isAdmin,
   const saveAiKey = async (value: string | null, check = false) => {
     setAiSaving(true);
     try {
+      // Адрес/модель сохраняются всегда; ключ — только если введён (или null = убрать).
+      // Так правка адреса не требует повторной вставки ключа.
+      const payload: Record<string, unknown> = {
+        aiBaseUrl: aiBase.trim() || null,
+        aiModel: aiModel.trim() || null,
+      };
+      if (value === null) payload.aiApiKey = null;
+      else if (value.trim()) payload.aiApiKey = value.trim();
       const r = await fetch("/api/user", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ aiApiKey: value }),
+        body: JSON.stringify(payload),
       });
       const b = await r.json().catch(() => ({}));
       if (!r.ok) throw new Error(b?.error || `Ошибка ${r.status}`);
       setAiTail(b.aiKeyTail ?? null);
       setAiKey("");
-      toast.success(value === null ? "Ключ ИИ удалён" : "Ключ ИИ сохранён");
+      toast.success(value === null ? "Ключ ИИ удалён" : "Настройки ИИ сохранены");
       setAiStatus(null);
       if (value === null) {
         setAiOpen(false);
@@ -95,7 +105,7 @@ export function ProfileSettings({ profile, setPremiumOpen, onReportBug, isAdmin,
         await checkAiKey();
       }
     } catch (err) {
-      toast.error("Не удалось сохранить ключ", {
+      toast.error("Не удалось сохранить", {
         description: err instanceof Error ? err.message : "Попробуйте ещё раз",
       });
     } finally {
@@ -267,15 +277,31 @@ export function ProfileSettings({ profile, setPremiumOpen, onReportBug, isAdmin,
                 autoComplete="off"
                 className="w-full rounded-xl border border-input bg-background px-3 py-2.5 text-sm font-mono"
               />
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <input
+                  value={aiBase}
+                  onChange={(e) => setAiBase(e.target.value)}
+                  placeholder="Base URL — https://…/v1"
+                  autoComplete="off"
+                  className="w-full rounded-xl border border-input bg-background px-3 py-2.5 text-sm font-mono"
+                />
+                <input
+                  value={aiModel}
+                  onChange={(e) => setAiModel(e.target.value)}
+                  placeholder="Модель — glm-4.6, gpt-4o-mini…"
+                  autoComplete="off"
+                  className="w-full rounded-xl border border-input bg-background px-3 py-2.5 text-sm font-mono"
+                />
+              </div>
               <p className="text-[10px] text-muted-foreground leading-snug">
-                OpenAI-совместимый ключ — нужен для ИИ-фраз, переводов, советов шефа и рассказа о поездке.
-                Хранится в базе приложения, наружу не отдаётся. Без своего ключа работает общий (если задал админ).
+                Ключ нужен для ИИ-фраз, переводов, советов шефа и рассказа о поездке. Хранится в базе, наружу не отдаётся.
+                Если ключ не от того провайдера, что общий, — укажи его Base URL и модель. Без своего ключа работает общий (если задал админ).
               </p>
-              <div className="flex gap-2">
+              <div className="flex flex-wrap gap-2">
                 <button
                   type="button"
                   onClick={() => saveAiKey(aiKey, true)}
-                  disabled={!aiKey.trim() || aiSaving || aiChecking}
+                  disabled={aiSaving || aiChecking || (!aiKey.trim() && aiBase.trim() === (profile.aiBaseUrl ?? "") && aiModel.trim() === (profile.aiModel ?? ""))}
                   className="min-h-10 rounded-lg bg-primary px-4 text-xs font-medium text-primary-foreground disabled:opacity-50 flex items-center gap-1.5"
                 >
                   {aiSaving ? <Loader2 className="size-3 animate-spin" /> : <Sparkles className="size-3" />}

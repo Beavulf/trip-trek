@@ -4,8 +4,7 @@ import { requireTripMember } from "@/lib/api-auth";
 import { calculateCurrentDayNumber } from "@/lib/trip-days";
 import { EXPENSE_CATEGORIES, CATEGORY_META } from "@/lib/types";
 import { currencySymbol } from "@/lib/currencies";
-import { userRateLimit } from "@/lib/rate-limit";
-import { resolveAiConfig, openaiChatUrl } from "@/lib/ai-key";
+import { runAi } from "@/lib/ai";
 
 // ─── Промпты: автор историй + 6 стилей рассказа ────────────────────────────
 
@@ -43,9 +42,9 @@ function dayOffsetFor(startDate: Date): number {
 
 // POST /api/ai-summary — генерация AI-итогов
 // P0 #1: auth + membership; P0 #2: tripId required (no default-trip);
-// P0 #3: SDK fail → 502 error (not 200 + fake template);
-// P0 #4: rate-limit; P1 #6: shared day formula; P1 #8: currency;
-// P2 #19: totalSpent excludes settlement.
+// P0 #3 (нынешний контракт): провайдер недоступен → 200 + локальный черновик
+// с generated:false / source:"local"; P0 #4: rate-limit (в runAi);
+// P1 #6: shared day formula; P1 #8: currency; P2 #19: totalSpent excludes settlement.
 // body: { type: "summary" | "day" | "tips", style?: string, dayNumber?: number }
 export async function POST(req: NextRequest) {
   try {
@@ -59,10 +58,6 @@ export async function POST(req: NextRequest) {
     // P0 #1: auth + membership
     const { user, response } = await requireTripMember(req, tripId);
     if (response) return response;
-
-    // 10 генераций в час на пользователя (LLM стоит денег)
-    const limited = userRateLimit(req, `${user!.id}:${tripId}`, "ai-summary", 10, 60 * 60_000);
-    if (limited) return limited;
 
     const body = (await req.json().catch(() => ({}))) as {
       type?: string;
@@ -211,18 +206,23 @@ export async function POST(req: NextRequest) {
 Не посещённые места: ${unvisited.map((p) => p.name).join(", ") || "основное посещено"}.${topCategories ? ` Траты по категориям: ${topCategories}.` : ""}`;
     }
 
-    // LLM: OpenAI-compatible (Docker) → ZAI SDK → local draft from trip data
-    try {
-      // BYOK: ключ — юзер → админ → env; база/модель — админ → env (resolveAiConfig)
-      const cfg = await resolveAiConfig(user!.id);
-      const llm = await generateWithLLM(systemPrompt, userPrompt, cfg);
-      if (llm) {
-        return NextResponse.json({ content: llm, type, style, generated: true, source: llmSource });
-      }
-    } catch (sdkErr) {
-      const msg = sdkErr instanceof Error ? sdkErr.message : "SDK недоступен";
-      console.error("[ai-summary] LLM error:", msg);
-      // Fall through to local draft so Docker still works without keys
+    // LLM через единый оркестратор: лимит, BYOK, учёт и алерты — в lib/ai.ts.
+    // Любая неудача (кроме лимита и блока) → локальный черновик из данных поездки:
+    // так Docker/прод без ключей продолжают работать (P0 #3).
+    const ai = await runAi({
+      req,
+      userId: user!.id,
+      tripId,
+      feature: "ai-summary",
+      system: systemPrompt,
+      prompt: userPrompt,
+    });
+    if (ai.ok) {
+      return NextResponse.json({ content: ai.text, type, style, generated: true, source: "openai" });
+    }
+    if (ai.reason === "rate_limited" && ai.limitResponse) return ai.limitResponse;
+    if (ai.reason === "blocked") {
+      return NextResponse.json({ error: "ИИ недоступен для твоего аккаунта — обратись к админу" }, { status: 403 });
     }
 
     const local = buildLocalSummary({
@@ -253,71 +253,6 @@ export async function POST(req: NextRequest) {
   } catch (e) {
     console.error("AI summary error:", e);
     return NextResponse.json({ error: "AI request failed" }, { status: 500 });
-  }
-}
-
-let llmSource: "openai" | "zai" | "local" = "local";
-
-async function generateWithLLM(
-  systemPrompt: string,
-  userPrompt: string,
-  cfg: { key: string | null; baseUrl: string | null; model: string | null }
-): Promise<string | null> {
-  const openaiKey = cfg.key;
-  const openaiBase = openaiChatUrl(cfg.baseUrl);
-  const openaiModel = cfg.model ?? process.env.OPENAI_MODEL ?? "gpt-4o-mini";
-
-  if (openaiKey) {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 60_000); // LLM может думать долго — но не дольше минуты
-    try {
-    const r = await fetch(`${openaiBase}/chat/completions`, {
-      method: "POST",
-      signal: controller.signal,
-      headers: {
-        Authorization: `Bearer ${openaiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: openaiModel,
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: userPrompt },
-        ],
-        temperature: 0.9,
-      }),
-    });
-    if (!r.ok) {
-      const t = await r.text().catch(() => "");
-      throw new Error(`OpenAI ${r.status}: ${t.slice(0, 200)}`);
-    }
-    const data = (await r.json()) as { choices?: { message?: { content?: string } }[] };
-    const content = data?.choices?.[0]?.message?.content;
-    if (!content) throw new Error("OpenAI вернул пустой ответ");
-    llmSource = "openai";
-    return content;
-    } finally {
-      clearTimeout(timeout);
-    }
-  }
-
-  try {
-    const ZAIModule = await import("z-ai-web-dev-sdk");
-    const ZAI = ZAIModule.default;
-    const zai = await ZAI.create();
-    const completion = await zai.chat.completions.create({
-      messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: userPrompt },
-      ],
-    });
-    const content = (completion as { choices?: { message?: { content?: string } }[] })?.choices?.[0]
-      ?.message?.content;
-    if (!content) return null;
-    llmSource = "zai";
-    return content;
-  } catch {
-    return null;
   }
 }
 

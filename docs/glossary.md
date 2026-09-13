@@ -57,8 +57,12 @@
 | **plan** | `free` / `premium`; премиум действителен пока не истёк `planExpiry`; проверка — только `isPremiumUser()` |
 | **free-лимиты** | `freeTripLimit`, `freeMemberLimit` из `AppSettings` (настраивает админ) |
 | **BYOK** | Bring Your Own Key: свой LLM-ключ юзера (`User.aiApiKey`), наружу только маска |
+| **Полный BYOK** | свой ключ + свой `User.aiBaseUrl`/`aiModel`; инвариант `pickAiConfig` — юзерский адрес получает только юзерский ключ |
 | **Цепочка ИИ-ключей** | юзер (BYOK) → админский в `AppSettings` → `env OPENAI_API_KEY` (`src/lib/ai-key.ts`) |
-| **aiBaseUrl / aiModel** | OpenAI-совместимый эндпоинт и модель (напр. `glm-4.6`), задаются админом |
+| **aiBaseUrl / aiModel** | OpenAI-совместимый эндпоинт и модель (напр. `glm-4.6`): глобально — у `AppSettings`, свой уровень — у юзера (только вместе с его ключом) |
+| **runAi / AI_FEATURES** | оркестратор всех ИИ-вызовов (`src/lib/ai.ts`): блок → лимит → ключ → провайдер → учёт; реестр фич с лимитами/температурами и швом премиум-гейта `access` — в `src/lib/ai-usage.ts` |
+| **AiUsage** | учёт вызовов ИИ: юзер, фича, чей ключ (`keySource`), токены, длительность; промпты/ответы не пишутся. Пишет `runAi` fire-and-forget |
+| **aiBlocked / алерты трат** | полный запрет ИИ юзеру (админ, `/admin/ai`); пороги `AppSettings.aiAlert*PerDay` — при превышении админы ловят уведомление (дедуп `aiAlertedAt` — раз в UTC-сутки) |
 | **AppSettings** | singleton-строка `id="app"`: ключи ИИ + конфиг приложения; до записи — дефолты кода |
 | **role** | `user` / `admin`; админ-роль всегда проверяется чтением из БД, не из токена |
 | **AdminLog** | журнал действий админов (кто/что/когда; ключи и пароли в meta запрещены) |

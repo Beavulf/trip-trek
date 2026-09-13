@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { requireUser } from "@/lib/api-auth";
-import { maskKey } from "@/lib/ai-key";
+import { maskKey, validateAiBaseUrl } from "@/lib/ai-key";
 
 // GET /api/user — профиль текущего пользователя (сессия)
 export async function GET(req: NextRequest) {
@@ -21,8 +21,11 @@ export async function GET(req: NextRequest) {
       plan: true,
       planExpiry: true,
       createdAt: true,
-      // Ключ ИИ наружу не отдаём — ниже превращаем в замаскированный хвост
+      // Ключ ИИ наружу не отдаём — ниже превращаем в замаскированный хвост.
+      // Адрес и модель — не секреты, возвращаются как есть (для UI профиля).
       aiApiKey: true,
+      aiBaseUrl: true,
+      aiModel: true,
     },
   });
 
@@ -128,11 +131,13 @@ export async function GET(req: NextRequest) {
   const maxOwnedTrips = isPremium ? null : 1;
   const maxMembersPerTrip = isPremium ? null : 5;
 
-  const { aiApiKey, ...safeUser } = user;
+  const { aiApiKey, aiBaseUrl, aiModel, ...safeUser } = user;
 
   return NextResponse.json({
     ...safeUser,
     aiKeyTail: aiApiKey ? maskKey(aiApiKey) : null,
+    aiBaseUrl: aiBaseUrl ?? "",
+    aiModel: aiModel ?? "",
     isPremium,
     stats: {
       trips: trips.length,
@@ -163,7 +168,7 @@ export async function PATCH(req: NextRequest) {
   const userId = authUser!.id;
 
   const body = await req.json();
-  const { name, emoji, color, avatarUrl, aiApiKey, onboardingCompleted } = body;
+  const { name, emoji, color, avatarUrl, aiApiKey, aiBaseUrl, aiModel, onboardingCompleted } = body;
 
   const data: Record<string, unknown> = {};
   if (typeof name === "string" && name.trim()) data.name = name.trim();
@@ -188,6 +193,24 @@ export async function PATCH(req: NextRequest) {
     if (cleaned) data.aiApiKey = cleaned;
   }
   if (aiApiKey === null) data.aiApiKey = null;
+  // Свой адрес провайдера (полный BYOK): та же https-валидация, что в админке —
+  // на этот URL сервер ходит с Bearer-ключом. Адрес без своего ключа игнорируется
+  // резолвом, но хранить его не запрещаем: ключ могут добавить позже.
+  if (aiBaseUrl !== undefined) {
+    if (typeof aiBaseUrl === "string" && aiBaseUrl.trim()) {
+      const checked = validateAiBaseUrl(aiBaseUrl.trim());
+      if (!checked.ok) {
+        return NextResponse.json({ error: `aiBaseUrl: ${checked.error}` }, { status: 400 });
+      }
+      data.aiBaseUrl = checked.value;
+    } else {
+      data.aiBaseUrl = null;
+    }
+  }
+  if (aiModel !== undefined) {
+    const trimmed = typeof aiModel === "string" ? aiModel.trim().slice(0, 120) : "";
+    data.aiModel = trimmed || null;
+  }
   // Обучение: true — тур пройден или пропущен, false — сброс («Пройти заново» в профиле)
   if (typeof onboardingCompleted === "boolean") {
     data.onboardingCompletedAt = onboardingCompleted ? new Date() : null;
@@ -200,8 +223,9 @@ export async function PATCH(req: NextRequest) {
   const user = await db.user.update({
     where: { id: userId },
     data,
-    // aiApiKey нужен только чтобы отдать маску aiKeyTail — сам ключ наружу не идёт
-    select: { id: true, name: true, emoji: true, color: true, avatarUrl: true, aiApiKey: true, onboardingCompletedAt: true },
+    // aiApiKey нужен только чтобы отдать маску aiKeyTail — сам ключ наружу не идёт;
+    // адрес/модель возвращаем, чтобы UI профиля синхронизировался без перезагрузки
+    select: { id: true, name: true, emoji: true, color: true, avatarUrl: true, aiApiKey: true, aiBaseUrl: true, aiModel: true, onboardingCompletedAt: true },
   });
 
   if (data.name || data.emoji || data.color) {
@@ -220,6 +244,8 @@ export async function PATCH(req: NextRequest) {
     ...safeUser,
     // Клиент сразу показывает «Свой ключ подключён (…хвост)» без перезагрузки
     aiKeyTail: _key ? maskKey(_key) : null,
+    aiBaseUrl: safeUser.aiBaseUrl ?? "",
+    aiModel: safeUser.aiModel ?? "",
     onboardingCompleted: safeUser.onboardingCompletedAt != null,
   });
 }

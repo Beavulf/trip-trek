@@ -10,6 +10,8 @@ export type AdminAction =
   | "user.password"
   | "user.delete"
   | "user.message"
+  | "user.ai_block"
+  | "user.ai_unblock"
   | "trip.edit"
   | "trip.delete"
   | "trip.invite_regen"

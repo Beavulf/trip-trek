@@ -2,6 +2,7 @@
 
 import { AnimatePresence, motion } from "framer-motion";
 import {
+  Bot,
   Crown,
   HardDrive,
   KeyRound,
@@ -49,6 +50,7 @@ export const SECTION_COLOR = {
   overview: "#f97316",
   users: "#0ea5e9",
   trips: "#f59e0b",
+  ai: "#d946ef",
   feedback: "#f43f5e",
   journal: "#10b981",
   settings: "#8b5cf6",
@@ -159,6 +161,8 @@ export const ACTION_META: Record<string, { label: string; icon: typeof Pencil; d
   "user.password": { label: "Пароль сброшен", icon: KeyRound },
   "user.delete": { label: "Пользователь удалён", icon: Trash2, danger: true },
   "user.message": { label: "Сообщение пользователю", icon: StickyNote },
+  "user.ai_block": { label: "ИИ отключён юзеру", icon: Bot, danger: true },
+  "user.ai_unblock": { label: "ИИ включён юзеру", icon: Sparkles },
   "trip.edit": { label: "Поездка изменена", icon: Pencil },
   "trip.delete": { label: "Поездка удалена", icon: Trash2, danger: true },
   "trip.invite_regen": { label: "Код приглашения обновлён", icon: RefreshCw },

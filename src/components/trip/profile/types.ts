@@ -7,6 +7,9 @@ export interface UserProfile {
   avatarUrl?: string | null;
   /** Свой ключ ИИ: наружу только замаскированный хвост («••••b7Fk») */
   aiKeyTail?: string | null;
+  /** Свой адрес провайдера и модель (полный BYOK) — не секреты */
+  aiBaseUrl?: string;
+  aiModel?: string;
   plan: string;
   planExpiry: string | null;
   createdAt: string;

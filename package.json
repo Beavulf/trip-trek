@@ -6,7 +6,7 @@
     "dev": "next dev -p 3000",
     "dev:ws": "bun server.ts",
     "dev:all": "bun server.ts",
-    "build": "next build && cp -r .next/static .next/standalone/.next/ && cp -r public .next/standalone/",
+    "build": "next build --webpack && cp -r .next/static .next/standalone/.next/ && cp -r public .next/standalone/",
     "start": "NODE_ENV=production bun server.ts 2>&1 | tee server.log",
     "lint": "eslint .",
     "test": "vitest run",
@@ -91,7 +91,6 @@
     "vaul": "^1.1.2",
     "web-push": "^3.6.7",
     "yet-another-react-lightbox": "^3.32.2",
-    "z-ai-web-dev-sdk": "^0.0.18",
     "zod": "^4.0.2",
     "zustand": "^5.0.6"
   },

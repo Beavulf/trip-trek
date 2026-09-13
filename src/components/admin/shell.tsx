@@ -6,6 +6,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { useTheme } from "next-themes";
 import {
+  Bot,
   ChevronLeft,
   LayoutDashboard,
   Loader2,
@@ -31,6 +32,7 @@ export const ADMIN_SECTIONS = [
   { href: "/admin", label: "Обзор", icon: LayoutDashboard, key: "overview" },
   { href: "/admin/users", label: "Юзеры", icon: Users, key: "users" },
   { href: "/admin/trips", label: "Поездки", icon: Map, key: "trips" },
+  { href: "/admin/ai", label: "ИИ", icon: Bot, key: "ai" },
   { href: "/admin/feedback", label: "Отзывы", icon: MessagesSquare, key: "feedback" },
   { href: "/admin/journal", label: "Журнал", icon: ScrollText, key: "journal" },
   { href: "/admin/settings", label: "Настройки", icon: Settings, key: "settings" },

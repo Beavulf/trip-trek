@@ -33,10 +33,12 @@ import { fmtBytes } from "./shared";
 // конфиг приложения (регистрация, лимиты free-плана), приборка хранилища
 // и справка о системе. Ключ ИИ наружу не отдаётся — только маска.
 
-const PROVIDER_HINTS = [
-  { name: "OpenAI", base: "— (оставь пустым)", model: "gpt-4o-mini" },
+// Пресеты провайдеров: клик заполняет Base URL и модель. Модель OpenRouter
+// зависит от выбранного на их сайте — оставляем поле пустым.
+const AI_PROVIDERS = [
+  { name: "OpenAI", base: "https://api.openai.com/v1", model: "gpt-4o-mini" },
   { name: "Z.ai (GLM)", base: "https://api.z.ai/api/paas/v4", model: "glm-4.6" },
-  { name: "OpenRouter", base: "https://openrouter.ai/api/v1", model: "см. на сайте" },
+  { name: "OpenRouter", base: "https://openrouter.ai/api/v1", model: "" },
   { name: "DeepSeek", base: "https://api.deepseek.com/v1", model: "deepseek-chat" },
 ];
 
@@ -59,7 +61,13 @@ interface SettingsData {
   aiKeyTail: string | null;
   aiBaseUrl: string;
   aiModel: string;
-  appConfig: { registrationEnabled: boolean; freeTripLimit: number; freeMemberLimit: number };
+  appConfig: {
+    registrationEnabled: boolean;
+    freeTripLimit: number;
+    freeMemberLimit: number;
+    aiAlertCallsPerDay: number;
+    aiAlertTokensPerDay: number;
+  };
 }
 
 interface TestResult {
@@ -132,6 +140,8 @@ export function SettingsTab() {
   const [registrationEnabled, setRegistrationEnabled] = useState(true);
   const [freeTripLimit, setFreeTripLimit] = useState("1");
   const [freeMemberLimit, setFreeMemberLimit] = useState("5");
+  const [aiAlertCalls, setAiAlertCalls] = useState("0");
+  const [aiAlertTokens, setAiAlertTokens] = useState("0");
 
   // === Хранилище ===
   const [confirmPurge, setConfirmPurge] = useState(false);
@@ -139,7 +149,16 @@ export function SettingsTab() {
 
   const [syncKey, setSyncKey] = useState("");
   const settingsKey = settings
-    ? [settings.aiKeyTail, settings.aiBaseUrl, settings.aiModel, settings.appConfig.registrationEnabled, settings.appConfig.freeTripLimit, settings.appConfig.freeMemberLimit].join("|")
+    ? [
+        settings.aiKeyTail,
+        settings.aiBaseUrl,
+        settings.aiModel,
+        settings.appConfig.registrationEnabled,
+        settings.appConfig.freeTripLimit,
+        settings.appConfig.freeMemberLimit,
+        settings.appConfig.aiAlertCallsPerDay,
+        settings.appConfig.aiAlertTokensPerDay,
+      ].join("|")
     : "";
   if (settings && settingsKey !== syncKey) {
     setSyncKey(settingsKey);
@@ -149,6 +168,8 @@ export function SettingsTab() {
     setRegistrationEnabled(settings.appConfig.registrationEnabled);
     setFreeTripLimit(String(settings.appConfig.freeTripLimit));
     setFreeMemberLimit(String(settings.appConfig.freeMemberLimit));
+    setAiAlertCalls(String(settings.appConfig.aiAlertCallsPerDay));
+    setAiAlertTokens(String(settings.appConfig.aiAlertTokensPerDay));
   }
 
   const saveAi = useMutation({
@@ -184,6 +205,8 @@ export function SettingsTab() {
             registrationEnabled,
             freeTripLimit: Number(freeTripLimit) || 0,
             freeMemberLimit: Number(freeMemberLimit) || 1,
+            aiAlertCallsPerDay: Number(aiAlertCalls) || 0,
+            aiAlertTokensPerDay: Number(aiAlertTokens) || 0,
           },
         }),
       });
@@ -250,7 +273,9 @@ export function SettingsTab() {
   const appDirty =
     registrationEnabled !== settings.appConfig.registrationEnabled ||
     freeTripLimit !== String(settings.appConfig.freeTripLimit) ||
-    freeMemberLimit !== String(settings.appConfig.freeMemberLimit);
+    freeMemberLimit !== String(settings.appConfig.freeMemberLimit) ||
+    aiAlertCalls !== String(settings.appConfig.aiAlertCallsPerDay) ||
+    aiAlertTokens !== String(settings.appConfig.aiAlertTokensPerDay);
 
   const usage = stats?.storage;
   const scanData = scan.data;
@@ -268,6 +293,29 @@ export function SettingsTab() {
           <span className="tabular-nums">{tail ?? "—"}</span>
         </div>
 
+        <label className="block text-xs font-medium text-muted-foreground">Провайдер — клик подставит адрес и модель</label>
+        <div className="flex flex-wrap gap-1.5">
+          {AI_PROVIDERS.map((p) => {
+            const on = baseUrl === p.base;
+            return (
+              <button
+                key={p.name}
+                type="button"
+                onClick={() => {
+                  setBaseUrl(p.base);
+                  if (p.model) setModel(p.model);
+                }}
+                className={cn(
+                  "px-3 min-h-9 rounded-xl text-xs font-medium transition-colors",
+                  on ? "bg-primary text-primary-foreground shadow-sm" : "bg-secondary border border-border text-muted-foreground hover:text-foreground"
+                )}
+              >
+                {p.name}
+              </button>
+            );
+          })}
+        </div>
+
         <label className="block text-xs font-medium text-muted-foreground">Ключ API</label>
         <input type="password" value={key} onChange={(e) => setKey(e.target.value)} placeholder="sk-…" autoComplete="off" className={inputCls} />
 
@@ -276,16 +324,6 @@ export function SettingsTab() {
 
         <label className="block text-xs font-medium text-muted-foreground">Модель</label>
         <input value={model} onChange={(e) => setModel(e.target.value)} placeholder="gpt-4o-mini — если пусто" autoComplete="off" className={inputCls} />
-
-        <div className="rounded-xl bg-muted/40 border border-border p-2.5 text-[10px] text-muted-foreground space-y-1">
-          {PROVIDER_HINTS.map((p) => (
-            <div key={p.name} className="flex flex-wrap gap-x-2">
-              <span className="font-semibold text-foreground/70 w-24 shrink-0">{p.name}</span>
-              <span className="font-mono">{p.base}</span>
-              <span className="font-mono text-muted-foreground/70">· {p.model}</span>
-            </div>
-          ))}
-        </div>
 
         <div className="flex flex-wrap gap-2">
           <button
@@ -395,7 +433,32 @@ export function SettingsTab() {
               className="w-full min-h-10 rounded-xl border border-input bg-background px-3 text-sm tabular-nums input-mobile"
             />
           </label>
+          <label className="space-y-1">
+            <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Алерты ИИ: вызовов/сутки</span>
+            <input
+              type="number"
+              min={0}
+              max={1000000}
+              value={aiAlertCalls}
+              onChange={(e) => setAiAlertCalls(e.target.value)}
+              className="w-full min-h-10 rounded-xl border border-input bg-background px-3 text-sm tabular-nums input-mobile"
+            />
+          </label>
+          <label className="space-y-1">
+            <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Алерты ИИ: токенов/сутки</span>
+            <input
+              type="number"
+              min={0}
+              max={1000000}
+              value={aiAlertTokens}
+              onChange={(e) => setAiAlertTokens(e.target.value)}
+              className="w-full min-h-10 rounded-xl border border-input bg-background px-3 text-sm tabular-nums input-mobile"
+            />
+          </label>
         </div>
+        <p className="text-[10px] text-muted-foreground -mt-1">
+          0 = алерт выключен. При превышении порога юзером придёт уведомление в колокольчик (не чаще раза в сутки).
+        </p>
 
         <button
           type="button"

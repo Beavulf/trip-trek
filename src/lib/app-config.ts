@@ -14,25 +14,38 @@ export interface AppConfig {
   registrationEnabled: boolean;
   freeTripLimit: number;
   freeMemberLimit: number;
+  /** Порог алерта трат ИИ на юзера в сутки (UTC). 0 = выключен. */
+  aiAlertCallsPerDay: number;
+  aiAlertTokensPerDay: number;
 }
 
 const DEFAULTS: AppConfig = {
   registrationEnabled: true,
   freeTripLimit: 1,
   freeMemberLimit: 5,
+  aiAlertCallsPerDay: 0,
+  aiAlertTokensPerDay: 0,
 };
 
 /** Текущий конфиг приложения (с дефолтами, если строка настроек ещё не создана). */
 export async function getAppConfig(): Promise<AppConfig> {
   const row = await db.appSettings.findUnique({
     where: { id: "app" },
-    select: { registrationEnabled: true, freeTripLimit: true, freeMemberLimit: true },
+    select: {
+      registrationEnabled: true,
+      freeTripLimit: true,
+      freeMemberLimit: true,
+      aiAlertCallsPerDay: true,
+      aiAlertTokensPerDay: true,
+    },
   });
   if (!row) return { ...DEFAULTS };
   return {
     registrationEnabled: row.registrationEnabled ?? DEFAULTS.registrationEnabled,
     freeTripLimit: Math.max(0, row.freeTripLimit ?? DEFAULTS.freeTripLimit),
     freeMemberLimit: Math.max(1, row.freeMemberLimit ?? DEFAULTS.freeMemberLimit),
+    aiAlertCallsPerDay: Math.max(0, row.aiAlertCallsPerDay ?? DEFAULTS.aiAlertCallsPerDay),
+    aiAlertTokensPerDay: Math.max(0, row.aiAlertTokensPerDay ?? DEFAULTS.aiAlertTokensPerDay),
   };
 }
 

@@ -2,27 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { publish } from "@/lib/ws-bus";
 import { requireTripMember } from "@/lib/api-auth";
-import { resolveAiConfig, openaiChatUrl } from "@/lib/ai-key";
+import { runAi } from "@/lib/ai";
 
 // ИИ-фразы: перевод своей фразы, «ещё фразы» раздела, пак для любого языка.
-// LLM — та же цепочка, что в foods/suggest: OpenAI-совместимый API → ZAI SDK → 503.
-// LLM стоит денег: 10 запросов в час на пользователя на поездку.
-
-const RATE_LIMIT_WINDOW_MS = 60 * 60 * 1000;
-const RATE_LIMIT_MAX = 10;
-const rateLimit = new Map<string, { count: number; resetAt: number }>();
-
-function checkRateLimit(key: string): boolean {
-  const now = Date.now();
-  const entry = rateLimit.get(key);
-  if (!entry || entry.resetAt < now) {
-    rateLimit.set(key, { count: 1, resetAt: now + RATE_LIMIT_WINDOW_MS });
-    return true;
-  }
-  if (entry.count >= RATE_LIMIT_MAX) return false;
-  entry.count += 1;
-  return true;
-}
+// Лимит, BYOK и учёт — в едином оркестраторе lib/ai.ts (старый личный Map-лимитер
+// удалён: он не имел чистки и не попал бы в будущий Redis-шов).
 
 const CATEGORIES = ["basics", "food", "transport", "shopping", "emergency", "social"] as const;
 type Category = (typeof CATEGORIES)[number];
@@ -112,12 +96,6 @@ export async function POST(req: NextRequest) {
 
     const { user, response } = await requireTripMember(req, tripId);
     if (response) return response;
-    if (!checkRateLimit(`${user.id}:${tripId}`)) {
-      return NextResponse.json({ error: "ИИ устал: не больше 10 запросов в час" }, { status: 429 });
-    }
-
-    // BYOK: ключ — юзер → админ → env; база/модель — админ → env (resolveAiConfig)
-    const cfg = await resolveAiConfig(user.id);
 
     const trip = await db.trip.findUnique({
       where: { id: tripId },
@@ -132,12 +110,10 @@ export async function POST(req: NextRequest) {
       const system =
         "Ты — переводчик-разговорник для путешественников. Переведи русскую фразу на указанный язык так, как её сказали бы местные в быту (разговорно, вежливо, коротко). Дай транслитерацию латиницей по слогам, чтобы русскоязычный мог прочитать вслух. " +
         'Отвечай СТРОГО JSON-объектом без markdown: {"foreign": "фраза на языке", "translit": "чтение латиницей"}. Никакого текста до или после.';
-      const userPrompt = `Язык: ${langLabel || "язык страны поездки"}. Страна поездки: ${trip.destination || "неизвестна"}. Фраза: «${trimmedText}»`;
-      const content = await generateWithLLM(system, userPrompt, cfg);
-      if (!content) {
-        return NextResponse.json({ error: "ИИ недоступен — добавь свой ключ ИИ в настройках профиля или попроси админа" }, { status: 503 });
-      }
-      const t = parseTranslation(content);
+      const prompt = `Язык: ${langLabel || "язык страны поездки"}. Страна поездки: ${trip.destination || "неизвестна"}. Фраза: «${trimmedText}»`;
+      const ai = await runAi({ req, userId: user.id, tripId, feature: "phrases-ai", system, prompt });
+      if (!ai.ok) return phrasesAiError(ai);
+      const t = parseTranslation(ai.text);
       if (!t) return NextResponse.json({ error: "ИИ ответил не по формату — попробуй ещё раз" }, { status: 502 });
       return NextResponse.json({ cn: t.cn, pinyin: t.pinyin });
     }
@@ -172,11 +148,9 @@ ${CATEGORIES.map((c) => `- ${c}: ${CATEGORY_RU[c]}`).join("\n")}
 Составь ${wantCount} новых фраз раздела «${cat ? CATEGORY_RU[cat] : "основы"}». Категория каждой фразы: «${cat ?? "basics"}».
 Уже есть в разговорнике — НЕ повторяй их и близкие по смыслу: ${haveRu.slice(0, 60).join(" | ") || "пусто"}.`;
 
-    const content = await generateWithLLM(system, userPrompt, cfg);
-    if (!content) {
-      return NextResponse.json({ error: "ИИ недоступен — добавь свой ключ ИИ в настройках профиля или попроси админа" }, { status: 503 });
-    }
-    let phrases = parsePhrases(content);
+    const ai = await runAi({ req, userId: user.id, tripId, feature: "phrases-ai", system, prompt: userPrompt });
+    if (!ai.ok) return phrasesAiError(ai);
+    let phrases = parsePhrases(ai.text);
     if (mode === "more" && cat) phrases = phrases.map((p) => ({ ...p, category: cat }));
     // дедуп по иностранному тексту (без учета регистра)
     phrases = phrases.filter((p) => !haveForeign.has(normForeign(p.foreign)));
@@ -213,67 +187,24 @@ ${CATEGORIES.map((c) => `- ${c}: ${CATEGORY_RU[c]}`).join("\n")}
   }
 }
 
-// Та же цепочка, что в foods/suggest и ai-summary: OpenAI-совместимый API → ZAI SDK → null
-async function generateWithLLM(
-  systemPrompt: string,
-  userPrompt: string,
-  cfg: { key: string | null; baseUrl: string | null; model: string | null }
-): Promise<string | null> {
-  const openaiKey = cfg.key;
-  const openaiBase = openaiChatUrl(cfg.baseUrl);
-  const openaiModel = cfg.model ?? process.env.OPENAI_MODEL ?? "gpt-4o-mini";
-
-  if (openaiKey) {
-    try {
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 60_000); // не висим дольше минуты
-      let r: Response;
-      try {
-        r = await fetch(`${openaiBase}/chat/completions`, {
-          method: "POST",
-          signal: controller.signal,
-          headers: {
-            Authorization: `Bearer ${openaiKey}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            model: openaiModel,
-            messages: [
-              { role: "system", content: systemPrompt },
-              { role: "user", content: userPrompt },
-            ],
-            temperature: 0.7,
-          }),
-        });
-      } finally {
-        clearTimeout(timeout);
-      }
-      if (!r.ok) {
-        const t = await r.text().catch(() => "");
-        console.error(`[phrases/ai] OpenAI ${r.status}: ${t.slice(0, 200)}`);
-        return null;
-      }
-      const data = (await r.json()) as { choices?: { message?: { content?: string } }[] };
-      return data?.choices?.[0]?.message?.content ?? null;
-    } catch (e) {
-      console.error("[phrases/ai] OpenAI error:", e);
-      return null;
+// Маппер неудач оркестратора в ответы с прежними текстами (контракт клиента):
+// 429 со своим «ИИ устал» (Retry-After наследуем от общего лимитера), 403 блока, 503 «добавь свой ключ».
+function phrasesAiError(ai: Awaited<ReturnType<typeof runAi>>): NextResponse {
+  if (!ai.ok) {
+    if (ai.reason === "rate_limited") {
+      const retryAfter = ai.limitResponse?.headers.get("Retry-After") ?? undefined;
+      return NextResponse.json(
+        { error: "ИИ устал: не больше 10 запросов в час" },
+        { status: 429, ...(retryAfter ? { headers: { "Retry-After": retryAfter } } : {}) }
+      );
     }
+    if (ai.reason === "blocked") {
+      return NextResponse.json({ error: "ИИ недоступен для твоего аккаунта — обратись к админу" }, { status: 403 });
+    }
+    return NextResponse.json(
+      { error: "ИИ недоступен — добавь свой ключ ИИ в настройках профиля или попроси админа" },
+      { status: 503 }
+    );
   }
-
-  try {
-    const ZAIModule = await import("z-ai-web-dev-sdk");
-    const ZAI = ZAIModule.default;
-    const zai = await ZAI.create();
-    const completion = await zai.chat.completions.create({
-      messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: userPrompt },
-      ],
-    });
-    return (completion as { choices?: { message?: { content?: string } }[] })?.choices?.[0]?.message?.content ?? null;
-  } catch (e) {
-    console.error("[phrases/ai] ZAI error:", e);
-    return null;
-  }
+  return NextResponse.json({ error: "Не удалось сгенерировать фразы" }, { status: 500 });
 }

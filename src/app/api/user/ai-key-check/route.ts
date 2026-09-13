@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireUser } from "@/lib/api-auth";
-import { resolveAiConfig, openaiChatUrl, maskKey } from "@/lib/ai-key";
+import { resolveAiConfig, openaiChatUrl, maskKey, DEFAULT_AI_MODEL } from "@/lib/ai-key";
 import { userRateLimit } from "@/lib/rate-limit";
 
 // POST /api/user/ai-key-check — проверка ИИ-ключа (BYOK).
@@ -34,7 +34,7 @@ export async function POST(req: NextRequest) {
   }
 
   const base = openaiChatUrl(cfg.baseUrl);
-  const model = cfg.model ?? process.env.OPENAI_MODEL ?? "gpt-4o-mini";
+  const model = cfg.model ?? DEFAULT_AI_MODEL;
 
   try {
     const controller = new AbortController();
@@ -44,6 +44,8 @@ export async function POST(req: NextRequest) {
       r = await fetch(`${base}/chat/completions`, {
         method: "POST",
         signal: controller.signal,
+        // как и в runAi: редирект унёс бы Bearer-ключ на чужой хост
+        redirect: "error",
         headers: {
           Authorization: `Bearer ${cfg.key}`,
           "Content-Type": "application/json",
@@ -71,7 +73,7 @@ export async function POST(req: NextRequest) {
       if (r.status === 404) {
         return NextResponse.json({
           ok: false,
-          error: `Адрес API не найден (404). Для модели «${model}» Base URL обычно должен включать /v1 — попроси админа проверить адрес.`,
+          error: `Адрес API не найден (404). Для модели «${model}» Base URL обычно должен включать /v1 — проверь свой адрес в профиле или адрес общего конфига у админа.`,
         });
       }
       return NextResponse.json({

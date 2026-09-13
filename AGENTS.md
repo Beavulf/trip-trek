@@ -45,7 +45,7 @@ bun run build            # production-сборка standalone
 | `src/components/trip/` | фичи главного экрана: itinerary, budget/, map/, gallery, board (чат), journal, food/, phrases/, timeline, dashboard/… |
 | `src/components/admin/`, `auth/`, `ui/` | админка, логин/регистрация, shadcn-кит |
 | `src/hooks/trip/` | `use-*.ts` — слой данных клиента (TanStack Query) над API |
-| `src/lib/` | серверная логика: `api-auth.ts`, `rate-limit.ts`, `ws-bus.ts`, `ai-key.ts`, `premium.ts`, `notify.ts`, `mail/`, `storage/`, `budget/`, `outbound.ts`, `db.ts` (Prisma-клиент), `trip-days.ts`, `trip-export.ts`, `trip-templates.ts`, `app-config.ts`; доменные модули маршрута: `time-of-day.ts`, `place-fields.ts` (контракт записи Place), `place-draft.ts`, `route.ts`, `route-threads.ts`, `map-filters.ts`, `map-bus.ts`, `map-layers.ts`, `query-keys.ts`, `place-links.ts`, `onboarding.ts` (шаги welcome-тура и обучалок вкладок + отметки обучения) |
+| `src/lib/` | серверная логика: `api-auth.ts`, `rate-limit.ts`, `ws-bus.ts`, `ai.ts` (оркестратор ИИ: runAi, учёт AiUsage, алерты трат), `ai-usage.ts` (реестр ИИ-фич AI_FEATURES + чистая математика учёта), `ai-key.ts` (BYOK-резолв: pickAiConfig, маски, https-гвард), `premium.ts`, `notify.ts`, `mail/`, `storage/`, `budget/`, `outbound.ts`, `db.ts` (Prisma-клиент), `trip-days.ts`, `trip-export.ts`, `trip-templates.ts`, `app-config.ts`; доменные модули маршрута: `time-of-day.ts`, `place-fields.ts` (контракт записи Place), `place-draft.ts`, `route.ts`, `route-threads.ts`, `map-filters.ts`, `map-bus.ts`, `map-layers.ts`, `query-keys.ts`, `place-links.ts`, `onboarding.ts` (шаги welcome-тура и обучалок вкладок + отметки обучения) |
 | `prisma/` | `schema.prisma`, миграции, seed, скрипты переноса |
 | `docker-deploy/` | прод: Dockerfile, compose, Caddy, `DEPLOY.md` (runbook), бэкапы |
 | `docs/` | `architecture.md`, `api.md`, `glossary.md`, `adr/0001–0008`, аудиты фич `audit-*.md`, `PRODUCTION_PLAN.md` |
@@ -82,10 +82,17 @@ WS-handshake требует валидный JWT (`server/ws-auth.ts`), анон
 - **Премиум**: `isPremiumUser()` (`src/lib/premium.ts`) = `plan === "premium"` и
   не истёк `planExpiry`. Лимиты free (`freeTripLimit`, `freeMemberLimit`) — в
   singleton `AppSettings` через `src/lib/app-config.ts`.
-- **ИИ (BYOK)**: ключ резолвится по цепочке юзер → админский из `AppSettings` →
-  `env OPENAI_API_KEY` (`src/lib/ai-key.ts`); наружу API отдаёт только маску.
-  OpenAI-совместимый `aiBaseUrl` + `aiModel`.
-- **Внешние HTTP** (Nominatim, Open-Meteo, курсы валют, LLM) — только через
+- **ИИ (BYOK)**: все LLM-вызовы — только через `runAi()` (`src/lib/ai.ts`):
+  блок админа → лимит фичи → резолв ключа → провайдер → учёт `AiUsage` →
+  алерт трат. Новая ИИ-фича = запись в `AI_FEATURES` (`src/lib/ai-usage.ts`)
+  + промпты в роуте; свой fetch/chat-completions в роуте не писать.
+  Ключ резолвится по цепочке юзер (свой ключ, опц. свой Base URL/модель) →
+  админский из `AppSettings` → `env OPENAI_API_KEY` (`src/lib/ai-key.ts`);
+  наружу API отдаёт только маску. OpenAI-совместимый `aiBaseUrl` + `aiModel`.
+  Задел на будущее: поле `access` в `AI_FEATURES` (премиум-гейт) и сериализация
+  сообщений в одном месте (vision). Не через `outbound.ts` — ретраи платных
+  вызовов не нужны, нужны HTTP-статус и `redirect:"error"`.
+- **Внешние HTTP** (Nominatim, Open-Meteo, курсы валют) — только через
   `src/lib/outbound.ts` (таймаут + ретрай + TTL-кэш, null при неудаче).
 
 ## Рецепты (как тут принято делать)

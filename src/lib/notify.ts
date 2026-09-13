@@ -14,7 +14,10 @@ export type NotificationType =
   | "trip_deleted"
   | "feedback_reply"
   | "admin_message"
-  | "ownership";
+  | "ownership"
+  | "ai_blocked"
+  | "ai_unblocked"
+  | "ai_spend_alert";
 
 export interface NotifyPayload {
   type: NotificationType;

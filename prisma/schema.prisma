@@ -28,6 +28,16 @@ model User {
   // Свой ключ ИИ (BYOK): OpenAI-совместимый. Наружу API отдаёт только замаскированный
   // хвост. Приоритет при вызове: свой ключ → админский (AppSettings) → env OPENAI_API_KEY
   aiApiKey   String?
+  // Свой адрес провайдера и модель (полный BYOK). База активна ТОЛЬКО вместе со своим
+  // ключом: чужой (админский/env) ключ на юзерский адрес не отправляется никогда.
+  aiBaseUrl  String?
+  aiModel    String?
+  // Полный запрет ИИ для юзера (любой источник ключа). Проверяется в runAi — единой
+  // точке, чтобы новый ИИ-роут не смог забыть проверку. Управляет админ из /admin/ai.
+  aiBlocked  Boolean   @default(false)
+  // Момент последнего алерта «порог трат ИИ». Дедуп — раз в UTC-сутки: сравнение
+  // «< начала сегодняшних суток» само сбрасывается в полночь, cron не нужен.
+  aiAlertedAt DateTime?
   // Обучение (welcome-tour): момент завершения/пропуска. null = не показывали
   // (или сброшено кнопкой «Пройти заново» в профиле) — тур откроется при входе на /
   onboardingCompletedAt DateTime?
@@ -44,6 +54,7 @@ model User {
   tripBans      TripBan[]
   notifications UserNotification[]
   resetTokens   PasswordResetToken[]
+  aiUsage       AiUsage[]
 }
 
 // === Токены сброса пароля: одноразовые, TTL 60 минут. В БД — только sha256-хеш,
@@ -75,6 +86,34 @@ model AppSettings {
   // Self-upgrade премиума без оплаты (демо-режим). Дефолт false: аудит 2026-09-12 —
   // самовыдача снимала лимиты тарифа. Включается из админки, когда появится оплата.
   selfUpgradeEnabled  Boolean @default(false)
+  // Пороги алертов «нестандартные траты ИИ» на юзера в сутки (UTC). 0 = алерт
+  // по этому измерению выключен. Считается по записям AiUsage за текущие сутки.
+  aiAlertCallsPerDay  Int     @default(0)
+  aiAlertTokensPerDay Int     @default(0)
+}
+
+// === Учёт вызовов ИИ: только метаданные, НИКОГДА содержимое промптов/ответов ===
+// Пишется из runAi (lib/ai.ts) fire-and-forget: сбой учёта не роняет фичу.
+// tripId без FK — статистика юзера переживает удаление поездки (как в Feedback).
+model AiUsage {
+  id               String   @id @default(cuid())
+  userId           String
+  tripId           String?
+  feature          String // ai-summary / foods-suggest / phrases-ai
+  keySource        String // user / admin / env — чей баланс горел
+  model            String
+  promptTokens     Int      @default(0) // 0, если провайдер не отдал usage
+  completionTokens Int      @default(0)
+  durationMs       Int      @default(0)
+  ok               Boolean  @default(true)
+  error            String? // короткий код: timeout / http_401 / network / empty
+  createdAt        DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt]) // суточные агрегаты юзера: алерты и карточка в админке
+  @@index([feature, createdAt]) // графики по фичам
+  @@index([createdAt]) // скан окна «14 дней» админ-разделом (таблица растёт монотонно)
 }
 
 // === Журнал действий админа: кто и что менял из панели ===

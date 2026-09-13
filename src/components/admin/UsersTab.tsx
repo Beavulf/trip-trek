@@ -13,11 +13,13 @@ import {
   Send,
   ShieldOff,
   ShieldCheck,
+  Sparkles,
   Trash2,
   UserRoundSearch,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn, plural } from "@/lib/utils";
+import { Switch } from "@/components/ui/switch";
 import { UserAvatar } from "@/components/trip/user-avatar";
 import { MobileBottomSheet } from "@/components/trip/mobile-bottom-sheet";
 import {
@@ -42,6 +44,7 @@ export interface AdminUserRow {
   plan: string;
   planExpiry: string | null;
   role: string;
+  aiBlocked: boolean;
   createdAt: string;
   _count: { memberships: number };
 }
@@ -309,6 +312,7 @@ function UserDetailSheet({
   const [confirmRole, setConfirmRole] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [confirmPassword, setConfirmPassword] = useState(false);
+  const [confirmAiBlock, setConfirmAiBlock] = useState(false);
 
   const { data: user } = useQuery<AdminUserDetail>({
     queryKey: ["admin-user", userId],
@@ -617,6 +621,25 @@ function UserDetailSheet({
           )}
         </div>
 
+        {/* Доступ к ИИ: полный блок — любой источник ключа */}
+        <div className="rounded-2xl border border-border p-3.5 flex items-center gap-3">
+          <span className="size-9 rounded-xl bg-secondary grid place-items-center shrink-0">
+            <Sparkles className={cn("size-4.5", user.aiBlocked ? "text-destructive" : "text-indigo-500")} />
+          </span>
+          <div className="flex-1 min-w-0">
+            <div className="text-sm font-medium">Доступ к ИИ</div>
+            <div className="text-xs text-muted-foreground">
+              {user.aiBlocked ? "Отключён полностью — даже со своим ключом" : "Рассказы, разговорник и шеф работают"}
+            </div>
+          </div>
+          <Switch
+            checked={!user.aiBlocked}
+            disabled={busy}
+            aria-label="Доступ к ИИ"
+            onCheckedChange={(v) => (v ? patch.mutate({ id: user.id, aiBlocked: false }) : setConfirmAiBlock(true))}
+          />
+        </div>
+
         {/* Роль */}
         {!isSelf && (
           <button
@@ -645,6 +668,31 @@ function UserDetailSheet({
           </button>
         )}
       </div>
+
+      {/* Подтверждение блокировки ИИ */}
+      <AlertDialog open={confirmAiBlock} onOpenChange={setConfirmAiBlock}>
+        <AlertDialogContent className="max-w-sm rounded-3xl">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Отключить ИИ для {user.name}?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Рассказы, разговорник и советы шефа перестанут работать — даже с личным ключом. Пользователю придёт уведомление.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="gap-2">
+            <AlertDialogCancel className="mt-0 rounded-xl">Отмена</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => {
+                e.preventDefault();
+                setConfirmAiBlock(false);
+                patch.mutate({ id: user.id, aiBlocked: true });
+              }}
+              className="rounded-xl bg-destructive text-white hover:bg-destructive/90"
+            >
+              Отключить ИИ
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Подтверждение смены роли */}
       <AlertDialog open={confirmRole} onOpenChange={setConfirmRole}>

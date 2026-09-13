@@ -93,13 +93,20 @@
 
 | Роут | Методы | Доступ | Лимит | Что делает |
 |---|---|---|---|---|
-| `ai-summary` | POST | M | 10/ч на user+trip | итоги поездки (LLM) |
+| `ai-summary` | POST | M | 10/ч на user+trip | итоги поездки (LLM); без ключа — локальный черновик (`generated:false`), заблокирован юзер — 403 |
 | `phrases/generate` | POST | M | 10/ч на user+trip | базовый разговорник по направлению |
-| `phrases/ai` | POST | M | 10/ч на user+trip | фразы по свободному запросу |
+| `phrases/ai` | POST | M | 10/ч на user+trip | фразы по свободному запросу (3 режима: translate/more/pack) |
 | `foods/suggest` | POST | M | 10/ч на user+trip | предложения блюд по городу |
+| `user/ai-key-check` | POST | U | 5/мин | проверка своего ключа живым запросом (общий ключ не проверяется) |
 
-Ключ LLM резолвится: юзер (BYOK) → `AppSettings` админа → `OPENAI_API_KEY`
-(`src/lib/ai-key.ts`). Все вызовы — через `src/lib/outbound.ts`.
+Ключ LLM резолвится: юзер (свой ключ + свой Base URL/модель = полный BYOK; иначе
+свой ключ на общем адресе) → `AppSettings` админа → `OPENAI_API_KEY`
+(`src/lib/ai-key.ts`, чистая функция `pickAiConfig`). Инвариант: юзерский адрес
+получает только юзерский ключ. Все вызовы — через единый оркестратор `runAi`
+(`src/lib/ai.ts`): блок-проверка → лимит → вызов → запись в `AiUsage`; **не через
+`outbound.ts`** (ретраи платных вызовов не нужны, нужен HTTP-статус и
+`redirect:"error"`). Заблокированным админом (`User.aiBlocked`) ИИ недоступен при
+любом источнике ключа (403).
 
 ## Уведомления и пуш
 
@@ -116,10 +123,11 @@
 
 | Роут | Методы | Что делает |
 |---|---|---|
-| `admin/users` | GET, PATCH, DELETE | юзеры: premium, роль, бан, удаление (AdminLog) |
+| `admin/users` | GET, PATCH, DELETE | юзеры: premium, роль, блок ИИ (`aiBlocked`), пароль, удаление (AdminLog + уведомление) |
 | `admin/trips` | GET, PATCH, DELETE | все поездки |
 | `admin/trips/members` | GET, POST, DELETE | участники любой поездки |
-| `admin/settings` | GET, PUT | `AppSettings`: ключ/база/модель ИИ, регистрация, лимиты free |
+| `admin/settings` | GET, PUT | `AppSettings`: ключ/база/модель ИИ, регистрация, лимиты free, пороги алертов трат ИИ |
+| `admin/ai` | GET | телеметрия ИИ: сутки/неделя, ряды 14д по фичам, юзеры с порогами/блоком, последние вызовы |
 | `admin/storage` | GET, POST | статистика и очистка хранилища |
 | `admin/stats` | GET | сводка дашборда |
 | `admin/journal` | GET | журнал действий админов (`AdminLog`) |

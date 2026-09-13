@@ -6,6 +6,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import Link from "next/link";
 import {
   Bell,
+  Bot,
   CheckCheck,
   Crown,
   KeyRound,
@@ -13,6 +14,7 @@ import {
   MessageSquareReply,
   ShieldBan,
   ShieldCheck,
+  Sparkles,
   Trash2,
   UserMinus,
   X,
@@ -48,6 +50,9 @@ const TYPE_ICON: Record<string, React.ReactNode> = {
   feedback_reply: <MessageSquareReply className="size-4 text-emerald-500" />,
   admin_message: <Mail className="size-4 text-sky-500" />,
   ownership: <Crown className="size-4 text-amber-500" />,
+  ai_blocked: <ShieldBan className="size-4 text-rose-500" />,
+  ai_unblocked: <Sparkles className="size-4 text-emerald-500" />,
+  ai_spend_alert: <Bot className="size-4 text-amber-500" />,
 };
 
 function fmtDateTime(ts: string): string {

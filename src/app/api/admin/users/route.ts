@@ -18,6 +18,7 @@ const SAFE_SELECT = {
   plan: true,
   planExpiry: true,
   role: true,
+  aiBlocked: true,
   aiApiKey: false,
   createdAt: true,
   _count: { select: { memberships: true } },
@@ -89,7 +90,7 @@ export async function PATCH(req: NextRequest) {
   if (limited) return limited;
 
   const body = await req.json().catch(() => ({}));
-  const { id, plan, premiumDays, role, name, email, emoji, color, password, message } = body as {
+  const { id, plan, premiumDays, role, name, email, emoji, color, password, message, aiBlocked } = body as {
     id?: string;
     plan?: string;
     premiumDays?: number | null;
@@ -100,6 +101,7 @@ export async function PATCH(req: NextRequest) {
     color?: string;
     password?: string;
     message?: string;
+    aiBlocked?: boolean;
   };
   // Пароль пишем отдельным changePassword (passwordChangedAt + сжигание ссылок сброса),
   // поэтому в общий data он не попадает
@@ -115,6 +117,7 @@ export async function PATCH(req: NextRequest) {
     email?: string;
     emoji?: string;
     color?: string;
+    aiBlocked?: boolean;
   } = {};
 
   if (plan !== undefined) {
@@ -140,6 +143,15 @@ export async function PATCH(req: NextRequest) {
       return NextResponse.json({ error: "Нельзя менять собственную роль" }, { status: 400 });
     }
     data.role = role;
+  }
+  if (aiBlocked !== undefined) {
+    if (typeof aiBlocked !== "boolean") {
+      return NextResponse.json({ error: "aiBlocked: boolean" }, { status: 400 });
+    }
+    if (id === admin!.id && aiBlocked) {
+      return NextResponse.json({ error: "Нельзя блокировать ИИ самому себе" }, { status: 400 });
+    }
+    data.aiBlocked = aiBlocked;
   }
   if (name !== undefined) {
     if (typeof name !== "string" || !name.trim() || name.trim().length > 64) {
@@ -227,6 +239,18 @@ export async function PATCH(req: NextRequest) {
     }
     if (data.role) {
       await logAdmin(admin!.id, "user.role", { type: "user", id, label }, { role: data.role });
+    }
+    if (data.aiBlocked !== undefined) {
+      const blocked = data.aiBlocked;
+      await logAdmin(admin!.id, blocked ? "user.ai_block" : "user.ai_unblock", { type: "user", id, label });
+      await notifyUser(id, {
+        type: blocked ? "ai_blocked" : "ai_unblocked",
+        title: blocked ? "Доступ к ИИ ограничен админом" : "Доступ к ИИ восстановлен",
+        body: blocked
+          ? "ИИ-функции (рассказы, разговорник, шеф) отключены для твоего аккаунта. Если считаешь это ошибкой — напиши админу."
+          : "ИИ-функции снова работают. Приятных путешествий!",
+        url: "/profile",
+      });
     }
     // Пароль — отдельной единой точкой записи: хеш, passwordChangedAt (выкидывает
     // другие сессии), сжигание ссылок сброса и уведомление пользователю внутри.

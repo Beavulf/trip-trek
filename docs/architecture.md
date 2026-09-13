@@ -83,7 +83,9 @@ return NextResponse.json(result);
   (по user, для тяжёлых действий) — `src/lib/rate-limit.ts`. In-memory,
   ADR-0005; обнуляется рестартом контейнера.
 - Внешние вызовы — только `src/lib/outbound.ts`: таймаут, один ретрай, TTL-кэш,
-  null при неудаче; у каждого вызова свой fallback.
+  null при неудаче; у каждого вызова свой fallback. Исключение — LLM: все вызовы
+  через оркестратор `runAi` (`src/lib/ai.ts`), которому нужны HTTP-статус для
+  учёта, `redirect:"error"` против увода ключа и никакие ретраи (платно).
 - Логи — `src/lib/logger.ts`; админ-действия пишутся в `AdminLog`
   (`src/lib/admin-log.ts`), ключи/пароли в meta запрещены.
 
@@ -123,7 +125,8 @@ User ──< TripMember >── Trip ──< Day ──< Place ──< Photo
               │            │  └──< BudgetPlan (уникален по tripId+category)
               │            └──< TripBan (бан юзера в конкретной поездке)
    глобальное: AppSettings (singleton id="app"), AdminLog,
-               PushSubscription, UserNotification, PasswordResetToken, Feedback
+               PushSubscription, UserNotification, PasswordResetToken, Feedback,
+               AiUsage (учёт вызовов ИИ: feature/keySource/токены, без промптов)
 ```
 
 Соглашения, которые легко сломать:
@@ -178,15 +181,28 @@ S3» — ADR-0003.
 
 ## 8. ИИ и монетизация
 
-- Резолв ключа (`src/lib/ai-key.ts`): свой `User.aiApiKey` (BYOK) → `AppSettings`
-  админа → `OPENAI_API_KEY`. Пользователь видит только маску; проверка ключа —
-  `user/ai-key-check`. Все вызовы LLM идут через `outbound.ts`.
-- ИИ-фичи: `ai-summary` (итоги поездки), `phrases/ai` + `phrases/generate`
-  (разговорник), `foods/suggest` (блюда). Лимит 10/ч на user+trip на каждую.
+- Единая точка — `runAi` (`src/lib/ai.ts`): блок админа → лимит фичи → резолв
+  ключа → вызов провайдера → учёт в `AiUsage` → алерт трат (всё
+  fire-and-forget, сбои учёта не роняют фичу). Новая ИИ-фича = запись в
+  `AI_FEATURES` (`src/lib/ai-usage.ts`) + промпты в своём роуте.
+- Резолв ключа (`src/lib/ai-key.ts`, чистая `pickAiConfig`): свой ключ юзера
+  (полный BYOK: + свой `aiBaseUrl`/`aiModel`; инвариант — юзерский адрес
+  получает только юзерский ключ) → `AppSettings` админа → `OPENAI_API_KEY`.
+  Пользователь видит только маску; проверка своего трио — `user/ai-key-check`.
+- Учёт и алерты: каждая попытка вызова пишется в `AiUsage` (только метаданные:
+  feature, keySource, токены, длительность; промпты/ответы — никогда). Пороги
+  `AppSettings.aiAlertCallsPerDay/aiAlertTokensPerDay` (0 = выключено) — при
+  превышении админы получают уведомление (дедуп — атомарный клейм
+  `User.aiAlertedAt` раз в UTC-сутки). Раздел `/admin/ai`: телеметрия, юзеры с
+  порогами, блокировка ИИ (`User.aiBlocked` — полный запрет любого источника).
+- ИИ-фичи: `ai-summary` (итоги поездки, при недоступности LLM — локальный
+  черновик), `phrases/ai` + `phrases/generate` (разговорник), `foods/suggest`
+  (блюда). Лимит 10/ч на user+trip на каждую.
 - Премиум: `isPremiumUser` (`plan=premium`, `planExpiry` не истёк). Выдача —
   вручную админом (`admin/users`) или `user/upgrade` (заглушка/ручной сценарий —
   известная дыра продакшена, см. `docs/PRODUCTION_PLAN.md`). Лимиты free читаются
-  из `AppSettings`.
+  из `AppSettings`. Шов премиум-гейта ИИ — поле `access` в `AI_FEATURES`
+  (`"all"` у всех; `"premium-or-byok"` включит гейт без правок оркестратора).
 
 ## 9. Уведомления
 

@@ -2,12 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { requireTripMember } from "@/lib/api-auth";
 import { currencySymbol } from "@/lib/currencies";
-import { userRateLimit } from "@/lib/rate-limit";
-import { resolveAiConfig, openaiChatUrl } from "@/lib/ai-key";
+import { runAi } from "@/lib/ai";
 
 // «Советы шефа»: LLM предлагает знаковые блюда города, которых ещё нет в гиде.
 // Пишет только клиент (пользователь выбирает, что добавить) — БД здесь не трогаем.
-// Лимит 10/час на пользователя — LLM стоит денег (единый модуль lib/rate-limit).
+// Лимит, BYOK и учёт — в едином оркестраторе lib/ai.ts.
 
 // Пример цены — в валюте конкретной поездки (buildSystemPrompt), а не жёсткий ¥
 function buildSystemPrompt(priceExample: string): string {
@@ -62,8 +61,6 @@ export async function POST(req: NextRequest) {
     }
     const { user, response } = await requireTripMember(req, tripId);
     if (response) return response;
-    const limited = userRateLimit(req, `${user.id}:${tripId}`, "foods-suggest", 10, 60 * 60_000);
-    if (limited) return limited;
 
     const [trip, foods] = await Promise.all([
       db.trip.findUnique({ where: { id: tripId }, select: { destination: true, currency: true } }),
@@ -72,23 +69,26 @@ export async function POST(req: NextRequest) {
     if (!trip) return NextResponse.json({ error: "Поездка не найдена" }, { status: 404 });
 
     const existing = foods.map((f) => f.name.toLowerCase());
-    const userPrompt = `Город: ${city.trim()}. Контекст поездки: ${trip.destination || city.trim()}. Валюта: ${trip.currency}.
-Уже в списке (не предлагай их и близкие синонимы): ${existing.length ? existing.join(", ") : "пусто"}.`;
-
-    // BYOK: ключ — юзер → админ → env; база/модель — админ → env (resolveAiConfig)
-    const cfg = await resolveAiConfig(user.id);
-    const content = await generateWithLLM(
-      buildSystemPrompt(`${currencySymbol(trip.currency)}25–40`),
-      userPrompt,
-      cfg
-    );
-    if (!content) {
+    const ai = await runAi({
+      req,
+      userId: user.id,
+      tripId,
+      feature: "foods-suggest",
+      system: buildSystemPrompt(`${currencySymbol(trip.currency)}25–40`),
+      prompt: `Город: ${city.trim()}. Контекст поездки: ${trip.destination || city.trim()}. Валюта: ${trip.currency}.
+Уже в списке (не предлагай их и близкие синонимы): ${existing.length ? existing.join(", ") : "пусто"}.`,
+    });
+    if (!ai.ok) {
+      if (ai.reason === "rate_limited" && ai.limitResponse) return ai.limitResponse;
+      if (ai.reason === "blocked") {
+        return NextResponse.json({ error: "ИИ недоступен для твоего аккаунта — обратись к админу" }, { status: 403 });
+      }
       return NextResponse.json(
         { error: "Шеф сейчас недоступен — проверь настройки LLM (OPENAI_API_KEY)" },
         { status: 503 }
       );
     }
-    const suggestions = parseSuggestions(content);
+    const suggestions = parseSuggestions(ai.text);
     if (suggestions.length === 0) {
       return NextResponse.json({ error: "Шеф ответил не по формату — попробуй ещё раз" }, { status: 502 });
     }
@@ -96,69 +96,5 @@ export async function POST(req: NextRequest) {
   } catch (e) {
     console.error("[foods/suggest] error:", e);
     return NextResponse.json({ error: "Не удалось получить советы шефа" }, { status: 500 });
-  }
-}
-
-// Та же цепочка, что в ai-summary: OpenAI-совместимый API → ZAI SDK → null
-async function generateWithLLM(
-  systemPrompt: string,
-  userPrompt: string,
-  cfg: { key: string | null; baseUrl: string | null; model: string | null }
-): Promise<string | null> {
-  const openaiKey = cfg.key;
-  const openaiBase = openaiChatUrl(cfg.baseUrl);
-  const openaiModel = cfg.model ?? process.env.OPENAI_MODEL ?? "gpt-4o-mini";
-
-  if (openaiKey) {
-    try {
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 60_000); // не висим дольше минуты
-      let r: Response;
-      try {
-        r = await fetch(`${openaiBase}/chat/completions`, {
-        method: "POST",
-        signal: controller.signal,
-        headers: {
-          Authorization: `Bearer ${openaiKey}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          model: openaiModel,
-          messages: [
-            { role: "system", content: systemPrompt },
-            { role: "user", content: userPrompt },
-          ],
-          temperature: 0.8,
-        }),
-      });
-      } finally {
-        clearTimeout(timeout);
-      }
-      if (!r.ok) {
-        const t = await r.text().catch(() => "");
-        console.error(`[foods/suggest] OpenAI ${r.status}: ${t.slice(0, 200)}`);
-        return null;
-      }
-      const data = (await r.json()) as { choices?: { message?: { content?: string } }[] };
-      return data?.choices?.[0]?.message?.content ?? null;
-    } catch (e) {
-      console.error("[foods/suggest] OpenAI error:", e);
-      return null;
-    }
-  }
-
-  try {
-    const ZAIModule = await import("z-ai-web-dev-sdk");
-    const ZAI = ZAIModule.default;
-    const zai = await ZAI.create();
-    const completion = await zai.chat.completions.create({
-      messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: userPrompt },
-      ],
-    });
-    return (completion as { choices?: { message?: { content?: string } }[] })?.choices?.[0]?.message?.content ?? null;
-  } catch {
-    return null;
   }
 }
