@@ -130,11 +130,14 @@
 X-Forwarded-For, ему доверяем только за Caddy) и `userRateLimit` (по user).
 In-memory, сбрасываются рестартом контейнера (ADR-0005).
 
-- login — 5 / 15 мин / IP
+- login — 5 / 15 мин / IP (включая `auth/[...nextauth]` POST)
 - register — 3 / ч / IP
 - forgot-password — 5 / ч / IP и 3 / ч / email
 - reset-password — 20 / ч / IP
 - join (GET превью) — 30 / мин / IP
+- health — 60 / мин / IP (БД-пинг кэшируется на 5 с)
+- weather — 30 / мин / IP
+- geocode — 60 / ч / user
 - ИИ-роуты — 10 / ч / user+trip
 
 ## Realtime-события

@@ -12,7 +12,6 @@ const MIME: Record<string, string> = {
   ".png": "image/png",
   ".webp": "image/webp",
   ".gif": "image/gif",
-  ".svg": "image/svg+xml",
   ".heic": "image/heic",
   ".heif": "image/heif",
 };
@@ -26,6 +25,22 @@ export function handleUploadsRequest(req: IncomingMessage, res: ServerResponse):
     return false;
   }
 
+  // FS-ошибки (гонка stat/open с одновременным удалением файла и т.п.) не должны
+  // вылетать uncaughtException'ом: server.ts завершает процесс, а он один на все
+  // поездки (аудит 2026-09-12). Для клиента расхождение выглядит как 404.
+  try {
+    return serveUpload(req, res, rawUrl);
+  } catch {
+    if (!res.headersSent) {
+      res.statusCode = 404;
+      res.setHeader("Cache-Control", "no-store");
+    }
+    res.end();
+    return true;
+  }
+}
+
+function serveUpload(req: IncomingMessage, res: ServerResponse, rawUrl: string): boolean {
   let pathname: string;
   try {
     pathname = decodeURIComponent(rawUrl.split("?")[0] || "");
@@ -71,6 +86,12 @@ export function handleUploadsRequest(req: IncomingMessage, res: ServerResponse):
     return true;
   }
 
-  createReadStream(filePath).pipe(res);
+  // Ошибка чтения после отправки заголовков (файл удалили между stat и open) —
+  // обрываем соединение; без обработчика stream-'error' процесс бы упал
+  const stream = createReadStream(filePath);
+  stream.on("error", () => {
+    res.destroy();
+  });
+  stream.pipe(res);
   return true;
 }

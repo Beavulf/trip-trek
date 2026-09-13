@@ -1,6 +1,7 @@
 import { fetchJson } from "@/lib/outbound";
 import { NextRequest, NextResponse } from "next/server";
 import { KNOWN_CITIES, decodeCustomKey } from "@/lib/city-coords";
+import { rateLimitMiddleware } from "@/lib/rate-limit";
 
 // Коды погоды WMO → описание + эмодзи
 const WMO_CODES: Record<number, { label: string; emoji: string }> = {
@@ -44,6 +45,12 @@ function wmoMeta(code: number, isDay = true): { label: string; emoji: string } {
 // P0 #3: decode custom key поддерживает отрицательные coords (новый формат custom:{lat},{lng}).
 // P1 #5: при падении open-meteo → 502 error (не 200 + fake 28° fallback).
 export async function GET(req: NextRequest) {
+  // Роут анонимный и ходит на open-meteo с общего IP сервера — без лимита
+  // флуд координатами выжигал квоту провайдера для всех пользователей
+  // (аудит 2026-09-12; как на соседних city-search/currency)
+  const limited = rateLimitMiddleware(req, "weather", 30, 60_000);
+  if (limited) return limited;
+
   const { searchParams } = new URL(req.url);
   const days = Math.min(7, Math.max(1, parseInt(searchParams.get("forecast") || "1")));
   // Окно прогноза от произвольной даты (формат YYYY-MM-DD) — open-meteo start_date/end_date
@@ -71,8 +78,10 @@ export async function GET(req: NextRequest) {
     // Прямые координаты (новый способ)
     lat = parseFloat(latParam);
     lng = parseFloat(lngParam);
-    // P0 #1: не Null Island — если coords невалидны, 400
-    if (isNaN(lat) || isNaN(lng) || (lat === 0 && lng === 0)) {
+    // P0 #1: не Null Island — если coords невалидны, 400.
+    // + географические диапазоны (аудит 2026-09-12): мусорные координаты
+    // гарантированно конвертировались в ошибку апстрима, разжигая кэш-промахи
+    if (isNaN(lat) || isNaN(lng) || (lat === 0 && lng === 0) || Math.abs(lat) > 90 || Math.abs(lng) > 180) {
       return NextResponse.json({ error: "Невалидные координаты" }, { status: 400 });
     }
     cityName = searchParams.get("name") || "Город";
