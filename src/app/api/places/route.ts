@@ -12,6 +12,13 @@ export async function POST(req: NextRequest) {
   if (!name || !dayId || !tripId || typeof lat !== "number" || typeof lng !== "number") {
     return NextResponse.json({ error: "name, dayId, tripId, lat, lng required" }, { status: 400 });
   }
+
+  // dayId обязан принадлежать этой поездке (аудит 2026-09-12; как в journal)
+  const day = await db.day.findFirst({ where: { id: dayId, tripId }, select: { id: true } });
+  if (!day) {
+    return NextResponse.json({ error: "day не принадлежит этой поездке" }, { status: 400 });
+  }
+
   const maxOrder = await db.place.aggregate({ where: { dayId }, _max: { order: true } });
   const nextOrder = order ?? (maxOrder._max.order ?? -1) + 1;
 

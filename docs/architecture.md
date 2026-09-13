@@ -127,8 +127,9 @@ User ──< TripMember >── Trip ──< Day ──< Place ──< Photo
 - **Expense**: `amount` — всегда в валюте поездки; то, что ввёл юзер, —
   `originalAmount`/`originalCurrency`. Делёж — `splitWith` (строка с userId через
   запятую, пусто = личная) + `excludeSelf`. Переводы-погашения идемпотентны по
-  `settlementKey` (уникальный, формат в схеме) — поэтому одну пару долгов можно
-  гасить многократно. Логика дележа/долгов — `src/lib/budget/` (split, balances,
+  `settlementKey` (уникальный **в рамках поездки**, `@@unique([tripId, settlementKey])`;
+  формат в схеме) — поэтому одну пару долгов можно гасить многократно.
+  Логика дележа/долгов — `src/lib/budget/` (split, balances,
   settle), не дублируй её в роутах.
 - **Photo**: `url`/`thumbUrl` (storage пайплайн), координаты из EXIF (`exifr`),
   `userId` — кто загрузил (SetNull при удалении аккаунта).

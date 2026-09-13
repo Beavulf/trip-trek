@@ -22,6 +22,11 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   if (data.status === "visited" && !data.visitedAt) {
     data.visitedAt = new Date();
   }
+  // Переносить место можно только в день той же поездки (аудит 2026-09-12; как в photos/[id])
+  if (typeof data.dayId === "string") {
+    const day = await db.day.findFirst({ where: { id: data.dayId, tripId: existing.tripId }, select: { id: true } });
+    if (!day) return NextResponse.json({ error: "day не принадлежит этой поездке" }, { status: 400 });
+  }
   const place = await db.place.update({ where: { id }, data });
 
   // WS: уведомить участников поездки

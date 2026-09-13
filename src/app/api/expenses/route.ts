@@ -59,11 +59,20 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "splitWith contains non-members" }, { status: 400 });
   }
 
-  // P0 #3: идемпотентность settlement — если settlementKey передан,
-  // проверяем есть ли уже запись с этим ключом. Если да — возвращаем её.
+  // dayId обязан принадлежать этой поездке (аудит 2026-09-12; как в journal)
+  if (dayId) {
+    const day = await db.day.findFirst({ where: { id: dayId, tripId }, select: { id: true } });
+    if (!day) {
+      return NextResponse.json({ error: "day не принадлежит этой поездке" }, { status: 400 });
+    }
+  }
+
+  // P0 #3: идемпотентность settlement — если settlementKey передан, ищем запись
+  // С ТЕМ ЖЕ tripId (ключ уникален в рамках поездки, @@unique([tripId, settlementKey])).
+  // Глобальный lookup возвращал чужую трату из другой поездки (аудит 2026-09-12).
   if (settlementKey && typeof settlementKey === "string") {
-    const existing = await db.expense.findUnique({
-      where: { settlementKey },
+    const existing = await db.expense.findFirst({
+      where: { settlementKey, tripId },
       include: {
         paidBy: { select: { id: true, name: true, emoji: true, color: true } },
         day: { select: { dayNumber: true, city: true } },

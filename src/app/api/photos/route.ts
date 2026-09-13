@@ -53,6 +53,13 @@ export async function POST(req: NextRequest) {
   const limited = userRateLimit(req, user!.id, "photos", 20, 60 * 60_000);
   if (limited) return limited;
 
+  // dayId обязан принадлежать этой поездке — проверяем ДО тяжёлой обработки
+  // файла (аудит 2026-09-12; как в journal)
+  const day = await db.day.findFirst({ where: { id: dayId, tripId }, select: { id: true } });
+  if (!day) {
+    return NextResponse.json({ error: "day не принадлежит этой поездке" }, { status: 400 });
+  }
+
   const placeId = (formData.get("placeId") as string) || null;
   const userId = user!.id;
   const caption = (formData.get("caption") as string) || null;
