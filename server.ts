@@ -72,9 +72,11 @@ app.prepare().then(() => {
   });
 
   // Socket.io server: handshake требует валидный JWT из cookie сессии —
-  // анонимные подключения отбиваются сразу
+  // анонимные подключения отбиваются сразу. maxHttpBufferSize ограничивает
+  // и так read-only канал (дефолт 1MB на сообщение — избыточно).
   io = new Server(server, {
     path: "/socket.io/",
+    maxHttpBufferSize: 64 * 1024,
     cors: {
       origin: process.env.WS_ALLOWED_ORIGINS?.split(",") || ["*"],
       methods: ["GET", "POST"],

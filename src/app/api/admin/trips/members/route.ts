@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import { requireAdmin } from "@/lib/api-auth";
 import { logAdmin } from "@/lib/admin-log";
 import { notifyUser } from "@/lib/notify";
+import { evictUserFromTrip } from "@/lib/ws-bus";
 import { userRateLimit } from "@/lib/rate-limit";
 
 // Управление участниками конкретной поездки (админ).
@@ -89,6 +90,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Владельца нельзя заблокировать. Сначала передай владение другому участнику." }, { status: 400 });
     }
     await db.tripMember.delete({ where: { id: member.id } });
+    void evictUserFromTrip(tripId, userId);
   }
 
   await logAdmin(admin!.id, "trip.ban", { type: "trip", id: tripId, label: trip.title }, { userId, userName: target.name, reason: reason || null });
@@ -146,6 +148,7 @@ export async function DELETE(req: NextRequest) {
   }
 
   await db.tripMember.delete({ where: { id: member.id } });
+  void evictUserFromTrip(member.tripId, member.userId);
   await logAdmin(admin!.id, "trip.member_remove", { type: "trip", id: member.tripId, label: member.trip.title }, {
     userId: member.userId,
     userName: member.user.name,

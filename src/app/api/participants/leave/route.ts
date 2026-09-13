@@ -32,6 +32,7 @@ export async function POST(req: NextRequest) {
   }
 
   await db.tripMember.delete({ where: { id: member.id } });
+  void evictUserFromTrip(tripId, user!.id);
   publish(tripId, "trip:updated", {});
 
   // Владельцу — уведомление, что участник ушёл

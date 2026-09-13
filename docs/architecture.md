@@ -101,6 +101,12 @@ return NextResponse.json(result);
 истину клиент добирает через API. Новое событие = добавить publish в роут +
 инвалидацию в хук + строку в `server/notification-map.ts` (если нужен колокольчик).
 
+Гарантии доступа (hardening 2026-09-12): handshake повторяет HTTP-инварианты —
+JWT + существование юзера + `passwordChangedAt` (токен до смены пароля WS не
+проходит). Удаление TripMember (исключение/бан/выход/админ) обязано звать
+`evictUserFromTrip(tripId, userId)` из `ws-bus.ts` — иначе открытая вкладка
+исключённого продолжала бы получать события комнаты.
+
 ## 5. Модель данных (Prisma / Postgres)
 
 Схема: `prisma/schema.prisma`, все связи каскадные от Trip. Ядро:

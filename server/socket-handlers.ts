@@ -52,13 +52,17 @@ export function setupSocketHandlers(io: Server, rooms: TripRooms): void {
     });
 
     // «Печатает…» в чате: ретрансляция в комнату БЕЗ отправителя (socket.to),
-    // только участникам той же поездки
+    // только участникам той же поездки. userName приходит от клиента —
+    // обрезаем: это лишь подпись в тосте, а не поле данных.
     socket.on("board:typing", async (data: unknown) => {
       const d = data as { tripId?: unknown; userName?: unknown } | null;
       if (typeof d?.tripId !== "string" || !(await checkMembership(d.tripId))) return;
       socket.to(`trip:${d.tripId}`).emit("board:typing", {
         tripId: d.tripId,
-        userName: typeof d.userName === "string" && d.userName ? d.userName : "Кто-то",
+        userName:
+          typeof d.userName === "string" && d.userName
+            ? d.userName.slice(0, 32)
+            : "Кто-то",
       });
     });
 

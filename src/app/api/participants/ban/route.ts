@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { Prisma } from "@prisma/client";
 import { requireTripMember, requireUser } from "@/lib/api-auth";
 import { notifyUser } from "@/lib/notify";
+import { evictUserFromTrip } from "@/lib/ws-bus";
 import { userRateLimit } from "@/lib/rate-limit";
 
 // Бан пользователя в поездке силами ВЛАДЕЛЬЦА (например, утёкла ссылка-приглашение).
@@ -51,6 +52,7 @@ export async function POST(req: NextRequest) {
   const member = await db.tripMember.findUnique({ where: { tripId_userId: { tripId, userId } } });
   if (member) {
     await db.tripMember.delete({ where: { id: member.id } });
+    void evictUserFromTrip(tripId, userId);
   }
 
   await notifyUser(userId, {

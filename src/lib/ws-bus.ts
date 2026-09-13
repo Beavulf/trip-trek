@@ -48,3 +48,21 @@ export function publish(tripId: string, event: string, payload: Record<string, u
       });
   }
 }
+
+/**
+ * Исключённого участника выгоняем из комнаты поездки сразу: иначе его открытая
+ * вкладка продолжала бы получать события до переподключения (аудит 2026-09-12).
+ * Вызывать после удаления TripMember.
+ */
+export async function evictUserFromTrip(tripId: string, userId: string): Promise<void> {
+  const io = holder.__tripIo;
+  if (!io) return;
+  try {
+    const sockets = await io.in(`trip:${tripId}`).fetchSockets();
+    for (const s of sockets) {
+      if (s.data.userId === userId) s.leave(`trip:${tripId}`);
+    }
+  } catch {
+    // realtime — вспомогательный канал; неудача eviction не роняет HTTP-запрос
+  }
+}

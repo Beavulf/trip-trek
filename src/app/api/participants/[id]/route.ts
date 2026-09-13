@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { requireTripMember } from "@/lib/api-auth";
 import { notifyUser } from "@/lib/notify";
-import { publish } from "@/lib/ws-bus";
+import { publish, evictUserFromTrip } from "@/lib/ws-bus";
 import { userRateLimit } from "@/lib/rate-limit";
 
 // PATCH /api/participants/[id] — обновить участника (бюджет, имя, роль)
@@ -81,6 +81,7 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
   }
 
   await db.tripMember.delete({ where: { id: member.id } });
+  void evictUserFromTrip(existing.tripId, member.userId);
   publish(existing.tripId, "trip:updated", {});
 
   await notifyUser(member.userId, {
