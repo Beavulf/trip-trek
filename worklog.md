@@ -2,10 +2,52 @@
 
 ## Current Project Status
 
-**Phase**: 16 (Login UX + Join Fix + Budget Plan Fix + AI Trip-Scoped + Currency + Food Add) — COMPLETED
-**Build**: ✅ TypeScript clean, ESLint clean (1 minor warning)
+**Phase**: 17 (Security Hardening по аудиту 2026-09-12 — 27 находок закрыты) — COMPLETED
+**Build**: ✅ TypeScript clean, ESLint clean (pre-existing warnings в UI), next build OK
 **Dev Server**: Running via `bun server.ts` (Next.js + WebSocket + Push on port 3000)
 **Test Accounts**: you@/leha@/den@triptrek.com (password: 1234)
+
+---
+
+## Session: Security Hardening (аудит 2026-09-12, план docs/superpowers/plans/2026-09-12-security-hardening.md)
+
+Формальный аудит (security-audit skill, source-only): 31 юнит покрытия, 27 находок
+needs_validation + 1 rejected. Все фиксы — отдельными коммитами 734e945…54add6c:
+
+- **Auth**: NextAuth `/api/auth/callback/credentials` под лимитом 5/15мин (был
+  неограниченный перебор); login-CSRF guard (Origin + JSON-only) на custom-login;
+  email канонизирован trim+lowercase (миграция 20260912130000) в
+  register/login/forgot; регистрация больше не автоджойнит по tripId —
+  вступление только через trips/join (проверки бана/лимита вынесены в
+  `src/lib/trip-join.ts`, preview не отдаёт внутренний trip UUID).
+- **WS**: handshake проверяет существование юзера и `passwordChangedAt`;
+  `evictUserFromTrip()` выгоняет исключённого участника из комнаты (5 мест);
+  maxHttpBufferSize 64KB, typing userName ≤32.
+- **Данные**: dayId-проверка в places/expenses/photos (была только у journal);
+  settlementKey уникален в рамках поездки `@@unique([tripId, settlementKey])`
+  (миграция 20260912140000), идемпотентность ищет с tripId.
+- **Политики**: ban-list GET owner-only и без email; totalBudget — один путь
+  (member `/api/trip/budget`), из owner-PATCH убран.
+- **Файлы**: avatarUrl принимается только `/uploads/avatars/avatar-*`, старый
+  файл удаляется лишь если на него больше никто не ссылается; photos/foods
+  парсят multipart ПОСЛЕ requireUser (аноним не буферизует 20MB).
+- **Публичное**: health (60/мин/IP + кэш БД 5с), weather (30/мин/IP),
+  geocode (60/ч/user + валидация координат); /uploads переживает гонку
+  stat/delete без падения процесса.
+- **Лимиты ресурсов**: слайсы длин на все member-writable поля, take:1000 на
+  8 списков, search 30/мин/user.
+- **AI/Push**: aiBaseUrl https-only (запись + openaiChatUrl), ai-key-check
+  проверяет только свой ключ, push-подписка чужую не перехватывает (409),
+  endpoint https+публичный хост, web-push timeout 10s, markdown-ссылки из
+  member-текста вычищаются из AI-промпта/черновика.
+- **Деплой**: entrypoint-гард по префиксам change-this-*/change-me-*;
+  start.sh без секрета-фолбэка; .dockerignore не тащит prisma/db и .env*;
+  smoke-compose только на 127.0.0.1.
+- **Тариф**: лимит поездок через `tripCreateGate()` на всех 4 путях создания;
+  self-upgrade премиума закрыт флагом `selfUpgradeEnabled` (миграция
+  20260912150000, дефолт false); poweredByHeader off, HSTS +includeSubDomains.
+
+Отчёт аудита: `C:\Users\world\security-audit-skill\trip-trek\run-1\REPORT.md`.
 
 ---
 
