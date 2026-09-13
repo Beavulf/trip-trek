@@ -24,7 +24,7 @@ import {
   useUpdatePlace,
   useUploadPhoto,
   useDeletePlace,
-  useDays,
+  useRouteDays,
   useTrip,
 } from "@/hooks/use-trip";
 import { useAuth } from "@/hooks/use-auth";
@@ -73,7 +73,7 @@ function PlaceDialogBody({ place, currency, onClose }: { place: Place; currency?
   const [uploading, setUploading] = useState(false);
   const [editing, setEditing] = useState(false);
   const [lightboxIdx, setLightboxIdx] = useState<number | null>(null);
-  const { data: days } = useDays();
+  const { data: days } = useRouteDays();
   const { setActiveTab, setMapFocusTarget } = useTripStore();
   const { data: placePhotos } = usePhotos(undefined, place.id);
 

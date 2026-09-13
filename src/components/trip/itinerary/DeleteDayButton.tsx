@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { Loader2, Trash2 } from "lucide-react";
-import { useDeleteDay, useDays } from "@/hooks/use-trip";
+import { useDeleteDay, useRouteDays } from "@/hooks/use-trip";
 import { useTripStore } from "@/lib/trip-store";
 import { toast } from "sonner";
 
@@ -13,7 +13,7 @@ interface DeleteDayButtonProps {
 
 export function DeleteDayButton({ dayId, dayNumber }: DeleteDayButtonProps) {
   const deleteDay = useDeleteDay();
-  const { data: days } = useDays();
+  const { data: days } = useRouteDays();
   const { setSelectedDay } = useTripStore();
   const [confirming, setConfirming] = useState(false);
 

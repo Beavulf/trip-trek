@@ -1,7 +1,7 @@
 "use client";
 
 import { useFoods, useUpdateFood, parseWantedBy, type FoodItem } from "@/hooks/use-trip";
-import { useDays, useTrip, useCurrentTripId } from "@/hooks/use-trip";
+import { useRouteDays, useTrip, useCurrentTripId } from "@/hooks/use-trip";
 import { useAuth } from "@/hooks/use-auth";
 import { motion } from "framer-motion";
 import {
@@ -38,7 +38,7 @@ export function FoodGuide() {
   const [addOpen, setAddOpen] = useState(false);
   const { data: foods, isLoading, error: foodsError, refetch: refetchFoods } = useFoods();
   const { data: trip, error: tripError, refetch: refetchTrip } = useTrip();
-  const { data: days } = useDays();
+  const { data: days } = useRouteDays();
   const { data: session } = useAuth();
   const currentUserId = (session?.user as { id?: string } | undefined)?.id || "";
   const { setTripSwitcherOpen } = useTripStore();

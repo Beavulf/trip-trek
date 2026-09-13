@@ -48,6 +48,7 @@ export function useWebSocket(tripId: string) {
     // Real-time events → invalidate queries
     socket.on("place:updated", (data: { tripId: string }) => {
       if (data.tripId === tripId) {
+        qc.invalidateQueries({ queryKey: ["route"] });
         qc.invalidateQueries({ queryKey: ["days"] });
         qc.invalidateQueries({ queryKey: ["trip"] });
       }
@@ -55,6 +56,7 @@ export function useWebSocket(tripId: string) {
 
     socket.on("place:created", (data: { tripId: string }) => {
       if (data.tripId === tripId) {
+        qc.invalidateQueries({ queryKey: ["route"] });
         qc.invalidateQueries({ queryKey: ["days"] });
         qc.invalidateQueries({ queryKey: ["trip"] });
       }
@@ -62,6 +64,7 @@ export function useWebSocket(tripId: string) {
 
     socket.on("place:deleted", (data: { tripId: string }) => {
       if (data.tripId === tripId) {
+        qc.invalidateQueries({ queryKey: ["route"] });
         qc.invalidateQueries({ queryKey: ["days"] });
         qc.invalidateQueries({ queryKey: ["trip"] });
       }
@@ -71,6 +74,7 @@ export function useWebSocket(tripId: string) {
       if (data.tripId === tripId) {
         qc.invalidateQueries({ queryKey: ["photos"] });
         qc.invalidateQueries({ queryKey: ["photos-geo"] });
+        qc.invalidateQueries({ queryKey: ["route"] });
         qc.invalidateQueries({ queryKey: ["days"] });
         qc.invalidateQueries({ queryKey: ["trip"] });
       }
@@ -80,6 +84,7 @@ export function useWebSocket(tripId: string) {
       if (data.tripId === tripId) {
         qc.invalidateQueries({ queryKey: ["photos"] });
         qc.invalidateQueries({ queryKey: ["photos-geo"] });
+        qc.invalidateQueries({ queryKey: ["route"] });
         qc.invalidateQueries({ queryKey: ["days"] });
         qc.invalidateQueries({ queryKey: ["trip"] });
       }

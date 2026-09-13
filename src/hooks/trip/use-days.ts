@@ -1,23 +1,8 @@
 "use client";
 
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import type { Day } from "@/lib/types";
-import { getTripId, useCurrentTripId } from "./trip-id";
-
-export function useDays() {
-  const tripId = useCurrentTripId();
-  return useQuery<Day[]>({
-    queryKey: ["days", tripId],
-    queryFn: async () => {
-      if (!tripId) return [];
-      const r = await fetch(`/api/days?tripId=${tripId}`);
-      if (!r.ok) throw new Error("fetch days failed");
-      const data = await r.json();
-      return Array.isArray(data) ? data : [];
-    },
-    enabled: !!tripId,
-  });
-}
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { getTripId } from "./trip-id";
+import { invalidateRouteData } from "@/lib/query-keys";
 
 export function useAddDay() {
   const qc = useQueryClient();
@@ -31,10 +16,7 @@ export function useAddDay() {
       if (!r.ok) throw new Error("add day failed");
       return r.json();
     },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["days"] });
-      qc.invalidateQueries({ queryKey: ["trip"] });
-    },
+    onSuccess: () => invalidateRouteData(qc),
   });
 }
 
@@ -49,10 +31,7 @@ export function useDeleteDay() {
       }
       return r.json();
     },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["days"] });
-      qc.invalidateQueries({ queryKey: ["trip"] });
-    },
+    onSuccess: () => invalidateRouteData(qc),
   });
 }
 
@@ -68,9 +47,6 @@ export function useUpdateDay() {
       if (!r.ok) throw new Error("update day failed");
       return r.json();
     },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["days"] });
-      qc.invalidateQueries({ queryKey: ["trip"] });
-    },
+    onSuccess: () => invalidateRouteData(qc),
   });
 }

@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { CalendarPlus, Loader2, MapPin, Pencil, X } from "lucide-react";
-import { useAddDay, useDays, useUpdateDay } from "@/hooks/use-trip";
+import { useAddDay, useRouteDays, useUpdateDay } from "@/hooks/use-trip";
 import { useBodyScrollLock } from "@/hooks/use-body-scroll-lock";
 import { useDialogA11y } from "@/hooks/use-dialog-a11y";
 import { toast } from "sonner";
@@ -41,7 +41,7 @@ export function DaySheet({ day, open, onOpenChange }: DaySheetProps) {
   const isEdit = !!day;
   const addDay = useAddDay();
   const updateDay = useUpdateDay();
-  const { data: days } = useDays();
+  const { data: days } = useRouteDays();
   const [city, setCity] = useState("");
   const [selectedCity, setSelectedCity] = useState<{ name: string; lat: number; lng: number; timezone?: string; language?: string } | null>(null);
   const [changeCity, setChangeCity] = useState(false);

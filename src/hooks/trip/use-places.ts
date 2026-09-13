@@ -2,6 +2,7 @@
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { getTripId } from "./trip-id";
+import { invalidateRouteData } from "@/lib/query-keys";
 import type { PlacePatch, PlaceCreateInput } from "@/lib/place-fields";
 
 export function useUpdatePlace() {
@@ -20,10 +21,7 @@ export function useUpdatePlace() {
       }
       return r.json();
     },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["days"] });
-      qc.invalidateQueries({ queryKey: ["trip"] });
-    },
+    onSuccess: () => invalidateRouteData(qc),
   });
 }
 
@@ -42,10 +40,7 @@ export function useCreatePlace() {
       }
       return r.json();
     },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["days"] });
-      qc.invalidateQueries({ queryKey: ["trip"] });
-    },
+    onSuccess: () => invalidateRouteData(qc),
   });
 }
 
@@ -59,10 +54,7 @@ export function useDeletePlace() {
         throw new Error(err.error || "delete place failed");
       }
     },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["days"] });
-      qc.invalidateQueries({ queryKey: ["trip"] });
-    },
+    onSuccess: () => invalidateRouteData(qc),
   });
 }
 

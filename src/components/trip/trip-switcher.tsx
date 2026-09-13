@@ -159,6 +159,7 @@ export function TripSwitcher() {
     if (currentTripId && known) return;
     setTripId(trips[0].id);
     qc.invalidateQueries({ queryKey: ["trip"] });
+    qc.invalidateQueries({ queryKey: ["route"] });
     qc.invalidateQueries({ queryKey: ["expenses"] });
     qc.invalidateQueries({ queryKey: ["budget-plan"] });
     qc.invalidateQueries({ queryKey: ["days"] });
@@ -204,6 +205,7 @@ export function TripSwitcher() {
       setTripId(data.id);
       qc.invalidateQueries({ queryKey: ["trips"] });
       qc.invalidateQueries({ queryKey: ["trip"] });
+      qc.invalidateQueries({ queryKey: ["route"] });
       qc.invalidateQueries({ queryKey: ["days"] });
       toast.success("Поездка создана! 🎉");
       setOpen(false);
@@ -220,6 +222,7 @@ export function TripSwitcher() {
     setTripId(tripId);
     setOpen(false);
     qc.invalidateQueries({ queryKey: ["trip"] });
+    qc.invalidateQueries({ queryKey: ["route"] });
     qc.invalidateQueries({ queryKey: ["days"] });
     qc.invalidateQueries({ queryKey: ["expenses"] });
     qc.invalidateQueries({ queryKey: ["photos"] });

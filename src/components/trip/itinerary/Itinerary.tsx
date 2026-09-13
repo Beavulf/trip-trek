@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
-import { useDays, useTrip, useCurrentTripId } from "@/hooks/use-trip";
+import { useRouteDays, useTrip, useCurrentTripId } from "@/hooks/use-trip";
 import { useTripStore } from "@/lib/trip-store";
 import { currencySymbol } from "@/lib/currencies";
 import { type Day, type Place } from "@/lib/types";
@@ -31,7 +31,7 @@ function dayCoords(day: {
 
 export function Itinerary() {
   const tripId = useCurrentTripId();
-  const { data: days, isLoading: daysLoading, isError: daysError, refetch: refetchDays } = useDays();
+  const { data: days, isLoading: daysLoading, isError: daysError, refetch: refetchDays } = useRouteDays();
   const { data: trip, isLoading: tripLoading, isError: tripError, refetch: refetchTrip } = useTrip();
   const { selectedDay, setSelectedDay, setActiveTab } = useTripStore();
   const [openPlace, setOpenPlace] = useState<Place | null>(null);

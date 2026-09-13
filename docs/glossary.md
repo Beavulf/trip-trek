@@ -45,6 +45,7 @@
 | **TripBan** | бан юзера в конкретной поездке (утёкшая инвайт-ссылка) |
 | **currentDayNumber** | «сегодня N-й день поездки» — считать только через `src/lib/trip-days.ts` |
 | **TimeOfDay** | слот времени места (morning/afternoon/evening) — порядок и подписи только через `src/lib/time-of-day.ts` |
+| **Route (модель чтения)** | дни+места+мета поездки одним запросом: `GET /api/route` → хук `useRoute`/`useRouteDays`; селекторы — `src/lib/route.ts`. Не путать с вкладкой «Маршрут» (itinerary) |
 | **PLACE_PATCHABLE** | единственный ручной список редактируемых полей Place (`src/lib/place-fields.ts`); POST/PATCH фильтруют тело через `pickPatchablePlace` — не добавляй параллельные белые списки |
 | **TripTab** | активный таб SPA (zustand store `src/lib/trip-store.ts`, persist) |
 

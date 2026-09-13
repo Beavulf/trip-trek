@@ -2,10 +2,10 @@
 
 // CSS Leaflet едет вместе с этим чанком (а не глобальным render-blocking <link> в layout)
 import "leaflet/dist/leaflet.css";
-import { useDays, useTrip, useCurrentTripId } from "@/hooks/use-trip";
+import { useRoute, useCurrentTripId } from "@/hooks/use-trip";
+import { usePhotosGeo } from "@/hooks/trip/use-photos";
 import { useTripStore } from "@/lib/trip-store";
-import { CATEGORY_META, type Place, type Day, type Photo } from "@/lib/types";
-import { MapContainer, TileLayer, Marker, Popup, Polyline, CircleMarker, Pane } from "react-leaflet";
+import { CATEGORY_META, type Place, type Day, type Photo } from "@/lib/types";import { MapContainer, TileLayer, Marker, Popup, Polyline, CircleMarker, Pane } from "react-leaflet";
 import L from "leaflet";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
@@ -26,10 +26,10 @@ import {
   ZoomOut,
 } from "lucide-react";
 import { useTheme } from "next-themes";
-import { useQuery } from "@tanstack/react-query";
 import { createPortal } from "react-dom";
 import { cn, plural } from "@/lib/utils";
 import { currencySymbol } from "@/lib/currencies";
+import { buildRouteCities, buildRoutePlaces, countVisited } from "@/lib/route";
 import { toast } from "sonner";
 import { AddPlaceSheet, type AddPlaceData } from "./add-place-sheet";
 import { PlaceDialog } from "./itinerary/PlaceDialog";
@@ -115,7 +115,10 @@ function makeLocateIcon() {
 
 export default function TripMap() {
   const tripId = useCurrentTripId();
-  const { data: days, isLoading, isError, refetch } = useDays();
+  // Модель чтения маршрута: дни+места+мета одним запросом (вместо useDays + useTrip)
+  const { data: route, isLoading, isError, refetch } = useRoute();
+  const days = route?.days;
+  const { data: geoPhotos } = usePhotosGeo();
   const {
     mapCityFilter,
     setMapCityFilter,
@@ -156,30 +159,15 @@ export default function TripMap() {
     return () => mq.removeEventListener("change", onChange);
   }, []);
 
-  // Фото с геолокацией (только текущая поездка)
-  const { data: geoPhotos } = useQuery<Photo[]>({
-    queryKey: ["photos-geo", tripId],
-    queryFn: async () => {
-      if (!tripId) return [];
-      const r = await fetch(`/api/photos/geo?tripId=${tripId}`);
-      if (!r.ok) throw new Error("fetch photos-geo failed");
-      const data = await r.json();
-      return Array.isArray(data) ? data : [];
-    },
-    enabled: !!tripId,
-  });
-
-  const { data: tripMeta } = useTrip();
-
   // Автоматический выбор слоя по теме
   const tileLayer: MapLayerKey = autoTheme
     ? resolvedTheme === "dark" ? "dark" : "voyager"
     : manualLayer;
 
-  const allPlaces = useMemo(() => {
-    if (!days) return [] as { place: Place; day: Day }[];
-    return days.flatMap((d) => d.places.map((p) => ({ place: p, day: d })));
-  }, [days]);
+  const allPlaces = useMemo(
+    () => buildRoutePlaces(days ?? []),
+    [days]
+  );
 
   const filtered = useMemo(() => {
     let res = allPlaces;
@@ -189,28 +177,13 @@ export default function TripMap() {
     return res;
   }, [allPlaces, mapCityFilter, mapOnlyUnvisited, mapOnlyChill]);
 
-  const cities = useMemo(() => {
-    if (!days) return [];
-    const seen = new Map<string, { cityKey: string; city: string; accentColor: string; count: number }>();
-    for (const d of days) {
-      if (!seen.has(d.cityKey)) {
-        seen.set(d.cityKey, {
-          cityKey: d.cityKey,
-          city: d.city,
-          accentColor: d.accentColor ?? "#f97316",
-          count: 0,
-        });
-      }
-    }
-    for (const { place, day } of allPlaces) {
-      const c = seen.get(day.cityKey);
-      if (c) c.count += 1;
-    }
-    return [...seen.values()];
-  }, [days, allPlaces]);
+  const cities = useMemo(
+    () => buildRouteCities(days ?? [], allPlaces),
+    [days, allPlaces]
+  );
 
   const visitedCount = useMemo(
-    () => allPlaces.filter((x) => x.place.status === "visited").length,
+    () => countVisited(allPlaces),
     [allPlaces]
   );
   const photoCount = geoPhotos?.length ?? 0;
@@ -239,7 +212,7 @@ export default function TripMap() {
   };
 
   const isChinaTrip = /china|китай|guangzhou|shenzhen|hongkong|macau|гуанчжоу|шэньчжэнь|гонконг|макао/i.test(
-    `${tripMeta?.trip?.destination ?? ""} ${tripMeta?.settings?.title ?? ""} ${(days || []).map((d) => d.city).join(" ")}`
+    `${route?.meta.destination ?? ""} ${route?.meta.title ?? ""} ${(days || []).map((d) => d.city).join(" ")}`
   );
   const mapNote = isChinaTrip
     ? "В Китае OpenStreetMap может грузиться медленно без VPN. Для навигации на месте удобнее приложение Amap (高德地图) или Baidu Maps."
@@ -585,7 +558,7 @@ export default function TripMap() {
 
           {/* Нити маршрута по дням */}
           {!onlyPhotos && (
-            <RouteThreads places={filtered} currentDayNumber={tripMeta?.currentDayNumber} />
+            <RouteThreads places={filtered} currentDayNumber={route?.meta.currentDayNumber} />
           )}
 
           {/* Места */}
@@ -823,7 +796,7 @@ export default function TripMap() {
 
       <PlaceDialog
         place={selectedPlace}
-        currency={currencySymbol(tripMeta?.settings.currency)}
+        currency={currencySymbol(route?.meta.currency)}
         onClose={() => setSelectedPlace(null)}
       />
 

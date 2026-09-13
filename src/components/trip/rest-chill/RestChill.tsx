@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useDays, useTrip, useCurrentTripId } from "@/hooks/use-trip";
+import { useRouteDays, useTrip, useCurrentTripId } from "@/hooks/use-trip";
 import {
   Coffee,
   Eye,
@@ -47,7 +47,7 @@ function timeGreeting(): { text: string; emoji: string } {
 
 export function RestChill() {
   const tripId = useCurrentTripId();
-  const { data: days, isLoading: daysLoading, error: daysError, refetch: refetchDays } = useDays();
+  const { data: days, isLoading: daysLoading, error: daysError, refetch: refetchDays } = useRouteDays();
   const { data: trip } = useTrip();
   const currency = trip?.settings.currency ?? "USD";
   const [filter, setFilter] = useState<string>("all");

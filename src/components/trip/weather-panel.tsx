@@ -1,6 +1,6 @@
 "use client";
 
-import { useWeather, useWeatherByCoords, useCitiesWeather, useDays, useTrip } from "@/hooks/use-trip";
+import { useWeather, useWeatherByCoords, useCitiesWeather, useRouteDays, useTrip } from "@/hooks/use-trip";
 import { resolveCityCoords, hasCityCoords } from "@/lib/city-coords";
 import { motion } from "framer-motion";
 import {
@@ -240,7 +240,7 @@ function WeatherSkeleton() {
 
 export function WeatherPanel() {
   const { data: trip } = useTrip();
-  const { data: days, isLoading: daysLoading } = useDays();
+  const { data: days, isLoading: daysLoading } = useRouteDays();
   const [selectedKey, setSelectedKey] = useState<string>("");
   // null = авто: «По маршруту», если прогноз пересекается с днями поездки
   const [view, setView] = useState<"route" | "city" | null>(null);

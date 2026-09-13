@@ -3,7 +3,7 @@
 import {
   useCreatePlace,
   useGeocode,
-  useDays,
+  useRouteDays,
 } from "@/hooks/use-trip";
 import { CATEGORY_META } from "@/lib/types";
 import { TIME_SLOTS, timeLabel } from "@/lib/time-of-day";
@@ -103,7 +103,7 @@ function AddPlaceForm({
   onDone: () => void;
   onCancel: () => void;
 }) {
-  const { data: days } = useDays();
+  const { data: days } = useRouteDays();
   const create = useCreatePlace();
   const geocode = useGeocode();
 

@@ -62,7 +62,8 @@
 
 | Роут | Методы | WS-событие | Что делает |
 |---|---|---|---|
-| `days` | GET, POST, PATCH, DELETE | `trip:updated` | дни поездки (город, даты) |
+| `route` | GET | — | модель чтения маршрута: дни+места+мета поездки одним запросом (`useRoute`); клиент читает маршрут отсюда, а не из `days`+`trip` параллельно |
+| `days` | GET, POST, PATCH, DELETE | `trip:updated` | дни поездки (город, даты); GET оставлен для совместимости — SPA читает через `route` |
 | `places` | POST | `place:created` | новое место (день, координаты, категория) |
 | `places/[id]` | PATCH, DELETE | `place:updated/deleted` | правка/удаление места, статус visited |
 | `photos` | GET, POST, DELETE | `photo:added` | галерея; POST — загрузка файла (storage, EXIF-гео) |

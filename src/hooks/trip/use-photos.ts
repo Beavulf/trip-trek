@@ -2,7 +2,24 @@
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import type { Photo } from "@/lib/types";
+import { queryKeys, invalidateRouteData } from "@/lib/query-keys";
 import { getTripId, useCurrentTripId } from "./trip-id";
+
+/** Фото с геометками для карты (жило инлайном в trip-map.tsx до фазы 3 углубления). */
+export function usePhotosGeo() {
+  const tripId = useCurrentTripId();
+  return useQuery<Photo[]>({
+    queryKey: queryKeys.photosGeo(tripId),
+    queryFn: async () => {
+      if (!tripId) return [];
+      const r = await fetch(`/api/photos/geo?tripId=${tripId}`);
+      if (!r.ok) throw new Error("fetch photos-geo failed");
+      const data = await r.json();
+      return Array.isArray(data) ? data : [];
+    },
+    enabled: !!tripId,
+  });
+}
 
 export function usePhotos(dayId?: string, placeId?: string) {
   const tripId = useCurrentTripId();
@@ -38,8 +55,7 @@ export function useUploadPhoto() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["photos"] });
       qc.invalidateQueries({ queryKey: ["photos-geo"] });
-      qc.invalidateQueries({ queryKey: ["days"] });
-      qc.invalidateQueries({ queryKey: ["trip"] });
+      invalidateRouteData(qc);
     },
   });
 }
@@ -62,8 +78,7 @@ export function useUpdatePhoto() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["photos"] });
       qc.invalidateQueries({ queryKey: ["photos-geo"] });
-      qc.invalidateQueries({ queryKey: ["days"] });
-      qc.invalidateQueries({ queryKey: ["trip"] });
+      invalidateRouteData(qc);
     },
   });
 }
@@ -81,8 +96,7 @@ export function useDeletePhoto() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["photos"] });
       qc.invalidateQueries({ queryKey: ["photos-geo"] });
-      qc.invalidateQueries({ queryKey: ["days"] });
-      qc.invalidateQueries({ queryKey: ["trip"] });
+      invalidateRouteData(qc);
     },
   });
 }
