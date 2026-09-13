@@ -34,7 +34,8 @@ import { buildRouteCities, buildRoutePlaces, countVisited } from "@/lib/route";
 import { toast } from "sonner";
 import { AddPlaceSheet, type AddPlaceData } from "./add-place-sheet";
 import { PlaceDialog } from "./itinerary/PlaceDialog";
-import { FiltersSheet, type MapFilters } from "./map/filters-sheet";
+import { FiltersSheet } from "./map/filters-sheet";
+import { useMapFilters } from "@/hooks/trip/use-map-filters";
 import { LayersSheet, type MapLayerKey } from "./map/layers-sheet";
 import { isChillCategory } from "@/lib/chill-categories";
 import { resolveCityCoords, decodeCustomKey } from "@/lib/city-coords";
@@ -103,15 +104,14 @@ export default function TripMap() {
   const days = route?.days;
   const { data: geoPhotos } = usePhotosGeo();
   const {
-    mapCityFilter,
-    setMapCityFilter,
-    mapOnlyUnvisited,
-    setMapOnlyUnvisited,
-    mapOnlyChill,
-    setMapOnlyChill,
-    setTripSwitcherOpen,
-    setActiveTab,
-  } = useTripStore();
+    filters,
+    patchFilters,
+    setCityFilter,
+    resetFilters,
+    activeCount: activeFilterCount,
+  } = useMapFilters();
+  const mapCityFilter = filters.cityFilter;
+  const { setTripSwitcherOpen, setActiveTab } = useTripStore();
 
   const [addMode, setAddMode] = useState(false);
   const [addData, setAddData] = useState<AddPlaceData | null>(null);
@@ -120,8 +120,6 @@ export default function TripMap() {
   const [layersOpen, setLayersOpen] = useState(false);
   const [autoTheme, setAutoTheme] = useState(true);
   const [manualLayer, setManualLayer] = useState<MapLayerKey>("voyager");
-  const [showPhotos, setShowPhotos] = useState(true);
-  const [onlyPhotos, setOnlyPhotos] = useState(false);
   const [railCollapsed, setRailCollapsed] = useState(false);
   const [selectedPlace, setSelectedPlace] = useState<Place | null>(null);
   const [fullscreenPhoto, setFullscreenPhoto] = useState<Photo | null>(null);
@@ -152,11 +150,11 @@ export default function TripMap() {
 
   const filtered = useMemo(() => {
     let res = allPlaces;
-    if (mapCityFilter) res = res.filter((x) => x.day.cityKey === mapCityFilter);
-    if (mapOnlyUnvisited) res = res.filter((x) => x.place.status !== "visited");
-    if (mapOnlyChill) res = res.filter((x) => isChillCategory(x.place.category));
+    if (filters.cityFilter) res = res.filter((x) => x.day.cityKey === filters.cityFilter);
+    if (filters.onlyUnvisited) res = res.filter((x) => x.place.status !== "visited");
+    if (filters.onlyChill) res = res.filter((x) => isChillCategory(x.place.category));
     return res;
-  }, [allPlaces, mapCityFilter, mapOnlyUnvisited, mapOnlyChill]);
+  }, [allPlaces, filters]);
 
   const cities = useMemo(
     () => buildRouteCities(days ?? [], allPlaces),
@@ -168,29 +166,6 @@ export default function TripMap() {
     [allPlaces]
   );
   const photoCount = geoPhotos?.length ?? 0;
-
-  const activeFilterCount =
-    (mapCityFilter ? 1 : 0) +
-    (mapOnlyUnvisited ? 1 : 0) +
-    (mapOnlyChill ? 1 : 0) +
-    (onlyPhotos ? 1 : 0) +
-    (showPhotos ? 0 : 1);
-
-  const filters: MapFilters = {
-    cityFilter: mapCityFilter,
-    onlyUnvisited: mapOnlyUnvisited,
-    onlyChill: mapOnlyChill,
-    showPhotos,
-    onlyPhotos,
-  };
-
-  const onFiltersChange = (patch: Partial<MapFilters>) => {
-    if ("cityFilter" in patch) setMapCityFilter(patch.cityFilter ?? null);
-    if ("onlyUnvisited" in patch) setMapOnlyUnvisited(!!patch.onlyUnvisited);
-    if ("onlyChill" in patch) setMapOnlyChill(!!patch.onlyChill);
-    if ("showPhotos" in patch) setShowPhotos(!!patch.showPhotos);
-    if ("onlyPhotos" in patch) setOnlyPhotos(!!patch.onlyPhotos);
-  };
 
   const isChinaTrip = /china|китай|guangzhou|shenzhen|hongkong|macau|гуанчжоу|шэньчжэнь|гонконг|макао/i.test(
     `${route?.meta.destination ?? ""} ${route?.meta.title ?? ""} ${(days || []).map((d) => d.city).join(" ")}`
@@ -424,7 +399,7 @@ export default function TripMap() {
   };
 
   // Вид сам подгонится под город в эффекте на mapCityFilter
-  const pickCity = (cityKey: string | null) => setMapCityFilter(cityKey);
+  const pickCity = setCityFilter;
 
   // «Показать весь маршрут» — вся поездка целиком, независимо от фильтров
   const fitAll = () => {
@@ -435,7 +410,7 @@ export default function TripMap() {
     map.invalidateSize();
     const pts = [
       ...allPlaces.map((x) => ({ lat: x.place.lat, lng: x.place.lng })),
-      ...(showPhotos && geoPhotos
+      ...(filters.showPhotos && geoPhotos
         ? geoPhotos.filter((p) => p.lat != null && p.lng != null).map((p) => ({ lat: p.lat!, lng: p.lng! }))
         : []),
     ];
@@ -499,8 +474,8 @@ export default function TripMap() {
     setAddMode(false);
   };
 
-  const visiblePlaces = onlyPhotos ? [] : filtered;
-  const visiblePhotos = showPhotos
+  const visiblePlaces = filters.onlyPhotos ? [] : filtered;
+  const visiblePhotos = filters.showPhotos
     ? (geoPhotos ?? []).filter((p) => p.lat != null && p.lng != null)
     : [];
 
@@ -536,7 +511,7 @@ export default function TripMap() {
           />
 
           {/* Нити маршрута по дням */}
-          {!onlyPhotos && (
+          {!filters.onlyPhotos && (
             <RouteThreads places={filtered} currentDayNumber={route?.meta.currentDayNumber} />
           )}
 
@@ -732,7 +707,7 @@ export default function TripMap() {
         )}
 
         {/* Пусто после фильтров */}
-        {!addMode && !onlyPhotos && filtered.length === 0 && allPlaces.length > 0 && (
+        {!addMode && !filters.onlyPhotos && filtered.length === 0 && allPlaces.length > 0 && (
           <div className="absolute inset-0 z-[560] grid place-items-center pointer-events-none px-6">
             <div className="pointer-events-auto rounded-2xl bg-card/95 border border-border shadow-xl px-4 py-4 text-center max-w-[250px]">
               <div className="text-2xl">🔍</div>
@@ -744,7 +719,7 @@ export default function TripMap() {
                 <button
                   type="button"
                   onClick={() =>
-                    onFiltersChange({ cityFilter: null, onlyUnvisited: false, onlyChill: false, onlyPhotos: false, showPhotos: true })
+                    resetFilters()
                   }
                   className="mt-2.5 w-full min-h-10 rounded-lg bg-primary text-primary-foreground text-xs font-medium"
                 >
@@ -784,7 +759,7 @@ export default function TripMap() {
         onOpenChange={setFiltersOpen}
         cities={cities}
         filters={filters}
-        onChange={onFiltersChange}
+        onChange={patchFilters}
         photoCount={photoCount}
         placeCount={allPlaces.length}
         visitedCount={visitedCount}

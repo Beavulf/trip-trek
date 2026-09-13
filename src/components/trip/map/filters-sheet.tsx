@@ -6,14 +6,9 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Camera, CheckCircle2, Circle, Coffee, Filter, MapPin, RotateCcw, X } from "lucide-react";
 import { useBodyScrollLock } from "@/hooks/use-body-scroll-lock";
 import { cn } from "@/lib/utils";
+import { activeFilterCount, DEFAULT_MAP_FILTERS, type MapFilters } from "@/lib/map-filters";
 
-export interface MapFilters {
-  cityFilter: string | null;
-  onlyUnvisited: boolean;
-  onlyChill: boolean;
-  showPhotos: boolean;
-  onlyPhotos: boolean;
-}
+export type { MapFilters };
 
 interface FiltersSheetProps {
   open: boolean;
@@ -42,12 +37,7 @@ export function FiltersSheet({
   useBodyScrollLock(open);
   if (!open || typeof document === "undefined") return null;
 
-  const activeCount =
-    (filters.cityFilter ? 1 : 0) +
-    (filters.onlyUnvisited ? 1 : 0) +
-    (filters.onlyChill ? 1 : 0) +
-    (filters.onlyPhotos ? 1 : 0) +
-    (filters.showPhotos ? 0 : 1);
+  const activeCount = activeFilterCount(filters);
 
   return createPortal(
     <AnimatePresence>
@@ -174,9 +164,7 @@ export function FiltersSheet({
             {activeCount > 0 && (
               <button
                 type="button"
-                onClick={() =>
-                  onChange({ cityFilter: null, onlyUnvisited: false, onlyChill: false, onlyPhotos: false, showPhotos: true })
-                }
+                onClick={() => onChange(DEFAULT_MAP_FILTERS)}
                 className="w-full min-h-11 rounded-xl border border-border text-sm font-medium flex items-center justify-center gap-2 hover:bg-accent transition-colors"
               >
                 <RotateCcw className="size-4" />
