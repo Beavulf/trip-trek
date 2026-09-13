@@ -30,6 +30,7 @@ import {
 import { useAuth } from "@/hooks/use-auth";
 import { useTripStore } from "@/lib/trip-store";
 import { CATEGORY_META, type Place, type Photo } from "@/lib/types";
+import { TIME_SLOTS, timeLabel } from "@/lib/time-of-day";
 import { useBodyScrollLock } from "@/hooks/use-body-scroll-lock";
 import { useDialogA11y } from "@/hooks/use-dialog-a11y";
 import { toast } from "sonner";
@@ -74,12 +75,6 @@ const CATEGORY_SHORT: Record<string, string> = {
   transport: "Транспорт",
   park: "Парк",
 };
-
-const TIMES = [
-  { value: "morning", label: "🌅 Утро" },
-  { value: "afternoon", label: "☀️ День" },
-  { value: "evening", label: "🌙 Вечер" },
-];
 
 function PlaceDialogBody({ place, currency, onClose }: { place: Place; currency?: string; onClose: () => void }) {
   const update = useUpdatePlace();
@@ -438,20 +433,20 @@ function PlaceDialogBody({ place, currency, onClose }: { place: Place; currency?
                     <div>
                       <div id="place-time-label" className="text-xs text-muted-foreground mb-1.5 flex items-center gap-1"><CalendarClock className="size-3" /> Время суток</div>
                       <div role="group" aria-labelledby="place-time-label" className="grid grid-cols-3 gap-1.5">
-                        {TIMES.map((t) => (
+                        {TIME_SLOTS.map((s) => (
                           <button
-                            key={t.value}
+                            key={s.key}
                             type="button"
-                            onClick={() => setTimeOfDay(timeOfDay === t.value ? "" : t.value)}
-                            aria-pressed={timeOfDay === t.value}
+                            onClick={() => setTimeOfDay(timeOfDay === s.key ? "" : s.key)}
+                            aria-pressed={timeOfDay === s.key}
                             className={cn(
                               "rounded-lg py-2 min-h-11 text-xs font-medium transition-colors border",
-                              timeOfDay === t.value
+                              timeOfDay === s.key
                                 ? "border-primary bg-primary/10 text-primary"
                                 : "border-border bg-secondary/50 hover:bg-accent"
                             )}
                           >
-                            {t.label}
+                            {timeLabel(s.key, { emoji: true })}
                           </button>
                         ))}
                       </div>

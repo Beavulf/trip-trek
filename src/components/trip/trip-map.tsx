@@ -37,6 +37,7 @@ import { FiltersSheet, type MapFilters } from "./map/filters-sheet";
 import { LayersSheet, type MapLayerKey } from "./map/layers-sheet";
 import { isChillCategory } from "@/lib/chill-categories";
 import { resolveCityCoords, decodeCustomKey } from "@/lib/city-coords";
+import { timeSortRank } from "@/lib/time-of-day";
 
 const TILE_LAYERS: Record<MapLayerKey, { url: string; attr: string }> = {
   voyager: {
@@ -57,8 +58,6 @@ const TILE_LAYERS: Record<MapLayerKey, { url: string; attr: string }> = {
     attr: "&copy; Esri",
   },
 };
-
-const TIME_RANK: Record<string, number> = { morning: 0, afternoon: 1, evening: 2 };
 
 // Кэш иконок: makeIcon создаёт новый L.DivIcon на каждый вызов, а без кэша
 // каждый ререндер карты (рефетч дней, фильтры) заменял DOM всех маркеров.
@@ -1033,7 +1032,7 @@ function RouteThreads({
   byDay.forEach(({ day, pts }) => {
     // Порядок обхода: время суток, затем исходный порядок списка
     const sorted = pts
-      .map((p, i) => ({ p, i, r: p.timeOfDay ? (TIME_RANK[p.timeOfDay] ?? 1.5) : 1.5 }))
+      .map((p, i) => ({ p, i, r: timeSortRank(p.timeOfDay) }))
       .sort((a, b) => a.r - b.r || a.i - b.i)
       .map((x) => x.p);
     const isToday = day.dayNumber === currentDayNumber;

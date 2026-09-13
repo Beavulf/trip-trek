@@ -7,7 +7,7 @@ import { CATEGORY_META, type Place, type TripSummary } from "@/lib/types";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { useTripStore } from "@/lib/trip-store";
-import { timeLabel } from "./DashboardHero";
+import { timeLabel } from "@/lib/time-of-day";
 
 interface TodayListProps {
   trip: TripSummary;
@@ -150,7 +150,7 @@ function TodayRow({
           {place.name}
         </div>
         <div className="text-[11px] text-muted-foreground flex items-center gap-2">
-          {place.timeOfDay && <span>{timeLabel(place.timeOfDay)}</span>}
+          {place.timeOfDay && <span>{timeLabel(place.timeOfDay, { emoji: true })}</span>}
           {place.budget ? <span>· {sym}{place.budget}</span> : null}
         </div>
       </div>

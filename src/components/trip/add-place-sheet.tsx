@@ -6,6 +6,7 @@ import {
   useDays,
 } from "@/hooks/use-trip";
 import { CATEGORY_META } from "@/lib/types";
+import { TIME_SLOTS, timeLabel } from "@/lib/time-of-day";
 import {
   Loader2,
   Check,
@@ -131,7 +132,6 @@ function AddPlaceForm({
       }
     );
     setGeocodedFor(key);
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- только при открытии sheet
   }, []);
 
   const submit = async () => {
@@ -227,9 +227,9 @@ function AddPlaceForm({
             className="w-full rounded-lg border border-input bg-background px-2 py-2 text-sm"
           >
             <option value="">Любое</option>
-            <option value="morning">🌅 Утро</option>
-            <option value="afternoon">☀️ День</option>
-            <option value="evening">🌙 Вечер</option>
+            {TIME_SLOTS.map((s) => (
+              <option key={s.key} value={s.key}>{timeLabel(s.key, { emoji: true })}</option>
+            ))}
           </select>
         </div>
         <div>

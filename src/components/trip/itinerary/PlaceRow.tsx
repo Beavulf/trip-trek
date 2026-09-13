@@ -12,6 +12,7 @@ import {
 import { useUpdatePlace } from "@/hooks/use-trip";
 import { useTripStore, type TripTab } from "@/lib/trip-store";
 import { CATEGORY_META, type Place } from "@/lib/types";
+import { timeLabel } from "@/lib/time-of-day";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
@@ -139,13 +140,4 @@ export function PlaceRow({ place, accentColor, currency, onOpen }: PlaceRowProps
       )}
     </motion.div>
   );
-}
-
-export function timeLabel(t: string | null) {
-  switch (t) {
-    case "morning": return "Утро";
-    case "afternoon": return "День";
-    case "evening": return "Вечер";
-    default: return "";
-  }
 }

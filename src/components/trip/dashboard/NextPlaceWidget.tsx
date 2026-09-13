@@ -3,7 +3,7 @@
 import { motion } from "framer-motion";
 import { ChevronRight, MapPin } from "lucide-react";
 import { CATEGORY_META, type TripSummary } from "@/lib/types";
-import { timeLabel } from "./DashboardHero";
+import { timeLabel } from "@/lib/time-of-day";
 
 export function NextPlaceWidget({ trip, onGoToItinerary }: { trip: TripSummary; onGoToItinerary: () => void }) {
   // Находим следующее непосещённое место текущего дня (или следующего дня)
@@ -96,7 +96,7 @@ export function NextPlaceWidget({ trip, onGoToItinerary }: { trip: TripSummary; 
           <p className="font-bold text-sm leading-tight truncate">{nextPlace.name}</p>
           <div className="flex items-center gap-2 text-[11px] text-muted-foreground mt-0.5">
             <span>День {dayOfPlace?.dayNumber} · {dayOfPlace?.city}</span>
-            {nextPlace.timeOfDay && <span>· {timeLabel(nextPlace.timeOfDay)}</span>}
+            {nextPlace.timeOfDay && <span>· {timeLabel(nextPlace.timeOfDay, { emoji: true })}</span>}
           </div>
           {nextPlace.address && (
             <div className="text-[10px] text-muted-foreground mt-0.5 truncate flex items-center gap-0.5">

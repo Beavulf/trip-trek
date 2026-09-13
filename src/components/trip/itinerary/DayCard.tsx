@@ -5,6 +5,7 @@ import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 import { Check, ChevronDown, MapPin, Pencil, Plus } from "lucide-react";
 import { type Day, type Place } from "@/lib/types";
 import { cn } from "@/lib/utils";
+import { daySections } from "@/lib/time-of-day";
 import { PlaceRow } from "./PlaceRow";
 import { DeleteDayButton } from "./DeleteDayButton";
 
@@ -20,12 +21,6 @@ interface DayCardProps {
   onAddPlace?: (dayId: string) => void;
   onEditDay?: (day: Day) => void;
 }
-
-const TIME_SECTIONS: { key: string; label: string }[] = [
-  { key: "morning", label: "Утро" },
-  { key: "afternoon", label: "День" },
-  { key: "evening", label: "Вечер" },
-];
 
 // Форматтеры на уровне модуля: Intl сам по себе дорог в создании
 const dateFmt = new Intl.DateTimeFormat("ru-RU", { day: "numeric", month: "short" });
@@ -57,18 +52,7 @@ export function DayCard({
   const dl = dateLabel(day.date);
 
   // Группировка по времени суток — только если она реально используется в этом дне
-  const hasTime = day.places.some((p) => p.timeOfDay);
-  const sections = hasTime
-    ? [
-        ...TIME_SECTIONS.map((s) => ({
-          ...s,
-          places: day.places.filter((p) => p.timeOfDay === s.key),
-        })).filter((s) => s.places.length > 0),
-        ...(day.places.some((p) => !p.timeOfDay)
-          ? [{ key: "other", label: "Без времени", places: day.places.filter((p) => !p.timeOfDay) }]
-          : []),
-      ]
-    : [{ key: "all", label: "", places: day.places }];
+  const sections = daySections(day.places);
 
   const placeRow = (p: Place) => (
     <PlaceRow key={p.id} place={p} accentColor={accent} currency={currency} onOpen={() => onOpenPlace(p)} />

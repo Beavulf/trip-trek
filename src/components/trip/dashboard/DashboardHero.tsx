@@ -219,12 +219,3 @@ function WeatherChip({ cityKey }: { cityKey: string }) {
     </button>
   );
 }
-
-export function timeLabel(t: string | null) {
-  switch (t) {
-    case "morning": return "🌅 Утро";
-    case "afternoon": return "☀️ День";
-    case "evening": return "🌙 Вечер";
-    default: return "Весь день";
-  }
-}

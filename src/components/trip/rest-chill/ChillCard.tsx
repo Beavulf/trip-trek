@@ -1,10 +1,11 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { CheckCircle2, ChevronRight, Circle, Clock, MapPin, Navigation, Share2, Star, Sunrise, Moon } from "lucide-react";
+import { CheckCircle2, ChevronRight, Circle, MapPin, Navigation, Share2, Star, Sunrise, Sun, Moon } from "lucide-react";
 import { useUpdatePlace } from "@/hooks/use-trip";
 import { useAuth } from "@/hooks/use-auth";
 import { CATEGORY_META, type Day, type Place } from "@/lib/types";
+import { timeIconKey, timeLabel } from "@/lib/time-of-day";
 import { currencySymbol } from "@/lib/currencies";
 import { toast } from "sonner";
 import { cn, haptic } from "@/lib/utils";
@@ -175,19 +176,12 @@ export function ChillCard({ place, day, currency = "USD", onOpen }: ChillCardPro
 }
 
 function TimeChip({ timeOfDay }: { timeOfDay: string }) {
-  const config =
-    timeOfDay === "morning"
-      ? { label: "Утро", Icon: Sunrise }
-      : timeOfDay === "evening"
-        ? { label: "Вечер", Icon: Moon }
-        : timeOfDay === "afternoon"
-          ? { label: "День", Icon: Clock }
-          : null;
-  if (!config) return null;
-  const { label, Icon } = config;
+  const key = timeIconKey(timeOfDay);
+  if (!key) return null;
+  const Icon = key === "sunrise" ? Sunrise : key === "sun" ? Sun : Moon;
   return (
     <span className="flex items-center gap-0.5">
-      <Icon className="size-2.5" /> {label}
+      <Icon className="size-2.5" /> {timeLabel(timeOfDay)}
     </span>
   );
 }
