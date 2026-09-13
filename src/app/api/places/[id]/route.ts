@@ -2,8 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { publish } from "@/lib/ws-bus";
 import { requireTripMember } from "@/lib/api-auth";
+import { pickPatchablePlace } from "@/lib/place-fields";
 
-// PATCH /api/places/[id] — обновить место (статус, заметки, рейтинг, адрес, имя, категория, бюджет)
+// PATCH /api/places/[id] — обновить место. Белый список и капы — общий контракт place-fields.
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const body = await req.json();
@@ -14,11 +15,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   const { response } = await requireTripMember(req, existing.tripId);
   if (response) return response;
 
-  const allowed = ["status", "notes", "rating", "visitedAt", "timeOfDay", "address", "name", "category", "budget", "description", "lat", "lng", "dayId"];
-  const data: Record<string, unknown> = {};
-  for (const k of allowed) {
-    if (k in body) data[k] = body[k];
-  }
+  const data = pickPatchablePlace(body);
   if (data.status === "visited" && !data.visitedAt) {
     data.visitedAt = new Date();
   }

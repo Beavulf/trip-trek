@@ -29,8 +29,9 @@ import {
 } from "@/hooks/use-trip";
 import { useAuth } from "@/hooks/use-auth";
 import { useTripStore } from "@/lib/trip-store";
-import { CATEGORY_META, type Place, type Photo } from "@/lib/types";
+import { CATEGORY_META, CATEGORY_SHORT, type Place, type Photo } from "@/lib/types";
 import { TIME_SLOTS, timeLabel } from "@/lib/time-of-day";
+import { googleDirectionsUrl } from "@/lib/place-links";
 import { useBodyScrollLock } from "@/hooks/use-body-scroll-lock";
 import { useDialogA11y } from "@/hooks/use-dialog-a11y";
 import { toast } from "sonner";
@@ -59,22 +60,6 @@ export function PlaceDialog({ place, currency, onClose }: PlaceDialogProps) {
     document.body
   );
 }
-
-/** Короткие подписи категорий для чипов (полные — в подсказке) */
-const CATEGORY_SHORT: Record<string, string> = {
-  sight: "Место",
-  temple: "Храм",
-  viewpoint: "Смотровая",
-  beach: "Пляж",
-  market: "Рынок",
-  casino: "Казино",
-  restaurant: "Еда",
-  cafe: "Кофе",
-  bar: "Бар",
-  hotel: "Отель",
-  transport: "Транспорт",
-  park: "Парк",
-};
 
 function PlaceDialogBody({ place, currency, onClose }: { place: Place; currency?: string; onClose: () => void }) {
   const update = useUpdatePlace();
@@ -339,7 +324,7 @@ function PlaceDialogBody({ place, currency, onClose }: { place: Place; currency?
               {visited ? "Посещено" : "Отметить"}
             </button>
             <a
-              href={`https://www.google.com/maps/dir/?api=1&destination=${fresh.lat},${fresh.lng}`}
+              href={googleDirectionsUrl(fresh.lat, fresh.lng)}
               target="_blank"
               rel="noopener noreferrer"
               className="rounded-xl py-3 text-sm font-medium bg-primary text-primary-foreground flex items-center justify-center gap-2 min-h-11"

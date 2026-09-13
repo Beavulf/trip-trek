@@ -6,6 +6,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Check, Loader2, MapPin, X, Navigation } from "lucide-react";
 import { useBodyScrollLock } from "@/hooks/use-body-scroll-lock";
 import { useGeocode } from "@/hooks/use-trip";
+import { formatLatLng } from "@/lib/utils";
 import dynamic from "next/dynamic";
 
 // Загружаем react-leaflet только на клиенте, чтобы избежать SSR-краша
@@ -61,7 +62,7 @@ export function MapPicker({
       onPick({
         lat: pos.lat,
         lng: pos.lng,
-        address: `${pos.lat.toFixed(4)}, ${pos.lng.toFixed(4)}`,
+        address: formatLatLng(pos.lat, pos.lng),
       });
       onOpenChange(false);
     }
@@ -106,7 +107,7 @@ export function MapPicker({
           <div className="rounded-lg bg-muted/50 px-3 py-2 text-[11px] text-muted-foreground flex items-center gap-1.5">
             <MapPin className="size-3 shrink-0" />
             <span className="truncate font-mono">
-              {pos.lat.toFixed(4)}, {pos.lng.toFixed(4)}
+              {formatLatLng(pos.lat, pos.lng)}
             </span>
           </div>
           <div className="flex gap-2">

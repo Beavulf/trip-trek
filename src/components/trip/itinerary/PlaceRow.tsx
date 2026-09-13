@@ -13,6 +13,7 @@ import { useUpdatePlace } from "@/hooks/use-trip";
 import { useTripStore, type TripTab } from "@/lib/trip-store";
 import { CATEGORY_META, type Place } from "@/lib/types";
 import { timeLabel } from "@/lib/time-of-day";
+import { googleDirectionsUrl } from "@/lib/place-links";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
@@ -117,7 +118,7 @@ export function PlaceRow({ place, accentColor, currency, onOpen }: PlaceRowProps
         {/* Действия: как добраться (внешние карты) · показать на карте поездки */}
         <div className="flex items-center gap-3 mt-1">
           <a
-            href={`https://www.google.com/maps/dir/?api=1&destination=${place.lat},${place.lng}`}
+            href={googleDirectionsUrl(place.lat, place.lng)}
             target="_blank"
             rel="noopener noreferrer"
             onClick={(e) => e.stopPropagation()}

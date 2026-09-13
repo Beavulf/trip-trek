@@ -8,6 +8,7 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { useTripStore } from "@/lib/trip-store";
 import { timeLabel } from "@/lib/time-of-day";
+import { googleDirectionsUrl } from "@/lib/place-links";
 
 interface TodayListProps {
   trip: TripSummary;
@@ -156,7 +157,7 @@ function TodayRow({
       </div>
       {place.lat !== 0 && place.lng !== 0 && (
         <a
-          href={`https://www.google.com/maps/dir/?api=1&destination=${place.lat},${place.lng}`}
+          href={googleDirectionsUrl(place.lat, place.lng)}
           target="_blank"
           rel="noopener noreferrer"
           onClick={(e) => e.stopPropagation()}

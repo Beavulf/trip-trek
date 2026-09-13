@@ -2,11 +2,13 @@
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { getTripId } from "./trip-id";
+import type { PlacePatch, PlaceCreateInput } from "@/lib/place-fields";
 
 export function useUpdatePlace() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ id, ...data }: { id: string } & Record<string, unknown>) => {
+    // userName — не поле Place, а подпись автора для WS-события
+    mutationFn: async ({ id, ...data }: { id: string } & PlacePatch & { userName?: string }) => {
       const r = await fetch(`/api/places/${id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
@@ -28,17 +30,7 @@ export function useUpdatePlace() {
 export function useCreatePlace() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (data: {
-      name: string;
-      description?: string;
-      category: string;
-      lat: number;
-      lng: number;
-      dayId: string;
-      timeOfDay?: string;
-      budget?: number;
-      address?: string;
-    }) => {
+    mutationFn: async (data: PlaceCreateInput) => {
       const r = await fetch("/api/places", {
         method: "POST",
         headers: { "Content-Type": "application/json" },

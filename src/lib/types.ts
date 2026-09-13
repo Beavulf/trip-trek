@@ -189,6 +189,23 @@ export const CATEGORY_META: Record<string, { label: string; emoji: string; color
   park: { label: "Парк", emoji: "🌳", color: "#15803d" },
 };
 
+/** Короткие подписи категорий для тесных чипов (полные — в CATEGORY_META.label и подсказке) */
+export const CATEGORY_SHORT: Record<string, string> = {
+  sight: "Место",
+  temple: "Храм",
+  viewpoint: "Смотровая",
+  beach: "Пляж",
+  market: "Рынок",
+  casino: "Казино",
+  restaurant: "Еда",
+  cafe: "Кофе",
+  bar: "Бар",
+  hotel: "Отель",
+  transport: "Транспорт",
+  park: "Парк",
+};
+
+
 export const EXPENSE_CATEGORIES: Record<string, { label: string; emoji: string; color: string }> = {
   accommodation: { label: "Проживание", emoji: "🏨", color: "#8b5cf6" },
   food: { label: "Питание", emoji: "🍜", color: "#f97316" },

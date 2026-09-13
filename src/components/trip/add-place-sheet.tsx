@@ -7,6 +7,7 @@ import {
 } from "@/hooks/use-trip";
 import { CATEGORY_META } from "@/lib/types";
 import { TIME_SLOTS, timeLabel } from "@/lib/time-of-day";
+import { formatLatLng, coordKey } from "@/lib/utils";
 import {
   Loader2,
   Check,
@@ -77,7 +78,7 @@ export function AddPlaceSheet({
 
           {initial && (
             <AddPlaceForm
-              key={`${initial.lat.toFixed(4)}-${initial.lng.toFixed(4)}-${open}`}
+              key={`${coordKey(initial.lat, initial.lng)}-${open}`}
               initial={initial}
               onDone={() => {
                 onOpenChange(false);
@@ -122,13 +123,13 @@ function AddPlaceForm({
   // Reverse geocoding при первоначальном монтировании, если адреса нет
   useEffect(() => {
     if (initial.address || !initial.lat || !initial.lng) return;
-    const key = `${initial.lat.toFixed(4)}-${initial.lng.toFixed(4)}`;
+    const key = coordKey(initial.lat, initial.lng);
     if (geocodedFor === key) return;
     geocode.mutate(
       { lat: initial.lat, lng: initial.lng },
       {
         onSuccess: (res) => setAddress(res.address),
-        onError: () => setAddress(`${initial.lat.toFixed(4)}, ${initial.lng.toFixed(4)}`),
+        onError: () => setAddress(formatLatLng(initial.lat, initial.lng)),
       }
     );
     setGeocodedFor(key);
@@ -172,7 +173,7 @@ function AddPlaceForm({
         {geocode.isPending ? (
           <span className="flex items-center gap-1"><Loader2 className="size-3 animate-spin" /> Определяем адрес…</span>
         ) : (
-          <span className="truncate">{address || `${lat.toFixed(4)}, ${lng.toFixed(4)}`}</span>
+          <span className="truncate">{address || formatLatLng(lat, lng)}</span>
         )}
       </div>
 

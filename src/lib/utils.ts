@@ -23,3 +23,13 @@ export function plural(n: number, one: string, few: string, many: string) {
   if ([2, 3, 4].includes(abs % 10) && ![12, 13, 14].includes(abs % 100)) return few
   return many
 }
+
+/** Координаты для показа человеку: «23.1291, 113.2644» (4 знака) */
+export function formatLatLng(lat: number, lng: number, sep = ", ") {
+  return `${lat.toFixed(4)}${sep}${lng.toFixed(4)}`;
+}
+
+/** Стабильный ключ пары координат (дедупликация геокода, query-ключи) */
+export function coordKey(lat: number, lng: number) {
+  return formatLatLng(lat, lng, "-");
+}
