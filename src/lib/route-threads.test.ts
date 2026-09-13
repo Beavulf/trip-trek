@@ -87,7 +87,7 @@ describe("buildRouteThreads", () => {
     );
     expect(segments.filter((s) => s.isToday).map((s) => s.dayId)).toEqual(["t"]);
     expect(segments[0].color).toBe("#123456");
-    expect(segments[2].color).toBe("#f97316"); // дефолт
+    expect(segments[1].color).toBe("#f97316"); // дефолт
   });
 
   it("одиночное место дня не даёт сегментов", () => {
