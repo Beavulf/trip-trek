@@ -39,7 +39,10 @@ export async function POST(req: NextRequest) {
     // Лимит на сам адрес (3/час) — чтобы россыпью IP-адресов не бомбить чужой ящик
     // письмами и не выталкивать живую ссылку жертвы. Проверяем ДО поиска аккаунта
     // и для несуществующих адресов тоже — иначе 429 раскрыл бы, кто зарегистрирован.
-    const perEmail = limit(`forgot-password-email:${email.trim()}`, { max: 3, windowMs: 60 * 60_000 });
+    // Ключ лимитера — нормализованный адрес, как и everywhere после канонизации
+    // (аудит 2026-09-12): регистровые варианты не должны получать отдельные бакеты.
+    const emailNorm = email.trim().toLowerCase();
+    const perEmail = limit(`forgot-password-email:${emailNorm}`, { max: 3, windowMs: 60 * 60_000 });
     if (!perEmail.ok) {
       return NextResponse.json(
         { error: "Слишком много запросов. Попробуйте позже." },
@@ -49,8 +52,8 @@ export async function POST(req: NextRequest) {
 
     await cleanupExpired();
 
-    // Ищем как в логине — без приведения регистра: email хранится как ввели при регистрации
-    const user = await db.user.findUnique({ where: { email: email.trim() } });
+    // Ищем по нормализованному адресу — register хранит email в едином виде
+    const user = await db.user.findUnique({ where: { email: emailNorm } });
     if (user) {
       // Один живой токен на пользователя: старые ссылки гасим
       await db.passwordResetToken.deleteMany({ where: { userId: user.id } });

@@ -23,13 +23,13 @@
 
 | Роут | Методы | Доступ | Лимит | Что делает |
 |---|---|---|---|---|
-| `auth/custom-login` | POST | 🌐 | 5/15 мин/IP | логин (bcrypt), ставит JWT-cookie |
+| `auth/custom-login` | POST | 🌐 | 5/15 мин/IP | логин (bcrypt), ставит JWT-cookie; проверяет Origin (NEXTAUTH_URL) и Content-Type: application/json (login-CSRF) |
 | `auth/custom-session` | GET | 🌐 | — | текущая сессия (учитывает `passwordChangedAt`) |
 | `auth/custom-signout` | POST | 🌐 | — | выход (снимает cookie) |
-| `auth/register` | POST | 🌐 | 3/ч/IP | регистрация + welcome-письмо; проверяет `registrationEnabled` |
+| `auth/register` | POST | 🌐 | 3/ч/IP | регистрация + welcome-письмо; проверяет `registrationEnabled`; email канонизируется (trim+lowercase) |
 | `auth/forgot-password` | POST | 🌐 | 5/ч/IP (+3/ч/email) | одноразовый токен (sha256 в БД, TTL 60 мин) + письмо; анти-перечисление |
 | `auth/reset-password` | POST | 🌐 | 20/ч/IP | сброс по токену, инвалидирует сессии |
-| `auth/[...nextauth]` | * | 🌐 | — | NextAuth-совместимость; клиент ходит в custom-* |
+| `auth/[...nextauth]` | * | 🌐 | 5/15 мин/IP (POST) | NextAuth-совместимость; клиент ходит в custom-*; credentials-вход под тем же лимитом, что и custom-login |
 | `user` | GET, PATCH | U | — | свой профиль (имя, emoji, цвет) |
 | `user/password` | POST | U | userRateLimit | смена пароля → инвалидация всех сессий |
 | `user/avatar` | POST | U | userRateLimit | аватар (через `src/lib/storage`) |

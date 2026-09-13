@@ -39,14 +39,19 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: policyError }, { status: 400 });
     }
 
-    const existing = await db.user.findUnique({ where: { email } });
+    // Канонизация email: хранится в едином виде, иначе регистровая копия адреса
+    // становилась «вторым аккаунтом», недостижимым ни логином, ни восстановлением
+    // (аудит 2026-09-12; логин и forgot-password ищут по тому же нормализованному виду)
+    const emailNorm = email.trim().toLowerCase();
+
+    const existing = await db.user.findUnique({ where: { email: emailNorm } });
     if (existing) {
       return NextResponse.json({ error: "Этот email уже зарегистрирован" }, { status: 400 });
     }
 
     const hashedPassword = await hashPassword(password);
     const user = await db.user.create({
-      data: { name, email, password: hashedPassword },
+      data: { name, email: emailNorm, password: hashedPassword },
     });
 
     // Приветственное письмо — fire-and-forget: SMTP не ждём, регистрацию не роняем.
