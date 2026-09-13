@@ -46,7 +46,7 @@
 | `trips/[tripId]/members/[memberId]` | PATCH | M(owner) | — | роль/имя участника, передача владения (ownership → уведомление) |
 | `trips/join` | GET, POST | U | 30/мин/IP + userRateLimit | превью поездки по инвайт-коду / вступление (проверяет TripBan, freeMemberLimit) |
 | `trips/from-template` | POST | U | — | создать поездку из шаблона (`src/lib/trip-templates.ts`) |
-| `trip` | GET, PATCH | M | — | сводка поездки: участники, счётчики, дни-мета БЕЗ мест (слим-формат, аудит 2026-09-13); `email` участников — только владельцу; дни с местами — `route` |
+| `trip` | GET, PATCH | M / O | — | сводка поездки: участники, счётчики, дни-мета БЕЗ мест (слим-формат, аудит 2026-09-13); `email` участников — только владельцу; дни с местами — `route`; PATCH — только владелец: `{status}` и/или `{title}` (переименование из «О поездке») |
 | `trip/dates` | PATCH | O | — | сдвиг дат/дней поездки |
 | `trip/budget` | PATCH | M | — | общий бюджет/валюта поездки |
 | `trip/import` | POST | U | userRateLimit | импорт JSON-бэкапа → новая поездка |

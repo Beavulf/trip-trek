@@ -50,6 +50,8 @@ export function Phrasebook() {
   const [addOpen, setAddOpen] = useState(false);
   const [generateOpen, setGenerateOpen] = useState(false);
   const [selectedLang, setSelectedLang] = useState("en");
+  // Какой язык показывать: "all" — все языки вперемешку
+  const [langFilter, setLangFilter] = useState("all");
 
   const totalCount = phrases?.length ?? 0;
   const favCount = phrases?.filter((p) => p.favorite).length ?? 0;
@@ -102,6 +104,7 @@ export function Phrasebook() {
   const filtered = useMemo(() => {
     if (!phrases) return [];
     let list = phrases;
+    if (langFilter !== "all") list = list.filter((p) => (p.language || "") === langFilter);
     if (favOnly) list = list.filter((p) => p.favorite);
     const q = query.trim();
     if (q) {
@@ -117,7 +120,7 @@ export function Phrasebook() {
       list = list.filter((p) => p.category === category);
     }
     return list;
-  }, [phrases, favOnly, query, category]);
+  }, [phrases, langFilter, favOnly, query, category]);
 
   // В режиме «Все» без поиска — лента, сгруппированная по разделам
   const groups = useMemo(() => {
@@ -130,21 +133,31 @@ export function Phrasebook() {
 
   const countFor = (key: string) => {
     if (!phrases) return 0;
-    const base = favOnly ? phrases.filter((p) => p.favorite) : phrases;
+    // счётчики разделов — в рамках выбранного языка, как и список ниже
+    let base = langFilter === "all" ? phrases : phrases.filter((p) => (p.language || "") === langFilter);
+    if (favOnly) base = base.filter((p) => p.favorite);
     return key === "all" ? base.length : base.filter((p) => p.category === key).length;
   };
 
-  // Загруженные паки по языкам — для удаления группой в шторке «Загрузить набор»
-  const packs = useMemo(() => {
+  // Языки в разговорнике с количеством фраз: это и фильтр «какой язык показать»,
+  // и список «Уже загружены» в шторке «Загрузить набор»
+  const langOptions = useMemo(() => {
     const counts = new Map<string, number>();
     (phrases ?? []).forEach((p) => {
       const code = p.language || "";
       counts.set(code, (counts.get(code) ?? 0) + 1);
     });
-    return Array.from(counts.entries()).map(([code, count]) => ({ code, count }));
+    return Array.from(counts.entries())
+      .map(([code, count]) => ({ code, count }))
+      .sort((a, b) => b.count - a.count);
   }, [phrases]);
+  const packs = langOptions;
+  const showLangRail = langOptions.length >= 2;
+  const langLabel = (code: string) =>
+    code === "" ? "Без языка" : LANGUAGES.find((l) => l.code === code)?.label ?? code;
+  const activeLangName = langFilter === "all" ? null : langLabel(langFilter);
 
-  const hasFilters = searching || favOnly || category !== "all";
+  const hasFilters = searching || favOnly || category !== "all" || langFilter !== "all";
   const actionsPhrase = phrases?.find((p) => p.id === actionsId) ?? null;
 
   const handleGenerate = async () => {
@@ -232,11 +245,20 @@ export function Phrasebook() {
         )}
         <div className="relative">
           <div className="mb-1 flex items-center gap-2 text-sm text-white/80">
-            <Languages className="size-4" /> Разговорник{langName ? ` · ${langName}` : ""}
+            <Languages className="size-4" />
+            {multiLang
+              ? `Разговорник · ${langOptions.length} ${plural(langOptions.length, "язык", "языка", "языков")}`
+              : `Разговорник${langName ? ` · ${langName}` : ""}`}
           </div>
           {totalCount > 0 ? (
             <>
-              <h1 className="text-2xl font-bold">{lang?.langPrefix === "zh" ? "Китайский в дорогу" : `${langName ?? "Фразы"} в дорогу`}</h1>
+              <h1 className="text-2xl font-bold">
+                {activeLangName
+                  ? `${activeLangName.charAt(0).toUpperCase()}${activeLangName.slice(1)} в дорогу`
+                  : lang?.langPrefix === "zh"
+                    ? "Китайский в дорогу"
+                    : `${langName ?? "Фразы"} в дорогу`}
+              </h1>
               <p className="mt-1 text-sm text-white/80">
                 Тапни по фразе — покажем крупно · 🔊 озвучит вслух
               </p>
@@ -283,6 +305,13 @@ export function Phrasebook() {
                   <Download className="size-4" /> Ещё язык
                 </button>
               </div>
+              {/* Подсказка «зачем и как»: фича загрузки языка неочевидна, пока не откроешь шторку */}
+              <p className="mt-3 flex items-start gap-1.5 text-[11px] leading-snug text-white/75">
+                <span aria-hidden>💡</span>
+                <span>
+                  «Ещё язык» скачивает набор фраз для другой страны: один раз онлайн — дальше офлайн, чтобы показать или послушать фразу на месте.
+                </span>
+              </p>
             </>
           ) : (
             <>
@@ -349,6 +378,51 @@ export function Phrasebook() {
             </button>
           </div>
 
+          {/* Языки: выбор «что показывать сейчас» — появляется, когда язык не один */}
+          {showLangRail && (
+            <>
+              <div className="chip-rail no-scrollbar">
+                <button
+                  type="button"
+                  onClick={() => setLangFilter("all")}
+                  aria-label="Показать все языки"
+                  aria-pressed={langFilter === "all"}
+                  className={cn(
+                    "flex min-h-11 items-center gap-1.5 whitespace-nowrap rounded-full px-3 py-1.5 text-xs font-medium transition-all",
+                    langFilter === "all" ? "bg-primary text-white shadow-md" : "border border-border bg-card hover:bg-accent"
+                  )}
+                >
+                  Все языки
+                  <span className={cn("tabular-nums", langFilter === "all" ? "text-white/75" : "text-muted-foreground/70")}>
+                    {phrases?.length ?? 0}
+                  </span>
+                </button>
+                {langOptions.map(({ code, count }) => {
+                  const active = langFilter === code;
+                  return (
+                    <button
+                      key={code || "none"}
+                      type="button"
+                      onClick={() => setLangFilter(code)}
+                      aria-label={`Показать только: ${langLabel(code)}`}
+                      aria-pressed={active}
+                      className={cn(
+                        "flex min-h-11 items-center gap-1.5 whitespace-nowrap rounded-full px-3 py-1.5 text-xs font-medium transition-all",
+                        active ? "bg-primary text-white shadow-md" : "border border-border bg-card hover:bg-accent"
+                      )}
+                    >
+                      <span aria-hidden>{langBadge(code) ?? "💬"}</span> {langLabel(code)}
+                      <span className={cn("tabular-nums", active ? "text-white/75" : "text-muted-foreground/70")}>{count}</span>
+                    </button>
+                  );
+                })}
+              </div>
+              <p className="-mt-2 px-1 text-[11px] text-muted-foreground">
+                Выбери язык — в списке останется только он. Подгрузить ещё: «Ещё язык» ↑
+              </p>
+            </>
+          )}
+
           {/* Разделы — скрываем в режиме поиска */}
           {!searching && (
             <div className="chip-rail no-scrollbar">
@@ -413,6 +487,7 @@ export function Phrasebook() {
                 setQuery("");
                 setFavOnly(false);
                 setCategory("all");
+                setLangFilter("all");
               }}
               className="mt-3 min-h-11 rounded-lg bg-primary px-3 py-2 text-xs text-primary-foreground"
             >
@@ -446,7 +521,7 @@ export function Phrasebook() {
                       onShow={setShowIndex}
                       onActions={setActionsId}
                       toggle={toggle}
-                      showLang={multiLang}
+                      showLang={multiLang && langFilter === "all"}
                     />
                   ))}
                 </div>
@@ -463,7 +538,7 @@ export function Phrasebook() {
                     onShow={setShowIndex}
                     onActions={setActionsId}
                     toggle={toggle}
-                    showLang={multiLang}
+                    showLang={multiLang && langFilter === "all"}
                   />
                 ))}
               </AnimatePresence>

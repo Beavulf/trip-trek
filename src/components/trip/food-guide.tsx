@@ -17,6 +17,7 @@ import {
   Share2,
   Trophy,
   Flame,
+  Sparkles,
 } from "lucide-react";
 import { useState, useMemo } from "react";
 import { toast } from "sonner";
@@ -280,6 +281,13 @@ export function FoodGuide() {
               />
             </div>
           )}
+          {/* Подсказка про ИИ-шефа: фича спрятана в шторке добавления — о ней надо сказать сразу */}
+          <p className="mt-3 flex items-start gap-1.5 text-[11px] leading-snug text-white/80">
+            <Sparkles className="mt-0.5 size-3.5 shrink-0" />
+            <span>
+              Не знаете, что попробовать? ИИ-шеф соберёт знаковые блюда города: «Добавить блюдо» → «Спросить шефа»
+            </span>
+          </p>
         </div>
       </div>
 

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   CalendarDays,
@@ -11,6 +11,7 @@ import {
   Loader2,
   LogOut,
   MapPin,
+  Pencil,
   UserPlus,
   Wallet,
 } from "lucide-react";
@@ -58,16 +59,46 @@ export function TripInfoSheet({
   useBodyScrollLock(open);
   const tripId = useCurrentTripId();
   const { data: trip, refetch } = useTrip();
+  const qc = useQueryClient();
   const { data: session } = useAuth();
   const { setTripSwitcherOpen } = useTripStore();
   const [copied, setCopied] = useState(false);
   const [confirmLeave, setConfirmLeave] = useState(false);
+  const [editTitle, setEditTitle] = useState(false);
+  const [titleDraft, setTitleDraft] = useState("");
+
+  // Переименование поездки (владелец): чип в шапке берёт title из списка
+  // поездок, поэтому после сохранения инвалидируем и его
+  const rename = useMutation({
+    mutationFn: async (title: string) => {
+      const r = await fetch(`/api/trip?tripId=${tripId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title }),
+      });
+      const json = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(json.error || "Не удалось сохранить");
+      return json;
+    },
+    onSuccess: async () => {
+      await refetch();
+      qc.invalidateQueries({ queryKey: ["trips"] });
+      toast.success("Название обновлено ✏️");
+      setEditTitle(false);
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
 
   if (!open || typeof document === "undefined") return null;
 
   const me = session?.user as { id?: string } | undefined;
   const myMember = trip?.participants.find((p) => p.id === me?.id);
   const isOwner = myMember?.role === "owner";
+
+  const startEditTitle = () => {
+    setTitleDraft(t?.title || "");
+    setEditTitle(true);
+  };
 
   const s = trip?.settings;
   const t = trip?.trip;
@@ -167,7 +198,54 @@ export function TripInfoSheet({
                   {t?.coverEmoji || "🌏"}
                 </span>
                 <div className="flex-1 min-w-0">
-                  <div className="font-bold text-base leading-tight truncate">{t?.title}</div>
+                  {editTitle ? (
+                    <div className="flex items-center gap-1.5">
+                      <input
+                        value={titleDraft}
+                        onChange={(e) => setTitleDraft(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" && titleDraft.trim()) rename.mutate(titleDraft);
+                          if (e.key === "Escape") setEditTitle(false);
+                        }}
+                        maxLength={120}
+                        autoFocus
+                        aria-label="Название поездки"
+                        className="min-w-0 flex-1 rounded-xl border border-input bg-background px-2.5 py-2 text-sm font-bold input-mobile"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => titleDraft.trim() && rename.mutate(titleDraft)}
+                        disabled={rename.isPending || !titleDraft.trim() || titleDraft.trim() === (t?.title || "")}
+                        aria-label="Сохранить название"
+                        className="grid size-9 shrink-0 place-items-center rounded-xl bg-primary text-primary-foreground transition-transform active:scale-95 disabled:opacity-50"
+                      >
+                        {rename.isPending ? <Loader2 className="size-4 animate-spin" /> : <Check className="size-4" />}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setEditTitle(false)}
+                        aria-label="Отменить правку"
+                        className="grid size-9 shrink-0 place-items-center rounded-xl bg-secondary text-muted-foreground transition-transform active:scale-95"
+                      >
+                        <X className="size-4" />
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-1">
+                      <div className="min-w-0 truncate font-bold text-base leading-tight">{t?.title}</div>
+                      {isOwner && (
+                        <button
+                          type="button"
+                          onClick={startEditTitle}
+                          aria-label="Переименовать поездку"
+                          title="Переименовать"
+                          className="grid size-9 shrink-0 place-items-center rounded-lg text-muted-foreground transition-colors hover:bg-accent hover:text-foreground active:scale-90"
+                        >
+                          <Pencil className="size-3.5" />
+                        </button>
+                      )}
+                    </div>
+                  )}
                   <div className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
                     <MapPin className="size-3" />
                     {t?.destination}

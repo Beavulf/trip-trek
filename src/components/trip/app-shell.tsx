@@ -33,6 +33,7 @@ import {
   MoreHorizontal,
   Bug,
   Shield,
+  UserRound,
 } from "lucide-react";
 import { useState, useEffect, useRef, type ReactNode } from "react";
 import dynamic from "next/dynamic";
@@ -94,7 +95,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   const { data: adminStats } = useAdminStats(!!isAdmin);
   const feedbackNew = isAdmin ? adminStats?.feedback.new ?? 0 : 0;
   const { activeTab, setActiveTab } = useTripStore();
-  const { data: trip } = useTrip();
+  const { data: trip, isLoading: tripLoading } = useTrip();
   const tabScrollRef = useRef<HTMLDivElement>(null);
   const headerRef = useRef<HTMLElement>(null);
   const [showLeftArrow, setShowLeftArrow] = useState(false);
@@ -172,9 +173,13 @@ export function AppShell({ children }: { children: ReactNode }) {
     return () => window.removeEventListener("triptrek-open-invite", openInvite);
   }, []);
 
+  // «Загрузка…» — только пока запрос реально идёт; без поездки пишем как есть,
+  // иначе новый юзер вечно видит «загрузку» и думает, что что-то сломалось
   const dayLine = trip
     ? `День ${trip.currentDayNumber}/${trip.settings.totalDays}${trip.days.find((d) => d.dayNumber === trip.currentDayNumber)?.city ? ` · ${trip.days.find((d) => d.dayNumber === trip.currentDayNumber)?.city}` : ""}`
-    : "загрузка…";
+    : tripLoading
+      ? "загрузка…"
+      : "нет активной поездки";
 
   return (
     <div className="min-h-dvh flex flex-col bg-background relative">
@@ -609,29 +614,41 @@ function ParticipantAvatars({ large }: { large?: boolean }) {
   const { setCurrentUserId } = useTripStore();
   const { data: session } = useSession();
   const router = useRouter();
-  if (!trip) return null;
 
   const size = large ? "size-11" : "size-9 sm:size-8";
   const authedUser = session?.user;
   if (authedUser) {
-    const current = trip.participants.find((p) => p.id === (authedUser as { id?: string }).id);
+    const current = trip?.participants.find((p) => p.id === (authedUser as { id?: string }).id);
+    // Кнопка профиля — у авторизованного всегда: и пока поездки нет (новый юзер),
+    // и если участник ещё не приехал в списке — иначе в профиль не попасть
+    if (!current) {
+      return (
+        <button
+          onClick={() => router.push("/profile")}
+          title="Профиль"
+          aria-label="Профиль"
+          className={cn(size, "grid place-items-center rounded-full border-2 border-background bg-primary/15 text-primary ring-2 ring-primary shrink-0")}
+        >
+          <UserRound className={large ? "size-5" : "size-4"} />
+        </button>
+      );
+    }
     return (
       <div className="flex items-center gap-1.5">
-        {current && (
-          <button
-            onClick={() => router.push("/profile")}
-            title={`${current.name} — профиль`}
-            aria-label="Профиль"
-            className={cn(size, "rounded-full grid place-items-center text-sm border-2 border-background ring-2 ring-primary shrink-0")}
-            style={{ background: current.color }}
-          >
-            <span>{current.emoji}</span>
-          </button>
-        )}
+        <button
+          onClick={() => router.push("/profile")}
+          title={`${current.name} — профиль`}
+          aria-label="Профиль"
+          className={cn(size, "rounded-full grid place-items-center text-sm border-2 border-background ring-2 ring-primary shrink-0")}
+          style={{ background: current.color }}
+        >
+          <span>{current.emoji}</span>
+        </button>
       </div>
     );
   }
 
+  if (!trip) return null;
   const current = trip.participants.find((p) => p.id === trip.settings.currentUserId) || trip.participants[0];
 
   return (

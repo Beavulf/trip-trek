@@ -145,7 +145,7 @@ export async function GET(req: NextRequest) {
   });
 }
 
-// PATCH /api/trip?tripId=... { status } — статус поездки меняет только владелец
+// PATCH /api/trip?tripId=... { status } или { title } — меняет только владелец
 const TRIP_STATUSES = ["planning", "active", "completed"];
 
 export async function PATCH(req: NextRequest) {
@@ -156,16 +156,29 @@ export async function PATCH(req: NextRequest) {
   const { user, membership, response } = await requireTripMember(req, tripId);
   if (response) return response;
   if (membership!.role !== "owner") {
-    return NextResponse.json({ error: "Статус меняет только владелец поездки" }, { status: 403 });
+    return NextResponse.json({ error: "Поездку меняет только владелец" }, { status: 403 });
   }
 
   const body = await req.json().catch(() => ({}));
-  const { status } = body as { status?: string };
-  if (!status || !TRIP_STATUSES.includes(status)) {
-    return NextResponse.json({ error: "status: planning | active | completed" }, { status: 400 });
+  const { status, title } = body as { status?: string; title?: string };
+
+  const data: { status?: string; title?: string } = {};
+  if (status !== undefined) {
+    if (!status || !TRIP_STATUSES.includes(status)) {
+      return NextResponse.json({ error: "status: planning | active | completed" }, { status: 400 });
+    }
+    data.status = status;
+  }
+  if (typeof title === "string") {
+    const clean = title.trim().slice(0, 120);
+    if (!clean) return NextResponse.json({ error: "Название не может быть пустым" }, { status: 400 });
+    data.title = clean;
+  }
+  if (Object.keys(data).length === 0) {
+    return NextResponse.json({ error: "Нечего обновлять: жду status или title" }, { status: 400 });
   }
 
-  const updated = await db.trip.update({ where: { id: tripId }, data: { status } });
+  const updated = await db.trip.update({ where: { id: tripId }, data });
   publish(tripId, "trip:updated", {});
-  return NextResponse.json({ ok: true, status: updated.status });
+  return NextResponse.json({ ok: true, title: updated.title, status: updated.status });
 }
