@@ -113,14 +113,18 @@ export async function POST(req: NextRequest) {
     const sym = currencySymbol(trip.currency);
     const memberNames = members.map((m) => m.user?.name || m.displayName).filter(Boolean);
 
-    // P1 #7: photos/captions + member names + journals включаем в промпт
+    // P1 #7: photos/captions + member names + journals включаем в промпт.
+    // Markdown-ссылки из member-контента нейтрализуем: иначе planted-текст
+    // доезжал и до промпта, и до no-LLM черновика, где рендерился кликабельной
+    // ссылкой/картинкой для другого участника (аудит 2026-09-12)
+    const sanitizeForAi = (t: string) => t.replace(/\[([^\]]*)\]\((https?:\/\/[^)\s]+)\)/g, "$1 ($2)");
     const photoCaptions = photos
-      .map((p) => p.caption || p.address || "")
+      .map((p) => sanitizeForAi(p.caption || p.address || ""))
       .filter(Boolean)
       .slice(0, 10);
     const journalTexts = journals
       .slice(0, 10)
-      .map((j) => `${j.mood ?? ""} ${j.user?.name ?? ""}: ${j.content}`.trim())
+      .map((j) => sanitizeForAi(`${j.mood ?? ""} ${j.user?.name ?? ""}: ${j.content}`.trim()))
       .filter(Boolean);
 
     // Траты по категориям (топ-3) — дают отчёту конкретику

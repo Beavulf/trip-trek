@@ -17,8 +17,34 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const { subscription } = body;
 
-    if (!subscription || !subscription.endpoint) {
-      return NextResponse.json({ error: "subscription required" }, { status: 400 });
+    if (!subscription || !subscription.endpoint || !subscription.keys?.p256dh || !subscription.keys?.auth) {
+      return NextResponse.json(
+        { error: "subscription (endpoint + keys) required" },
+        { status: 400 }
+      );
+    }
+
+    // Валидация endpoint: сервер сам ходит по этому адресу (VAPID-запрос),
+    // произвольная строка делала из пуша SSRF-примитив (аудит 2026-09-12)
+    let endpointHost: string;
+    try {
+      const u = new URL(subscription.endpoint);
+      if (u.protocol !== "https:") {
+        return NextResponse.json({ error: "endpoint: только https" }, { status: 400 });
+      }
+      endpointHost = u.hostname;
+    } catch {
+      return NextResponse.json({ error: "endpoint: некорректный URL" }, { status: 400 });
+    }
+    if (
+      endpointHost === "localhost" ||
+      endpointHost === "127.0.0.1" ||
+      endpointHost === "0.0.0.0" ||
+      endpointHost.endsWith(".local") ||
+      endpointHost.endsWith(".internal") ||
+      /^\d{1,3}(\.\d{1,3}){3}$/.test(endpointHost)
+    ) {
+      return NextResponse.json({ error: "endpoint: недопустимый хост" }, { status: 400 });
     }
 
     const existing = await db.pushSubscription.findUnique({
@@ -26,11 +52,10 @@ export async function POST(req: NextRequest) {
     });
 
     if (existing) {
+      // Чужую подписку не перехватываем (аудит 2026-09-12): переassignment
+      // отсылал пуш юзера на устройство атакующего / глушил его пуши
       if (existing.userId !== userId) {
-        await db.pushSubscription.update({
-          where: { endpoint: subscription.endpoint },
-          data: { userId },
-        });
+        return NextResponse.json({ error: "Эта подписка принадлежит другому пользователю" }, { status: 409 });
       }
       return NextResponse.json({ ok: true, existed: true });
     }

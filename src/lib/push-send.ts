@@ -43,7 +43,9 @@ export async function sendPushToTripMembers(
       url: notification.url || "/",
     });
 
-    // Отправляем каждому
+    // Отправляем каждому. timeout обязателен: endpoint задаёт клиент, без
+    // дедлайна «чёрная дыра» держала бы сокет и тормозила рассылку
+    // (аудит 2026-09-12)
     const results = await Promise.allSettled(
       subscriptions.map((sub) =>
         webpush.sendNotification(
@@ -54,7 +56,8 @@ export async function sendPushToTripMembers(
               auth: sub.auth,
             },
           },
-          payload
+          payload,
+          { timeout: 10_000 }
         )
       )
     );

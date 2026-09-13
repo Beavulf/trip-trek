@@ -34,7 +34,7 @@
 | `user/password` | POST | U | userRateLimit | смена пароля → инвалидация всех сессий |
 | `user/avatar` | POST | U | userRateLimit | аватар (через `src/lib/storage`) |
 | `user/upgrade` | POST | U | — | переход на premium (ручной сценарий; известная заглушка) |
-| `user/ai-key-check` | POST | U | userRateLimit | проверка BYOK-ключа у LLM, наружу — только маска |
+| `user/ai-key-check` | POST | U | userRateLimit | проверка ТОЛЬКО своего BYOK-ключа у LLM (общий не трогается), наружу — только маска |
 | `limits` | GET, POST, PATCH | U / M | — | лимиты плана юзера (maxTrips/maxMembers: free из `AppSettings`, premium = ∞) |
 
 ## Поездки и участники

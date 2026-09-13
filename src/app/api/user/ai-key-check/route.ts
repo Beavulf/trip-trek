@@ -15,8 +15,19 @@ export async function POST(req: NextRequest) {
   if (limited) return limited;
 
   const cfg = await resolveAiConfig(user!.id);
-  if (!cfg.key) {
-    return NextResponse.json({ ok: false, error: "Ключ не задан — ни свой, ни общий" }, { status: 400 });
+
+  // Проверяем ТОЛЬКО свой ключ юзера. Общий (админ/env) не греем чужими
+  // запросами и не показываем его телеметрию/хвост — у админа для проверки
+  // общего конфига есть admin/settings/test (аудит 2026-09-12).
+  if (cfg.source !== "user") {
+    return NextResponse.json({
+      ok: Boolean(cfg.key),
+      checked: false,
+      source: cfg.source,
+      message: cfg.key
+        ? "Свой ключ не задан — используется общий, его проверка не выполнялась."
+        : "Ключ не задан — ни свой, ни общий.",
+    });
   }
 
   const base = openaiChatUrl(cfg.baseUrl);

@@ -64,7 +64,24 @@ export async function PUT(req: NextRequest) {
     aiTouched = true;
   }
   if (aiBaseUrl !== undefined) {
-    data.aiBaseUrl = typeof aiBaseUrl === "string" && aiBaseUrl.trim() ? aiBaseUrl.trim() : null;
+    // https-only: на этот адрес уходят Bearer-ключи пользователей — произвольный
+    // scheme/host делал из сервера прокси утечки ключей (аудит 2026-09-12).
+    // http://localhost разрешён только в dev (мок-провайдеры).
+    if (typeof aiBaseUrl === "string" && aiBaseUrl.trim()) {
+      const raw = aiBaseUrl.trim();
+      try {
+        const u = new URL(raw);
+        const isLocal = u.hostname === "localhost" || u.hostname === "127.0.0.1";
+        if (u.protocol !== "https:" && !(isLocal && process.env.NODE_ENV !== "production")) {
+          return NextResponse.json({ error: "aiBaseUrl: только https" }, { status: 400 });
+        }
+        data.aiBaseUrl = raw;
+      } catch {
+        return NextResponse.json({ error: "aiBaseUrl: некорректный URL" }, { status: 400 });
+      }
+    } else {
+      data.aiBaseUrl = null;
+    }
     aiTouched = true;
   }
   if (aiModel !== undefined) {

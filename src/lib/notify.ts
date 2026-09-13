@@ -76,6 +76,9 @@ async function sendPush(userId: string, payload: NotifyPayload): Promise<void> {
           {
             TTL: 86_400,
             vapidDetails: { subject: "mailto:admin@triptrek.app", ...keys },
+            // дедлайн обязателен: endpoint задаёт клиент, зависший отправитель
+            // тормозил бы ждущий его HTTP-роут (аудит 2026-09-12)
+            timeout: 10_000,
           }
         );
       } catch (e) {

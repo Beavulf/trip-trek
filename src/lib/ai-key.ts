@@ -56,14 +56,23 @@ export function maskKey(key: string): string {
  * База OpenAI-совместимого API без хвостового слэша. Если провайдер указан
  * голым хостом (https://api.deepseek.com) — добавляем /v1: почти все
  * OpenAI-совместимые API живут под /v1, а в пути с версией смысла нет.
+ *
+ * https-only (аудит 2026-09-12): на этот URL уходят Bearer-ключи, не-https
+ * или не-URL значение заменяется дефолтом. http://localhost — только в dev.
  */
 export function openaiChatUrl(baseUrl: string | null | undefined): string {
-  const base = (baseUrl ?? process.env.OPENAI_BASE_URL ?? "https://api.openai.com/v1").trim().replace(/\/+$/, "");
+  const fallback = process.env.OPENAI_BASE_URL ?? "https://api.openai.com/v1";
+  const base = (baseUrl ?? fallback).trim().replace(/\/+$/, "");
   try {
     const u = new URL(base);
+    const isLocal = u.hostname === "localhost" || u.hostname === "127.0.0.1";
+    if (u.protocol !== "https:" && !(isLocal && process.env.NODE_ENV !== "production")) {
+      return fallback;
+    }
     if (u.pathname === "" || u.pathname === "/") return `${base}/v1`;
   } catch {
-    // не URL — отдаём как есть, провайдер вернёт понятную ошибку
+    // не URL — дефолт вместо сырой строки (это мог быть инъекция пути)
+    return fallback;
   }
   return base;
 }
