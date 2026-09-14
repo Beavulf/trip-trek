@@ -41,6 +41,21 @@ export type AiResult =
       limitResponse?: NextResponse;
     };
 
+/**
+ * Единый маппер неудач runAi в HTTP-ответ: 429 лимитера — как есть (Retry-After),
+ * блок — 403, нет ключа — 503, остальное (провайдер/пусто) — 502. Тексты своих
+ * 503/403 фича передаёт сама — они видны юзеру в toast как есть.
+ */
+export function aiFailResponse(
+  ai: Extract<AiResult, { ok: false }>,
+  texts: { blocked: string; unavailable: string; format?: string }
+): NextResponse {
+  if (ai.reason === "rate_limited" && ai.limitResponse) return ai.limitResponse;
+  if (ai.reason === "blocked") return NextResponse.json({ error: texts.blocked }, { status: 403 });
+  if (ai.reason === "no_key") return NextResponse.json({ error: texts.unavailable }, { status: 503 });
+  return NextResponse.json({ error: texts.format ?? "ИИ не смог ответить — попробуй ещё раз" }, { status: 502 });
+}
+
 export async function runAi(input: RunAiInput): Promise<AiResult> {
   const def = AI_FEATURES[input.feature];
   const cfg = await resolveAiConfig(input.userId);

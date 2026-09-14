@@ -2,45 +2,46 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { requireTripMember } from "@/lib/api-auth";
 import { currencySymbol } from "@/lib/currencies";
-import { runAi } from "@/lib/ai";
+import { runAi, aiFailResponse } from "@/lib/ai";
+import { sanitizeUserText, extractJsonLoose } from "@/lib/planner";
 
 // «Советы шефа»: LLM предлагает знаковые блюда города, которых ещё нет в гиде.
 // Пишет только клиент (пользователь выбирает, что добавить) — БД здесь не трогаем.
 // Лимит, BYOK и учёт — в едином оркестраторе lib/ai.ts.
 
 // Пример цены — в валюте конкретной поездки (buildSystemPrompt), а не жёсткий ¥
-function buildSystemPrompt(priceExample: string): string {
+function buildSystemPrompt(priceExample: string, count: number): string {
   return `Ты — шеф-повар и гастрогид. Пользователь собирает список «что попробовать» в городе своей поездки.
-Предложи 4 знаковых блюда или напитка именно этого города, которых НЕТ в списке уже добавленных.
+Предложи ${count} знаковых блюд или напитков именно этого города, которых НЕТ в списке уже добавленных${count > 4 ? ". Сгруппируй так, чтобы была выборка: от уличной еды до ресторанных специалитетов" : ""}.
 Отвечай СТРОГО JSON-массивом без markdown-обёрток, каждый элемент:
 {"name": "название по-русски", "nameCn": "оригинальное название местным письмом или null", "description": "1–2 предложения по-русски: что это и почему стоит попробовать", "price": "ориентир цены в валюте поездки, например \"${priceExample}\"", "emoji": "один эмодзи блюда"}
 Никакого текста до или после JSON.`;
 }
 
-function parseSuggestions(raw: string): Suggestion[] {
-  // LLM любят оборачивать JSON в ```-блоки — срезаем
-  const cleaned = raw.replace(/```(?:json)?/gi, "").trim();
-  const start = cleaned.indexOf("[");
-  const end = cleaned.lastIndexOf("]");
-  if (start === -1 || end === -1 || end <= start) return [];
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(cleaned.slice(start, end + 1));
-  } catch {
-    return [];
-  }
+/** Парсинг уже извлечённого JSON: поля по контракту + дедуп по имени
+ * (LLM любит дублировать блюдо — без дедупа коллизии ключей и двойные добавления). */
+function parseSuggestions(parsed: unknown, cap: number): Suggestion[] {
   if (!Array.isArray(parsed)) return [];
-  return parsed
-    .filter((it): it is Record<string, unknown> => !!it && typeof it === "object")
-    .map((it) => ({
-      name: typeof it.name === "string" ? it.name.trim().slice(0, 200) : "",
-      nameCn: typeof it.nameCn === "string" && it.nameCn.trim() ? it.nameCn.trim().slice(0, 100) : null,
-      description: typeof it.description === "string" ? it.description.trim().slice(0, 500) : "",
-      price: typeof it.price === "string" && it.price.trim() ? it.price.trim().slice(0, 50) : null,
-      emoji: typeof it.emoji === "string" && it.emoji.trim() ? [...it.emoji.trim()][0] : "🍽️",
-    }))
-    .filter((it) => it.name.length > 0)
-    .slice(0, 6);
+  const seen = new Set<string>();
+  const out: Suggestion[] = [];
+  for (const it of parsed) {
+    if (typeof it !== "object" || it === null) continue;
+    const rec = it as Record<string, unknown>;
+    const name = typeof rec.name === "string" ? rec.name.trim().slice(0, 200) : "";
+    if (!name) continue;
+    const key = name.toLowerCase().replace(/\s+/g, " ");
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push({
+      name,
+      nameCn: typeof rec.nameCn === "string" && rec.nameCn.trim() ? rec.nameCn.trim().slice(0, 100) : null,
+      description: typeof rec.description === "string" ? rec.description.trim().slice(0, 500) : "",
+      price: typeof rec.price === "string" && rec.price.trim() ? rec.price.trim().slice(0, 50) : null,
+      emoji: typeof rec.emoji === "string" && rec.emoji.trim() ? [...rec.emoji.trim()][0] : "🍽️",
+    });
+    if (out.length >= cap) break;
+  }
+  return out;
 }
 
 interface Suggestion {
@@ -51,14 +52,16 @@ interface Suggestion {
   emoji: string;
 }
 
-// POST /api/foods/suggest — body: { tripId, city }
+// POST /api/foods/suggest — body: { tripId, city, count? } — count 4–10 (пакет блюд)
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { tripId, city } = body as { tripId?: string; city?: string };
+    const { tripId, city, count } = body as { tripId?: string; city?: string; count?: number };
     if (!tripId || !city?.trim()) {
       return NextResponse.json({ error: "tripId и city обязательны" }, { status: 400 });
     }
+    // Пакетный режим: сколько блюд просим (дефолт 4 — прежний контракт)
+    const want = Math.min(Math.max(Math.round(count ?? 4) || 4, 4), 10);
     const { user, response } = await requireTripMember(req, tripId);
     if (response) return response;
 
@@ -74,21 +77,18 @@ export async function POST(req: NextRequest) {
       userId: user.id,
       tripId,
       feature: "foods-suggest",
-      system: buildSystemPrompt(`${currencySymbol(trip.currency)}25–40`),
-      prompt: `Город: ${city.trim()}. Контекст поездки: ${trip.destination || city.trim()}. Валюта: ${trip.currency}.
-Уже в списке (не предлагай их и близкие синонимы): ${existing.length ? existing.join(", ") : "пусто"}.`,
+      system: buildSystemPrompt(`${currencySymbol(trip.currency)}25–40`, want),
+      prompt: `Город: ${sanitizeUserText(city.trim(), 80)}. Контекст поездки: ${sanitizeUserText(trip.destination || city.trim(), 120)}. Валюта: ${trip.currency}.
+Уже в списке (не предлагай их и близкие синонимы): ${existing.length ? sanitizeUserText(existing.join(", "), 600) : "пусто"}.`,
     });
     if (!ai.ok) {
-      if (ai.reason === "rate_limited" && ai.limitResponse) return ai.limitResponse;
-      if (ai.reason === "blocked") {
-        return NextResponse.json({ error: "ИИ недоступен для твоего аккаунта — обратись к админу" }, { status: 403 });
-      }
-      return NextResponse.json(
-        { error: "Шеф сейчас недоступен — проверь настройки LLM (OPENAI_API_KEY)" },
-        { status: 503 }
-      );
+      return aiFailResponse(ai, {
+        blocked: "ИИ недоступен для твоего аккаунта — обратись к админу",
+        unavailable: "ИИ недоступен — добавь свой ключ ИИ в настройках профиля или попроси админа",
+        format: "Шеф ответил не по формату — попробуй ещё раз",
+      });
     }
-    const suggestions = parseSuggestions(ai.text);
+    const suggestions = parseSuggestions(extractJsonLoose(ai.text), want);
     if (suggestions.length === 0) {
       return NextResponse.json({ error: "Шеф ответил не по формату — попробуй ещё раз" }, { status: 502 });
     }

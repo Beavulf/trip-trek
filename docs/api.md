@@ -65,6 +65,7 @@
 | `route` | GET | — | модель чтения маршрута: дни+места+мета поездки одним запросом (`useRoute`); единственный источник дней с местами — дашборд, лента и галерея тоже читают его через `useRouteDays` |
 | `days` | POST, PATCH, DELETE | `trip:updated` | мутации дней (город, даты); GET удалён (аудит 2026-09-13) — читайте `route` |
 | `places` | POST | `place:created` | новое место (день, координаты, категория) |
+| `places/batch` | POST | `place:created` (одна публикация с count) | батч-создание до 30 мест из черновиков ИИ (планер/рестораны/прогулка); все dayId — своей поездки |
 | `places/[id]` | PATCH, DELETE | `place:updated/deleted` | правка/удаление места, статус visited |
 | `photos` | GET, POST, DELETE | `photo:added` | галерея; POST — загрузка файла (storage, EXIF-гео); GET отдаёт `place` проекцией {name, lat, lng} |
 | `photos/[id]` | PATCH | `photo:added` | подпись/избранное |
@@ -96,7 +97,10 @@
 | `ai-summary` | POST | M | 10/ч на user+trip | итоги поездки (LLM); без ключа — локальный черновик (`generated:false`), заблокирован юзер — 403 |
 | `phrases/generate` | POST | M | 10/ч на user+trip | базовый разговорник по направлению |
 | `phrases/ai` | POST | M | 10/ч на user+trip | фразы по свободному запросу (3 режима: translate/more/pack) |
-| `foods/suggest` | POST | M | 10/ч на user+trip | предложения блюд по городу |
+| `foods/suggest` | POST | M | 10/ч на user+trip | блюда города: `count` 4–10 (пакет «Подборка шефа» в Еде) |
+| `ai/planner` | POST | M | 3/ч на user+trip | черновик маршрута ИИ (mode trip/day/replace) по **существующим** дням; места геокодируются Nominatim по nameEn, `fail` → «уточнить на карте» |
+| `ai/restaurants` | POST | M | 6/ч на user+trip | реальные заведения OpenStreetMap у города дня; ИИ только отбирает — имена/координаты из OSM (`matchPicksToPois`) |
+| `ai/walk` | POST | M | 6/ч на user+trip | прогулка на 1–6 ч: OSM-POI в радиусе 300–5000 м минус места поездки, ИИ собирает таймлайн |
 | `user/ai-key-check` | POST | U | 5/мин | проверка своего ключа живым запросом (общий ключ не проверяется) |
 
 Ключ LLM резолвится: юзер (свой ключ + свой Base URL/модель = полный BYOK; иначе
@@ -147,7 +151,7 @@ In-memory, сбрасываются рестартом контейнера (ADR
 - health — 60 / мин / IP (БД-пинг кэшируется на 5 с)
 - weather — 30 / мин / IP
 - geocode — 60 / ч / user
-- ИИ-роуты — 10 / ч / user+trip
+- ИИ-роуты (ai-summary, phrases, foods) — 10 / ч / user+trip; ai/planner — 3 / ч, ai/restaurants и ai/walk — 6 / ч (реестр лимитов: `AI_FEATURES` в `src/lib/ai-usage.ts`)
 
 ## Realtime-события
 

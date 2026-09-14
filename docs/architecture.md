@@ -201,7 +201,15 @@ S3» — ADR-0003.
   порогами, блокировка ИИ (`User.aiBlocked` — полный запрет любого источника).
 - ИИ-фичи: `ai-summary` (итоги поездки, при недоступности LLM — локальный
   черновик), `phrases/ai` + `phrases/generate` (разговорник), `foods/suggest`
-  (блюда). Лимит 10/ч на user+trip на каждую.
+  (блюда, `count` 4–10). Лимит 10/ч на user+trip; `ai/planner` — 3/ч,
+  `ai/restaurants` и `ai/walk` — 6/ч.
+- Генерация с проверкой по реальным данным (`src/lib/poi.ts`,
+  `src/lib/geocode-place.ts`): планер маршрута предлагает черновик по
+  **существующим** дням, координаты добывает Nominatim по `nameEn`,
+  `fail` → «уточнить на карте»; рестораны и прогулки собираются из реальных
+  POI OpenStreetMap (Overpass), ИИ только отбирает — имена и координаты всегда
+  из OSM (`matchPicksToPois` отбрасывает выдумки). В поездку попадает только
+  отмеченное юзером (`POST /api/places/batch`, одна WS-публикация).
 - Премиум: `isPremiumUser` (`plan=premium`, `planExpiry` не истёк). Выдача —
   вручную админом (`admin/users`) или `user/upgrade` (заглушка/ручной сценарий —
   известная дыра продакшена, см. `docs/PRODUCTION_PLAN.md`). Лимиты free читаются

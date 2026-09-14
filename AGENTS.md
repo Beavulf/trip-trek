@@ -45,7 +45,7 @@ bun run build            # production-сборка standalone
 | `src/components/trip/` | фичи главного экрана: itinerary, budget/, map/, gallery, board (чат), journal, food/, phrases/, timeline, dashboard/… |
 | `src/components/admin/`, `auth/`, `ui/` | админка, логин/регистрация, shadcn-кит |
 | `src/hooks/trip/` | `use-*.ts` — слой данных клиента (TanStack Query) над API |
-| `src/lib/` | серверная логика: `api-auth.ts`, `rate-limit.ts`, `ws-bus.ts`, `ai.ts` (оркестратор ИИ: runAi, учёт AiUsage, алерты трат), `ai-usage.ts` (реестр ИИ-фич AI_FEATURES + чистая математика учёта), `ai-key.ts` (BYOK-резолв: pickAiConfig, маски, https-гвард), `premium.ts`, `notify.ts`, `mail/`, `storage/`, `budget/`, `outbound.ts`, `db.ts` (Prisma-клиент), `trip-days.ts`, `trip-export.ts`, `trip-templates.ts`, `app-config.ts`; доменные модули маршрута: `time-of-day.ts`, `place-fields.ts` (контракт записи Place), `place-draft.ts`, `route.ts`, `route-threads.ts`, `map-filters.ts`, `map-bus.ts`, `map-layers.ts`, `query-keys.ts`, `place-links.ts`, `onboarding.ts` (шаги welcome-тура и обучалок вкладок + отметки обучения) |
+| `src/lib/` | серверная логика: `api-auth.ts`, `rate-limit.ts`, `ws-bus.ts`, `ai.ts` (оркестратор ИИ: runAi, учёт AiUsage, алерты трат, aiFailResponse), `ai-usage.ts` (реестр ИИ-фич AI_FEATURES + чистая математика учёта), `ai-key.ts` (BYOK-резолв: pickAiConfig, маски, https-гвард), `planner.ts` (контракты/валидация планера + sanitizeUserText/extractJsonLoose), `poi.ts` (OSM POI через Overpass: парсер, матчинг выбора ИИ), `geocode-place.ts` (Nominatim для черновиков, троттлинг + бюджет времени), `premium.ts`, `notify.ts`, `mail/`, `storage/`, `budget/`, `outbound.ts`, `db.ts` (Prisma-клиент), `trip-days.ts`, `trip-export.ts`, `trip-templates.ts`, `app-config.ts`; доменные модули маршрута: `time-of-day.ts`, `place-fields.ts` (контракт записи Place), `place-draft.ts`, `route.ts`, `route-threads.ts`, `map-filters.ts`, `map-bus.ts`, `map-layers.ts`, `query-keys.ts`, `place-links.ts`, `onboarding.ts` (шаги welcome-тура и обучалок вкладок + отметки обучения) |
 | `prisma/` | `schema.prisma`, миграции, seed, скрипты переноса |
 | `docker-deploy/` | прод: Dockerfile, compose, Caddy, `DEPLOY.md` (runbook), бэкапы |
 | `docs/` | `architecture.md`, `api.md`, `glossary.md`, `adr/0001–0008`, аудиты фич `audit-*.md`, `PRODUCTION_PLAN.md` |
@@ -84,7 +84,8 @@ WS-handshake требует валидный JWT (`server/ws-auth.ts`), анон
   singleton `AppSettings` через `src/lib/app-config.ts`.
 - **ИИ (BYOK)**: все LLM-вызовы — только через `runAi()` (`src/lib/ai.ts`):
   блок админа → лимит фичи → резолв ключа → провайдер → учёт `AiUsage` →
-  алерт трат. Новая ИИ-фича = запись в `AI_FEATURES` (`src/lib/ai-usage.ts`)
+  алерт трат; маппинг ошибок — `aiFailResponse` (429/403/503/502 без дублей).
+  Новая ИИ-фича = запись в `AI_FEATURES` (`src/lib/ai-usage.ts`)
   + промпты в роуте; свой fetch/chat-completions в роуте не писать.
   Ключ резолвится по цепочке юзер (свой ключ, опц. свой Base URL/модель) →
   админский из `AppSettings` → `env OPENAI_API_KEY` (`src/lib/ai-key.ts`);
@@ -92,6 +93,13 @@ WS-handshake требует валидный JWT (`server/ws-auth.ts`), анон
   Задел на будущее: поле `access` в `AI_FEATURES` (премиум-гейт) и сериализация
   сообщений в одном месте (vision). Не через `outbound.ts` — ретраи платных
   вызовов не нужны, нужны HTTP-статус и `redirect:"error"`.
+- **Генерация с реальными данными**: всё, что ИИ «предлагает как место», —
+  через `src/lib/poi.ts` (Overpass: ИИ выбирает из списка, `matchPicksToPois`
+  отбрасывает выдумки) и `src/lib/geocode-place.ts` (Nominatim по `nameEn`,
+  троттлинг 1.1с + бюджет времени). Имена/города участников — в промпт только
+  через `sanitizeUserText` (`planner.ts`); свободный JSON LLM — только через
+  `extractJsonLoose`. В поездку черновики попадают батчем
+  (`POST /api/places/batch`) и только после явного подтверждения юзера.
 - **Внешние HTTP** (Nominatim, Open-Meteo, курсы валют) — только через
   `src/lib/outbound.ts` (таймаут + ретрай + TTL-кэш, null при неудаче).
 

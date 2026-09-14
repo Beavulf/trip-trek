@@ -7,7 +7,7 @@ import { useTripStore } from "@/lib/trip-store";
 import { currencySymbol } from "@/lib/currencies";
 import { type Day, type Place } from "@/lib/types";
 import { resolveCityCoords, decodeCustomKey } from "@/lib/city-coords";
-import { CalendarPlus, Compass, Loader2, Map as MapIcon, PartyPopper, Plane, Plus } from "lucide-react";
+import { CalendarPlus, Compass, Loader2, Map as MapIcon, PartyPopper, Plane, Plus, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import { cn, plural } from "@/lib/utils";
 import { AddPlaceSheet, type AddPlaceData } from "../add-place-sheet";
@@ -15,6 +15,7 @@ import { EmptyHero } from "../empty-hero";
 import { DayCard } from "./DayCard";
 import { PlaceDialog } from "./PlaceDialog";
 import { DaySheet, AddDayButton } from "./DaySheet";
+import { PlannerWizard } from "./PlannerWizard";
 
 function dayCoords(day: {
   cityKey: string;
@@ -40,6 +41,7 @@ export function Itinerary() {
   const [addData, setAddData] = useState<AddPlaceData | null>(null);
   const [daySheetOpen, setDaySheetOpen] = useState(false);
   const [editDay, setEditDay] = useState<Day | null>(null);
+  const [plannerOpen, setPlannerOpen] = useState(false);
   // Дата-статус считаем на клиенте (SSR показывает скелетон) и обновляем раз в минуту,
   // чтобы «Старт через N дней» не зависал
   const [now, setNow] = useState(() => Date.now());
@@ -282,6 +284,16 @@ export function Itinerary() {
         </div>
       </div>
 
+      {/* Планер: черновик маршрута от ИИ, только для существующих дней */}
+      <button
+        type="button"
+        onClick={() => setPlannerOpen(true)}
+        className="w-full min-h-11 rounded-2xl border-2 border-dashed border-[#d946ef]/40 bg-[#d946ef]/5 text-[13px] font-medium flex items-center justify-center gap-1.5 text-foreground/90 hover:bg-[#d946ef]/10 transition-colors"
+      >
+        <Sparkles className="size-4 text-[#d946ef]" aria-hidden />
+        Спланировать маршрут с ИИ
+      </button>
+
       {/* Нить маршрута: дни-станции на общей линии */}
       <div className="relative">
         <div className="absolute left-[11px] top-3 bottom-3 w-0.5 rounded-full bg-border" aria-hidden="true" />
@@ -309,6 +321,8 @@ export function Itinerary() {
       <PlaceDialog place={openPlace} currency={curSym} onClose={() => setOpenPlace(null)} />
       <AddPlaceSheet open={addOpen} onOpenChange={setAddOpen} initial={addData} />
       <DaySheet day={editDay} open={daySheetOpen || !!editDay} onOpenChange={(v) => { setDaySheetOpen(v); if (!v) setEditDay(null); }} />
+      {/* Планер монтируется только открытым: черновик живёт ровно сессию */}
+      {plannerOpen && <PlannerWizard onClose={() => setPlannerOpen(false)} />}
     </div>
   );
 }

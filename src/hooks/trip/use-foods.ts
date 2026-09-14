@@ -146,14 +146,15 @@ export interface FoodSuggestion {
   emoji: string;
 }
 
-// «Советы шефа»: LLM предлагает блюда города, пользователь выбирает что добавить
+// «Советы шефа»: LLM предлагает блюда города, пользователь выбирает что добавить.
+// count — размер подборки (4 — прежний контракт в шторке, 10 — пакетный режим).
 export function useSuggestFoods() {
   return useMutation({
-    mutationFn: async ({ tripId, city }: { tripId: string; city: string }) => {
+    mutationFn: async ({ tripId, city, count }: { tripId: string; city: string; count?: number }) => {
       const r = await fetch("/api/foods/suggest", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ tripId, city }),
+        body: JSON.stringify({ tripId, city, count }),
       });
       const body = await r.json().catch(() => ({}));
       if (!r.ok) {

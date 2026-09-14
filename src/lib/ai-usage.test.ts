@@ -2,9 +2,15 @@ import { describe, it, expect } from "vitest";
 import { AI_FEATURES, parseAiUsage, utcMidnight, isSpendOverLimit } from "./ai-usage";
 
 describe("AI_FEATURES", () => {
-  it("у всех фич лимит 10/час и валидный доступ", () => {
+  it("у обычных генераций лимит 10/час, у тяжёлых — жёстче", () => {
+    expect(AI_FEATURES["ai-summary"].limit.max).toBe(10);
+    expect(AI_FEATURES["foods-suggest"].limit.max).toBe(10);
+    expect(AI_FEATURES["phrases-ai"].limit.max).toBe(10);
+    // планировщик — самый дорогой по токенам; Overpass-фичи — средние
+    expect(AI_FEATURES.planner.limit.max).toBe(3);
+    expect(AI_FEATURES.restaurants.limit.max).toBe(6);
+    expect(AI_FEATURES.walk.limit.max).toBe(6);
     for (const def of Object.values(AI_FEATURES)) {
-      expect(def.limit.max).toBe(10);
       expect(def.limit.windowMs).toBe(60 * 60_000);
       expect(["all", "premium-or-byok"]).toContain(def.access);
     }

@@ -14,7 +14,17 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { BookOpen, Bot, Check, Languages, Loader2, UtensilsCrossed } from "lucide-react";
+import {
+  BookOpen,
+  Bot,
+  Check,
+  Compass,
+  Footprints,
+  Languages,
+  Loader2,
+  Soup,
+  UtensilsCrossed,
+} from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { UserAvatar } from "@/components/trip/user-avatar";
@@ -35,10 +45,14 @@ import { EmptyState, FlipNumber, Stamp, relTime } from "./shared";
 // Пульт ИИ-телеметрии штаба: табло суток, 14-дневный график по фичам,
 // юзеры с порогами трат и журнал последних вызовов. Учёт ведёт runAi (lib/ai.ts).
 
+// Первые три — var(--chart-1..3) как в Обзоре; новые фичи — секционные/категорийные цвета.
 const FEATURES = [
   { id: "ai-summary", label: "Рассказы", icon: BookOpen, color: "var(--chart-1)" },
   { id: "foods-suggest", label: "Шеф", icon: UtensilsCrossed, color: "var(--chart-2)" },
   { id: "phrases-ai", label: "Фразы", icon: Languages, color: "var(--chart-3)" },
+  { id: "planner", label: "Планер", icon: Compass, color: "#d946ef" },
+  { id: "restaurants", label: "Заведения", icon: Soup, color: "#16a34a" },
+  { id: "walk", label: "Прогулки", icon: Footprints, color: "#0ea5e9" },
 ] as const;
 
 const KEY_SOURCE_META: Record<string, { label: string; className: string }> = {

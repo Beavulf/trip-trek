@@ -2,10 +2,16 @@
 // Без db и без Next — только тестируемые чистые функции (vitest, node-env).
 // Оркестратор (вызов провайдера, учёт, алерты) — в lib/ai.ts.
 
-export type AiFeature = "ai-summary" | "foods-suggest" | "phrases-ai";
+export type AiFeature =
+  | "ai-summary"
+  | "foods-suggest"
+  | "phrases-ai"
+  | "planner"
+  | "restaurants"
+  | "walk";
 
 export interface AiFeatureConfig {
-  /** Лимит вызовов на юзера на поездку: LLM стоит денег, у всех фич 10/час. */
+  /** Лимит вызовов на юзера на поездку. */
   limit: { max: number; windowMs: number };
   temperature: number;
   /**
@@ -16,13 +22,20 @@ export interface AiFeatureConfig {
   access: "all" | "premium-or-byok";
 }
 
-/** Лимит одинаковый у всех фич — как исторически в docs/api.md (10/ч на юзера+поездку). */
+/** Лимит обычных генераций — как исторически в docs/api.md (10/ч на юзера+поездку). */
 const HOURLY_10 = { max: 10, windowMs: 60 * 60_000 };
+/** Планировщик самый дорогой по токенам (большой JSON на всю поездку) — 3/ч. */
+const HOURLY_3 = { max: 3, windowMs: 60 * 60_000 };
+/** Overpass-фичи: сам OSM-запрос тяжёлый для публичных зеркал — умеренный лимит. */
+const HOURLY_6 = { max: 6, windowMs: 60 * 60_000 };
 
 export const AI_FEATURES: Record<AiFeature, AiFeatureConfig> = {
   "ai-summary": { limit: HOURLY_10, temperature: 0.9, access: "all" },
   "foods-suggest": { limit: HOURLY_10, temperature: 0.8, access: "all" },
   "phrases-ai": { limit: HOURLY_10, temperature: 0.7, access: "all" },
+  planner: { limit: HOURLY_3, temperature: 0.6, access: "all" },
+  restaurants: { limit: HOURLY_6, temperature: 0.7, access: "all" },
+  walk: { limit: HOURLY_6, temperature: 0.7, access: "all" },
 };
 
 export interface AiUsageTokens {

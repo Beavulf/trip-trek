@@ -1,13 +1,14 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Locate, Loader2, AlertCircle, RotateCw } from "lucide-react";
+import { Locate, Loader2, AlertCircle, Footprints, RotateCw } from "lucide-react";
 import { useNearby, type NearbyPlace } from "@/hooks/use-trip";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import type { GeoState } from "./types";
 import { cachedGeo } from "./types";
 import { NearbyCard } from "./NearbyCard";
+import { WalkView } from "./WalkView";
 import { getTripId } from "@/hooks/use-trip";
 import { wishlistDedupeKey } from "@/lib/wishlist";
 
@@ -36,6 +37,7 @@ export function NearbyView({ category, onCategoryChange, radius, onRadiusChange,
   }, [tripId]);
 
   const [geo, setGeo] = useState<GeoState>(cachedGeo.value);
+  const [walkOpen, setWalkOpen] = useState(false);
 
   const enabled = geo.status === "ready";
   const { data, isLoading, error, refetch, isFetching } = useNearby(
@@ -175,6 +177,17 @@ export function NearbyView({ category, onCategoryChange, radius, onRadiusChange,
               Обновить
             </button>
           </p>
+
+          {/* Прогулка на ближайшие часы: OSM-POI + ИИ-таймлайн */}
+          <button
+            type="button"
+            onClick={() => setWalkOpen(true)}
+            className="w-full min-h-11 rounded-2xl border-2 border-dashed border-[#d946ef]/40 bg-[#d946ef]/5 text-[13px] font-medium flex items-center justify-center gap-1.5 text-foreground/90 hover:bg-[#d946ef]/10 transition-colors"
+          >
+            <Footprints className="size-4 text-[#d946ef]" aria-hidden />
+            Прогулка на ближайшие часы с ИИ
+          </button>
+          <WalkView open={walkOpen} onClose={() => setWalkOpen(false)} />
 
           {isLoading ? (
             <div className="flex items-center justify-center gap-2 py-12 text-muted-foreground">
