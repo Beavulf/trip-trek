@@ -158,6 +158,9 @@ model Trip {
   totalBudget Float     @default(1100)
   currency    String    @default("USD")
   inviteCode  String    @unique @default(cuid())
+  // Кто может приглашать участников: true — все участники, false — только владелец
+  // (тогда GET /api/trip прячет inviteCode от не-владельцев, join остаётся по коду)
+  allowMemberInvites Boolean @default(true)
   coverColor  String    @default("#f97316")
   coverEmoji  String    @default("🌏")
   status      String    @default("planning") // planning / active / completed

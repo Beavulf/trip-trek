@@ -4,9 +4,10 @@ import { useState } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { QRCodeSVG } from "qrcode.react";
-import { X, Copy, Check, Share2, Users, Link as LinkIcon, Loader2, ScanLine } from "lucide-react";
+import { X, Copy, Check, Share2, Users, Link as LinkIcon, Loader2, Lock, ScanLine } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTrip, useCurrentTripId } from "@/hooks/use-trip";
+import { useAuth } from "@/hooks/use-auth";
 import { useTripStore } from "@/lib/trip-store";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -17,6 +18,7 @@ export function InviteFriends({ open, onOpenChange }: { open: boolean; onOpenCha
   useBodyScrollLock(open);
   const tripId = useCurrentTripId();
   const { data: trip, isLoading, isError, refetch } = useTrip();
+  const { data: session } = useAuth();
   const { setTripSwitcherOpen } = useTripStore();
   const [copied, setCopied] = useState<"link" | "code" | null>(null);
 
@@ -69,6 +71,12 @@ export function InviteFriends({ open, onOpenChange }: { open: boolean; onOpenCha
   const members = trip?.participants ?? [];
   const memberCount = members.length;
   const crowdHint = memberCount >= 5;
+
+  // Страховка на стороне клиента: владелец мог запретить приглашать, пока
+  // шторка была открыта или UI устарел; сервер в этом случае код не отдаёт
+  const myId = session?.user?.id;
+  const isOwner = !!myId && members.some((m) => m.id === myId && m.role === "owner");
+  const inviteLocked = trip?.settings.allowMemberInvites === false && !isOwner;
 
   return createPortal(
     <AnimatePresence>
@@ -131,6 +139,12 @@ export function InviteFriends({ open, onOpenChange }: { open: boolean; onOpenCha
                 >
                   Обновить
                 </button>
+              </div>
+            ) : inviteLocked ? (
+              <div className="py-10 text-center space-y-2 text-muted-foreground">
+                <Lock className="size-5 mx-auto" />
+                <p className="text-sm font-medium text-foreground">Приглашения ограничены</p>
+                <p className="text-xs">Приглашать новых участников может только владелец поездки.</p>
               </div>
             ) : isLoading || !inviteCode ? (
               <div className="py-10 text-center text-sm text-muted-foreground flex items-center justify-center gap-2">

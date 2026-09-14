@@ -144,6 +144,10 @@ User ──< TripMember >── Trip ──< Day ──< Place ──< Photo
   (код: zh, ja, fr…). null у записей до миграции.
 - **FoodItem**: голоса «хочу попробовать» — `wantedBy` (JSON-строка массива userId).
 - **BoardMessage.reactions** — JSON-строка `{"👍":["userId",…]}`.
+- **Trip.allowMemberInvites** — политика приглашений: `true` (дефолт) — код видят
+  все участники, `false` — только владелец (GET /api/trip прячет `inviteCode`,
+  join по коду не меняется). Переключается владельцем из «О поездке»
+  (PATCH /api/trip).
 - **AppSettings** — singleton-строка `id="app"`; до первой записи её нет, тогда
   действуют дефолты кода (`src/lib/app-config.ts`): registrationEnabled,
   freeTripLimit=1, freeMemberLimit=5, общий ключ ИИ.

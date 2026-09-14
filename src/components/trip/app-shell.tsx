@@ -96,6 +96,11 @@ export function AppShell({ children }: { children: ReactNode }) {
   const feedbackNew = isAdmin ? adminStats?.feedback.new ?? 0 : 0;
   const { activeTab, setActiveTab } = useTripStore();
   const { data: trip, isLoading: tripLoading } = useTrip();
+  // Приглашать могут все участники, пока владелец не ограничил это в «О поездке»
+  const myRole = trip?.participants.find(
+    (p) => p.id === (session?.user as { id?: string } | undefined)?.id
+  )?.role;
+  const canInvite = myRole === "owner" || trip?.settings.allowMemberInvites !== false;
   const tabScrollRef = useRef<HTMLDivElement>(null);
   const headerRef = useRef<HTMLElement>(null);
   const [showLeftArrow, setShowLeftArrow] = useState(false);
@@ -224,9 +229,11 @@ export function AppShell({ children }: { children: ReactNode }) {
             >
               <Crown className="size-4" />
             </HeaderIconBtn>
-            <HeaderIconBtn onClick={() => setInviteOpen(true)} label="Пригласить друзей">
-              <UserPlus className="size-4" />
-            </HeaderIconBtn>
+            {canInvite && (
+              <HeaderIconBtn onClick={() => setInviteOpen(true)} label="Пригласить друзей">
+                <UserPlus className="size-4" />
+              </HeaderIconBtn>
+            )}
             <HeaderIconBtn onClick={() => setInfoOpen(true)} label="О поездке">
               <Info className="size-4" />
             </HeaderIconBtn>
@@ -273,6 +280,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                     isPremium={!!isPremium}
                     isAdmin={isAdmin}
                     feedbackNew={feedbackNew}
+                    canInvite={canInvite}
                     onClose={() => setMoreOpen(false)}
                     onPremium={() => setPremiumOpen(true)}
                     onInvite={() => setInviteOpen(true)}
@@ -425,6 +433,7 @@ function MobileMoreSheet({
   isPremium,
   isAdmin,
   feedbackNew,
+  canInvite,
   onClose,
   onPremium,
   onInvite,
@@ -436,6 +445,7 @@ function MobileMoreSheet({
   isPremium: boolean;
   isAdmin: boolean;
   feedbackNew: number;
+  canInvite: boolean;
   onClose: () => void;
   onPremium: () => void;
   onInvite: () => void;
@@ -524,14 +534,16 @@ function MobileMoreSheet({
                 }}
               />
             )}
-            <MoreItem
-              icon={<UserPlus className="size-4" />}
-              label="Пригласить друзей"
-              onClick={() => {
-                onClose();
-                onInvite();
-              }}
-            />
+            {canInvite && (
+              <MoreItem
+                icon={<UserPlus className="size-4" />}
+                label="Пригласить друзей"
+                onClick={() => {
+                  onClose();
+                  onInvite();
+                }}
+              />
+            )}
             <MoreItem
               icon={<Share2 className="size-4" />}
               label="Карточка поездки"

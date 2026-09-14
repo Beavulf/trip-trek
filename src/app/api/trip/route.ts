@@ -83,6 +83,9 @@ export async function GET(req: NextRequest) {
   const isReplacementOnly = (s: string) => /^[\uFFFD\s]*$/.test(s);
   // PII (аудит 2026-09-13): email участников — только владельцу, а не всем подряд
   const isOwner = membership!.role === "owner";
+  // Приглашать могут все участники, пока владелец не запретил; при запрете код
+  // не-владельцам не отдаём вовсе — без кода нет и приглашения (join только по коду)
+  const canInvite = isOwner || trip.allowMemberInvites;
   const visitedMap = new Map(visitedByDay.map((v) => [v.dayId, v._count._all]));
   const participants = members.map((m) => ({
     id: m.userId,
@@ -107,14 +110,15 @@ export async function GET(req: NextRequest) {
       totalBudget: calculatedBudget,
       currency: trip.currency,
       currentUserId: null,
-      inviteCode: trip.inviteCode,
+      inviteCode: canInvite ? trip.inviteCode : null,
+      allowMemberInvites: trip.allowMemberInvites,
       tripId: trip.id,
     },
     trip: {
       id: trip.id,
       title: trip.title,
       destination: trip.destination,
-      inviteCode: trip.inviteCode,
+      inviteCode: canInvite ? trip.inviteCode : null,
       coverColor: trip.coverColor,
       coverEmoji: trip.coverEmoji,
       status: trip.status,
@@ -160,9 +164,13 @@ export async function PATCH(req: NextRequest) {
   }
 
   const body = await req.json().catch(() => ({}));
-  const { status, title } = body as { status?: string; title?: string };
+  const { status, title, allowMemberInvites } = body as {
+    status?: string;
+    title?: string;
+    allowMemberInvites?: boolean;
+  };
 
-  const data: { status?: string; title?: string } = {};
+  const data: { status?: string; title?: string; allowMemberInvites?: boolean } = {};
   if (status !== undefined) {
     if (!status || !TRIP_STATUSES.includes(status)) {
       return NextResponse.json({ error: "status: planning | active | completed" }, { status: 400 });
@@ -174,11 +182,19 @@ export async function PATCH(req: NextRequest) {
     if (!clean) return NextResponse.json({ error: "Название не может быть пустым" }, { status: 400 });
     data.title = clean;
   }
+  if (typeof allowMemberInvites === "boolean") {
+    data.allowMemberInvites = allowMemberInvites;
+  }
   if (Object.keys(data).length === 0) {
-    return NextResponse.json({ error: "Нечего обновлять: жду status или title" }, { status: 400 });
+    return NextResponse.json({ error: "Нечего обновлять: жду status, title или allowMemberInvites" }, { status: 400 });
   }
 
   const updated = await db.trip.update({ where: { id: tripId }, data });
   publish(tripId, "trip:updated", {});
-  return NextResponse.json({ ok: true, title: updated.title, status: updated.status });
+  return NextResponse.json({
+    ok: true,
+    title: updated.title,
+    status: updated.status,
+    allowMemberInvites: updated.allowMemberInvites,
+  });
 }

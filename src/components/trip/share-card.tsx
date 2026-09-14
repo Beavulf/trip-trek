@@ -5,6 +5,7 @@ import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { Share2, Download, X, Loader2, Image as ImageIcon, Copy, Check } from "lucide-react";
 import { useTrip, useCurrentTripId } from "@/hooks/use-trip";
+import { useAuth } from "@/hooks/use-auth";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { useBodyScrollLock } from "@/hooks/use-body-scroll-lock";
@@ -23,6 +24,13 @@ export function ShareCard({ open, onOpenChange }: { open: boolean; onOpenChange:
   const [imageCopied, setImageCopied] = useState(false);
 
   const variant = CARD_VARIANTS.find((v) => v.id === variantId) ?? CARD_VARIANTS[0];
+
+  // При запрете «приглашает только владелец» сервер не отдаёт не-владельцу код —
+  // здесь лишь прячем кнопку ссылки, чтобы не дразнить ошибкой
+  const { data: session } = useAuth();
+  const myId = session?.user?.id;
+  const isOwner = !!myId && (trip?.participants ?? []).some((m) => m.id === myId && m.role === "owner");
+  const canShareInvite = isOwner || trip?.settings.allowMemberInvites !== false;
 
   // Собираем данные поездки для отрисовки
   const buildData = (): CardData | null => {
@@ -303,15 +311,17 @@ export function ShareCard({ open, onOpenChange }: { open: boolean; onOpenChange:
               </button>
             )}
 
-            {/* Ссылка */}
-            <button
-              type="button"
-              onClick={copyLink}
-              className="w-full flex items-center justify-center gap-2 py-3 text-xs text-muted-foreground hover:text-foreground min-h-11"
-            >
-              {copied ? <Check className="size-3 text-green-500" /> : <Copy className="size-3" />}
-              {copied ? "Скопировано!" : "Копировать ссылку-приглашение"}
-            </button>
+            {/* Ссылка — только тем, кому разрешено приглашать */}
+            {canShareInvite && (
+              <button
+                type="button"
+                onClick={copyLink}
+                className="w-full flex items-center justify-center gap-2 py-3 text-xs text-muted-foreground hover:text-foreground min-h-11"
+              >
+                {copied ? <Check className="size-3 text-green-500" /> : <Copy className="size-3" />}
+                {copied ? "Скопировано!" : "Копировать ссылку-приглашение"}
+              </button>
+            )}
           </div>
         </motion.div>
       </motion.div>

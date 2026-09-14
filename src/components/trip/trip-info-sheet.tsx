@@ -9,10 +9,12 @@ import {
   Copy,
   Download,
   Loader2,
+  Lock,
   LogOut,
   MapPin,
   Pencil,
   UserPlus,
+  Users,
   Wallet,
 } from "lucide-react";
 import { createPortal } from "react-dom";
@@ -107,6 +109,10 @@ export function TripInfoSheet({
   const start = s?.startDate ? new Date(s.startDate) : null;
   const end = start && s?.totalDays ? new Date(start.getTime() + (s.totalDays - 1) * 86_400_000) : null;
   const fmt = (d: Date | null) => (d ? d.toLocaleDateString("ru-RU") : "—");
+
+  // Приглашать можно, пока владелец не выключил это для участников
+  // (undefined — старый кэш/ответ без поля: считаем, что разрешено)
+  const canInvite = isOwner || s?.allowMemberInvites !== false;
 
   const copyInvite = async () => {
     if (!s?.inviteCode) return;
@@ -311,67 +317,81 @@ export function TripInfoSheet({
                 </div>
               )}
 
-              {/* Приглашение: код + кнопки */}
-              <div className="rounded-2xl border border-border p-3 space-y-2">
-                <div className="flex items-center justify-between gap-2">
-                  <div className="min-w-0">
-                    <div className="font-mono text-[9px] uppercase tracking-widest text-muted-foreground/70">
-                      код приглашения
+              {/* Приглашение: код + кнопки; при запрете не-владельцу — пояснение */}
+              {canInvite ? (
+                <div className="rounded-2xl border border-border p-3 space-y-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="min-w-0">
+                      <div className="font-mono text-[9px] uppercase tracking-widest text-muted-foreground/70">
+                        код приглашения
+                      </div>
+                      <div className="font-mono font-black text-sm tracking-[0.12em] truncate">{s?.inviteCode}</div>
                     </div>
-                    <div className="font-mono font-black text-sm tracking-[0.12em] truncate">{s?.inviteCode}</div>
+                    <button
+                      type="button"
+                      onClick={copyInvite}
+                      aria-label="Скопировать код"
+                      className={cn(
+                        "size-10 rounded-xl grid place-items-center shrink-0 transition-colors",
+                        copied ? "bg-green-500 text-white" : "bg-secondary hover:bg-accent"
+                      )}
+                    >
+                      {copied ? <Check className="size-4" /> : <Copy className="size-4" />}
+                    </button>
                   </div>
-                  <button
-                    type="button"
-                    onClick={copyInvite}
-                    aria-label="Скопировать код"
-                    className={cn(
-                      "size-10 rounded-xl grid place-items-center shrink-0 transition-colors",
-                      copied ? "bg-green-500 text-white" : "bg-secondary hover:bg-accent"
-                    )}
-                  >
-                    {copied ? <Check className="size-4" /> : <Copy className="size-4" />}
-                  </button>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onOpenChange(false);
+                        onInvite();
+                      }}
+                      className="min-h-10 rounded-xl bg-primary text-primary-foreground text-xs font-semibold inline-flex items-center justify-center gap-1.5 active:scale-[0.98] transition-transform"
+                    >
+                      <UserPlus className="size-3.5" />
+                      Пригласить
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onOpenChange(false);
+                        onShare();
+                      }}
+                      className="min-h-10 rounded-xl bg-secondary border border-border text-xs font-semibold inline-flex items-center justify-center gap-1.5 hover:bg-accent transition-colors"
+                    >
+                      <Share2 className="size-3.5" />
+                      Карточка
+                    </button>
+                  </div>
+                  {isOwner && (
+                    <InvitePolicySwitch tripId={tripId} current={s?.allowMemberInvites !== false} refetch={refetch} />
+                  )}
                 </div>
-                <div className="grid grid-cols-2 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      onOpenChange(false);
-                      onInvite();
-                    }}
-                    className="min-h-10 rounded-xl bg-primary text-primary-foreground text-xs font-semibold inline-flex items-center justify-center gap-1.5 active:scale-[0.98] transition-transform"
-                  >
-                    <UserPlus className="size-3.5" />
-                    Пригласить
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      onOpenChange(false);
-                      onShare();
-                    }}
-                    className="min-h-10 rounded-xl bg-secondary border border-border text-xs font-semibold inline-flex items-center justify-center gap-1.5 hover:bg-accent transition-colors"
-                  >
-                    <Share2 className="size-3.5" />
-                    Карточка
-                  </button>
+              ) : (
+                <div className="rounded-2xl border border-border p-3 flex items-center gap-2.5 text-muted-foreground">
+                  <Lock className="size-4 shrink-0" />
+                  <p className="text-xs leading-snug">
+                    Приглашать новых участников может только владелец поездки.
+                  </p>
                 </div>
-              </div>
+              )}
 
               {/* Участники (с управлением для владельца) */}
               <MemberManager tripId={tripId} members={trip.participants} refetch={refetch} detailed />
 
-              {/* Действия с поездкой */}
+              {/* Действия с поездкой: бэкап — полный дамп, только владельцу */}
               <div className="rounded-2xl border border-border divide-y divide-border overflow-hidden">
-                <button
-                  type="button"
-                  onClick={() => void downloadBackup()}
-                  className="w-full flex items-center gap-3 px-3.5 py-3 text-sm hover:bg-accent/50 transition-colors text-left"
-                >
-                  <Download className="size-4 text-muted-foreground" />
-                  <span className="flex-1">Скачать бэкап JSON</span>
-                  <span className="font-mono text-[9px] uppercase tracking-widest text-muted-foreground/60">v2.0</span>
-                </button>
+                {isOwner && (
+                  <button
+                    type="button"
+                    onClick={() => void downloadBackup()}
+                    className="w-full flex items-center gap-3 px-3.5 py-3 text-sm hover:bg-accent/50 transition-colors text-left"
+                  >
+                    <Download className="size-4 text-muted-foreground" />
+                    <span className="flex-1">Скачать бэкап JSON</span>
+                    <span className="font-mono text-[9px] uppercase tracking-widest text-muted-foreground/60">v2.0</span>
+                  </button>
+                )}
 
                 {isOwner ? (
                   <div className="px-3.5 py-3 flex items-center gap-3">
@@ -410,6 +430,72 @@ export function TripInfoSheet({
       </motion.div>
     </AnimatePresence>,
     document.body
+  );
+}
+
+/** Кто может приглашать (владелец): все участники или только владелец */
+function InvitePolicySwitch({
+  tripId,
+  current,
+  refetch,
+}: {
+  tripId: string;
+  current: boolean;
+  refetch: () => Promise<unknown>;
+}) {
+  const patch = useMutation({
+    mutationFn: async (allowMemberInvites: boolean) => {
+      const r = await fetch(`/api/trip?tripId=${tripId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ allowMemberInvites }),
+      });
+      const json = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(json.error || "Не удалось сохранить");
+      return json;
+    },
+    onSuccess: async (_d, allow) => {
+      await refetch();
+      toast.success(allow ? "Приглашать могут все участники" : "Приглашает только владелец");
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const options = [
+    { value: true, label: "Все участники", icon: Users },
+    { value: false, label: "Только владелец", icon: Lock },
+  ] as const;
+
+  return (
+    <div>
+      <div className="grid grid-cols-2 gap-1.5 p-1 rounded-2xl bg-muted">
+        {options.map((o) => {
+          const Icon = o.icon;
+          const active = current === o.value;
+          return (
+            <button
+              key={String(o.value)}
+              type="button"
+              disabled={patch.isPending}
+              onClick={() => current !== o.value && patch.mutate(o.value)}
+              aria-pressed={active}
+              className={cn(
+                "min-h-9 rounded-xl text-[11px] font-semibold inline-flex items-center justify-center gap-1.5 transition-all disabled:opacity-50",
+                active ? "bg-card shadow text-foreground" : "text-muted-foreground hover:text-foreground"
+              )}
+            >
+              <Icon className="size-3.5" />
+              {o.label}
+            </button>
+          );
+        })}
+      </div>
+      <p className="text-[10px] text-muted-foreground mt-1 leading-snug">
+        {current
+          ? "Код приглашения виден всем участникам"
+          : "Код приглашения виден только вам — участники позвать друзей не смогут"}
+      </p>
+    </div>
   );
 }
 

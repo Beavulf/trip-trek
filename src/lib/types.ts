@@ -120,14 +120,16 @@ export interface TripSummary {
     totalBudget: number;
     currency: string;
     currentUserId: string | null;
-    inviteCode?: string;
+    inviteCode?: string | null;
+    /** Кто может приглашать: false — только владелец (код не-владельцам не отдаётся) */
+    allowMemberInvites?: boolean;
     tripId?: string;
   };
   trip?: {
     id: string;
     title: string;
     destination: string;
-    inviteCode: string;
+    inviteCode: string | null;
     coverColor: string;
     coverEmoji: string;
     status: string;

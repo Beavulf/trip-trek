@@ -1,12 +1,13 @@
 "use client";
 
 import { useState, useRef } from "react";
-import { Download, Upload, Loader2, Database, ChevronRight } from "lucide-react";
+import { Download, Upload, Loader2, Database, ChevronRight, Lock } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
-import { useCurrentTripId } from "@/hooks/use-trip";
+import { useCurrentTripId, useTrip } from "@/hooks/use-trip";
+import { useAuth } from "@/hooks/use-auth";
 import { useTripStore } from "@/lib/trip-store";
 
 export function DataBackup() {
@@ -17,6 +18,12 @@ export function DataBackup() {
   const [confirmImport, setConfirmImport] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const qc = useQueryClient();
+  const { data: trip } = useTrip();
+  const { data: session } = useAuth();
+
+  // Бэкап — полный дамп поездки, важная функция владельца (API отдаёт 403 остальным)
+  const myId = session?.user?.id;
+  const isOwner = !!myId && (trip?.participants ?? []).some((m) => m.id === myId && m.role === "owner");
 
   if (!tripId) {
     return (
@@ -111,25 +118,32 @@ export function DataBackup() {
         </div>
       </div>
 
-      {/* Экспорт */}
-      <button
-        type="button"
-        onClick={handleExport}
-        disabled={exporting || importing}
-        aria-label="Экспортировать данные поездки"
-        className="w-full min-h-14 rounded-xl border border-border px-3 flex items-center gap-3 hover:bg-accent transition-colors disabled:opacity-50 text-left"
-      >
-        {exporting ? (
-          <Loader2 className="size-5 text-primary animate-spin shrink-0" />
-        ) : (
-          <Download className="size-5 text-primary shrink-0" />
-        )}
-        <span className="flex-1 min-w-0">
-          <span className="block text-sm font-medium">{exporting ? "Экспорт…" : "Экспорт"}</span>
-          <span className="block text-xs text-muted-foreground">Скачать JSON-файл на устройство</span>
-        </span>
-        <ChevronRight className="size-4 text-muted-foreground shrink-0" />
-      </button>
+      {/* Экспорт — только владельцу (полный дамп поездки) */}
+      {isOwner ? (
+        <button
+          type="button"
+          onClick={handleExport}
+          disabled={exporting || importing}
+          aria-label="Экспортировать данные поездки"
+          className="w-full min-h-14 rounded-xl border border-border px-3 flex items-center gap-3 hover:bg-accent transition-colors disabled:opacity-50 text-left"
+        >
+          {exporting ? (
+            <Loader2 className="size-5 text-primary animate-spin shrink-0" />
+          ) : (
+            <Download className="size-5 text-primary shrink-0" />
+          )}
+          <span className="flex-1 min-w-0">
+            <span className="block text-sm font-medium">{exporting ? "Экспорт…" : "Экспорт"}</span>
+            <span className="block text-xs text-muted-foreground">Скачать JSON-файл на устройство</span>
+          </span>
+          <ChevronRight className="size-4 text-muted-foreground shrink-0" />
+        </button>
+      ) : (
+        <div className="w-full min-h-14 rounded-xl border border-border/60 px-3 flex items-center gap-3 text-left text-muted-foreground">
+          <Lock className="size-4 shrink-0" />
+          <span className="text-xs leading-snug">Экспорт и импорт данных доступны владельцу поездки</span>
+        </div>
+      )}
 
       {/* Импорт */}
       <input
@@ -145,7 +159,7 @@ export function DataBackup() {
       <button
         type="button"
         onClick={() => setConfirmImport(true)}
-        disabled={importing || exporting}
+        disabled={importing || exporting || !isOwner}
         aria-label="Импортировать данные из JSON"
         className={cn(
           "w-full min-h-14 rounded-xl border px-3 mt-2 flex items-center gap-3 transition-colors disabled:opacity-50 text-left",
