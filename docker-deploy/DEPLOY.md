@@ -92,6 +92,15 @@ docker compose -f docker-deploy/docker-compose.yml up -d --build
 Миграции назад не откатываются автоматически — пишем только совместимые
 миграции (additive-first).
 
+Если `up --build` поднял контейнер, но он циклится с `P3009` в логах — упавшая
+миграция записана в `_prisma_migrations` и блокирует остальные. Лечение: прочитать
+ошибку миграции в логах, довести схему до её конечного состояния руками
+(`docker exec triptrek-db psql -U triptrek -d triptrek ...`) и пометить применённой:
+`docker exec triptrek-app bunx prisma migrate resolve --applied <имя>`, затем
+перезапустить контейнер. Реальный случай: `20260912140000_expense_settlementkey_composite`
+падала, потому что init-миграция создаёт уник как голый INDEX, а не CONSTRAINT
+(починено в самой миграции, commit 162c706).
+
 ## 4. Бэкапы
 
 `backup.sh` сохраняет дамп Postgres + архив uploads и отправляет наружу через
