@@ -11,6 +11,7 @@ import { cn } from "@/lib/utils";
 import { useBodyScrollLock } from "@/hooks/use-body-scroll-lock";
 import { useTripStore } from "@/lib/trip-store";
 import { CARD_VARIANTS, type CardData, type CardVariantId } from "./share-card-art";
+import { currencySymbol } from "@/lib/currencies";
 
 export function ShareCard({ open, onOpenChange }: { open: boolean; onOpenChange: (v: boolean) => void }) {
   useBodyScrollLock(open);
@@ -63,6 +64,7 @@ export function ShareCard({ open, onOpenChange }: { open: boolean; onOpenChange:
       totalPlaces: trip.totalPlaces,
       photos: trip.totalPhotos,
       spent: trip.totalSpent,
+      currencySymbol: currencySymbol(trip.settings.currency),
       members: trip.participants.map((p) => ({ emoji: p.emoji, color: p.color, name: p.name })),
       // dayProgress может быть отрицательным у ещё не начавшейся поездки — для карточки зажимаем
       progress: Math.max(0, Math.min(100, trip.dayProgress || 0)),

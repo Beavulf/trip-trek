@@ -321,8 +321,8 @@ export function Itinerary() {
       <PlaceDialog place={openPlace} currency={curSym} onClose={() => setOpenPlace(null)} />
       <AddPlaceSheet open={addOpen} onOpenChange={setAddOpen} initial={addData} />
       <DaySheet day={editDay} open={daySheetOpen || !!editDay} onOpenChange={(v) => { setDaySheetOpen(v); if (!v) setEditDay(null); }} />
-      {/* Планер монтируется только открытым: черновик живёт ровно сессию */}
-      {plannerOpen && <PlannerWizard onClose={() => setPlannerOpen(false)} />}
+      {/* Планер смонтирован всегда: состояние черновика он сбрасывает сам при открытии */}
+      <PlannerWizard open={plannerOpen} onOpenChange={setPlannerOpen} />
     </div>
   );
 }

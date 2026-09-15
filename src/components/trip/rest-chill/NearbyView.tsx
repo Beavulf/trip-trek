@@ -138,6 +138,18 @@ export function NearbyView({ category, onCategoryChange, radius, onRadiusChange,
         </div>
       </div>
 
+      {/* Прогулка на ближайшие часы: OSM-POI + ИИ-таймлайн. Кнопка видна всегда —
+          без геолокации шторка сама попросит определить местоположение (WalkView) */}
+      <button
+        type="button"
+        onClick={() => setWalkOpen(true)}
+        className="w-full min-h-11 rounded-2xl border-2 border-dashed border-[#d946ef]/40 bg-[#d946ef]/5 text-[13px] font-medium flex items-center justify-center gap-1.5 text-foreground/90 hover:bg-[#d946ef]/10 transition-colors"
+      >
+        <Footprints className="size-4 text-[#d946ef]" aria-hidden />
+        Прогулка на ближайшие часы с ИИ
+      </button>
+      <WalkView open={walkOpen} onClose={() => setWalkOpen(false)} />
+
       {/* Кнопка геолокации */}
       {geo.status !== "ready" && (
         <div className="rounded-2xl border-2 border-dashed border-border bg-card p-4 text-center space-y-2">
@@ -177,17 +189,6 @@ export function NearbyView({ category, onCategoryChange, radius, onRadiusChange,
               Обновить
             </button>
           </p>
-
-          {/* Прогулка на ближайшие часы: OSM-POI + ИИ-таймлайн */}
-          <button
-            type="button"
-            onClick={() => setWalkOpen(true)}
-            className="w-full min-h-11 rounded-2xl border-2 border-dashed border-[#d946ef]/40 bg-[#d946ef]/5 text-[13px] font-medium flex items-center justify-center gap-1.5 text-foreground/90 hover:bg-[#d946ef]/10 transition-colors"
-          >
-            <Footprints className="size-4 text-[#d946ef]" aria-hidden />
-            Прогулка на ближайшие часы с ИИ
-          </button>
-          <WalkView open={walkOpen} onClose={() => setWalkOpen(false)} />
 
           {isLoading ? (
             <div className="flex items-center justify-center gap-2 py-12 text-muted-foreground">

@@ -68,6 +68,23 @@ export async function geocodePlace(name: string, cityContext: string | null): Pr
   };
 }
 
+/** Проверка, что строка — реальный город/населённый пункт (для свободного ввода
+ * перед отдачей в LLM: билиберда иначе превращается в выдуманные блюда).
+ * null от Nominatim (недоступен) = «не смогли проверить», пусть вызывающий решает. */
+export async function findCity(name: string): Promise<{ ok: boolean; unresolved: boolean }> {
+  const q = name.trim();
+  if (!q) return { ok: false, unresolved: false };
+  const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q)}&format=json&limit=1&accept-language=ru`;
+  await politeDelay();
+  const hits = await fetchJson<NominatimHit[]>(url, { cacheSec: 86_400, timeoutMs: 8000 });
+  // Сервис недоступен — не блокируем фичу, это не ошибка пользователя
+  if (!Array.isArray(hits)) return { ok: true, unresolved: true };
+  const hit = hits[0];
+  // Города — class place/boundary; POI и улицы городом не считаем
+  const ok = !!hit && (hit.class === "place" || hit.class === "boundary");
+  return { ok, unresolved: false };
+}
+
 /** Геокодировать черновики последовательно (троттлинг внутри); пишем результат на месте.
  * Бюджет времени страхует роут от минутного зависания на медленном Nominatim:
  * не успевшие места остаются "fail" — черновик честно пометит их «уточнить на карте». */

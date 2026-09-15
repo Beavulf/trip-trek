@@ -4,6 +4,7 @@ import { requireTripMember } from "@/lib/api-auth";
 import { currencySymbol } from "@/lib/currencies";
 import { runAi, aiFailResponse } from "@/lib/ai";
 import { sanitizeUserText, extractJsonLoose } from "@/lib/planner";
+import { findCity } from "@/lib/geocode-place";
 
 // «Советы шефа»: LLM предлагает знаковые блюда города, которых ещё нет в гиде.
 // Пишет только клиент (пользователь выбирает, что добавить) — БД здесь не трогаем.
@@ -70,6 +71,16 @@ export async function POST(req: NextRequest) {
       db.foodItem.findMany({ where: { tripId }, select: { name: true } }),
     ]);
     if (!trip) return NextResponse.json({ error: "Поездка не найдена" }, { status: 404 });
+
+    // Город с карты: свободный ввод проверяем Nominatim'ом — без этого билиберда
+    // доезжает до LLM и возвращается «знаковыми блюдами» выдуманного города
+    const cityCheck = await findCity(city);
+    if (!cityCheck.ok) {
+      return NextResponse.json(
+        { error: `Не нашли город «${city.trim().slice(0, 60)}» на карте — проверьте название или выберите из списка` },
+        { status: 400 }
+      );
+    }
 
     const existing = foods.map((f) => f.name.toLowerCase());
     const ai = await runAi({

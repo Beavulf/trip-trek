@@ -32,12 +32,15 @@ export function FoodPackSheet({
   open,
   onClose,
   city,
+  cities,
   existingNames,
   onAdded,
 }: {
   open: boolean;
   onClose: () => void;
   city: string;
+  /** Города дней поездки — быстрый выбор без ручного ввода */
+  cities: string[];
   existingNames: string[];
   onAdded: () => void;
 }) {
@@ -100,6 +103,31 @@ export function FoodPackSheet({
   return (
     <MobileBottomSheet open={open} onOpenChange={(v) => !v && onClose()} title="Подборка шефа" titleIcon={<ChefHat className="size-4" />}>
       <div className="space-y-3">
+        {/* Города поездки — тап заполняет поле; свой город можно вписать руками */}
+        {cities.length > 0 && (
+          <div className="space-y-1.5">
+            <p className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">город поездки</p>
+            <div className="chip-rail no-scrollbar">
+              {cities.map((c) => (
+                <button
+                  key={c}
+                  type="button"
+                  aria-pressed={norm(c) === norm(targetCity)}
+                  onClick={() => setTargetCity(c)}
+                  className={cn(
+                    "min-h-9 px-3 rounded-full text-xs font-medium whitespace-nowrap transition-colors",
+                    norm(c) === norm(targetCity)
+                      ? "bg-primary text-primary-foreground shadow-sm"
+                      : "bg-card border border-border text-muted-foreground hover:text-foreground"
+                  )}
+                >
+                  {c}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
         <div className="flex gap-2">
           <input
             value={targetCity}

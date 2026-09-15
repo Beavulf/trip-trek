@@ -19,6 +19,8 @@ export interface CardData {
   totalPlaces: number;
   photos: number;
   spent: number;
+  /** Символ валюты поездки — траты на карточке не всегда в долларах */
+  currencySymbol: string;
   members: { emoji: string; color: string; name: string }[];
   progress: number;
   inviteCode: string;
@@ -132,6 +134,26 @@ function clipUpper(s: string, max: number) {
   return t.length > max ? t.slice(0, max - 1) + "…" : t;
 }
 
+// Русская множественная форма для подписей на canvas (либа plural сюда не тянем — файл чистый)
+function pluralRu(n: number, one: string, few: string, many: string): string {
+  const m10 = n % 10;
+  const m100 = n % 100;
+  if (m10 === 1 && m100 !== 11) return one;
+  if (m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14)) return few;
+  return many;
+}
+
+// Ужать шрифт под maxWidth (длинные названия городов ломают сетку билета)
+function fitFont(ctx: CanvasRenderingContext2D, text: string, basePx: number, minPx: number, maxWidth: number, font: (px: number) => string): number {
+  let px = basePx;
+  for (; px > minPx; px -= 4) {
+    ctx.font = font(px);
+    if (ctx.measureText(text).width <= maxWidth) return px;
+  }
+  ctx.font = font(minPx);
+  return minPx;
+}
+
 // ---------- 1. Сторис 9:16 (эволюция прежней карточки) ----------
 
 function renderStory(ctx: CanvasRenderingContext2D, d: CardData) {
@@ -156,24 +178,27 @@ function renderStory(ctx: CanvasRenderingContext2D, d: CardData) {
 
   ctx.fillStyle = "white";
   ctx.font = "bold 56px " + SANS;
-  wrapText(ctx, d.title, 540, 340, 900, 64);
+  const titleLines = wrapText(ctx, d.title, 540, 340, 900, 64);
 
+  // Подзаголовок сдвигаем под фактическое число строк заголовка
+  const subtitleY = 340 + titleLines * 64 + 24;
   ctx.font = "32px " + SANS;
   ctx.fillStyle = "rgba(255,255,255,0.7)";
-  ctx.fillText(`${d.totalDays} дней в пути`, 540, 480);
+  ctx.fillText(`${d.totalDays} ${pluralRu(d.totalDays, "день", "дня", "дней")} в пути`, 540, subtitleY);
 
+  const dividerY = Math.max(560, subtitleY + 80);
   ctx.strokeStyle = "rgba(255,255,255,0.2)";
   ctx.lineWidth = 2;
   ctx.beginPath();
-  ctx.moveTo(100, 560);
-  ctx.lineTo(980, 560);
+  ctx.moveTo(100, dividerY);
+  ctx.lineTo(980, dividerY);
   ctx.stroke();
 
   const stats = [
     { icon: "📍", value: `${d.visited}/${d.totalPlaces}`, label: "мест" },
     { icon: "📸", value: `${d.photos}`, label: "фото" },
-    { icon: "📔", value: `${d.members.length}`, label: "путешественников" },
-    { icon: "💰", value: `$${d.spent.toFixed(0)}`, label: "потрачено" },
+    { icon: "📔", value: `${d.members.length}`, label: pluralRu(d.members.length, "путешественник", "путешественника", "путешественников") },
+    { icon: "💰", value: `${d.currencySymbol}${Math.round(d.spent).toLocaleString("ru-RU")}`, label: "потрачено" },
   ];
   const cardWidth = 420;
   const cardHeight = 200;
@@ -273,12 +298,13 @@ function renderTicket(ctx: CanvasRenderingContext2D, d: CardData) {
   ctx.font = "64px sans-serif";
   ctx.fillText(d.emoji, 540, 268);
 
-  // маршрут FROM -> TO
-  const from = clipUpper(d.cities[0]?.name || d.destination || "HOME", 11);
-  const to = clipUpper(d.cities.length > 1 ? d.cities[d.cities.length - 1].name : d.destination || "★", 11);
+  // маршрут FROM -> TO (длинные названия ужать шрифтом, иначе налезают друг на друга)
+  const from = clipUpper(d.cities[0]?.name || d.destination || "HOME", 14);
+  const to = clipUpper(d.cities.length > 1 ? d.cities[d.cities.length - 1].name : d.destination || "★", 14);
+  fitFont(ctx, from, 88, 44, 440, (px) => `bold ${px} ` + SANS);
   ctx.fillStyle = "#1c1917";
-  ctx.font = "bold 88px " + SANS;
   ctx.fillText(from, 250, 470);
+  fitFont(ctx, to, 88, 44, 440, (px) => `bold ${px} ` + SANS);
   ctx.fillText(to, 830, 470);
 
   // пунктирная дуга с самолётиком
@@ -323,22 +349,29 @@ function renderTicket(ctx: CanvasRenderingContext2D, d: CardData) {
     ctx.fillStyle = "#8a8375";
     ctx.font = "22px " + MONO;
     ctx.fillText(c.label, cx, 800);
+    fitFont(ctx, c.value, 38, 22, colW - 18, (px) => `bold ${px} ` + SANS);
     ctx.fillStyle = "#1c1917";
-    ctx.font = "bold 38px " + SANS;
     ctx.fillText(c.value, cx, 860);
   });
 
-  // маршрутная строка: города через стрелки
+  // маршрутная строка: города через стрелки (не влезает — укорачиваем список, потом шрифт)
   ctx.fillStyle = "#6d6656";
-  ctx.font = "26px " + MONO;
-  const routeStr = d.cities.slice(0, 4).map((c) => c.name).join(" → ") + (d.cities.length > 4 ? " → …" : "");
-  ctx.fillText(routeStr.toUpperCase(), 540, 960);
+  const routeStrFor = (n: number) =>
+    d.cities.slice(0, n).map((c) => c.name).join(" → ") + (d.cities.length > n ? " → …" : "");
+  let routeN = Math.min(d.cities.length, 4);
+  const routePx = 26;
+  for (; routeN > 1; routeN--) {
+    ctx.font = `${routePx} ` + MONO;
+    if (ctx.measureText(routeStrFor(routeN).toUpperCase()).width <= W - 160) break;
+  }
+  ctx.font = `${routePx} ` + MONO;
+  ctx.fillText(routeStrFor(routeN).toUpperCase(), 540, 960);
 
   // отрывная часть
   dashedLine(ctx, 60, 1030, W - 60, 1030, [14, 12], "rgba(0,0,0,0.22)", 2);
 
   ctx.fillStyle = "#1c1917";
-  ctx.font = "bold 44px " + SANS;
+  fitFont(ctx, d.title, 44, 24, W - 160, (px) => `bold ${px} ` + SANS);
   ctx.fillText(d.title, 540, 1105);
   ctx.fillStyle = "#8a8375";
   ctx.font = "24px " + MONO;
@@ -407,11 +440,16 @@ function renderPolaroid(ctx: CanvasRenderingContext2D, d: CardData) {
   wrapText(ctx, cityLine, 0, photoY + photoH / 2 - 10, photoW - 80, 68);
   ctx.font = "30px " + SANS;
   ctx.fillStyle = "rgba(255,255,255,0.8)";
-  ctx.fillText(`${d.totalDays} дней · ${d.totalPlaces} мест`, 0, photoY + photoH - 40);
+  ctx.fillText(
+    `${d.totalDays} ${pluralRu(d.totalDays, "день", "дня", "дней")} · ${d.totalPlaces} ${pluralRu(d.totalPlaces, "место", "места", "мест")}`,
+    0,
+    photoY + photoH - 40
+  );
 
-  // рукописная подпись
+  // рукописная подпись (длинный заголовок ужать, не вылезая за рамку полариоида)
   ctx.fillStyle = "#2d2a26";
-  ctx.font = "italic 54px " + SCRIPT;
+  const script = (px: number) => `italic ${px} ` + SCRIPT;
+  fitFont(ctx, `${d.title} ${d.emoji}`, 54, 22, 860, script);
   ctx.fillText(`${d.title} ${d.emoji}`, 0, photoY + photoH + 120);
   ctx.fillStyle = "#8a857b";
   ctx.font = "28px " + SANS;
@@ -485,8 +523,17 @@ function renderReceipt(ctx: CanvasRenderingContext2D, d: CardData) {
   dashedLine(ctx, L, y, R, y, [6, 8], "rgba(0,0,0,0.18)", 2);
   y += 56;
 
+  // Подвал прибит к низу бумаги: штрихкод и «спасибо» не зависят от длины
+  // списка, строкам городов оставляем только помещающееся место (раньше
+  // 6+ городов наезжали на штрихкод)
+  const barcodeY = bottom - 186;
+  const thanksY = bottom - 50;
+  const stackAfterCities = 8 + 54 + 4 * 54 + 10 + 64 + 56 + 78; // блок сводки до штрихкода
+  const citiesLimit = barcodeY - stackAfterCities;
+
   ctx.font = "34px " + MONO;
-  for (const c of d.cities.slice(0, 6)) {
+  const shownCities = d.cities.slice(0, Math.max(1, Math.min(6, Math.floor((citiesLimit - y) / 58))));
+  for (const c of shownCities) {
     ctx.fillStyle = "#1c1917";
     ctx.textAlign = "left";
     const name = c.name.length > 14 ? c.name.slice(0, 13) + "…" : c.name;
@@ -495,10 +542,11 @@ function renderReceipt(ctx: CanvasRenderingContext2D, d: CardData) {
     ctx.fillText(`${c.days} дн`, R, y);
     y += 58;
   }
-  if (d.cities.length > 6) {
+  const hiddenCities = d.cities.length - shownCities.length;
+  if (hiddenCities > 0 && y + 58 <= citiesLimit) {
     ctx.fillStyle = "#7d776b";
     ctx.textAlign = "left";
-    ctx.fillText(`…и ещё ${d.cities.length - 6}`, L, y);
+    ctx.fillText(`…и ещё ${hiddenCities} ${pluralRu(hiddenCities, "город", "города", "городов")}`, L, y);
     y += 58;
   }
   y += 8;
@@ -517,7 +565,7 @@ function renderReceipt(ctx: CanvasRenderingContext2D, d: CardData) {
   row("ВСЕГО ДНЕЙ", String(d.totalDays));
   row("МЕСТ ОТМЕЧЕНО", `${d.visited}/${d.totalPlaces}`);
   row("ФОТО", String(d.photos));
-  row("ПОТРАЧЕНО", `$${d.spent.toFixed(0)}`);
+  row("ПОТРАЧЕНО", `${d.currencySymbol}${Math.round(d.spent).toLocaleString("ru-RU")}`);
   y += 10;
 
   ctx.fillStyle = "#1c1917";
@@ -525,7 +573,7 @@ function renderReceipt(ctx: CanvasRenderingContext2D, d: CardData) {
   ctx.textAlign = "left";
   ctx.fillText("ИТОГО", L, y);
   ctx.textAlign = "right";
-  ctx.fillText(`${d.totalDays} ДНЕЙ`, R, y);
+  ctx.fillText(`${d.totalDays} ${pluralRu(d.totalDays, "ДЕНЬ", "ДНЯ", "ДНЕЙ")}`, R, y);
   y += 64;
   dashedLine(ctx, L, y, R, y, [8, 8], "rgba(0,0,0,0.3)", 2);
   y += 56;
@@ -534,13 +582,11 @@ function renderReceipt(ctx: CanvasRenderingContext2D, d: CardData) {
   ctx.font = "28px " + MONO;
   ctx.textAlign = "center";
   ctx.fillText("ОПЛАЧЕНО ВОСПОМИНАНИЯМИ", center, y);
-  y += 78;
 
-  barcode(ctx, d.inviteCode || d.title, center - 300, y, 600, 86, "#1c1917");
-  y += 130;
+  barcode(ctx, d.inviteCode || d.title, center - 300, barcodeY, 600, 86, "#1c1917");
   ctx.fillStyle = "#7d776b";
   ctx.font = "30px " + MONO;
-  ctx.fillText("СПАСИБО! ЖДЁМ СНОВА ✈", center, Math.min(y, bottom - 40));
+  ctx.fillText("СПАСИБО! ЖДЁМ СНОВА ✈", center, thanksY);
 }
 
 // ---------- 5. Маршрут 4:5 ----------
@@ -567,10 +613,11 @@ function renderRoute(ctx: CanvasRenderingContext2D, d: CardData) {
   drawTrackedLeft(ctx, "МАРШРУТ ПОЕЗДКИ", 70, 104, 8);
   ctx.fillStyle = "white";
   ctx.font = "bold 64px " + SANS;
-  wrapText(ctx, d.title, 70, 180, 760, 70);
+  const titleLines = wrapText(ctx, d.title, 70, 180, 760, 70);
   ctx.fillStyle = "rgba(255,255,255,0.5)";
   ctx.font = "26px " + MONO;
-  ctx.fillText(d.dateLabel.toUpperCase(), 70, 252);
+  // дата уезжает под фактическое число строк заголовка (раньше налезала на 2-ю строку)
+  ctx.fillText(d.dateLabel.toUpperCase(), 70, 180 + titleLines * 70 + 12);
 
   // компас
   ctx.save();
@@ -588,63 +635,63 @@ function renderRoute(ctx: CanvasRenderingContext2D, d: CardData) {
   ctx.fillText("С", 0, -66);
   ctx.restore();
 
-  // точки городов
+  // точки городов (в поездке без дней города нет — рисуем только шапку и статистику)
   const pts = d.cities.slice(0, 7);
   const hidden = d.cities.length - pts.length;
-  const topY = 380, bottomY = 1150;
-  const stepY = pts.length > 1 ? (bottomY - topY) / (pts.length - 1) : 0;
-  const positions = pts.map((c, i) => ({
-    city: c,
-    x: i % 2 === 0 ? 280 : 800,
-    y: pts.length === 1 ? (topY + bottomY) / 2 : topY + stepY * i,
-  }));
+  // при длинном заголовке опускаем график ниже даты, чтобы не слипались
+  const topY = Math.max(380, 180 + titleLines * 70 + 90), bottomY = 1150;
 
-  ctx.save();
-  ctx.strokeStyle = d.accent;
-  ctx.lineWidth = 3;
-  ctx.setLineDash([2, 14]);
-  ctx.lineCap = "round";
-  ctx.beginPath();
-  ctx.moveTo(positions[0].x, positions[0].y);
-  for (let i = 1; i < positions.length; i++) {
-    const a = positions[i - 1], b = positions[i];
-    const mx = (a.x + b.x) / 2 + (i % 2 === 1 ? 90 : -90);
-    const my = (a.y + b.y) / 2;
-    ctx.quadraticCurveTo(mx, my, b.x, b.y);
-  }
-  ctx.stroke();
-  ctx.restore();
+  if (pts.length > 0) {
+    const stepY = pts.length > 1 ? (bottomY - topY) / (pts.length - 1) : 0;
+    const positions = pts.map((c, i) => ({
+      city: c,
+      x: i % 2 === 0 ? 280 : 800,
+      y: pts.length === 1 ? (topY + bottomY) / 2 : topY + stepY * i,
+    }));
 
-  if (positions.length === 1) {
-    positions.push({ ...positions[0], x: 800 });
-  }
+    ctx.save();
+    ctx.strokeStyle = d.accent;
+    ctx.lineWidth = 3;
+    ctx.setLineDash([2, 14]);
+    ctx.lineCap = "round";
+    ctx.beginPath();
+    ctx.moveTo(positions[0].x, positions[0].y);
+    for (let i = 1; i < positions.length; i++) {
+      const a = positions[i - 1], b = positions[i];
+      const mx = (a.x + b.x) / 2 + (i % 2 === 1 ? 90 : -90);
+      const my = (a.y + b.y) / 2;
+      ctx.quadraticCurveTo(mx, my, b.x, b.y);
+    }
+    ctx.stroke();
+    ctx.restore();
 
-  ctx.textAlign = "center";
-  positions.forEach((p, i) => {
-    // свечение
-    ctx.fillStyle = "rgba(255,255,255,0.08)";
-    ctx.beginPath(); ctx.arc(p.x, p.y, 34, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = d.accent;
-    ctx.beginPath(); ctx.arc(p.x, p.y, 20, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = "#0e1626";
-    ctx.beginPath(); ctx.arc(p.x, p.y, 9, 0, Math.PI * 2); ctx.fill();
+    ctx.textAlign = "center";
+    positions.forEach((p, i) => {
+      // свечение
+      ctx.fillStyle = "rgba(255,255,255,0.08)";
+      ctx.beginPath(); ctx.arc(p.x, p.y, 34, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = d.accent;
+      ctx.beginPath(); ctx.arc(p.x, p.y, 20, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = "#0e1626";
+      ctx.beginPath(); ctx.arc(p.x, p.y, 9, 0, Math.PI * 2); ctx.fill();
 
-    const left = p.x < 540;
-    ctx.textAlign = left ? "left" : "right";
-    const lx = left ? p.x + 56 : p.x - 56;
-    ctx.fillStyle = "white";
-    ctx.font = "bold 36px " + SANS;
-    ctx.fillText(p.city.name, lx, p.y - 4);
-    ctx.fillStyle = "rgba(255,255,255,0.5)";
-    ctx.font = "24px " + MONO;
-    ctx.fillText(`${p.city.days} ${p.city.days === 1 ? "день" : p.city.days < 5 ? "дня" : "дней"} · ${i + 1}-я точка`, lx, p.y + 32);
-  });
+      const left = p.x < 540;
+      ctx.textAlign = left ? "left" : "right";
+      const lx = left ? p.x + 56 : p.x - 56;
+      ctx.fillStyle = "white";
+      ctx.font = "bold 36px " + SANS;
+      ctx.fillText(p.city.name, lx, p.y - 4);
+      ctx.fillStyle = "rgba(255,255,255,0.5)";
+      ctx.font = "24px " + MONO;
+      ctx.fillText(`${p.city.days} ${pluralRu(p.city.days, "день", "дня", "дней")} · ${i + 1}-я точка`, lx, p.y + 32);
+    });
 
-  if (hidden > 0) {
-    ctx.textAlign = "left";
-    ctx.fillStyle = "rgba(255,255,255,0.6)";
-    ctx.font = "28px " + MONO;
-    ctx.fillText(`+${hidden} городов дальше по пути…`, 90, bottomY + 70);
+    if (hidden > 0) {
+      ctx.textAlign = "left";
+      ctx.fillStyle = "rgba(255,255,255,0.6)";
+      ctx.font = "28px " + MONO;
+      ctx.fillText(`+${hidden} ${pluralRu(hidden, "город", "города", "городов")} дальше по пути…`, 90, bottomY + 70);
+    }
   }
 
   // нижняя строка статистики
@@ -653,7 +700,13 @@ function renderRoute(ctx: CanvasRenderingContext2D, d: CardData) {
   ctx.textAlign = "center";
   ctx.fillStyle = "rgba(255,255,255,0.7)";
   ctx.font = "26px " + MONO;
-  drawTracked(ctx, `${d.totalDays} ДНЕЙ · ${d.totalPlaces} МЕСТ · ${d.photos} ФОТО`, 540, 1294, 3);
+  drawTracked(
+    ctx,
+    `${d.totalDays} ${pluralRu(d.totalDays, "ДЕНЬ", "ДНЯ", "ДНЕЙ")} · ${d.totalPlaces} ${pluralRu(d.totalPlaces, "МЕСТО", "МЕСТА", "МЕСТ")} · ${d.photos} ФОТО`,
+    540,
+    1294,
+    3
+  );
   ctx.fillStyle = "rgba(255,255,255,0.35)";
   ctx.font = "bold 24px " + SANS;
   ctx.fillText("TripTrek", 540, 1332);

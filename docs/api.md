@@ -97,7 +97,7 @@
 | `ai-summary` | POST | M | 10/ч на user+trip | итоги поездки (LLM); без ключа — локальный черновик (`generated:false`), заблокирован юзер — 403 |
 | `phrases/generate` | POST | M | 10/ч на user+trip | базовый разговорник по направлению |
 | `phrases/ai` | POST | M | 10/ч на user+trip | фразы по свободному запросу (3 режима: translate/more/pack) |
-| `foods/suggest` | POST | M | 10/ч на user+trip | блюда города: `count` 4–10 (пакет «Подборка шефа» в Еде) |
+| `foods/suggest` | POST | M | 10/ч на user+trip | блюда города: `count` 4–10 (пакет «Подборка шефа» в Еде); город свободного ввода проверяется Nominatim'ом (`findCity` в `geocode-place.ts`) — 400 «не нашли город», если это не place/boundary (недоступный Nominatim не блокирует) |
 | `ai/planner` | POST | M | 3/ч на user+trip | черновик маршрута ИИ (mode trip/day/replace) по **существующим** дням; места геокодируются Nominatim по nameEn, `fail` → «уточнить на карте» |
 | `ai/restaurants` | POST | M | 6/ч на user+trip | реальные заведения OpenStreetMap у города дня; ИИ только отбирает — имена/координаты из OSM (`matchPicksToPois`) |
 | `ai/walk` | POST | M | 6/ч на user+trip | прогулка на 1–6 ч: OSM-POI в радиусе 300–5000 м минус места поездки, ИИ собирает таймлайн |

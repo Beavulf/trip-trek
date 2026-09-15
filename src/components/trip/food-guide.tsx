@@ -553,6 +553,7 @@ export function FoodGuide() {
         open={packOpen}
         onClose={() => setPackOpen(false)}
         city={dayCityOrder[0] || ""}
+        cities={dayCityOrder}
         existingNames={(foods ?? []).map((f) => f.name)}
         onAdded={() => void refetchFoods()}
       />
