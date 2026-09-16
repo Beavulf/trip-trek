@@ -58,8 +58,9 @@ export function calculatePersonalSpend(expenses: Expense[], userIds: string[]): 
   for (const id of userIds) result[id] ??= { byCategory: {}, byDay: {}, total: 0 };
 
   // Долговая книга: claims[должник][кредитор] — доли общих трат, которые должник ещё не вернул кредитору.
-  // Каждая запись помнит категорию и день исходной траты — по ним перевод «переедет» к должнику.
-  const claims: Record<string, Record<string, { category: string; dayId: string | null; remaining: number }[]>> = {};
+  // Каждая запись помнит категорию, день и дату исходной траты: перевод не может закрыть долг
+  // по трате, появившейся ПОЗЖЕ самого перевода (иначе старые переводы «съедают» новые траты).
+  const claims: Record<string, Record<string, { category: string; dayId: string | null; remaining: number; createdAt: string }[]>> = {};
 
   const settlements: Expense[] = [];
 
@@ -80,7 +81,15 @@ export function calculatePersonalSpend(expenses: Expense[], userIds: string[]): 
         category: e.category,
         dayId: e.dayId,
         remaining: share,
+        createdAt: e.createdAt,
       });
+    }
+  }
+
+  // Внутри каждой пары гасим старейшие долги первыми — детерминированный FIFO
+  for (const byCreditor of Object.values(claims)) {
+    for (const ledger of Object.values(byCreditor)) {
+      ledger.sort((a, b) => (Date.parse(a.createdAt) || 0) - (Date.parse(b.createdAt) || 0));
     }
   }
 
@@ -114,11 +123,14 @@ export function calculatePersonalSpend(expenses: Expense[], userIds: string[]): 
       const debtor = s.paidById;
       if (debtor === creditor || !result[creditor] || !result[debtor]) continue;
       let left = per;
+      const settledAt = Date.parse(s.createdAt) || 0;
       // Гасим долг должника перед кредитором: у кредитора трата уменьшается (деньги вернулись),
       // у должника — появляется (по факту потратил он), в категории/дне исходной траты.
+      // Перевод закрывает только долги, существовавшие на момент перевода.
       for (const c of claims[debtor]?.[creditor] ?? []) {
         if (left <= 1e-9) break;
         if (c.remaining <= 1e-9) continue;
+        if ((Date.parse(c.createdAt) || 0) > settledAt) continue; // долг из будущего перевода
         const t = Math.min(left, c.remaining);
         c.remaining -= t;
         left -= t;
