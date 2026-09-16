@@ -20,8 +20,8 @@ export interface Settlement {
 // excludeSelf = true → плательщик не участвует (купил только для других)
 // excludeSelf = false → плательщик тоже участвует (купил для себя + других)
 
-// Доля одного участника в трате (единая формула для долгов и чистых трат)
-function sharePerPerson(e: Expense): number {
+// Доля одного участника в трате (единая формула для долгов, чистых трат и персональной аналитики)
+export function sharePerPerson(e: Expense): number {
   const splitUsers: string[] = (e.splitWith || "").split(",").filter(Boolean);
   if (splitUsers.length === 0) return 0;
   const count = e.excludeSelf ? splitUsers.length : splitUsers.length + 1;

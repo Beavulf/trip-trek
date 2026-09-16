@@ -7,7 +7,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { useTripStore } from "@/lib/trip-store";
 import { EXPENSE_CATEGORIES } from "@/lib/types";
 import { currencySymbol } from "@/lib/currencies";
-import { calculateBalances, calculateSettlements, calculateNetSpent } from "@/lib/budget";
+import { calculateBalances, calculateSettlements, calculateNetSpent, calculatePersonalSpend } from "@/lib/budget";
 import { cn, plural } from "@/lib/utils";
 import { CurrencyConverter } from "../currency-converter";
 import { BudgetPlanWidget } from "../budget-plan-widget";
@@ -46,6 +46,8 @@ export function Budget() {
   const [showBudgetModal, setShowBudgetModal] = useState(false);
   const [historyFilter, setHistoryFilter] = useState<HistoryFilter>("all");
   const [showAllHistory, setShowAllHistory] = useState(false);
+  // Скоуп аналитики: "all" — вся группа, "me" — текущий юзер, иначе userId участника
+  const [scope, setScope] = useState<string>("all");
   const currentUserId = (session?.user as { id?: string } | undefined)?.id || "";
 
   // useMemo: новые identity на каждый рендер перерисовывали recharts-графики
@@ -55,11 +57,32 @@ export function Budget() {
     () => (expenses ?? []).filter((e) => e.category !== "settlement"),
     [expenses]
   );
+
+  // participant.id в /api/trip сериализуется как userId, поэтому сравним с paidById напрямую.
+  // Мёртвый id (участник удалён, поездка сменилась) молча откатывается на «Все».
+  const scopeUserId = useMemo(() => {
+    if (scope === "me") return currentUserId || null;
+    if (scope && scope !== "all") {
+      return (trip?.participants ?? []).some((p) => p.id === scope) ? scope : null;
+    }
+    return null;
+  }, [scope, currentUserId, trip?.participants]);
+
+  // Персональные траты «по реальным деньгам» (см. lib/budget/personal): трата целиком у плательщика,
+  // возвращённый долг переносит долю к вернувшему — в категориях/днях исходных трат.
+  const personalByUser = useMemo(
+    () => calculatePersonalSpend(expenses ?? [], (trip?.participants ?? []).map((p) => p.id)),
+    [expenses, trip?.participants]
+  );
+  const myPersonal = scopeUserId ? personalByUser[scopeUserId] : undefined;
+
   const byCategory = useMemo(
     () =>
       Object.keys(EXPENSE_CATEGORIES)
         .map((key) => {
-          const sum = realExpenses.filter((e) => e.category === key).reduce((s, e) => s + e.amount, 0);
+          const sum = myPersonal
+            ? (myPersonal.byCategory[key] ?? 0)
+            : realExpenses.filter((e) => e.category === key).reduce((s, e) => s + e.amount, 0);
           return {
             key,
             label: EXPENSE_CATEGORIES[key].label,
@@ -69,18 +92,20 @@ export function Budget() {
           };
         })
         .filter((x) => x.value > 0),
-    [realExpenses]
+    [realExpenses, myPersonal]
   );
 
   const dailyData = useMemo(
     () =>
       (trip?.days ?? [])
         .map((d) => {
-          const sum = realExpenses.filter((e) => e.dayId === d.id).reduce((s, e) => s + e.amount, 0);
+          const sum = myPersonal
+            ? (myPersonal.byDay[d.id] ?? 0)
+            : realExpenses.filter((e) => e.dayId === d.id).reduce((s, e) => s + e.amount, 0);
           return { day: `Д${d.dayNumber}`, amount: Math.round(sum), city: d.city };
         })
         .filter((d) => d.amount > 0),
-    [trip?.days, realExpenses]
+    [trip?.days, realExpenses, myPersonal]
   );
 
   if (!tripId) {
@@ -190,9 +215,14 @@ export function Budget() {
       <BudgetAnalytics
         byCategory={byCategory}
         dailyData={dailyData}
-        totalSpent={totalSpent}
+        totalSpent={myPersonal ? myPersonal.total : totalSpent}
         dayColor={dayColor}
         currencySymbol={sym}
+        // "me" оставляем как есть: по нему чип подсвечивается и подпись говорит «твоя доля»
+        scope={scopeUserId ? scope : "all"}
+        onScopeChange={setScope}
+        participants={trip.participants}
+        currentUserId={currentUserId}
       />
 
       <SettlementSection
