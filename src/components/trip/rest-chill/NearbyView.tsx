@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Locate, Loader2, AlertCircle, Footprints, RotateCw } from "lucide-react";
+import { Locate, Loader2, AlertCircle, Footprints, UtensilsCrossed, RotateCw } from "lucide-react";
 import { useNearby, type NearbyPlace } from "@/hooks/use-trip";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -24,9 +24,10 @@ interface NearbyViewProps {
   radius: number;
   onRadiusChange: (r: number) => void;
   onGoToWishlist?: () => void;
+  onOpenRestaurants: () => void;
 }
 
-export function NearbyView({ category, onCategoryChange, radius, onRadiusChange, onGoToWishlist }: NearbyViewProps) {
+export function NearbyView({ category, onCategoryChange, radius, onRadiusChange, onGoToWishlist, onOpenRestaurants }: NearbyViewProps) {
   const tripId = getTripId();
   // P1 #14: сбрасываем cachedGeo при смене trip — не хотим «GZ кэш» в новой поездке
   useEffect(() => {
@@ -149,6 +150,16 @@ export function NearbyView({ category, onCategoryChange, radius, onRadiusChange,
         Прогулка на ближайшие часы с ИИ
       </button>
       <WalkView open={walkOpen} onClose={() => setWalkOpen(false)} />
+
+      {/* ИИ-подборка заведений у города дня (переехала из Еды) — якорь день маршрута, не геолокация */}
+      <button
+        type="button"
+        onClick={onOpenRestaurants}
+        className="w-full min-h-11 rounded-2xl border-2 border-dashed border-[#d946ef]/40 bg-[#d946ef]/5 text-[13px] font-medium flex items-center justify-center gap-1.5 text-foreground/90 hover:bg-[#d946ef]/10 transition-colors"
+      >
+        <UtensilsCrossed className="size-4 text-[#d946ef]" aria-hidden />
+        Рестораны рядом с ИИ
+      </button>
 
       {/* Кнопка геолокации */}
       {geo.status !== "ready" && (

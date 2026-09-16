@@ -133,6 +133,21 @@ describe("calculatePersonalSpend (модель реальных денег)", ()
     expect(totalOf(p, A) + totalOf(p, B)).toBeCloseTo(70);
   });
 
+  it("хвост старого перевода не перемазывается тратами, добавленными позже", () => {
+    // 10-го: я заплатил 20 за Борю (еда). 11-го: Боря перевёл 35 (долг 20 + переплата 15).
+    // 16-го: я добавил свою транспортную трату 60 — она НЕ должна сдвинуть развозку перевода.
+    const e1 = exp({ amount: 20, paidById: A, splitWith: B, excludeSelf: true, createdAt: "2026-09-10T10:00:00Z" });
+    const s1 = exp({ category: "settlement", paidById: B, splitWith: A, excludeSelf: true, amount: 35, createdAt: "2026-09-11T10:00:00Z" });
+    const p1 = calculatePersonalSpend([e1, s1], [A, B]);
+    const e2 = exp({ amount: 60, paidById: A, category: "transport", createdAt: "2026-09-16T10:00:00Z" });
+    const p2 = calculatePersonalSpend([e1, s1, e2], [A, B]);
+    // развозка хвоста (15) зафиксирована пропорциями еды на 11-е и не меняется
+    expect(foodOf(p1, B)).toBeCloseTo(foodOf(p2, B));
+    expect(foodOf(p1, A)).toBeCloseTo(foodOf(p2, A));
+    expect(p2[A].byCategory["transport"]).toBeCloseTo(60);
+    expect(totalOf(p2, A) + totalOf(p2, B)).toBeCloseTo(80);
+  });
+
   it("взаимные долги, гасят нетто: итог — ровно доли потребления", () => {
     // Аня заплатила $60 за себя и Борю (по $30), Боря — $90 за себя и Аню (по $45).
     // Нетто-должник — Аня ($45 − $30 = $15). После перевода у каждого должно быть по $75.

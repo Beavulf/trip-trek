@@ -12,23 +12,25 @@ export interface PersonalSpend {
 const sumRemaining = (ledger: { remaining: number }[] | undefined) =>
   (ledger ?? []).reduce((s, c) => s + c.remaining, 0);
 
-// Гасим `amount` долга debtor перед creditor: зачтённая доля каждой исходной траты
+// Гасим `amount` долга debtor перед кредитором: зачтённая доля каждой исходной траты
 // переходит от кредитора (он платил, но ему вернули/зачли) к должнику (по факту потратил он).
-// Внутри книги берём пропорционально остаткам, чтобы категории гасились равномерно.
+// Книга отсортирована FIFO — закрываем старейшие траты первыми, свежие не трогаем,
+// пока не исчерпаны старые: новая трата не должна «уменьшаться» из-за старых зачётов.
 function offsetClaims(
-  claims: Record<string, Record<string, { category: string; dayId: string | null; remaining: number }[]>>,
+  claims: Record<string, Record<string, { category: string; dayId: string | null; remaining: number; createdAt: string }[]>>,
   result: Record<string, PersonalSpend>,
   debtor: string,
   creditor: string,
   amount: number
 ) {
   const ledger = claims[debtor]?.[creditor] ?? [];
-  const gross = sumRemaining(ledger);
-  if (gross <= 1e-9) return;
+  let left = amount;
   for (const c of ledger) {
-    const t = amount * (c.remaining / gross);
-    if (t <= 0) continue;
+    if (left <= 1e-9) break;
+    if (c.remaining <= 1e-9) continue;
+    const t = Math.min(left, c.remaining);
     c.remaining -= t;
+    left -= t;
     const pCred = result[creditor];
     const pDeb = result[debtor];
     pCred.byCategory[c.category] = (pCred.byCategory[c.category] ?? 0) - t;
@@ -137,16 +139,24 @@ export function calculatePersonalSpend(expenses: Expense[], userIds: string[]): 
         spend(creditor, c.category, c.dayId, -t);
         spend(debtor, c.category, c.dayId, t);
       }
-      // Перевод без подходящих долгов (адхок/перевыплата) — распределяем пропорционально
-      // текущим тратам кредитора, чтобы суммы по категориям у обоих сошлись.
+      // Перевод без подходящих долгов (адхок/перевыплата) — «возврат денег»: размазываем
+      // пропорционально тратам кредитора НА МОМЕНТ перевода. Пропорции заморожены датой,
+      // чтобы новые траты не сдвигали старые развозки (иначе у друзей «магически» менялись
+      // цифры при добавлении чужих трат).
       if (left > 1e-9) {
-        const cats = Object.keys(result[creditor].byCategory).filter((c) => result[creditor].byCategory[c] > 0);
-        const base = cats.reduce((sum, c) => sum + result[creditor].byCategory[c], 0);
-        for (const c of cats) {
-          const t = base > 0 ? left * (result[creditor].byCategory[c] / base) : 0;
+        const snapshot: Record<string, number> = {};
+        let snapBase = 0;
+        for (const e of expenses) {
+          if (e.category === "settlement" || e.paidById !== creditor) continue;
+          if ((Date.parse(e.createdAt) || 0) > settledAt) continue;
+          snapshot[e.category] = (snapshot[e.category] ?? 0) + e.amount;
+          snapBase += e.amount;
+        }
+        for (const c of Object.keys(snapshot)) {
+          const t = snapBase > 0 ? left * (snapshot[c] / snapBase) : 0;
           if (t <= 0) continue;
           spend(creditor, c, null, -t);
-          spend(debtor, c, null, t);
+          spend(debtor, c, null, +t);
         }
       }
     }

@@ -9,6 +9,7 @@ import {
   ListPlus,
   Locate,
   Search,
+  Sparkles,
   Star,
   Loader2,
   MapPin,
@@ -19,6 +20,7 @@ import { CHILL_CATEGORIES, CHILL_CATEGORY_LABELS } from "@/lib/chill-categories"
 import { plural } from "@/lib/utils";
 import { ChillCard } from "./ChillCard";
 import { NearbyView } from "./NearbyView";
+import { RestaurantsSheet } from "./RestaurantsSheet";
 import { WishlistView } from "./WishlistView";
 import { FateCup, type FateCandidate } from "./FateCup";
 import { loadWishlist, migrateLegacyWishlist } from "@/lib/wishlist";
@@ -57,6 +59,8 @@ export function RestChill() {
   const [nearbyCat, setNearbyCat] = useState<string>("all");
   const [nearbyRadius, setNearbyRadius] = useState<number>(1500);
   const [hideVisited, setHideVisited] = useState(false);
+  // ИИ-шторка «Рестораны рядом» — основная фича «Рядома», быстрый доступ из hero
+  const [restaurantsOpen, setRestaurantsOpen] = useState(false);
   // Версия wishlist: saveWishlist диспатчит "triptrek-wishlist-changed" — счётчик в hero и бейдж живые
   const [wishlistVersion, setWishlistVersion] = useState(0);
   const [greeting, setGreeting] = useState<{ text: string; emoji: string } | null>(null);
@@ -250,23 +254,24 @@ export function RestChill() {
             <div className="text-xl font-bold tabular-nums leading-tight">{stats.total}</div>
             <div className="text-[10px] text-white/75">в маршруте</div>
           </button>
+          {/* Быстрый доступ к основной ИИ-фиче «Рядома»: счётчик «Хочу» остался бейджем на переключателе */}
           <button
             type="button"
-            onClick={() => setView("wishlist")}
-            aria-label={`В списке «Хочу»: ${stats.wishlist}. Открыть список`}
+            onClick={() => setRestaurantsOpen(true)}
+            aria-label="Рестораны рядом — ИИ-подборка заведений у города дня"
             className="rounded-xl bg-white/15 backdrop-blur px-2 py-2 text-center active:scale-95 transition-transform hover:bg-white/20"
           >
-            <div className="text-xl font-bold tabular-nums leading-tight flex items-center justify-center gap-1">
-              {stats.wishlist} <span aria-hidden="true" className="text-xs">→</span>
+            <div className="text-xl font-bold leading-tight flex items-center justify-center">
+              <Sparkles className="size-5" aria-hidden />
             </div>
-            <div className="text-[10px] text-white/75">в «Хочу»</div>
+            <div className="text-[10px] text-white/75">Рядом · ИИ</div>
           </button>
         </div>
 
         {/* Чашка = прогресс, но процент называем словами — она рядом */}
         {fateCandidates.length > 0 ? (
           <p className="relative text-white/75 text-[11px] mt-2.5 flex items-center gap-1">
-            <span aria-hidden="true">🫖</span> Не можешь выбрать? Нажми на чашку — подскажет место
+            <span aria-hidden="true">🍵</span> Не можешь выбрать? Нажми на чашку — подскажет место
           </p>
         ) : (
           stats.total > 0 && (
@@ -454,12 +459,21 @@ export function RestChill() {
             radius={nearbyRadius}
             onRadiusChange={setNearbyRadius}
             onGoToWishlist={() => setView("wishlist")}
+            onOpenRestaurants={() => setRestaurantsOpen(true)}
           />
         )}
       </div>
 
       {/* Полный диалог места: редактирование, фото, «на карте» — тот же, что в Маршруте */}
       <PlaceDialog place={dialogPlace} currency={currency} onClose={() => setDialogPlace(null)} />
+
+      {/* ИИ-подборка заведений у города дня — открыётся из hero и из вью «Рядом» */}
+      <RestaurantsSheet
+        open={restaurantsOpen}
+        onClose={() => setRestaurantsOpen(false)}
+        days={(days ?? []).map((d) => ({ id: d.id, dayNumber: d.dayNumber, city: d.city }))}
+        onAdded={() => {}}
+      />
     </div>
   );
 }

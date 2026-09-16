@@ -322,7 +322,8 @@ function FateSheet({
     >
       {!picked ? (
         <div className="text-center py-8 space-y-3">
-          <div className="text-5xl">{hasAnyPlaces ? "🎉" : "🫖"}</div>
+          {/* 🍵 вместо 🫖: чайник — Emoji 13.0, на Windows 10 не рендерится (квадрат) */}
+          <div className="text-5xl">{hasAnyPlaces ? "🎉" : "🍵"}</div>
           <p className="text-sm font-medium">
             {hasAnyPlaces ? "Всё посещено — красавчики!" : "Пока нет мест для выбора"}
           </p>

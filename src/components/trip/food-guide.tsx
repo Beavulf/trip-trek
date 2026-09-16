@@ -26,7 +26,7 @@ import { useTripStore } from "@/lib/trip-store";
 import { currencySymbol } from "@/lib/currencies";
 import { FoodSheet } from "./food/FoodSheet";
 import { AddFoodSheet } from "./food/AddFoodSheet";
-import { FoodPackSheet, FoodRestaurantsSheet } from "./food/FoodAiSheets";
+import { FoodPackSheet } from "./food/FoodAiSheets";
 import { CITY_PALETTE, type ParticipantLite } from "./food/shared";
 
 const MEDALS = ["🥇", "🥈", "🥉"];
@@ -39,7 +39,6 @@ export function FoodGuide() {
   const [sheetId, setSheetId] = useState<string | null>(null);
   const [addOpen, setAddOpen] = useState(false);
   const [packOpen, setPackOpen] = useState(false);
-  const [restaurantsOpen, setRestaurantsOpen] = useState(false);
   const { data: foods, isLoading, error: foodsError, refetch: refetchFoods } = useFoods();
   const { data: trip, error: tripError, refetch: refetchTrip } = useTrip();
   const { data: days } = useRouteDays();
@@ -284,7 +283,7 @@ export function FoodGuide() {
               />
             </div>
           )}
-          {/* ИИ-подборки: пакет блюд шефа + реальные заведения OSM рядом с днём */}
+          {/* ИИ-подборка блюд шефа; «Рестораны рядом» при схлопе переехали в Chill */}
           <div className="mt-3 flex gap-2">
             <button
               type="button"
@@ -292,13 +291,6 @@ export function FoodGuide() {
               className="flex-1 min-h-11 rounded-xl bg-white/15 hover:bg-white/25 backdrop-blur px-3 flex items-center justify-center gap-1.5 text-xs font-medium transition-colors active:scale-[0.98]"
             >
               <Sparkles className="size-4" /> Подборка шефа
-            </button>
-            <button
-              type="button"
-              onClick={() => setRestaurantsOpen(true)}
-              className="flex-1 min-h-11 rounded-xl bg-white/15 hover:bg-white/25 backdrop-blur px-3 flex items-center justify-center gap-1.5 text-xs font-medium transition-colors active:scale-[0.98]"
-            >
-              <MapPin className="size-4" /> Рестораны рядом
             </button>
           </div>
         </div>
@@ -556,12 +548,6 @@ export function FoodGuide() {
         cities={dayCityOrder}
         existingNames={(foods ?? []).map((f) => f.name)}
         onAdded={() => void refetchFoods()}
-      />
-      <FoodRestaurantsSheet
-        open={restaurantsOpen}
-        onClose={() => setRestaurantsOpen(false)}
-        days={(days ?? []).map((d) => ({ id: d.id, dayNumber: d.dayNumber, city: d.city }))}
-        onAdded={() => {}}
       />
     </div>
   );
