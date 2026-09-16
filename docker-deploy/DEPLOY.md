@@ -88,6 +88,13 @@ docker compose -f docker-deploy/docker-compose.yml up -d --build
 Миграции применяются entrypoint'ом автоматически. Данные и фото на именованных
 томах — `down/up` их не трогает (проверено критерием Phase 3/5).
 
+TLS и 80/443 обслуживает ОБЩИЙ Caddy guild-ledger (`/root/guild-ledger/Caddyfile`,
+upstream `triptrek-app:3000` по имени). Поэтому app обязан быть прикреплён к сети
+`supabase-network` — это закреплено в compose (`networks: caddy-shared` для app).
+Признак того, что связь потерялась: приложение healthy, `/api/health` внутри
+контейнера 200, а снаружи 502 и в логах Caddy `lookup triptrek-app: i/o timeout`.
+Лечение разово: `docker network connect supabase-network triptrek-app`.
+
 Откат: `git checkout <предыдущий тег> && docker compose ... up -d --build`.
 Миграции назад не откатываются автоматически — пишем только совместимые
 миграции (additive-first).

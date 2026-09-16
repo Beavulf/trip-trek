@@ -42,6 +42,13 @@ services:
     depends_on:
       db:
         condition: service_healthy
+    # default — своя сеть (db); caddy-shared — сеть ОБЩЕГО Caddy (guild-ledger),
+    # который резолвит triptrek-app по имени контейнера. Без неё сайт падает в
+    # 502 при каждом пересоздании контейнера (инцидент 2026-09-16: ручной
+    # `docker network connect` слетел при redeploy).
+    networks:
+      - default
+      - caddy-shared
     restart: unless-stopped
     stop_grace_period: 30s
     healthcheck:
@@ -73,3 +80,8 @@ volumes:
   triptrek-uploads:
   triptrek-caddy-data:
   triptrek-caddy-config:
+
+networks:
+  caddy-shared:
+    name: supabase-network
+    external: true
