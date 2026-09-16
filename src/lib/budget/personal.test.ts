@@ -67,6 +67,55 @@ describe("calculatePersonalSpend (модель реальных денег)", ()
     expect(groupTotal(p)).toBeCloseTo(200);
   });
 
+  it("заплатил только за друга (excludeSelf) — вся трата у плательщика, у друга 0", () => {
+    // «Я заплатил за друга, только за него» — деньги вышли из моего кошелька,
+    // у друга появляется только долг (гасится переводом), но не трата в аналитике.
+    const e = exp({ amount: 50, paidById: A, splitWith: B, excludeSelf: true });
+    const p = calculatePersonalSpend([e], [A, B]);
+    expect(foodOf(p, A)).toBeCloseTo(50);
+    expect(foodOf(p, B)).toBeCloseTo(0);
+    // долг записан: после перевода Бора трата целиком уйдёт ему
+    const p2 = calculatePersonalSpend([e, settle(B, A, 50)], [A, B]);
+    expect(foodOf(p2, A)).toBeCloseTo(0);
+    expect(foodOf(p2, B)).toBeCloseTo(50);
+  });
+
+  it("частичный возврат долга делит трату пропорционально возвращённому", () => {
+    const e = exp({ amount: 100, paidById: A, splitWith: `${B},${C}`, excludeSelf: true });
+    const p = calculatePersonalSpend([e, settle(B, A, 30)], [A, B, C]);
+    expect(foodOf(p, A)).toBeCloseTo(70);
+    expect(foodOf(p, B)).toBeCloseTo(30);
+    expect(foodOf(p, C)).toBeCloseTo(0);
+  });
+
+  it("взаимозачёт: он заплатил за меня столько же — доли меняются местами без переводов", () => {
+    // Я заплатил $50 за еду Лёхи; он заплатил $50 за мою еду. Долги гасятся встречно,
+    // и в аналитике каждая трата переходит к тому, кто её потребил.
+    const e1 = exp({ amount: 50, paidById: A, splitWith: B, excludeSelf: true });
+    const e2 = exp({ amount: 50, paidById: B, splitWith: A, excludeSelf: true });
+    const p = calculatePersonalSpend([e1, e2], [A, B]);
+    expect(totalOf(p, A)).toBeCloseTo(50);
+    expect(totalOf(p, B)).toBeCloseTo(50);
+  });
+
+  it("взаимозачёт с частичным покрытием: «платил за себя и меня» компенсирует только мою половину", () => {
+    // Я заплатил $50 только за Лёху; он заплатил $80 за себя и меня (моя доля $40).
+    // Зачёт $40: у меня остаётся $10 его непогашенного долга + $40 моей доли его траты = $50.
+    const e1 = exp({ amount: 50, paidById: A, splitWith: B, excludeSelf: true });
+    const e2 = exp({ amount: 80, paidById: B, splitWith: A, excludeSelf: false });
+    const p = calculatePersonalSpend([e1, e2], [A, B]);
+    expect(totalOf(p, A)).toBeCloseTo(50);
+    expect(totalOf(p, B)).toBeCloseTo(80);
+  });
+
+  it("зачёт + перевод: после гашения нетто сходится в доли потребления", () => {
+    const e1 = exp({ amount: 50, paidById: A, splitWith: B, excludeSelf: true });
+    const e2 = exp({ amount: 30, paidById: B, splitWith: A, excludeSelf: true });
+    const p = calculatePersonalSpend([e1, e2, settle(B, A, 20)], [A, B]);
+    expect(totalOf(p, A)).toBeCloseTo(30);
+    expect(totalOf(p, B)).toBeCloseTo(50);
+  });
+
   it("взаимные долги, гасят нетто: итог — ровно доли потребления", () => {
     // Аня заплатила $60 за себя и Борю (по $30), Боря — $90 за себя и Аню (по $45).
     // Нетто-должник — Аня ($45 − $30 = $15). После перевода у каждого должно быть по $75.

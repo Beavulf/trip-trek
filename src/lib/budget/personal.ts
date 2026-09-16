@@ -9,6 +9,37 @@ export interface PersonalSpend {
   total: number;
 }
 
+const sumRemaining = (ledger: { remaining: number }[] | undefined) =>
+  (ledger ?? []).reduce((s, c) => s + c.remaining, 0);
+
+// Гасим `amount` долга debtor перед creditor: зачтённая доля каждой исходной траты
+// переходит от кредитора (он платил, но ему вернули/зачли) к должнику (по факту потратил он).
+// Внутри книги берём пропорционально остаткам, чтобы категории гасились равномерно.
+function offsetClaims(
+  claims: Record<string, Record<string, { category: string; dayId: string | null; remaining: number }[]>>,
+  result: Record<string, PersonalSpend>,
+  debtor: string,
+  creditor: string,
+  amount: number
+) {
+  const ledger = claims[debtor]?.[creditor] ?? [];
+  const gross = sumRemaining(ledger);
+  if (gross <= 1e-9) return;
+  for (const c of ledger) {
+    const t = amount * (c.remaining / gross);
+    if (t <= 0) continue;
+    c.remaining -= t;
+    const pCred = result[creditor];
+    const pDeb = result[debtor];
+    pCred.byCategory[c.category] = (pCred.byCategory[c.category] ?? 0) - t;
+    if (c.dayId) pCred.byDay[c.dayId] = (pCred.byDay[c.dayId] ?? 0) - t;
+    pCred.total -= t;
+    pDeb.byCategory[c.category] = (pDeb.byCategory[c.category] ?? 0) + t;
+    if (c.dayId) pDeb.byDay[c.dayId] = (pDeb.byDay[c.dayId] ?? 0) + t;
+    pDeb.total += t;
+  }
+}
+
 // Персональные траты «по реальным деньгам» — сколько человек фактически потратил из кошелька:
 //  1) любая трата сначала целиком у плательщика (заплатил за троих $200 — у него все $200, долги — отдельная история);
 //  2) перевод (settlement) должник → кредитор переносит часть траты от кредитора к должнику —
@@ -50,6 +81,25 @@ export function calculatePersonalSpend(expenses: Expense[], userIds: string[]): 
         dayId: e.dayId,
         remaining: share,
       });
+    }
+  }
+
+  // Взаимозачёт (живой, без кнопки): встречные долги пары гасят друг друга —
+  // «он заплатил за меня» компенсирует «я заплатил за него» (если он платил за себя и меня —
+  // компенсирует только моя доля). Зачтённая доля переходит от кредитора к должнику
+  // (это его потребление) в категориях/днях исходных трат. Нетто-остаток долга ждёт перевода.
+  const seenPairs = new Set<string>();
+  for (const debtor of Object.keys(claims)) {
+    for (const creditor of Object.keys(claims[debtor])) {
+      const key = debtor < creditor ? `${debtor}|${creditor}` : `${creditor}|${debtor}`;
+      if (seenPairs.has(key)) continue;
+      seenPairs.add(key);
+      const grossX = sumRemaining(claims[debtor]?.[creditor]);
+      const grossY = sumRemaining(claims[creditor]?.[debtor]);
+      const offset = Math.min(grossX, grossY);
+      if (offset <= 1e-9) continue;
+      offsetClaims(claims, result, debtor, creditor, offset);
+      offsetClaims(claims, result, creditor, debtor, offset);
     }
   }
 
