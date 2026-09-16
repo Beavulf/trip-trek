@@ -4,7 +4,7 @@ import { requireTripMember } from "@/lib/api-auth";
 import { calculateCurrentDayNumber } from "@/lib/trip-days";
 import { EXPENSE_CATEGORIES, CATEGORY_META } from "@/lib/types";
 import { currencySymbol } from "@/lib/currencies";
-import { runAi } from "@/lib/ai";
+import { runAi, aiFailResponse } from "@/lib/ai";
 
 // ─── Промпты: автор историй + 6 стилей рассказа ────────────────────────────
 
@@ -207,8 +207,11 @@ export async function POST(req: NextRequest) {
     }
 
     // LLM через единый оркестратор: лимит, BYOK, учёт и алерты — в lib/ai.ts.
-    // Любая неудача (кроме лимита и блока) → локальный черновик из данных поездки:
-    // так Docker/прод без ключей продолжают работать (P0 #3).
+    // Локальный черновик — ТОЛЬКО когда ключа нет вовсе (Docker/прод без
+    // конфига). Сбои провайдера (таймаут, сеть, пустой ответ) отдаём как все
+    // фичи — 502 «попробуй ещё раз»: подмена черновиком с плашкой «без
+    // AI-ключа» при настроенном ключе вводит в заблуждение (кейс 2026-09-16 —
+    // GLM на рассказе отвечал 70–84 с и рвался по таймауту).
     const ai = await runAi({
       req,
       userId: user!.id,
@@ -220,9 +223,12 @@ export async function POST(req: NextRequest) {
     if (ai.ok) {
       return NextResponse.json({ content: ai.text, type, style, generated: true, source: "openai" });
     }
-    if (ai.reason === "rate_limited" && ai.limitResponse) return ai.limitResponse;
-    if (ai.reason === "blocked") {
-      return NextResponse.json({ error: "ИИ недоступен для твоего аккаунта — обратись к админу" }, { status: 403 });
+    if (ai.reason !== "no_key") {
+      return aiFailResponse(ai, {
+        blocked: "ИИ недоступен для твоего аккаунта — обратись к админу",
+        unavailable: "ИИ ещё не настроен — добавь ключ в профиле или обратись к админу",
+        format: "ИИ не успел написать историю — попробуй ещё раз",
+      });
     }
 
     const local = buildLocalSummary({

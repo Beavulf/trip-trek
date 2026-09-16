@@ -83,7 +83,9 @@ export async function runAi(input: RunAiInput): Promise<AiResult> {
   // Таймер живёт до конца чтения тела: провайдер может отдать заголовки
   // и замереть на потоке — abort должен разорвать и чтение json тоже.
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 60_000); // LLM думает долго, но не дольше минуты
+  // Таймаут — свойство фичи: творческий текст на «размышляющих» моделях идёт
+  // дольше минуты (см. комментарий к timeoutMs в ai-usage.ts).
+  const timeout = setTimeout(() => controller.abort(), def.timeoutMs ?? 60_000);
 
   let r: Response;
   try {

@@ -94,7 +94,7 @@
 
 | Роут | Методы | Доступ | Лимит | Что делает |
 |---|---|---|---|---|
-| `ai-summary` | POST | M | 10/ч на user+trip | итоги поездки (LLM); без ключа — локальный черновик (`generated:false`), заблокирован юзер — 403 |
+| `ai-summary` | POST | M | 10/ч на user+trip | итоги поездки (LLM); без ключа вовсе — локальный черновик (`generated:false`), сбой провайдера — 502 «попробуй ещё раз» (не подменяется черновиком), заблокирован юзер — 403 |
 | `phrases/generate` | POST | M | 10/ч на user+trip | базовый разговорник по направлению |
 | `phrases/ai` | POST | M | 10/ч на user+trip | фразы по свободному запросу (3 режима: translate/more/pack) |
 | `foods/suggest` | POST | M | 10/ч на user+trip | блюда города: `count` 4–10 (пакет «Подборка шефа» в Еде); город свободного ввода проверяется Nominatim'ом (`findCity` в `geocode-place.ts`) — 400 «не нашли город», если это не place/boundary (недоступный Nominatim не блокирует) |
@@ -151,7 +151,7 @@ In-memory, сбрасываются рестартом контейнера (ADR
 - health — 60 / мин / IP (БД-пинг кэшируется на 5 с)
 - weather — 30 / мин / IP
 - geocode — 60 / ч / user
-- ИИ-роуты (ai-summary, phrases, foods) — 10 / ч / user+trip; ai/planner — 3 / ч, ai/restaurants и ai/walk — 6 / ч (реестр лимитов: `AI_FEATURES` в `src/lib/ai-usage.ts`)
+- ИИ-роуты (ai-summary, phrases, foods) — 10 / ч / user+trip; ai/planner — 3 / ч, ai/restaurants и ai/walk — 6 / ч (реестр лимитов: `AI_FEATURES` в `src/lib/ai-usage.ts`). Там же per-feature таймаут вызова провайдера (дефолт 60 с; ai-summary — 180 с: «размышляющие» GLM-модели пишут рассказ 70–90 с, walk — 90 с)
 
 ## Realtime-события
 

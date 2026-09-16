@@ -572,7 +572,7 @@ function AISummaryInner({ tripId }: { tripId: string }) {
               ))}
             </div>
             <p className="text-[11px] text-muted-foreground">
-              Обычно занимает 10–30 секунд · не закрывайте страницу
+              Обычно 20–90 секунд, иногда дольше · не закрывайте страницу
             </p>
           </motion.div>
         )}

@@ -15,6 +15,12 @@ export interface AiFeatureConfig {
   limit: { max: number; windowMs: number };
   temperature: number;
   /**
+   * Таймаут вызова провайдера. GLM-«размышляющие» модели на свободном
+   * творческом тексте (рассказ) легко сидят 70–90 с — общий дефолт 60 с их
+   * рвёт (кейс 2026-09-16: ai-summary стабильно падал в empty на 60-й секунде).
+   */
+  timeoutMs: number;
+  /**
    * Шов под премиум-гейт (см. runAi в lib/ai.ts): "all" — всем;
    * "premium-or-byok" — премиум или свой ключ. Пока у всех "all" —
    * включение гейта для новой фичи не потребует правок оркестратора.
@@ -29,13 +35,19 @@ const HOURLY_3 = { max: 3, windowMs: 60 * 60_000 };
 /** Overpass-фичи: сам OSM-запрос тяжёлый для публичных зеркал — умеренный лимит. */
 const HOURLY_6 = { max: 6, windowMs: 60 * 60_000 };
 
+const TIMEOUT_60 = 60_000;
+/** Прогулка жила на 44 с впритык к дефолту — запас на медльных ответах провайдера. */
+const TIMEOUT_90 = 90_000;
+/** Рассказ: замер на routerai/GLM — 71–84 с чистой генерации. */
+const TIMEOUT_180 = 180_000;
+
 export const AI_FEATURES: Record<AiFeature, AiFeatureConfig> = {
-  "ai-summary": { limit: HOURLY_10, temperature: 0.9, access: "all" },
-  "foods-suggest": { limit: HOURLY_10, temperature: 0.8, access: "all" },
-  "phrases-ai": { limit: HOURLY_10, temperature: 0.7, access: "all" },
-  planner: { limit: HOURLY_3, temperature: 0.6, access: "all" },
-  restaurants: { limit: HOURLY_6, temperature: 0.7, access: "all" },
-  walk: { limit: HOURLY_6, temperature: 0.7, access: "all" },
+  "ai-summary": { limit: HOURLY_10, temperature: 0.9, timeoutMs: TIMEOUT_180, access: "all" },
+  "foods-suggest": { limit: HOURLY_10, temperature: 0.8, timeoutMs: TIMEOUT_60, access: "all" },
+  "phrases-ai": { limit: HOURLY_10, temperature: 0.7, timeoutMs: TIMEOUT_60, access: "all" },
+  planner: { limit: HOURLY_3, temperature: 0.6, timeoutMs: TIMEOUT_60, access: "all" },
+  restaurants: { limit: HOURLY_6, temperature: 0.7, timeoutMs: TIMEOUT_60, access: "all" },
+  walk: { limit: HOURLY_6, temperature: 0.7, timeoutMs: TIMEOUT_90, access: "all" },
 };
 
 export interface AiUsageTokens {
