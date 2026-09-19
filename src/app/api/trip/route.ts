@@ -68,15 +68,12 @@ export async function GET(req: NextRequest) {
     ? members.reduce((sum, m) => sum + (m.budget ?? 0), 0)
     : trip.totalBudget;
 
-  const now = new Date();
   // P1 #6: shared currentDayNumber formula (была своя здесь + другая в ai-summary)
+  // 0 = поездка ещё не началась (см. trip-days.ts)
   const currentDayNumber = calculateCurrentDayNumber(trip.startDate, trip.totalDays);
-  const start = new Date(trip.startDate);
-  const nowUTC = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
-  const startUTC = Date.UTC(start.getUTCFullYear(), start.getUTCDate());
-  const diffDays = Math.floor((nowUTC - startUTC) / (1000 * 60 * 60 * 24));
-
-  const dayProgress = Math.min(100, Math.round(((diffDays + 1) / trip.totalDays) * 100));
+  // Прогресс дней — из той же формулы; раньше здесь была своя математика
+  // Date.UTC без месяца, считавшая diffDays от неправильной даты
+  const dayProgress = Math.min(100, Math.round((currentDayNumber / trip.totalDays) * 100));
   const placeProgress = totalPlaces > 0 ? Math.round((visitedPlaces / totalPlaces) * 100) : 0;
 
   // Формируем participants-совместимый формат

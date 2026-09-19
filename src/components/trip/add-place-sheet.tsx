@@ -81,10 +81,10 @@ function AddPlaceForm({
     budget: "",
     address: initial.address || "",
     description: "",
+    lat: initial.lat,
+    lng: initial.lng,
     dayId: initial.dayId || "",
   });
-  const [lat, setLat] = useState(initial.lat);
-  const [lng, setLng] = useState(initial.lng);
   const [mapOpen, setMapOpen] = useState(false);
   // Адрес, введённый пользователем (или пришедший с пикера) — приоритетнее геокода
   const [addressOverride, setAddressOverride] = useState<string | null>(initial.address ?? null);
@@ -92,7 +92,7 @@ function AddPlaceForm({
   // Адрес по координатам: кэшируемый query (по координатам) вместо мутации
   // с ручной дедупликацией; пока грузится — показываем координаты
   const { data: geo, isPending: geoPending } = useReverseGeocode(initial.lat, initial.lng, !initial.address);
-  const shownAddress = addressOverride ?? geo?.address ?? formatLatLng(lat, lng);
+  const shownAddress = addressOverride ?? geo?.address ?? formatLatLng(draft.lat, draft.lng);
 
   const patchDraft = (patch: Partial<PlaceDraft>) => {
     setDraft((d) => ({ ...d, ...patch }));
@@ -113,8 +113,8 @@ function AddPlaceForm({
         name: draft.name.trim(),
         description: draft.description.trim() || undefined,
         category: draft.category,
-        lat,
-        lng,
+        lat: draft.lat,
+        lng: draft.lng,
         dayId: draft.dayId,
         timeOfDay: draft.timeOfDay || undefined,
         budget: parseBudget(draft.budget) ?? undefined,
@@ -190,12 +190,10 @@ function AddPlaceForm({
       <MapPicker
         open={mapOpen}
         onOpenChange={setMapOpen}
-        initialLat={lat}
-        initialLng={lng}
+        initialLat={draft.lat}
+        initialLng={draft.lng}
         onPick={(r) => {
-          setLat(r.lat);
-          setLng(r.lng);
-          patchDraft({ address: r.address });
+          patchDraft({ address: r.address, lat: r.lat, lng: r.lng });
         }}
       />
     </div>

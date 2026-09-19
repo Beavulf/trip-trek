@@ -29,6 +29,8 @@ const draft = (over: Partial<PlaceDraft>): PlaceDraft => ({
   budget: "25",
   address: "Улица 1",
   description: "Интересно",
+  lat: 1,
+  lng: 2,
   dayId: "d1",
   ...over,
 });
@@ -75,5 +77,13 @@ describe("diffPlaceDraft", () => {
 
   it("день не часть диффа (перенос дня — отдельная мутация)", () => {
     expect(diffPlaceDraft(draft({}), draft({ dayId: "d2" }))).toEqual({});
+  });
+
+  it("перенос точки с карты — lat/lng уходят парой", () => {
+    expect(diffPlaceDraft(draft({}), draft({ lat: 1.0001, lng: 2.0001 }))).toEqual({ lat: 1.0001, lng: 2.0001 });
+  });
+
+  it("микросдвиг координат (GPS-шум) не считается изменением", () => {
+    expect(diffPlaceDraft(draft({}), draft({ lat: 1 + 1e-9, lng: 2 - 1e-10 }))).toEqual({});
   });
 });

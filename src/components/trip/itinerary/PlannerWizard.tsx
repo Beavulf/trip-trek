@@ -11,6 +11,7 @@ import {
   Pencil,
   RotateCw,
   Sparkles,
+  TriangleAlert,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn, plural } from "@/lib/utils";
@@ -387,6 +388,11 @@ export function PlannerWizard({ open, onOpenChange }: { open: boolean; onOpenCha
                                   ) : (
                                     <span className="inline-flex items-center gap-1 text-[10px] text-emerald-600 dark:text-emerald-400">
                                       <MapPin className="size-3" /> найдено на карте{p.geoConfidence === "approx" ? " (проверьте точку)" : ""}
+                                    </span>
+                                  )}
+                                  {p.farWarning && (
+                                    <span className="inline-flex items-center gap-1 text-[10px] text-amber-600 dark:text-amber-400" title="Место далеко от остальных мест дня или вашего отеля — проверьте, так ли нужно">
+                                      <TriangleAlert className="size-3" /> {p.farWarning}
                                     </span>
                                   )}
                                   <button

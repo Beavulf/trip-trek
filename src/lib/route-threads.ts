@@ -10,6 +10,22 @@ export interface RouteThreadInput {
   day: Day;
 }
 
+/**
+ * Плоская последовательность мест всего маршрута: дни по порядку, внутри дня —
+    по слоту времени (timeSortRank), затем по order. Единый «порядок обхода» для
+ * нити на карте и навигации «следующее/предыдущее место» в карточке места.
+ */
+export function flatRoutePlaces(days: Pick<Day, "id" | "dayNumber" | "places">[]): Place[] {
+  return [...days]
+    .sort((a, b) => a.dayNumber - b.dayNumber)
+    .flatMap((d) =>
+      d.places
+        .map((p, i) => ({ p, i, r: timeSortRank(p.timeOfDay) }))
+        .sort((a, b) => a.r - b.r || a.i - b.i)
+        .map((x) => x.p)
+    );
+}
+
 export interface RouteSegment {
   dayId: string;
   a: Place;

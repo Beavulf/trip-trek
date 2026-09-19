@@ -74,8 +74,9 @@ export function QuickAddSheet({ open, onOpenChange }: { open: boolean; onOpenCha
         <>
           {trip && (
             <p className="text-xs text-muted-foreground -mt-1 mb-3">
-              День {trip.currentDayNumber} ·{" "}
-              {trip.days.find((d) => d.dayNumber === trip.currentDayNumber)?.city ?? ""}
+              {/* До старта (currentDayNumber = 0) быстрое добавление цепляем к дню 1 */}
+              День {Math.max(trip.currentDayNumber, 1)} ·{" "}
+              {trip.days.find((d) => d.dayNumber === Math.max(trip.currentDayNumber, 1))?.city ?? ""}
             </p>
           )}
 

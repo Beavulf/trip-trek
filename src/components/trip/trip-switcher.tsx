@@ -468,8 +468,11 @@ function HeaderTripChip({
   trip?: TripCard;
   tripData: ReturnType<typeof useTrip>["data"];
 }) {
+  // До старта currentDayNumber = 0 — показываем дату вылета вместо «День 0»
   const dayLine = tripData
-    ? `День ${tripData.currentDayNumber}/${tripData.settings.totalDays}`
+    ? tripData.currentDayNumber < 1
+      ? `Старт ${new Intl.DateTimeFormat("ru-RU", { day: "numeric", month: "short" }).format(new Date(tripData.settings.startDate))}`
+      : `День ${tripData.currentDayNumber}/${tripData.settings.totalDays}`
     : null;
   const title = trip?.title || "Поездки";
   return (

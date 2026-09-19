@@ -13,6 +13,9 @@ export interface PlaceDraft {
   budget: string;
   address: string;
   description: string;
+  /** Координаты точки: редактируются выбором на карте (MapPicker) */
+  lat: number;
+  lng: number;
   /** Только для создания: день размещения */
   dayId: string;
 }
@@ -25,6 +28,8 @@ export function draftFromPlace(place: Place, dayId?: string): PlaceDraft {
     budget: place.budget != null ? String(place.budget) : "",
     address: place.address || "",
     description: place.description || "",
+    lat: place.lat,
+    lng: place.lng,
     dayId: dayId ?? place.dayId,
   };
 }
@@ -49,5 +54,10 @@ export function diffPlaceDraft(base: PlaceDraft, cur: PlaceDraft): PlacePatch {
   if (parseBudget(cur.budget) !== parseBudget(base.budget)) patch.budget = parseBudget(cur.budget);
   if (cur.address.trim() !== (base.address || "")) patch.address = cur.address.trim() || null;
   if (cur.description.trim() !== (base.description || "")) patch.description = cur.description.trim() || null;
+  // Точку двигают картой — пара lat/lng меняется вместе; GPS-шум отсекаем эпсилоном
+  if (Math.abs(cur.lat - base.lat) > 1e-7 || Math.abs(cur.lng - base.lng) > 1e-7) {
+    patch.lat = cur.lat;
+    patch.lng = cur.lng;
+  }
   return patch;
 }

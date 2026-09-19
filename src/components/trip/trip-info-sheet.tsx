@@ -265,10 +265,14 @@ export function TripInfoSheet({
                 </div>
               </div>
 
-              {/* Прогресс дня */}
+              {/* Прогресс дня; до старта (currentDayNumber = 0) — дата старта вместо «День 0» */}
               <div>
                 <div className="flex justify-between text-xs mb-1.5">
-                  <span className="font-medium">День {trip.currentDayNumber} из {s?.totalDays}</span>
+                  <span className="font-medium">
+                    {trip.currentDayNumber < 1
+                      ? `Поездка начнётся ${new Intl.DateTimeFormat("ru-RU", { day: "numeric", month: "long" }).format(new Date(s?.startDate ?? Date.now()))}`
+                      : `День ${trip.currentDayNumber} из ${s?.totalDays}`}
+                  </span>
                   <span className="font-mono text-muted-foreground">{trip.dayProgress}%</span>
                 </div>
                 <div className="h-2 rounded-full bg-muted overflow-hidden">

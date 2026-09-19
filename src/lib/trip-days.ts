@@ -1,7 +1,8 @@
 // Shared helper для вычисления текущего дня поездки.
 // P1 #6: раньше в api/trip/route.ts была формула floor+UTC,
 // а в api/ai-summary/route.ts — ceil+ms. Расхождение давало разные номера дней.
-// Теперь единая функция используется в обоих местах.
+// 0 = поездка ещё не началась: кламп в 1 рисовал «Сегодня» на первом дне
+// (и «Прошёл» на прошедших) задолго до старта — сессия 2026-09-19.
 export function calculateCurrentDayNumber(startDate: Date, totalDays: number): number {
   const now = new Date();
   // Use date-only comparison (ignore time) in UTC to avoid timezone drift
@@ -12,7 +13,8 @@ export function calculateCurrentDayNumber(startDate: Date, totalDays: number): n
     new Date(startDate).getUTCDate()
   );
   const diffDays = Math.floor((nowUTC - startUTC) / (1000 * 60 * 60 * 24));
-  return Math.max(1, Math.min(totalDays, diffDays + 1));
+  if (diffDays < 0) return 0;
+  return Math.min(totalDays, diffDays + 1);
 }
 
 /**

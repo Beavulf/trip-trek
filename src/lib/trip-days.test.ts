@@ -19,9 +19,9 @@ describe("calculateCurrentDayNumber", () => {
     expect(calculateCurrentDayNumber(new Date("2026-09-10T00:00:00Z"), 7)).toBe(3);
   });
 
-  it("до старта поездки не уходит ниже 1", () => {
+  it("до старта поездки возвращает 0 — «сегодня» ещё нет", () => {
     fakeNow("2026-09-08T12:00:00Z");
-    expect(calculateCurrentDayNumber(new Date("2026-09-10T00:00:00Z"), 7)).toBe(1);
+    expect(calculateCurrentDayNumber(new Date("2026-09-10T00:00:00Z"), 7)).toBe(0);
   });
 
   it("после конца поездки зажимается последним днём", () => {

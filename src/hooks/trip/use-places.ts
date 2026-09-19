@@ -57,3 +57,23 @@ export function useDeletePlace() {
     onSuccess: () => invalidateRouteData(qc),
   });
 }
+
+/** Перестановка мест внутри дня (drag&drop): полный порядок id дня одним запросом. */
+export function useReorderPlaces() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ dayId, placeIds }: { dayId: string; placeIds: string[] }) => {
+      const r = await fetch("/api/places/reorder", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tripId: getTripId(), dayId, placeIds }),
+      });
+      if (!r.ok) {
+        const err = await r.json().catch(() => ({}));
+        throw new Error(err.error || "reorder places failed");
+      }
+      return r.json();
+    },
+    onSuccess: () => invalidateRouteData(qc),
+  });
+}

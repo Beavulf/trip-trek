@@ -179,9 +179,15 @@ export function AppShell({ children }: { children: ReactNode }) {
   }, []);
 
   // «Загрузка…» — только пока запрос реально идёт; без поездки пишем как есть,
-  // иначе новый юзер вечно видит «загрузку» и думает, что что-то сломалось
+  // иначе новый юзер вечно видит «загрузку» и думает, что что-то сломалось.
+  // До старта currentDayNumber = 0 — дата вылета вместо «День 0».
+  const startLine = trip
+    ? `Старт ${new Intl.DateTimeFormat("ru-RU", { day: "numeric", month: "short" }).format(new Date(trip.settings.startDate))}`
+    : null;
   const dayLine = trip
-    ? `День ${trip.currentDayNumber}/${trip.settings.totalDays}${trip.days.find((d) => d.dayNumber === trip.currentDayNumber)?.city ? ` · ${trip.days.find((d) => d.dayNumber === trip.currentDayNumber)?.city}` : ""}`
+    ? trip.currentDayNumber < 1
+      ? startLine
+      : `День ${trip.currentDayNumber}/${trip.settings.totalDays}${trip.days.find((d) => d.dayNumber === trip.currentDayNumber)?.city ? ` · ${trip.days.find((d) => d.dayNumber === trip.currentDayNumber)?.city}` : ""}`
     : tripLoading
       ? "загрузка…"
       : "нет активной поездки";

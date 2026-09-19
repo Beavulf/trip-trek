@@ -4,8 +4,10 @@ import {
   sanitizeUserText,
   normalizeName,
   limitsFor,
+  markFarDrafts,
   PLANNER_CATEGORIES,
   PLANNER_TIME_SLOTS,
+  type PlannerDayDraft,
 } from "./planner";
 
 const ok = {
@@ -102,5 +104,66 @@ describe("константы планера", () => {
     expect(PLANNER_CATEGORIES).toContain("sight");
     expect(PLANNER_CATEGORIES).toContain("restaurant");
     expect(PLANNER_TIME_SLOTS).toEqual(["morning", "afternoon", "evening"]);
+  });
+});
+
+describe("markFarDrafts — связность дня по координатам", () => {
+  const draftPlace = (name: string, lat: number, lng: number) => ({
+    name,
+    nameEn: name,
+    category: "sight",
+    timeOfDay: null,
+    why: "x",
+    budgetHint: null,
+    addressHint: null,
+    geoConfidence: "exact" as const,
+    lat,
+    lng,
+    address: null,
+    farWarning: null,
+  });
+
+  // Гуанчжоу: соседние точки в паре километров и выброс в другом конце города
+  const day: PlannerDayDraft = {
+    dayNumber: 1,
+    places: [
+      draftPlace("Отель", 23.1291, 113.2644),
+      draftPlace("Рядом с отелем", 23.1310, 113.2700),
+      draftPlace("Далеко", 23.5500, 113.5900),
+      draftPlace("Без гео", Number.NaN, Number.NaN),
+    ],
+  };
+  // NaN-заглушка выше только для типа; на практике непрошедшие геокодинг — lat/lng null
+  day.places[3] = { ...day.places[3], lat: null, lng: null };
+
+  it("место дальше порога получает farWarning с километрами", () => {
+    const drafts = [structuredClone(day)];
+    markFarDrafts(drafts, new Map([[1, [{ lat: 23.1291, lng: 113.2644 }]]]));
+    expect(drafts[0].places[0].farWarning).toBeNull(); // сам якорь — рядом с собой
+    expect(drafts[0].places[1].farWarning).toBeNull(); // ~600 м от якоря
+    expect(drafts[0].places[2].farWarning).toMatch(/км от остальных мест дня/);
+    expect(drafts[0].places[3].farWarning).toBeNull(); // без координат — не судим
+  });
+
+  it("без якорей день судится по взаимной связности черновиков", () => {
+    const drafts = [structuredClone(day)];
+    markFarDrafts(drafts, new Map());
+    expect(drafts[0].places[0].farWarning).toBeNull();
+    expect(drafts[0].places[1].farWarning).toBeNull();
+    expect(drafts[0].places[2].farWarning).toMatch(/км от остальных мест дня/); // выброс дня
+  });
+
+  it("плотный кластер далеко от якоря (отеля) всё равно предупреждается", () => {
+    const solo: PlannerDayDraft[] = [
+      {
+        dayNumber: 2,
+        places: [
+          draftPlace("Кластер А", 39.9042, 116.4074), // Пекин
+          draftPlace("Кластер Б", 39.9050, 116.4080), // в 100 м от А
+        ],
+      },
+    ];
+    markFarDrafts(solo, new Map([[2, [{ lat: 31.2304, lng: 121.4737 }]]])); // якорь — Шанхай
+    expect(solo[0].places.every((p) => p.farWarning?.includes("км") ?? false)).toBe(true);
   });
 });

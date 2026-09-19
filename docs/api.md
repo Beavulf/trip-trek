@@ -67,6 +67,7 @@
 | `places` | POST | `place:created` | новое место (день, координаты, категория) |
 | `places/batch` | POST | `place:created` (одна публикация с count) | батч-создание до 30 мест из черновиков ИИ (планер/рестораны/прогулка); все dayId — своей поездки |
 | `places/[id]` | PATCH, DELETE | `place:updated/deleted` | правка/удаление места, статус visited |
+| `places/reorder` | POST | `place:updated` (без тоста) | порядок мест внутри дня (drag&drop в карточке дня): полный список id дня одной перестановкой; `order` — серверное поле, обычный PATCH его не пишет |
 | `photos` | GET, POST, DELETE | `photo:added` | галерея; POST — загрузка файла (storage, EXIF-гео); GET отдаёт `place` проекцией {name, lat, lng} |
 | `photos/[id]` | PATCH | `photo:added` | подпись/избранное |
 | `photos/geo` | GET | — | фото с координатами для карты: селект маркерных полей, кап 1000 |
@@ -98,7 +99,7 @@
 | `phrases/generate` | POST | M | 10/ч на user+trip | базовый разговорник по направлению |
 | `phrases/ai` | POST | M | 10/ч на user+trip | фразы по свободному запросу (3 режима: translate/more/pack) |
 | `foods/suggest` | POST | M | 10/ч на user+trip | блюда города: `count` 4–10 (пакет «Подборка шефа» в Еде); город свободного ввода проверяется Nominatim'ом (`findCity` в `geocode-place.ts`) — 400 «не нашли город», если это не place/boundary (недоступный Nominatim не блокирует) |
-| `ai/planner` | POST | M | 3/ч на user+trip | черновик маршрута ИИ (mode trip/day/replace) по **существующим** дням; места геокодируются Nominatim по nameEn, `fail` → «уточнить на карте» |
+| `ai/planner` | POST | M | 3/ч на user+trip | черновик маршрута ИИ (mode trip/day/replace) по **существующим** дням; в промпт уходят координаты существующих мест дня (якорь «рядом с отелем»), после геокодинга далёкие места получают `farWarning` («≈N км от остальных мест дня»), итог — в `geoNote`; геокодирование Nominatim по nameEn, `fail` → «уточнить на карте» |
 | `ai/restaurants` | POST | M | 6/ч на user+trip | реальные заведения OpenStreetMap у города дня; ИИ только отбирает — имена/координаты из OSM (`matchPicksToPois`) |
 | `ai/walk` | POST | M | 6/ч на user+trip | прогулка на 1–6 ч: OSM-POI в радиусе 300–5000 м минус места поездки, ИИ собирает таймлайн |
 | `user/ai-key-check` | POST | U | 5/мин | проверка своего ключа живым запросом (общий ключ не проверяется) |

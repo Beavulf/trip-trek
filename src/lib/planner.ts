@@ -3,6 +3,7 @@
 // Без db/Next — всё покрывается юнит-тестами. Роут — api/ai/planner.
 import { CATEGORY_META } from "./types";
 import { TIME_SLOTS } from "./time-of-day";
+import { haversineMeters } from "./poi";
 
 /** Категории мест, на которые ИИ имеет право мапить свои предложения. */
 export const PLANNER_CATEGORIES = Object.keys(CATEGORY_META);
@@ -27,6 +28,11 @@ export interface PlannerPlaceDraft {
   lat: number | null;
   lng: number | null;
   address: string | null;
+  /**
+   * Серверная метка связности (после геокодинга): место далеко от остальных
+   * мест дня / уже существующих точек дня. Строка для юзера, null = рядом.
+   */
+  farWarning: string | null;
 }
 
 export interface PlannerDayDraft {
@@ -155,6 +161,7 @@ function validatePlace(p: unknown, exclude: string[]): PlannerPlaceDraft | null 
     lat: null,
     lng: null,
     address: null,
+    farWarning: null,
   };
 }
 
@@ -182,5 +189,39 @@ export function extractJsonLoose(raw: string): unknown {
     return JSON.parse(body);
   } catch {
     return null;
+  }
+}
+
+/** Порог «место далеко от дня»: дальше — черновик получает честное предупреждение. */
+export const PLANNER_FAR_METERS = 5000;
+
+/**
+ * Проверка связности дня после геокодинга.
+ * Правило: если в дне уже есть места (якорь — например, отель), черновик судится
+ * по расстоянию до ближайшего якоря; если день пуст — по ближайшему соседнему
+ * черновику (взаимная связность дня). Дальше PLANNER_FAR_METERS → farWarning
+ * с километрами; юзер видит это в карточке черновика до добавления в маршрут.
+ */
+export function markFarDrafts(
+  drafts: PlannerDayDraft[],
+  anchorsByDay: Map<number, { lat: number; lng: number }[]>
+): void {
+  for (const d of drafts) {
+    const anchors = anchorsByDay.get(d.dayNumber) ?? [];
+    const located = d.places.filter((p) => p.lat != null && p.lng != null);
+    for (const p of located) {
+      const candidates =
+        anchors.length > 0
+          ? anchors
+          : located
+              .filter((q) => q !== p && q.lat != null && q.lng != null)
+              .map((q) => ({ lat: q.lat!, lng: q.lng! }));
+      if (candidates.length === 0) continue; // сравнивать не с чем
+      const nearest = Math.min(...candidates.map((c) => haversineMeters(p.lat!, p.lng!, c.lat, c.lng)));
+      if (nearest > PLANNER_FAR_METERS) {
+        const km = (nearest / 1000).toFixed(nearest < 10_000 ? 1 : 0);
+        p.farWarning = `≈${km} км от остальных мест дня`;
+      }
+    }
   }
 }

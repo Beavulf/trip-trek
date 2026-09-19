@@ -6,7 +6,10 @@ import {
   Camera,
   CheckCircle2,
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   Loader2,
+  Map as MapIcon,
   MapPin,
   Navigation,
   NotebookPen,
@@ -30,14 +33,16 @@ import { useTripStore } from "@/lib/trip-store";
 import { focusOnMap } from "@/lib/map-bus";
 import { CATEGORY_META, type Place, type Photo } from "@/lib/types";
 import { diffPlaceDraft, draftFromPlace, type PlaceDraft } from "@/lib/place-draft";
+import { flatRoutePlaces } from "@/lib/route-threads";
 import { googleDirectionsUrl } from "@/lib/place-links";
 import { useDialogA11y } from "@/hooks/use-dialog-a11y";
 import { MobileBottomSheet } from "../mobile-bottom-sheet";
 import { toast } from "sonner";
-import { cn } from "@/lib/utils";
+import { cn, formatLatLng } from "@/lib/utils";
 import { compressImageForUpload, ImageCompressError } from "@/lib/image-compress";
 import { PhotoLightbox } from "../photo-lightbox";
 import { PlaceForm } from "../place-form";
+import { MapPicker } from "../map-picker";
 
 interface PlaceDialogProps {
   place: Place | null;
@@ -49,8 +54,20 @@ interface PlaceDialogProps {
 export function PlaceDialog({ place, currency, onClose }: PlaceDialogProps) {
   // Последнее не-null место держим до конца exit-анимации — иначе unmount её убивает.
   // Обновляем прямо в рендере (легальный паттерн «track previous»), а не в эффекте.
+  // lastProp отделяет «юзер кликнул другое место» от внутренней навигации
+  // (кнопки «дальше/назад» меняют shown, не трогая проп родителя).
   const [shown, setShown] = useState<Place | null>(null);
-  if (place && place !== shown) setShown(place);
+  const [lastProp, setLastProp] = useState<Place | null>(null);
+  if (place) {
+    if (place !== lastProp) {
+      setLastProp(place);
+      setShown(place);
+    }
+  } else if (lastProp !== null) {
+    // Закрыт: чистим якорь, чтобы повторное открытие того же места из кэша
+    // (та же идентичность объекта) снова синхронизировалось
+    setLastProp(null);
+  }
 
   if (typeof document === "undefined" || !shown) return null;
 
@@ -61,6 +78,7 @@ export function PlaceDialog({ place, currency, onClose }: PlaceDialogProps) {
       open={!!place}
       currency={currency}
       onClose={onClose}
+      onNavigate={setShown}
     />
   );
 }
@@ -70,11 +88,14 @@ function PlaceDialogBody({
   open,
   currency,
   onClose,
+  onNavigate,
 }: {
   place: Place;
   open: boolean;
   currency?: string;
   onClose: () => void;
+  /** Внутренняя навигация по маршруту: кнопки «назад/дальше» в карточке */
+  onNavigate: (p: Place) => void;
 }) {
   const update = useUpdatePlace();
   const upload = useUploadPhoto();
@@ -86,6 +107,7 @@ function PlaceDialogBody({
   const [notes, setNotes] = useState(place.notes || "");
   const [uploading, setUploading] = useState(false);
   const [editing, setEditing] = useState(false);
+  const [mapOpen, setMapOpen] = useState(false);
   const [lightboxIdx, setLightboxIdx] = useState<number | null>(null);
   const { data: days } = useRouteDays();
   const { setActiveTab } = useTripStore();
@@ -122,6 +144,12 @@ function PlaceDialogBody({
 
   const day = days?.find((d) => d.id === fresh.dayId) ?? days?.find((d) => d.id === place.dayId);
   const photos = Array.isArray(placePhotos) ? placePhotos : [];
+
+  // Соседние места по порядку обхода маршрута (дни → слот времени → order)
+  const routeSeq = useMemo(() => (days ? flatRoutePlaces(days) : []), [days]);
+  const seqIdx = routeSeq.findIndex((p) => p.id === fresh.id);
+  const prevPlace = seqIdx > 0 ? routeSeq[seqIdx - 1] : null;
+  const nextPlace = seqIdx >= 0 && seqIdx < routeSeq.length - 1 ? routeSeq[seqIdx + 1] : null;
 
   // Права на фото: автор или владелец поездки
   const { data: session } = useAuth();
@@ -335,6 +363,40 @@ function PlaceDialogBody({
             />
           </div>
 
+          {/* Навигация по маршруту: посмотреть, что дальше/было раньше */}
+          {(prevPlace || nextPlace) && (
+            <div className="flex gap-2">
+              {prevPlace ? (
+                <button
+                  type="button"
+                  onClick={() => onNavigate(prevPlace)}
+                  className="flex-1 min-w-0 min-h-11 rounded-xl border border-border bg-secondary/60 hover:bg-accent px-2.5 flex items-center gap-1.5 text-xs transition-colors"
+                  title={`Предыдущее место: ${prevPlace.name}`}
+                  aria-label="Предыдущее место маршрута"
+                >
+                  <ChevronLeft className="size-4 shrink-0 text-muted-foreground" />
+                  <span className="truncate text-muted-foreground">{prevPlace.name}</span>
+                </button>
+              ) : (
+                <div className="flex-1" aria-hidden="true" />
+              )}
+              {nextPlace ? (
+                <button
+                  type="button"
+                  onClick={() => onNavigate(nextPlace)}
+                  className="flex-1 min-w-0 min-h-11 rounded-xl border border-border bg-secondary/60 hover:bg-accent px-2.5 flex items-center justify-end gap-1.5 text-xs transition-colors"
+                  title={`Следующее место: ${nextPlace.name}`}
+                  aria-label="Следующее место маршрута"
+                >
+                  <span className="truncate text-muted-foreground">{nextPlace.name}</span>
+                  <ChevronRight className="size-4 shrink-0 text-muted-foreground" />
+                </button>
+              ) : (
+                <div className="flex-1" aria-hidden="true" />
+              )}
+            </div>
+          )}
+
           {/* Редактирование деталей — раскрывающийся блок */}
           <div className="rounded-xl border border-border overflow-hidden">
             <button
@@ -362,6 +424,24 @@ function PlaceDialogBody({
                       onChange={(patch) => setDraft((d) => ({ ...d, ...patch }))}
                       currency={currency}
                     />
+                    {/* Точка на карте: перенос адреса/координат места, как при добавлении */}
+                    <div>
+                      <button
+                        type="button"
+                        onClick={() => setMapOpen(true)}
+                        className="w-full min-h-11 rounded-lg bg-secondary border border-border hover:bg-accent flex items-center justify-center gap-1.5 text-sm"
+                      >
+                        <MapIcon className="size-4" /> Выбрать точку на карте
+                      </button>
+                      <p className="mt-1 flex items-center gap-1 text-[11px] text-muted-foreground">
+                        <MapPin className="size-3 shrink-0" />
+                        <span className="truncate font-mono">
+                          {formatLatLng(draft.lat, draft.lng)}
+                          {(Math.abs(draft.lat - baseDraft.lat) > 1e-7 || Math.abs(draft.lng - baseDraft.lng) > 1e-7)
+                            ? " · новая точка" : ""}
+                        </span>
+                      </p>
+                    </div>
                     {editDirty && (
                       <div className="flex gap-2">
                         <button
@@ -503,6 +583,15 @@ function PlaceDialogBody({
           <DeletePlaceButton placeId={fresh.id} placeName={fresh.name} onDeleted={onClose} />
       </div>
     </MobileBottomSheet>
+
+      {/* Пикер точки: и для правки координат из блока редактирования */}
+      <MapPicker
+        open={mapOpen}
+        onOpenChange={setMapOpen}
+        initialLat={draft.lat}
+        initialLng={draft.lng}
+        onPick={(r) => setDraft((d) => ({ ...d, address: r.address, lat: r.lat, lng: r.lng }))}
+      />
 
       {/* Лайтбокс — вне overlay, чтобы клики YARL не всплывали и не закрывали диалог */}
       {lightboxIdx !== null && (

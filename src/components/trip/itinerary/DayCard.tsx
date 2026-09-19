@@ -1,11 +1,13 @@
 "use client";
 
 import { useState } from "react";
-import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
-import { Check, ChevronDown, MapPin, Pencil, Plus } from "lucide-react";
+import { motion, AnimatePresence, Reorder, useDragControls, useReducedMotion } from "framer-motion";
+import { Check, ChevronDown, GripVertical, MapPin, Pencil, Plus } from "lucide-react";
 import { type Day, type Place } from "@/lib/types";
 import { cn } from "@/lib/utils";
-import { daySections } from "@/lib/time-of-day";
+import { daySections, type DaySection } from "@/lib/time-of-day";
+import { useReorderPlaces } from "@/hooks/use-trip";
+import { toast } from "sonner";
 import { PlaceRow } from "./PlaceRow";
 import { DeleteDayButton } from "./DeleteDayButton";
 
@@ -47,12 +49,38 @@ export function DayCard({
   const [expanded, setExpanded] = useState(true);
   const reduceMotion = useReducedMotion();
   const accent = day.accentColor ?? "#f97316";
+  const reorder = useReorderPlaces();
+
+  // Локальные секции мест: пока тянешь карточку, порядок живёт здесь;
+  // после мутации (или чужого place:updated) resync с данными маршрута.
+  // Синхронизация в рендере (паттерн «track previous» из PlannerWizard),
+  // а не в эффекте — иначе каскад ререндеров.
+  const [sections, setSections] = useState<DaySection[]>(() => daySections(day.places));
+  const [syncedPlaces, setSyncedPlaces] = useState<Place[] | null>(null);
+  if (day.places !== syncedPlaces) {
+    setSyncedPlaces(day.places);
+    setSections(daySections(day.places));
+  }
+
   const visited = day.places.filter((p) => p.status === "visited").length;
   const progress = day.places.length ? (visited / day.places.length) * 100 : 0;
   const dl = dateLabel(day.date);
 
-  // Группировка по времени суток — только если она реально используется в этом дне
-  const sections = daySections(day.places);
+  // Перестановка внутри секции (утро/день/вечер/без времени): слоты не смешиваем —
+  // «утро» не может уехать в «вечер» перетаскиванием, слот меняется в карточке места.
+  const applyReorder = (key: string, nextPlaces: Place[]) => {
+    const nextSections = sections.map((s) => (s.key === key ? { ...s, places: nextPlaces } : s));
+    setSections(nextSections);
+    reorder.mutate(
+      { dayId: day.id, placeIds: nextSections.flatMap((s) => s.places.map((p) => p.id)) },
+      {
+        onError: () => {
+          setSections(daySections(day.places));
+          toast.error("Не удалось изменить порядок мест");
+        },
+      }
+    );
+  };
 
   const placeRow = (p: Place) => (
     <PlaceRow key={p.id} place={p} accentColor={accent} currency={currency} onOpen={() => onOpenPlace(p)} />
@@ -176,8 +204,14 @@ export function DayCard({
                         {s.label}
                         <span className="h-px w-6 bg-border" aria-hidden="true" />
                       </div>
-                      {s.places.map(placeRow)}
+                      {s.places.length > 1 ? (
+                        <SortablePlaces places={s.places} onReorder={(next) => applyReorder(s.key, next)} accentColor={accent} currency={currency} onOpenPlace={onOpenPlace} />
+                      ) : (
+                        s.places.map(placeRow)
+                      )}
                     </div>
+                  ) : s.places.length > 1 ? (
+                    <SortablePlaces key={s.key} places={s.places} onReorder={(next) => applyReorder(s.key, next)} accentColor={accent} currency={currency} onOpenPlace={onOpenPlace} />
                   ) : (
                     s.places.map(placeRow)
                   )
@@ -197,5 +231,66 @@ export function DayCard({
         </AnimatePresence>
       </div>
     </div>
+  );
+}
+
+/**
+ * Сортируемый список мест секции: ручка-грип слева от карточки, тянется только
+ * за неё (клик по карточке открывает место). Reorder из framer-motion —
+ * и мышь, и тач в одном примитиве, без отдельной DnD-библиотеки.
+ */
+function SortablePlaces({
+  places,
+  onReorder,
+  accentColor,
+  currency,
+  onOpenPlace,
+}: {
+  places: Place[];
+  onReorder: (next: Place[]) => void;
+  accentColor: string;
+  currency?: string;
+  onOpenPlace: (p: Place) => void;
+}) {
+  return (
+    <Reorder.Group axis="y" values={places} onReorder={onReorder} className="space-y-1.5">
+      {places.map((p) => (
+        <SortableRow key={p.id} place={p} accentColor={accentColor} currency={currency} onOpenPlace={onOpenPlace} />
+      ))}
+    </Reorder.Group>
+  );
+}
+
+function SortableRow({
+  place,
+  accentColor,
+  currency,
+  onOpenPlace,
+}: {
+  place: Place;
+  accentColor: string;
+  currency?: string;
+  onOpenPlace: (p: Place) => void;
+}) {
+  const controls = useDragControls();
+  return (
+    <Reorder.Item
+      value={place}
+      dragListener={false}
+      dragControls={controls}
+      className="flex items-center gap-1"
+    >
+      <button
+        type="button"
+        onPointerDown={(e) => controls.start(e)}
+        aria-label={`Перетащить «${place.name}», чтобы изменить порядок`}
+        className="shrink-0 size-9 -ml-1.5 grid place-items-center rounded-lg text-muted-foreground/50 hover:text-muted-foreground hover:bg-accent/60 cursor-grab active:cursor-grabbing touch-none"
+      >
+        <GripVertical className="size-4" />
+      </button>
+      <div className="flex-1 min-w-0">
+        <PlaceRow place={place} accentColor={accentColor} currency={currency} onOpen={() => onOpenPlace(place)} />
+      </div>
+    </Reorder.Item>
   );
 }
