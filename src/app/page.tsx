@@ -9,9 +9,14 @@ import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 import { Loader2 } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
+import { useCurrentTripId } from "@/hooks/trip/trip-id";
+import { cn } from "@/lib/utils";
+
+// Лоадер вынесен: тот же импорт используется и для dynamic(), и для прогрева чанка в простое
+const loadTripMap = () => import("@/components/trip/trip-map");
 
 // Leaflet работает только в браузере
-const TripMap = dynamic(() => import("@/components/trip/trip-map"), {
+const TripMap = dynamic(loadTripMap, {
   ssr: false,
   loading: () => <div className="py-20 text-center text-muted-foreground">Загрузка карты…</div>,
 });
@@ -42,9 +47,31 @@ const Achievements = dynamic(() => import("@/components/trip/achievements").then
 const Board = dynamic(() => import("@/components/trip/board").then(m => m.Board), { loading: TabLoader });
 
 export default function Home() {
-  const { activeTab } = useTripStore();
+  const { activeTab, mapEverOpened } = useTripStore();
   const router = useRouter();
   const { data: session, status } = useAuth();
+  const tripId = useCurrentTripId();
+
+  // Карта — самая тяжёлая вкладка (создание Leaflet-инстанса, сотни маркеров-нитей),
+  // поэтому живёт между переключениями вкладок: строится при первом заходе и дальше
+  // только прячется (display:none). Размонтирование возвращало бы пользователю
+  // «подвисание» на каждый возврат на вкладку. Флаг в сторе — транзиентный,
+  // после перезагрузки страницы карта строится заново при первом заходе.
+  const showMap = mapEverOpened || activeTab === "map";
+
+  // Прогрев ленивого чанка карты в простое после старта: первый заход на вкладку
+  // не ждёт ни сеть, ни парсинг (Safari не умеет requestIdleCallback — фолбэк на таймер)
+  useEffect(() => {
+    const warm = () => {
+      void loadTripMap();
+    };
+    if ("requestIdleCallback" in window) {
+      const id = window.requestIdleCallback(warm, { timeout: 5000 });
+      return () => window.cancelIdleCallback(id);
+    }
+    const t = setTimeout(warm, 2500);
+    return () => clearTimeout(t);
+  }, []);
 
   // Редирект только в useEffect (не во время рендера!)
   useEffect(() => {
@@ -79,19 +106,29 @@ export default function Home() {
 
   return (
     <AppShell>
+      {/* Карта живёт вне keyed-обёртки framer: mount-once, при уходе со вкладки
+          прячется display:none, а не размонтируется. key=tripId — при смене поездки
+          карта честно строится заново (иначе остался бы вид и fit прошлой поездки). */}
+      <div
+        key={tripId || "no-trip"}
+        className={cn(activeTab !== "map" && "hidden")}
+        aria-hidden={activeTab !== "map"}
+      >
+        {showMap && <TripMap active={activeTab === "map"} />}
+      </div>
       {/* Без AnimatePresence mode="wait": при быстрых переключениях вкладок exit-анимация
           тяжёлой вкладки (карта/галерея) может застрять и заблокировать появление новой.
           Оставляем только enter-анимацию — key меняет контент мгновенно. */}
-      <motion.div
-        key={activeTab}
-        initial={{ opacity: 0, y: 8 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
-      >
+      {activeTab !== "map" && (
+        <motion.div
+          key={activeTab}
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+        >
           {activeTab === "dashboard" && <Dashboard />}
           {activeTab === "timeline" && <Timeline />}
           {activeTab === "itinerary" && <Itinerary />}
-          {activeTab === "map" && <TripMap />}
           {activeTab === "gallery" && <Gallery />}
           {activeTab === "budget" && <Budget />}
           {activeTab === "rest" && <RestChill />}
@@ -103,7 +140,8 @@ export default function Home() {
           {activeTab === "board" && <Board />}
           {activeTab === "achievements" && <Achievements />}
           {activeTab === "info" && <InfoPanel />}
-      </motion.div>
+        </motion.div>
+      )}
     </AppShell>
   );
 }

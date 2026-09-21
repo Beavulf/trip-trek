@@ -140,6 +140,11 @@ WS-handshake требует валидный JWT (`server/ws-auth.ts`), анон
 - Императивный Leaflet (`L.*`, тайминги полётов) живёт только в `src/components/trip/map/`
   (`canvas.tsx`, `icons.ts`, `route-threads.tsx`) и `map-picker-client.tsx`. Компонентам карты
   нужен полёт — проси у `MapCanvasHandle` (focusOn/fitPoints/flyToPoints/zoomBy/getCenter).
+- Вкладка «Карта» живёт между переключениями: `page.tsx` держит `TripMap` смонтированным и
+  прячет `display:none` (флаг `mapEverOpened` в trip-store), иначе пересоздание Leaflet-инстанса
+  подвешивает каждый возврат на вкладку. При скрытой вкладке полёты копятся в очереди `MapCanvas`
+  (проп `active`), на возврат — `invalidateSize` + сброс очереди. Не «упрощай» обратно до
+  условного рендеринга.
 
 ## Поддержание документации (обязательное правило)
 

@@ -18,6 +18,9 @@ export function usePhotosGeo() {
       return Array.isArray(data) ? data : [];
     },
     enabled: !!tripId,
+    // Загрузка фото шлёт photo:added → WS-шина инвалидирует ключ; refetch на каждый
+    // заход на вкладку карты только перерисовывал сотни маркеров зря.
+    staleTime: 60_000,
   });
 }
 

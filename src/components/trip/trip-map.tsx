@@ -44,7 +44,7 @@ import { MapCanvas, type MapCanvasHandle } from "./map/canvas";
 import { makeIcon, makePhotoIcon, makeLocateIcon } from "./map/icons";
 import { EmptyHero } from "./empty-hero";
 
-export default function TripMap() {
+export default function TripMap({ active = true }: { active?: boolean }) {
   const tripId = useCurrentTripId();
   // Модель чтения маршрута: дни+места+мета одним запросом (вместо useDays + useTrip)
   const { data: route, isLoading, isError, refetch } = useRoute();
@@ -207,6 +207,21 @@ export default function TripMap() {
     };
   }, [allPlaces]);
 
+  // Фото-метки — самая дорогая часть монтирования (каждая — маркер с <img>,
+  // их может быть сотни). На первое открытие вкладки откладываем их до простоя:
+  // тайлы и пины мест становятся интерактивными сразу, фото дорисовываются следом.
+  const [photosReady, setPhotosReady] = useState(false);
+  useEffect(() => {
+    if (photosReady) return;
+    const warm = () => setPhotosReady(true);
+    if ("requestIdleCallback" in window) {
+      const id = window.requestIdleCallback(warm, { timeout: 2000 });
+      return () => window.cancelIdleCallback(id);
+    }
+    const t = setTimeout(warm, 800);
+    return () => clearTimeout(t);
+  }, [photosReady]);
+
   // Шапку и FAB прячем классом на body: обёртка вкладки от framer-motion
   // создаёт stacking context, внутри которого любой z-index ниже шапки.
   useEffect(() => {
@@ -334,9 +349,10 @@ export default function TripMap() {
   };
 
   const visiblePlaces = filters.onlyPhotos ? [] : filtered;
-  const visiblePhotos = filters.showPhotos
-    ? (geoPhotos ?? []).filter((p) => p.lat != null && p.lng != null)
-    : [];
+  const visiblePhotos =
+    filters.showPhotos && photosReady
+      ? (geoPhotos ?? []).filter((p) => p.lat != null && p.lng != null)
+      : [];
 
   return (
     // Без animate-fade-up на корне: его animation-fill:both оставляет
@@ -360,6 +376,7 @@ export default function TripMap() {
           center={initialCenter}
           zoom={mapCityFilter ? 12 : 8}
           fullscreen={fullscreen}
+          active={active}
         >
           {/* Нити маршрута по дням */}
           {!filters.onlyPhotos && (

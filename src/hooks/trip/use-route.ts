@@ -37,6 +37,10 @@ export function useRoute() {
     queryKey: queryKeys.route(tripId),
     queryFn: () => (tripId ? fetchRoute(tripId) : Promise.reject(new Error("no trip selected"))),
     enabled: !!tripId,
+    // Маршрут меняется только мутациями, а они (и WS-шина) инвалидируют ключ сразу.
+    // Без staleTime каждый заход на вкладку давал фоновый refetch: новая identity
+    // данных → перерисовка всех маркеров и нитей карты.
+    staleTime: 60_000,
   });
 }
 
@@ -51,5 +55,6 @@ export function useRouteDays() {
     queryFn: () => (tripId ? fetchRoute(tripId) : Promise.reject(new Error("no trip selected"))),
     select: (r) => r.days,
     enabled: !!tripId,
+    staleTime: 60_000, // см. useRoute: мутации и WS-шина инвалидируют ключ сами
   });
 }

@@ -9,6 +9,7 @@
 // декларативных маркеров/попапов. Кандидат №3 аудита 2026-09-12, фаза 4d.
 import {
   forwardRef,
+  useCallback,
   useEffect,
   useImperativeHandle,
   useRef,
@@ -43,6 +44,12 @@ interface MapCanvasProps {
   zoom: number;
   /** Полноэкранный режим: контейнер меняется — пересчитать размер после css-перехода */
   fullscreen?: boolean;
+  /**
+   * Вкладка видима. Карта живёт между вкладками спрятанной (display:none) —
+   * у контейнера тогда нулевые размеры, и полёты по ней ломают вид. Пока active=false,
+   * команды копятся в очереди; на возврат — invalidateSize и сброс очереди по порядку.
+   */
+  active?: boolean;
   className?: string;
   children?: ReactNode;
 }
@@ -61,7 +68,7 @@ function flyToPts(map: L.Map, pts: MapPoint[], minZoom: number) {
 }
 
 export const MapCanvas = forwardRef<MapCanvasHandle, MapCanvasProps>(function MapCanvas(
-  { layer, center, zoom, fullscreen, className, children },
+  { layer, center, zoom, fullscreen, active = true, className, children },
   ref
 ) {
   const mapRef = useRef<L.Map | null>(null);
@@ -69,6 +76,15 @@ export const MapCanvas = forwardRef<MapCanvasHandle, MapCanvasProps>(function Ma
   // после — исполняются немедленно; порядок вызовов сохраняется.
   const queueRef = useRef<Array<(m: L.Map) => void>>([]);
   const readyRef = useRef(false);
+  const activeRef = useRef(active);
+
+  const flushQueue = useCallback(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    const queued = queueRef.current;
+    queueRef.current = [];
+    queued.forEach((fn) => fn(map));
+  }, []);
 
   // Колесо мыши зумит только на десктопе (на мобильном колесо нет, а страница не должна скроллиться «в карту»)
   const [isDesktop, setIsDesktop] = useState(false);
@@ -79,6 +95,18 @@ export const MapCanvas = forwardRef<MapCanvasHandle, MapCanvasProps>(function Ma
     mq.addEventListener("change", onChange);
     return () => mq.removeEventListener("change", onChange);
   }, []);
+
+  // Возврат на вкладку: display:none обнулял размеры контейнера — пересчитываем
+  // и только потом выпускаем накопленные за время скрытности команды (стартовый
+  // fitBounds, фокус из шины map-bus) — иначе полёт считается по нулевым размерам.
+  useEffect(() => {
+    activeRef.current = active;
+    if (!active) return;
+    const map = mapRef.current;
+    if (!map) return;
+    map.invalidateSize();
+    flushQueue();
+  }, [active, flushQueue]);
 
   // Дожидаемся инстанса карты (появляется асинхронно, иногда позже спиннера
   // загрузки), исполняем накопленные команды и вешаем заморозку анимаций:
@@ -91,12 +119,10 @@ export const MapCanvas = forwardRef<MapCanvasHandle, MapCanvasProps>(function Ma
       if (map) {
         clearInterval(iv);
         readyRef.current = true;
-        const queued = queueRef.current;
-        queueRef.current = [];
-        queued.forEach((fn) => fn(map));
         const el = map.getContainer();
         map.on("movestart", () => el.classList.add("map-anim-paused"));
         map.on("moveend", () => el.classList.remove("map-anim-paused"));
+        if (activeRef.current) flushQueue();
       } else if (++tries > 40) {
         clearInterval(iv);
       }
@@ -105,7 +131,7 @@ export const MapCanvas = forwardRef<MapCanvasHandle, MapCanvasProps>(function Ma
       clearInterval(iv);
       readyRef.current = false;
     };
-  }, []);
+  }, [flushQueue]);
 
   useImperativeHandle(ref, () => ({
     focusOn(point, opts) {
@@ -114,7 +140,7 @@ export const MapCanvas = forwardRef<MapCanvasHandle, MapCanvasProps>(function Ma
           duration: opts?.duration ?? 0.7,
         });
       };
-      if (readyRef.current && mapRef.current) run(mapRef.current);
+      if (readyRef.current && activeRef.current && mapRef.current) run(mapRef.current);
       else queueRef.current.push(run);
     },
     fitPoints(points, opts) {
@@ -132,12 +158,12 @@ export const MapCanvas = forwardRef<MapCanvasHandle, MapCanvasProps>(function Ma
           animate: false,
         });
       };
-      if (readyRef.current && mapRef.current) run(mapRef.current);
+      if (readyRef.current && activeRef.current && mapRef.current) run(mapRef.current);
       else queueRef.current.push(run);
     },
     flyToPoints(points, minZoom) {
       const run = (m: L.Map) => flyToPts(m, points, minZoom);
-      if (readyRef.current && mapRef.current) run(mapRef.current);
+      if (readyRef.current && activeRef.current && mapRef.current) run(mapRef.current);
       else queueRef.current.push(run);
     },
     zoomBy(delta) {

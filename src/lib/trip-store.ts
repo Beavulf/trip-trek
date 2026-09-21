@@ -21,6 +21,11 @@ export type TripTab =
 
 interface TripState {
   activeTab: TripTab;
+  // Карта хоть раз открывалась в этой сессии: после этого page.tsx держит её
+  // смонтированной (прячет display:none при уходе), чтобы возврат на вкладку был
+  // мгновенным. Транзиентное (не в persist): после перезагрузки страницы карта
+  // честно строится заново при первом заходе.
+  mapEverOpened: boolean;
   setActiveTab: (t: TripTab) => void;
   currentUserId: string | null;
   setCurrentUserId: (id: string | null) => void;
@@ -50,7 +55,9 @@ export const useTripStore = create<TripState>()(
   persist(
     (set) => ({
       activeTab: "dashboard",
-      setActiveTab: (t) => set({ activeTab: t }),
+      mapEverOpened: false,
+      setActiveTab: (t) =>
+        set((s) => ({ activeTab: t, mapEverOpened: s.mapEverOpened || t === "map" })),
       currentUserId: null,
       setCurrentUserId: (id) => set({ currentUserId: id }),
       selectedDay: null,
