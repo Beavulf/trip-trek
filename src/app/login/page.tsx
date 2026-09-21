@@ -3,7 +3,7 @@
 import { Suspense, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
-import { Loader2, Plane, UserPlus, LogIn, Globe } from "lucide-react";
+import { Loader2, UserPlus, LogIn, Globe } from "lucide-react";
 import { toast } from "sonner";
 import { PasswordField } from "@/components/auth/password-field";
 
@@ -98,9 +98,10 @@ function LoginPageContent() {
           <motion.div
             initial={{ scale: 0.8, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
-            className="size-16 rounded-2xl bg-white/20 backdrop-blur grid place-items-center text-white mx-auto mb-3 shadow-lg"
+            className="mx-auto mb-3 w-fit"
           >
-            <Plane className="size-8" />
+            {/* Фирменный знак (PNG уже со скруглёнными углами); тень повторяет радиус через rounded-2xl */}
+            <img src="/icon-192.png" alt="Логотип TripTrek" className="size-16 rounded-2xl shadow-lg" />
           </motion.div>
           <h1 className="text-2xl font-bold text-white">TripTrek</h1>
           <p className="text-white/70 text-sm mt-1">

@@ -1,6 +1,6 @@
 // Service Worker для TripTrek — push + умное кэширование + авто-обновление
 // Версия кэша — МЕНЯТЬ ПРИ КАЖДОМ ДЕПЛОЕ!
-const CACHE_VERSION = "v26-08-12-uploads";
+const CACHE_VERSION = "v26-09-21-brand";
 const CACHE_NAME = `triptrek-${CACHE_VERSION}`;
 const STATIC_ASSETS = ["/", "/login", "/manifest.webmanifest", "/icon-192.png", "/icon-512.png", "/icon-1024.png"];
 
