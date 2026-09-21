@@ -108,9 +108,18 @@ export function TourDialog({
         className="w-full max-w-sm overflow-hidden rounded-3xl border border-border bg-card shadow-2xl sm:max-w-md"
       >
         {/* Иллюстрация шага: слайд по направлению навигации; слой растянут на всю
-            высоту рамки, иначе арт прилипает к верхнему краю */}
+            высоту рамки, иначе арт прилипает к верхнему краю. «Пропустить» живёт
+            в углу арта: в одном ряду с точками и кнопками она не помещается на
+            телефонах и выдавливала «Далее» за край карточки */}
         <div className="px-5 pt-5">
           <div className="relative h-36 overflow-hidden rounded-2xl border border-border bg-gradient-to-br from-primary/10 via-transparent to-violet-500/10 sm:h-40">
+            <button
+              type="button"
+              onClick={onClose}
+              className="absolute right-2.5 top-2.5 z-10 min-h-9 rounded-full border border-border bg-card/90 px-3 text-xs font-medium text-muted-foreground backdrop-blur-sm transition-colors hover:text-foreground active:scale-95"
+            >
+              Пропустить
+            </button>
             <AnimatePresence initial={false} mode="popLayout">
               <motion.div
                 key={current.id}
@@ -150,17 +159,24 @@ export function TourDialog({
           </AnimatePresence>
         </div>
 
-        {/* Управление: пропустить · точки · назад/далее */}
-        <div className="flex items-center justify-between gap-2 px-5 pb-5 pt-4 sm:px-6">
-          <button
-            type="button"
-            onClick={onClose}
-            className="min-h-11 rounded-xl px-3 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground active:scale-95"
-          >
-            Пропустить
-          </button>
+        {/* Управление: назад · точки · далее. Ряд обязан влезать в 360px, поэтому
+            точки сжимаются (min-w-0), а кнопки не переносят текст */}
+        <div className="flex items-center gap-2 px-5 pb-5 pt-4 sm:px-6">
+          {/* Плейсхолдер ширины «Назад» — точки стоят по центру и на первом шаге */}
+          {step > 0 ? (
+            <button
+              type="button"
+              onClick={() => go(step - 1)}
+              aria-label="Назад"
+              className="grid size-11 shrink-0 place-items-center rounded-xl border border-border bg-secondary text-sm font-medium transition-colors hover:bg-accent active:scale-95"
+            >
+              <ChevronLeft className="size-4" />
+            </button>
+          ) : (
+            <span aria-hidden className="size-11 shrink-0" />
+          )}
 
-          <div className="flex items-center" aria-label="Шаги обучения">
+          <div className="flex min-w-0 flex-1 items-center justify-center overflow-hidden" aria-label="Шаги обучения">
             {steps.map((s, i) => (
               <button
                 key={s.id}
@@ -168,7 +184,7 @@ export function TourDialog({
                 aria-current={i === step ? "step" : undefined}
                 aria-label={`Шаг ${i + 1} из ${steps.length}`}
                 onClick={() => go(i)}
-                className="p-1.5"
+                className="p-1"
               >
                 <span
                   className={cn(
@@ -180,26 +196,14 @@ export function TourDialog({
             ))}
           </div>
 
-          <div className="flex items-center gap-2">
-            {step > 0 && (
-              <button
-                type="button"
-                onClick={() => go(step - 1)}
-                aria-label="Назад"
-                className="grid size-11 place-items-center rounded-xl border border-border bg-secondary text-sm font-medium transition-colors hover:bg-accent active:scale-95"
-              >
-                <ChevronLeft className="size-4" />
-              </button>
-            )}
-            <button
-              ref={primaryBtnRef}
-              type="button"
-              onClick={primary}
-              className="min-h-11 rounded-xl bg-primary px-5 text-sm font-semibold text-primary-foreground shadow-md shadow-primary/30 transition-transform active:scale-[0.97]"
-            >
-              {current.cta ?? "Далее"}
-            </button>
-          </div>
+          <button
+            ref={primaryBtnRef}
+            type="button"
+            onClick={primary}
+            className="min-h-11 shrink-0 whitespace-nowrap rounded-xl bg-primary px-4 text-sm font-semibold text-primary-foreground shadow-md shadow-primary/30 transition-transform active:scale-[0.97]"
+          >
+            {current.cta ?? "Далее"}
+          </button>
         </div>
       </motion.div>
     </motion.div>,

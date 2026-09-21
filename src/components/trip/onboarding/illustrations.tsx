@@ -148,8 +148,9 @@ function InviteArt() {
           <UserPlus className="size-4.5" />
         </span>
       </div>
-      <span className="rounded-full border border-dashed border-primary/40 bg-primary/10 px-3.5 py-1 font-mono text-xs font-bold tracking-widest text-primary">
-        SUMMER26
+      {/* Реальные коды поездок — служебные cuid, вымышленную «SUMMER26» не рисуем */}
+      <span className="rounded-full border border-dashed border-primary/40 bg-primary/10 px-3.5 py-1 text-xs font-bold uppercase tracking-widest text-primary">
+        Код · Ссылка · QR
       </span>
     </div>
   );

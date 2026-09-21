@@ -205,6 +205,10 @@ export function TripSwitcher() {
       qc.invalidateQueries({ queryKey: ["trips"] });
       qc.invalidateQueries({ queryKey: ["trip"] });
       qc.invalidateQueries({ queryKey: ["route"] });
+      // Поездка «с нуля» пуста: без дней не работают ни «+», ни обзор —
+      // первое действие новичка должно быть «Добавить день» на маршруте
+      // (шаблонные поездки сюда не попадают — дни им создаёт роут шаблона)
+      useTripStore.getState().setActiveTab("itinerary");
       toast.success("Поездка создана! 🎉");
       setOpen(false);
       setView("list");
