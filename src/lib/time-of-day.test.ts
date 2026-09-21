@@ -4,6 +4,7 @@ import {
   timeSortRank,
   timeLabel,
   timeIconKey,
+  timeSlotFromHour,
   daySections,
 } from "./time-of-day";
 import type { Place } from "./types";
@@ -71,6 +72,24 @@ describe("timeIconKey", () => {
     expect(timeIconKey("afternoon")).toBe("sun");
     expect(timeIconKey("evening")).toBe("moon");
     expect(timeIconKey("night")).toBeNull();
+  });
+});
+
+describe("timeSlotFromHour", () => {
+  it("границы слотов: до 12 утра, 12–17 день, с 18 вечер", () => {
+    expect(timeSlotFromHour(9)).toBe("morning");
+    expect(timeSlotFromHour(11)).toBe("morning");
+    expect(timeSlotFromHour(12)).toBe("afternoon");
+    expect(timeSlotFromHour(14)).toBe("afternoon");
+    expect(timeSlotFromHour(17)).toBe("afternoon");
+    expect(timeSlotFromHour(18)).toBe("evening");
+    expect(timeSlotFromHour(23)).toBe("evening");
+  });
+
+  it("полночь — утро (ночные часы ближе к слоту утра), некорректный ввод — null", () => {
+    expect(timeSlotFromHour(0)).toBe("morning");
+    expect(timeSlotFromHour(NaN)).toBeNull();
+    expect(timeSlotFromHour(Infinity)).toBeNull();
   });
 });
 

@@ -53,7 +53,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({
         title: null,
         stops: [],
-        note: `В радиусе ${radius} м почти всё уже знакомо или в OSM мало мест. Увеличь радиус и попробуй снова.`,
+        note: `В радиусе ${radius} м почти всё уже знакомо или в OSM мало мест. Увеличь радиус (до 5 км) и попробуй снова.`,
       });
     }
 

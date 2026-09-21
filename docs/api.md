@@ -99,8 +99,8 @@
 | `phrases/generate` | POST | M | 10/ч на user+trip | базовый разговорник по направлению |
 | `phrases/ai` | POST | M | 10/ч на user+trip | фразы по свободному запросу (3 режима: translate/more/pack) |
 | `foods/suggest` | POST | M | 10/ч на user+trip | блюда города: `count` 4–10 (пакет «Подборка шефа» в Еде); город свободного ввода проверяется Nominatim'ом (`findCity` в `geocode-place.ts`) — 400 «не нашли город», если это не place/boundary (недоступный Nominatim не блокирует) |
-| `ai/planner` | POST | M | 3/ч на user+trip | черновик маршрута ИИ (mode trip/day/replace) по **существующим** дням; в промпт уходят координаты существующих мест дня (якорь «рядом с отелем»), после геокодинга далёкие места получают `farWarning` («≈N км от остальных мест дня»), итог — в `geoNote`; геокодирование Nominatim по nameEn, `fail` → «уточнить на карте» |
-| `ai/restaurants` | POST | M | 6/ч на user+trip | реальные заведения OpenStreetMap у города дня; ИИ только отбирает — имена/координаты из OSM (`matchPicksToPois`) |
+| `ai/planner` | POST | M | 3/ч на user+trip | черновик маршрута ИИ (mode trip/day/replace) по **существующим** дням; в промпт уходят координаты существующих мест дня (якорь «рядом с отелем»), после геокодинга далёкие места получают `farWarning` («≈N км от остальных мест дня»), итог — в `geoNote`; пустой день: по «Пожеланиям», без них — просто лучшие места города (позиционирование фичи — подборка мест на выбор, не готовый маршрут); геокодирование Nominatim по nameEn, `fail` → «уточнить на карте» |
+| `ai/restaurants` | POST | M | 6/ч на user+trip | реальные заведения OpenStreetMap у города дня; ИИ только отбирает — имена/координаты из OSM (`matchPicksToPois`); опц. `preferences` — свободные пожелания (санитайзятся, главный фильтр отбора) |
 | `ai/walk` | POST | M | 6/ч на user+trip | прогулка на 1–6 ч: OSM-POI в радиусе 300–5000 м минус места поездки, ИИ собирает таймлайн |
 | `user/ai-key-check` | POST | U | 5/мин | проверка своего ключа живым запросом (общий ключ не проверяется) |
 
@@ -152,7 +152,7 @@ In-memory, сбрасываются рестартом контейнера (ADR
 - health — 60 / мин / IP (БД-пинг кэшируется на 5 с)
 - weather — 30 / мин / IP
 - geocode — 60 / ч / user
-- ИИ-роуты (ai-summary, phrases, foods) — 10 / ч / user+trip; ai/planner — 3 / ч, ai/restaurants и ai/walk — 6 / ч (реестр лимитов: `AI_FEATURES` в `src/lib/ai-usage.ts`). Там же per-feature таймаут вызова провайдера (дефолт 60 с; ai-summary — 180 с: «размышляющие» GLM-модели пишут рассказ 70–90 с, walk — 90 с)
+- ИИ-роуты (ai-summary, phrases, foods) — 10 / ч / user+trip; ai/planner — 3 / ч, ai/restaurants и ai/walk — 6 / ч (реестр лимитов: `AI_FEATURES` в `src/lib/ai-usage.ts`). Там же per-feature таймаут вызова провайдера (дефолт 60 с; ai-summary — 180 с: «размышляющие» GLM-модели пишут рассказ 70–90 с, walk и ai/planner — 90 с: JSON на все дни большой поездки). Обрезка ответа провайдером (`finish_reason=length`) пишется в AiUsage как `error:"truncated"`
 
 ## Realtime-события
 

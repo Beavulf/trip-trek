@@ -5,6 +5,7 @@ import { Check, Footprints, Loader2, Locate, MapPin, RotateCw, Sparkles } from "
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { CATEGORY_META } from "@/lib/types";
+import { timeSlotFromHour } from "@/lib/time-of-day";
 import { useRouteDays, useTrip } from "@/hooks/use-trip";
 import { MobileBottomSheet } from "../mobile-bottom-sheet";
 import { AiDisclaimer } from "../ai-disclaimer";
@@ -17,6 +18,14 @@ import { cachedGeo } from "./types";
 // день по одной — прогулка не мусорит в маршруте сама.
 
 const HOURS = [2, 3, 4];
+// Радиус выбирает юзер: сервер подсказывает «увеличь радиус», значит контрол
+// обязан существовать. Дефолт 2 км — комфортный максимум пешей прогулки.
+const RADII = [
+  { m: 1000, label: "1 км" },
+  { m: 2000, label: "2 км" },
+  { m: 3000, label: "3 км" },
+  { m: 5000, label: "5 км" },
+];
 
 export function WalkView({ open, onClose }: { open: boolean; onClose: () => void }) {
   const { data: trip } = useTrip();
@@ -26,6 +35,7 @@ export function WalkView({ open, onClose }: { open: boolean; onClose: () => void
 
   const [geo, setGeo] = useState<GeoState>(cachedGeo.value);
   const [hours, setHours] = useState(3);
+  const [radius, setRadius] = useState(2000);
   const [prefs, setPrefs] = useState("");
   const [result, setResult] = useState<{ title: string | null; stops: WalkStop[]; note?: string } | null>(null);
   const [added, setAdded] = useState<Set<string>>(new Set());
@@ -40,6 +50,7 @@ export function WalkView({ open, onClose }: { open: boolean; onClose: () => void
       setAdded(new Set());
       setPrefs("");
       setHours(3);
+      setRadius(2000);
       setGeo(cachedGeo.value);
     }
   }
@@ -71,7 +82,7 @@ export function WalkView({ open, onClose }: { open: boolean; onClose: () => void
   const run = async () => {
     if (geo.status !== "ready") return;
     try {
-      const res = await walk.mutateAsync({ lat: geo.lat, lng: geo.lng, radiusM: 1500, hours, startLabel: startLabel() });
+      const res = await walk.mutateAsync({ lat: geo.lat, lng: geo.lng, radiusM: radius, hours, startLabel: startLabel() });
       setResult(res);
       setAdded(new Set());
       if (res.stops.length === 0 && res.note) toast(res.note);
@@ -96,6 +107,9 @@ export function WalkView({ open, onClose }: { open: boolean; onClose: () => void
           category: stop.category,
           lat: stop.lat,
           lng: stop.lng,
+          // Слот из времени остановки: иначе место падает в «Без времени»,
+          // хотя ИИ уже раскладывал таймлайн по часам
+          timeOfDay: stop.startLabel ? timeSlotFromHour(parseInt(stop.startLabel, 10)) : null,
           description: stop.why,
           address: stop.address,
         },
@@ -144,6 +158,27 @@ export function WalkView({ open, onClose }: { open: boolean; onClose: () => void
                     )}
                   >
                     {h} ч
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <span className="text-[11px] text-muted-foreground shrink-0">В</span>
+              <div role="radiogroup" aria-label="Радиус поиска мест" className="flex-1 grid grid-cols-4 gap-1 p-1 bg-card border border-border rounded-xl">
+                {RADII.map((r) => (
+                  <button
+                    key={r.m}
+                    type="button"
+                    role="radio"
+                    aria-checked={radius === r.m}
+                    onClick={() => setRadius(r.m)}
+                    className={cn(
+                      "min-h-9 rounded-lg text-xs font-medium transition-all",
+                      radius === r.m ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground hover:bg-accent"
+                    )}
+                  >
+                    {r.label}
                   </button>
                 ))}
               </div>

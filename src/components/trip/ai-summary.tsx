@@ -273,7 +273,7 @@ function AISummaryInner({ tripId }: { tripId: string }) {
       addHistory(item);
       if (res.generated === false) {
         toast.info("Пока без нейросети — это черновик по данным поездки", {
-          description: "Добавьте OPENAI_API_KEY на сервере для живых историй",
+          description: "Добавь свой ключ ИИ в профиле (Настройки → Свой ключ ИИ) или попроси админа подключить общий",
         });
       }
     } catch (e) {

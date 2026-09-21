@@ -35,6 +35,7 @@ export function RestaurantsSheet({
   const restaurants = useAiRestaurants();
   const batch = useCreatePlacesBatch();
   const [dayId, setDayId] = useState<string>(days[0]?.id ?? "");
+  const [prefs, setPrefs] = useState("");
   const [drafts, setDrafts] = useState<RestaurantDraft[]>([]);
   const [picked, setPicked] = useState<Set<string>>(new Set());
   const [note, setNote] = useState<string | null>(null);
@@ -46,6 +47,7 @@ export function RestaurantsSheet({
     setSynced(syncKey);
     if (open) {
       setDayId(days[0]?.id ?? "");
+      setPrefs("");
       setDrafts([]);
       setPicked(new Set());
       setNote(null);
@@ -58,7 +60,7 @@ export function RestaurantsSheet({
       return;
     }
     try {
-      const res = await restaurants.mutateAsync({ dayId });
+      const res = await restaurants.mutateAsync({ dayId, preferences: prefs.trim() || undefined });
       setDrafts(res.drafts ?? []);
       setPicked(new Set((res.drafts ?? []).map((d) => d.name)));
       setNote(res.note ?? null);
@@ -113,6 +115,15 @@ export function RestaurantsSheet({
             ))}
           </div>
         </div>
+
+        <input
+          value={prefs}
+          onChange={(e) => setPrefs(e.target.value)}
+          maxLength={200}
+          placeholder="Пожелания: суши, тихое место, с видом… (необязательно)"
+          className="w-full min-h-10 rounded-xl border border-input bg-background px-3 text-sm input-mobile"
+          aria-label="Пожелания к подборке заведений"
+        />
 
         <button
           type="button"

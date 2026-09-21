@@ -139,9 +139,10 @@ export async function runAi(input: RunAiInput): Promise<AiResult> {
   }
 
   const data = (await r.json().catch(() => null).finally(() => clearTimeout(timeout))) as {
-    choices?: { message?: { content?: string } }[];
+    choices?: { message?: { content?: string }; finish_reason?: string }[];
   } | null;
-  const content = data?.choices?.[0]?.message?.content;
+  const choice = data?.choices?.[0];
+  const content = choice?.message?.content;
   if (!content) {
     void logAiUsage({
       userId: input.userId,
@@ -158,6 +159,10 @@ export async function runAi(input: RunAiInput): Promise<AiResult> {
 
   const usage = parseAiUsage(data);
   const durationMs = Date.now() - startedAt;
+  // finish_reason=length → провайдер обрезал ответ лимитом вывода: телеметрии
+  // это важнее юзеру (решение о max_tokens — по реальным данным, гипотетический
+  // cap рвал бы reasoning-моделям их же «размышления»)
+  const truncated = choice?.finish_reason === "length";
   // Алерт строго ПОСЛЕ записи текущего вызова: иначе агрегат не видит
   // только что сделанный вызов и порог срабатывает через раз.
   void logAiUsage({
@@ -168,6 +173,7 @@ export async function runAi(input: RunAiInput): Promise<AiResult> {
     model,
     ok: true,
     usage,
+    error: truncated ? "truncated" : undefined,
     durationMs,
   })
     .then(() => maybeAlertSpend(input.userId))

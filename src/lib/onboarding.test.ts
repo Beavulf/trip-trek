@@ -80,12 +80,14 @@ describe("TAB_TOURS (обучалки вкладок)", () => {
     expect(TAB_TOURS.length).toBeLessThanOrEqual(8);
   });
 
-  it("у каждой обучалки 2–4 шага, у шагов уникальные id, непустые тексты и известная иконка", () => {
+  it("у каждой обучалки 2–5 шагов, у шагов уникальные id, непустые тексты и известная иконка", () => {
     const allIds: string[] = [];
     for (const t of TAB_TOURS) {
       expect(t.eyebrow.trim()).not.toBe("");
       expect(t.steps.length).toBeGreaterThanOrEqual(2);
-      expect(t.steps.length).toBeLessThanOrEqual(4);
+      // 5 — потолок, достигнут только туром «Маршрут» (самый насыщенный таб:
+      // планер с механикой якоря заслужил отдельный шаг); другим вкладкам теснее
+      expect(t.steps.length).toBeLessThanOrEqual(5);
       for (const s of t.steps) {
         allIds.push(s.id);
         expect(s.title.trim()).not.toBe("");

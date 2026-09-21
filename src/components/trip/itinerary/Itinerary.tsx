@@ -284,14 +284,14 @@ export function Itinerary() {
         </div>
       </div>
 
-      {/* Планер: черновик маршрута от ИИ, только для существующих дней */}
+      {/* Планер: варианты мест от ИИ (не готовый маршрут), только для существующих дней */}
       <button
         type="button"
         onClick={() => setPlannerOpen(true)}
         className="w-full min-h-11 rounded-2xl border-2 border-dashed border-[#d946ef]/40 bg-[#d946ef]/5 text-[13px] font-medium flex items-center justify-center gap-1.5 text-foreground/90 hover:bg-[#d946ef]/10 transition-colors"
       >
         <Sparkles className="size-4 text-[#d946ef]" aria-hidden />
-        Спланировать маршрут с ИИ
+        Подобрать места с ИИ
       </button>
 
       {/* Нить маршрута: дни-станции на общей линии */}

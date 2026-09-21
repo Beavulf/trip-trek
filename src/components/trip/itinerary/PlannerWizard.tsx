@@ -195,11 +195,11 @@ export function PlannerWizard({ open, onOpenChange }: { open: boolean; onOpenCha
     <MobileBottomSheet
       open={open}
       onOpenChange={onOpenChange}
-      title="Планер маршрута"
+      title="Подборка мест"
       titleIcon={<Sparkles className="size-5 text-[#d946ef]" aria-hidden />}
       panelRef={panelRef}
       role="dialog"
-      ariaLabel="Планер маршрута"
+      ariaLabel="Подборка мест от ИИ"
       contentClassName="px-0 py-0"
     >
       {planner.isPending ? (
@@ -208,6 +208,22 @@ export function PlannerWizard({ open, onOpenChange }: { open: boolean; onOpenCha
         /* ─── Шаг 1: запрос ─── */
         <>
           <div className="px-4 sm:px-5 py-4 space-y-5">
+            {/* Механика подбора неочевидна («почему места кучкуются у отеля?»),
+                объясняем до формы: якорь = места дня, пустой день = пожелания или лучшее в городе */}
+            <section className="rounded-2xl border border-primary/15 bg-primary/5 p-3 space-y-2">
+              <p className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">как это работает</p>
+              <ul className="space-y-1.5 text-[11px] leading-snug text-muted-foreground">
+                <li className="flex items-start gap-2">
+                  <MapPin className="mt-0.5 size-3.5 shrink-0 text-primary" aria-hidden />
+                  <span>Добавьте в день отель или хотя бы одно место — ИИ подберёт остальное рядом с ними.</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <Sparkles className="mt-0.5 size-3.5 shrink-0 text-primary" aria-hidden />
+                  <span>Пустой день? Опишите пожелания — без них предложим просто лучшие места города.</span>
+                </li>
+              </ul>
+            </section>
+
             <section className="space-y-2">
               <p className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">что планируем</p>
               <div className="flex flex-wrap gap-1.5">
@@ -291,7 +307,7 @@ export function PlannerWizard({ open, onOpenChange }: { open: boolean; onOpenCha
               />
             </section>
 
-            <AiDisclaimer text="ИИ предлагает идеи и сверяет их с картой, но может ошибаться — черновик перед добавлением проверяете вы." />
+            <AiDisclaimer text="ИИ предлагает варианты мест, а не готовый маршрут — порядок и дорогу выстраиваете вы. Названия и точки на карте проверяйте: ИИ может ошибаться." />
           </div>
 
           {/* CTA — липкий низ шторки, виден всегда */}
@@ -302,7 +318,7 @@ export function PlannerWizard({ open, onOpenChange }: { open: boolean; onOpenCha
               disabled={planner.isPending || dayList.length === 0}
               className="w-full min-h-12 rounded-2xl bg-primary text-primary-foreground font-semibold text-sm flex items-center justify-center gap-2 disabled:opacity-40 active:scale-[0.98] transition-all"
             >
-              <Sparkles className="size-4" /> Собрать план
+              <Sparkles className="size-4" /> Подобрать места
             </button>
             <p className="text-center text-[10px] text-muted-foreground mt-1.5">3 генерации в час · обычно 30–60 секунд</p>
           </footer>
@@ -326,7 +342,8 @@ export function PlannerWizard({ open, onOpenChange }: { open: boolean; onOpenCha
                       <span className="text-xs text-muted-foreground truncate">{d.city}</span>
                       <button
                         type="button"
-                        onClick={() => run({ mode: "day", dayNumber: d.dayNumber, exclude: d.places.map((p) => p.name) })}
+                        onClick={() => run({ mode: "day", dayNumber: d.dayNumber, // exclude по всем дням: черновики ещё не в БД, сервер про них не знает
+                          exclude: drafts.flatMap((x) => x.places.map((y) => y.name)) })}
                         disabled={planner.isPending}
                         className="ml-auto inline-flex items-center gap-1 text-[11px] text-primary hover:underline disabled:opacity-50"
                       >

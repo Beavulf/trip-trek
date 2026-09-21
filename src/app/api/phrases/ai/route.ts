@@ -3,6 +3,8 @@ import { db } from "@/lib/db";
 import { publish } from "@/lib/ws-bus";
 import { requireTripMember } from "@/lib/api-auth";
 import { runAi } from "@/lib/ai";
+import { sanitizeUserText } from "@/lib/planner";
+import { AI_FEATURES } from "@/lib/ai-usage";
 
 // ИИ-фразы: перевод своей фразы, «ещё фразы» раздела, пак для любого языка.
 // Лимит, BYOK и учёт — в едином оркестраторе lib/ai.ts (старый личный Map-лимитер
@@ -103,14 +105,15 @@ export async function POST(req: NextRequest) {
     });
     if (!trip) return NextResponse.json({ error: "Поездка не найдена" }, { status: 404 });
 
-    const langLabel = (languageName || language || "").trim();
+    // languageName — свободная строка с клиента: участник-контент, в промпт через санитайзер
+    const langLabel = sanitizeUserText(languageName || language || "", 40);
 
     /* Перевод одной фразы — в БД не пишем, клиент подставит в форму */
     if (mode === "translate") {
       const system =
         "Ты — переводчик-разговорник для путешественников. Переведи русскую фразу на указанный язык так, как её сказали бы местные в быту (разговорно, вежливо, коротко). Дай транслитерацию латиницей по слогам, чтобы русскоязычный мог прочитать вслух. " +
         'Отвечай СТРОГО JSON-объектом без markdown: {"foreign": "фраза на языке", "translit": "чтение латиницей"}. Никакого текста до или после.';
-      const prompt = `Язык: ${langLabel || "язык страны поездки"}. Страна поездки: ${trip.destination || "неизвестна"}. Фраза: «${trimmedText}»`;
+      const prompt = `Язык: ${langLabel || "язык страны поездки"}. Страна поездки: ${trip.destination ? sanitizeUserText(trip.destination, 120) : "неизвестна"}. Фраза: «${sanitizeUserText(trimmedText, 200)}»`;
       const ai = await runAi({ req, userId: user.id, tripId, feature: "phrases-ai", system, prompt });
       if (!ai.ok) return phrasesAiError(ai);
       const t = parseTranslation(ai.text);
@@ -129,7 +132,12 @@ export async function POST(req: NextRequest) {
     // «多少钱?» и «多少钱？」 — одна фраза: сравниваем без пунктуации и регистра
     const normForeign = (s: string) => s.replace(/[\s\p{P}\p{S}]+/gu, "").toLowerCase();
     const haveForeign = new Set(existing.map((p) => normForeign(p.cn)));
-    const haveRu = existing.map((p) => p.ru);
+    // В промпт — только фразы запрошенного языка: «Спасибо» из китайского пака
+    // не должно запрещать «Спасибо» в новом языке, иначе «близкие по смыслу»
+    // вычищают из любого пака половину базовых фраз
+    const langCode = (language ?? "").trim().slice(0, 12);
+    const langRu = (langCode ? existing.filter((p) => p.language === langCode) : existing).map((p) => p.ru);
+    const destinationLine = trip.destination ? sanitizeUserText(trip.destination, 120) : "неизвестна";
 
     const lastOrders = await db.phrase.groupBy({ by: ["category"], where: { tripId }, _max: { order: true } });
     const orderBase = new Map<string, number>(lastOrders.map((g) => [g.category, (g._max.order ?? 0) + 1]));
@@ -140,13 +148,14 @@ export async function POST(req: NextRequest) {
 
     const userPrompt =
       mode === "pack"
-        ? `Язык: ${langLabel}. Страна поездки: ${trip.destination || "неизвестна"}.
+        ? `Язык: ${langLabel}. Страна поездки: ${destinationLine}.
 Составь сбалансированный набор из ${wantCount} фраз по разделам:
 ${CATEGORIES.map((c) => `- ${c}: ${CATEGORY_RU[c]}`).join("\n")}
-(по 4–5 фраз на раздел).`
-        : `Язык: ${langLabel}. Страна поездки: ${trip.destination || "неизвестна"}.
+(по 4–5 фраз на раздел).
+Уже есть на этом языке — НЕ повторяй их и близкие по смыслу: ${langRu.slice(0, 60).join(" | ") || "пусто"}.`
+        : `Язык: ${langLabel}. Страна поездки: ${destinationLine}.
 Составь ${wantCount} новых фраз раздела «${cat ? CATEGORY_RU[cat] : "основы"}». Категория каждой фразы: «${cat ?? "basics"}».
-Уже есть в разговорнике — НЕ повторяй их и близкие по смыслу: ${haveRu.slice(0, 60).join(" | ") || "пусто"}.`;
+Уже есть в разговорнике — НЕ повторяй их и близкие по смыслу: ${langRu.slice(0, 60).join(" | ") || "пусто"}.`;
 
     const ai = await runAi({ req, userId: user.id, tripId, feature: "phrases-ai", system, prompt: userPrompt });
     if (!ai.ok) return phrasesAiError(ai);
@@ -160,7 +169,6 @@ ${CATEGORIES.map((c) => `- ${c}: ${CATEGORY_RU[c]}`).join("\n")}
       return NextResponse.json({ error: "ИИ не предложил новых фраз — попробуй ещё раз" }, { status: 502 });
     }
 
-    const langCode = (language ?? "").trim().slice(0, 12);
     const data = phrases.map((p) => {
       const base = orderBase.get(p.category) ?? 1;
       orderBase.set(p.category, base + 1);
@@ -193,8 +201,9 @@ function phrasesAiError(ai: Awaited<ReturnType<typeof runAi>>): NextResponse {
   if (!ai.ok) {
     if (ai.reason === "rate_limited") {
       const retryAfter = ai.limitResponse?.headers.get("Retry-After") ?? undefined;
+      // Лимит из реестра, не хардкод: смена лимита не должна врать в тексте
       return NextResponse.json(
-        { error: "ИИ устал: не больше 10 запросов в час" },
+        { error: `ИИ устал: не больше ${AI_FEATURES["phrases-ai"].limit.max} запросов в час` },
         { status: 429, ...(retryAfter ? { headers: { "Retry-After": retryAfter } } : {}) }
       );
     }

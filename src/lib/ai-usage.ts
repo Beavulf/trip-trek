@@ -36,7 +36,8 @@ const HOURLY_3 = { max: 3, windowMs: 60 * 60_000 };
 const HOURLY_6 = { max: 6, windowMs: 60 * 60_000 };
 
 const TIMEOUT_60 = 60_000;
-/** Прогулка жила на 44 с впритык к дефолту — запас на медльных ответах провайдера. */
+/** Прогулка жила на 44 с впритык к дефолту — запас на медльных ответах провайдера.
+ *  Планеру тот же запас: JSON на все дни большой поездки сидит у 60 с на GLM. */
 const TIMEOUT_90 = 90_000;
 /** Рассказ: замер на routerai/GLM — 71–84 с чистой генерации. */
 const TIMEOUT_180 = 180_000;
@@ -45,7 +46,7 @@ export const AI_FEATURES: Record<AiFeature, AiFeatureConfig> = {
   "ai-summary": { limit: HOURLY_10, temperature: 0.9, timeoutMs: TIMEOUT_180, access: "all" },
   "foods-suggest": { limit: HOURLY_10, temperature: 0.8, timeoutMs: TIMEOUT_60, access: "all" },
   "phrases-ai": { limit: HOURLY_10, temperature: 0.7, timeoutMs: TIMEOUT_60, access: "all" },
-  planner: { limit: HOURLY_3, temperature: 0.6, timeoutMs: TIMEOUT_60, access: "all" },
+  planner: { limit: HOURLY_3, temperature: 0.6, timeoutMs: TIMEOUT_90, access: "all" },
   restaurants: { limit: HOURLY_6, temperature: 0.7, timeoutMs: TIMEOUT_60, access: "all" },
   walk: { limit: HOURLY_6, temperature: 0.7, timeoutMs: TIMEOUT_90, access: "all" },
 };

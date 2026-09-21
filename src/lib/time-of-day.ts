@@ -50,6 +50,15 @@ export function timeIconKey(t: string | null | undefined): "sunrise" | "sun" | "
   return null;
 }
 
+/** Слот по часу суток: время старта («14:30» прогулки) → слот места маршрута. */
+export function timeSlotFromHour(hour: number): string | null {
+  if (!Number.isFinite(hour)) return null;
+  const h = ((hour % 24) + 24) % 24;
+  if (h < 12) return "morning";
+  if (h < 18) return "afternoon";
+  return "evening";
+}
+
 export interface DaySection {
   key: string;
   label: string;

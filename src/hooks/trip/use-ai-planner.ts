@@ -53,12 +53,12 @@ export interface RestaurantDraft {
 }
 
 export function useAiRestaurants() {
-  return useMutation<{ drafts: RestaurantDraft[]; note?: string }, Error, { dayId: string }>({
-    mutationFn: async ({ dayId }) => {
+  return useMutation<{ drafts: RestaurantDraft[]; note?: string }, Error, { dayId: string; preferences?: string }>({
+    mutationFn: async ({ dayId, preferences }) => {
       const r = await fetch("/api/ai/restaurants", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ tripId: getTripId(), dayId }),
+        body: JSON.stringify({ tripId: getTripId(), dayId, preferences }),
       });
       const b = await r.json().catch(() => ({}));
       if (!r.ok) throw new Error(b.error || `Ошибка ${r.status}`);
