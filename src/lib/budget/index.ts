@@ -1,4 +1,7 @@
 export { calculateBalances, calculateSettlements, calculateNetSpent, sharePerPerson } from "./balances";
+export { toCents, fromCents, shareCents } from "./money";
+export { calculatePlannedRoute } from "./planned";
+export type { PlannedRouteStats, PlannedDayStat, PlannedCategoryStat } from "./planned";
 export type { Balance, Settlement } from "./balances";
 export { calculateSplit } from "./split";
 export { settleDebts } from "./settle";

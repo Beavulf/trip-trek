@@ -3,7 +3,7 @@
 import { motion } from "framer-motion";
 import { Camera, Coffee, MapPin, TrendingDown, Wallet } from "lucide-react";
 import { type TripSummary } from "@/lib/types";
-import { cn } from "@/lib/utils";
+import { cn, fmtMoney } from "@/lib/utils";
 import { currencySymbol } from "@/lib/currencies";
 import { useTripStore } from "@/lib/trip-store";
 
@@ -40,7 +40,7 @@ export function DashboardStats({ trip, daysRemaining }: DashboardStatsProps) {
         </div>
         <div className="flex items-end gap-2">
           <span className="text-3xl font-bold leading-none tabular-nums">{sym}{trip.totalSpent.toFixed(0)}</span>
-          {hasBudget && <span className="text-sm text-muted-foreground mb-0.5">/ {sym}{budget}</span>}
+          {hasBudget && <span className="text-sm text-muted-foreground mb-0.5">/ {sym}{fmtMoney(budget)}</span>}
         </div>
         {hasBudget ? (
           <>

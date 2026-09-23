@@ -2,9 +2,9 @@
 
 import { useState } from "react";
 import { motion, AnimatePresence, Reorder, useDragControls, useReducedMotion } from "framer-motion";
-import { Check, ChevronDown, GripVertical, MapPin, Pencil, Plus } from "lucide-react";
+import { Check, ChevronDown, GripVertical, MapPin, Pencil, Plus, Wallet } from "lucide-react";
 import { type Day, type Place } from "@/lib/types";
-import { cn } from "@/lib/utils";
+import { cn, fmtMoney } from "@/lib/utils";
 import { daySections, type DaySection } from "@/lib/time-of-day";
 import { useReorderPlaces } from "@/hooks/use-trip";
 import { toast } from "sonner";
@@ -15,6 +15,8 @@ interface DayCardProps {
   day: Day;
   /** Символ валюты поездки */
   currency?: string;
+  /** Сколько участников в поездке — для «на человека» в плане дня */
+  participantsCount?: number;
   /** День = «сегодня» по календарю поездки */
   isCurrent?: boolean;
   /** День уже прошёл */
@@ -40,6 +42,7 @@ function dateLabel(iso: string): { date: string; weekday: string } | null {
 export function DayCard({
   day,
   currency,
+  participantsCount = 0,
   isCurrent,
   isPast,
   onOpenPlace,
@@ -65,6 +68,11 @@ export function DayCard({
   const visited = day.places.filter((p) => p.status === "visited").length;
   const progress = day.places.length ? (visited / day.places.length) * 100 : 0;
   const dl = dateLabel(day.date);
+
+  // План дня по бюджетам, указанным в местах; рядом — в пересчёте на человека
+  const sym = currency ?? "$";
+  const plannedTotal = day.places.reduce((s, p) => s + (p.budget && p.budget > 0 ? p.budget : 0), 0);
+  const plannedPerPerson = participantsCount > 0 ? plannedTotal / participantsCount : 0;
 
   // Перестановка внутри секции (утро/день/вечер/без времени): слоты не смешиваем —
   // «утро» не может уехать в «вечер» перетаскиванием, слот меняется в карточке места.
@@ -140,6 +148,18 @@ export function DayCard({
               <span className="flex items-center gap-0.5">
                 <MapPin className="size-3" /> {day.city}
               </span>
+              {plannedTotal > 0 && (
+                <span
+                  className="flex items-center gap-1 tabular-nums font-medium"
+                  style={{ color: accent }}
+                  title={`План дня по бюджетам мест, ≈ ${sym}${fmtMoney(plannedPerPerson)} на человека`}
+                >
+                  <Wallet className="size-3" /> ≈{sym}{fmtMoney(plannedTotal)}
+                  {plannedPerPerson > 0 && (
+                    <span className="text-muted-foreground font-normal">· {sym}{fmtMoney(plannedPerPerson)}/чел</span>
+                  )}
+                </span>
+              )}
             </div>
             <div className="font-semibold text-sm truncate mt-0.5">{day.title}</div>
             <div className="mt-2 h-1.5 rounded-full bg-muted overflow-hidden">

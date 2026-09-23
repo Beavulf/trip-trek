@@ -4,7 +4,7 @@ import { useRef, useState } from "react";
 import { motion } from "framer-motion";
 import { Wallet, Pencil, Check, X, Plus, CalendarDays } from "lucide-react";
 import { toast } from "sonner";
-import { cn, plural } from "@/lib/utils";
+import { cn, plural, fmtMoney } from "@/lib/utils";
 import { useUpdateTripBudget } from "@/hooks/use-trip";
 
 interface BudgetHeroProps {
@@ -131,7 +131,7 @@ export function BudgetHero({
               </button>
             </div>
           ) : (
-            <span className="text-white/80 mb-1 font-semibold">{sym}{totalBudget}</span>
+            <span className="text-white/80 mb-1 font-semibold">{sym}{fmtMoney(totalBudget)}</span>
           )}
         </div>
 

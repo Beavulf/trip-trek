@@ -29,6 +29,15 @@ export function formatLatLng(lat: number, lng: number, sep = ", ") {
   return `${lat.toFixed(4)}${sep}${lng.toFixed(4)}`;
 }
 
+/**
+ * Деньги для показа: максимум 2 знака после точки, лишние нули срезаются
+ * (5000 → «5000», 5814.8234 → «5814.82», 100/3 → «33.33»).
+ * Сырые float из БД в текст рисовать нельзя — бывали хвосты на 6–8 знаков.
+ */
+export function fmtMoney(v: number) {
+  return String(Number(v.toFixed(2)));
+}
+
 /** Стабильный ключ пары координат (дедупликация геокода, query-ключи) */
 export function coordKey(lat: number, lng: number) {
   return formatLatLng(lat, lng, "-");

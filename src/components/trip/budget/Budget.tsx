@@ -8,9 +8,10 @@ import { useTripStore } from "@/lib/trip-store";
 import { EXPENSE_CATEGORIES } from "@/lib/types";
 import { currencySymbol } from "@/lib/currencies";
 import { calculateBalances, calculateSettlements, calculateNetSpent, calculatePersonalSpend } from "@/lib/budget";
-import { cn, plural } from "@/lib/utils";
+import { cn, plural, fmtMoney } from "@/lib/utils";
 import { CurrencyConverter } from "../currency-converter";
 import { BudgetPlanWidget } from "../budget-plan-widget";
+import { RoutePlanCard } from "./RoutePlanCard";
 import { BudgetHero } from "./BudgetHero";
 import { BudgetAnalytics } from "./BudgetAnalytics";
 import { ExpenseRow } from "./ExpenseRow";
@@ -212,6 +213,8 @@ export function Budget() {
 
       <BudgetPlanWidget />
 
+      <RoutePlanCard />
+
       <BudgetAnalytics
         byCategory={byCategory}
         dailyData={dailyData}
@@ -255,7 +258,7 @@ export function Budget() {
           ))}
         </div>
         <p className="text-[11px] text-muted-foreground mt-2.5">
-          Общий бюджет группы: {sym}{trip.settings.totalBudget} — сумма бюджетов участников.
+          Общий бюджет группы: {sym}{fmtMoney(trip.settings.totalBudget)} — сумма бюджетов участников.
           {" "}Потраченное учитывает вернувшиеся переводы.
         </p>
       </div>

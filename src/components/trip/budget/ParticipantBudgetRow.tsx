@@ -3,7 +3,7 @@
 import { useRef, useState } from "react";
 import { Pencil } from "lucide-react";
 import { toast } from "sonner";
-import { cn } from "@/lib/utils";
+import { cn, fmtMoney } from "@/lib/utils";
 import { useUpdateMember, useTrip, getTripId } from "@/hooks/use-trip";
 import { currencySymbol } from "@/lib/currencies";
 import type { Participant } from "@/lib/types";
@@ -106,7 +106,7 @@ export function ParticipantBudgetRow({ participant, spent }: ParticipantBudgetRo
           className="text-right group"
         >
           <div className={cn("text-sm font-semibold", remaining !== null && remaining < 0 && "text-red-500")}>
-            {budget !== null ? `${sym}${budget}` : "—"}
+            {budget !== null ? `${sym}${fmtMoney(budget)}` : "—"}
           </div>
           {remaining !== null && (
             <div className={cn("text-[10px] tabular-nums", remaining < 0 ? "text-red-500" : "text-muted-foreground")}>

@@ -7,7 +7,7 @@ import { motion } from "framer-motion";
 import { Target, Pencil, Check, Loader2, X, ChevronDown } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
-import { cn, plural } from "@/lib/utils";
+import { cn, plural, fmtMoney } from "@/lib/utils";
 
 export function BudgetPlanWidget() {
   const { data: trip } = useTrip();
@@ -71,7 +71,7 @@ export function BudgetPlanWidget() {
           <Target className="size-4" /> План vs Факт
         </h2>
         <div className="text-xs text-muted-foreground">
-          План: {sym}{totalPlan} · Потрачено: {sym}{totalSpent.toFixed(0)}
+          План: {sym}{fmtMoney(totalPlan)} · Потрачено: {sym}{totalSpent.toFixed(0)}
         </div>
       </div>
 
@@ -129,7 +129,7 @@ export function BudgetPlanWidget() {
                   >
                     <Pencil className="size-3.5 text-primary shrink-0" />
                     <span className={cn("text-sm font-bold tabular-nums", over ? "text-red-600" : "text-foreground")}>
-                      {sym}{plan}
+                      {sym}{fmtMoney(plan)}
                     </span>
                   </button>
                 )}

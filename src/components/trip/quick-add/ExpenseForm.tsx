@@ -7,7 +7,7 @@ import { currencySelectOptions, currencySymbol } from "@/lib/currencies";
 import { getSavedCurrency, saveCurrency } from "@/lib/currency-pref";
 import { Check, Loader2, Users } from "lucide-react";
 import { toast } from "sonner";
-import { cn } from "@/lib/utils";
+import { cn, fmtMoney } from "@/lib/utils";
 import { DayPicker } from "./DayPicker";
 
 interface ExpenseFormProps {

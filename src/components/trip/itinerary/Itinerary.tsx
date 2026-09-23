@@ -303,6 +303,7 @@ export function Itinerary() {
               key={day.id}
               day={day}
               currency={curSym}
+              participantsCount={trip.participants.length}
               isCurrent={day.dayNumber === trip.currentDayNumber}
               isPast={day.dayNumber < trip.currentDayNumber}
               onOpenPlace={setOpenPlace}
