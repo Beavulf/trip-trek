@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { calculatePlannedRoute } from "./planned";
+import { calculatePlannedRoute, calculateRoutePlanByExpenseCategory, EXPENSE_CATEGORY_BY_PLACE } from "./planned";
 import type { Day, Place } from "../types";
 
 const place = (over: Partial<Place>): Place => ({
@@ -74,3 +74,50 @@ describe("calculatePlannedRoute (план по маршрутным бюджет
     expect(s2.unpricedPlaces).toBe(1); // нулевой бюджет — места без суммы
   });
 });
+
+describe("calculateRoutePlanByExpenseCategory (план маршрута в группах План vs Факт)", () => {
+  it("категории мест маппятся в категории трат и суммируются", () => {
+    const days = [
+      day({ id: "d1", dayNumber: 1, places: [
+        place({ budget: 100, category: "hotel" }),      // → accommodation
+        place({ budget: 50.5, category: "restaurant" }), // → food
+        place({ budget: 9.5, category: "cafe" }),        // → food
+        place({ budget: 40, category: "temple" }),       // → attractions
+        place({ budget: 25, category: "market" }),       // → shopping
+        place({ budget: null, category: "hotel" }),      // без суммы — мимо
+      ] }),
+    ];
+    const plan = calculateRoutePlanByExpenseCategory(days);
+    expect(plan.accommodation).toBeCloseTo(100, 2);
+    expect(plan.food).toBeCloseTo(60, 2);
+    expect(plan.attractions).toBeCloseTo(40, 2);
+    expect(plan.shopping).toBeCloseTo(25, 2);
+    expect(Object.keys(plan)).toEqual(["accommodation", "food", "attractions", "shopping"]);
+  });
+
+  it("неизвестная категория места попадает в «Прочее», транспорт и казино — напрямую", () => {
+    const days = [
+      day({ id: "d1", dayNumber: 1, places: [
+        place({ budget: 10, category: "hoverbike" }), // неизвестная → other
+        place({ budget: 20, category: "transport" }),
+        place({ budget: 5, category: "casino" }),
+      ] }),
+    ];
+    const plan = calculateRoutePlanByExpenseCategory(days);
+    expect(plan.other).toBeCloseTo(10, 2);
+    expect(plan.transport).toBeCloseTo(20, 2);
+    expect(plan.casino).toBeCloseTo(5, 2);
+  });
+
+  it("маппинг покрывает все известные категории мест", () => {
+    for (const cat of Object.keys(CATEGORY_KEYS)) {
+      expect(EXPENSE_CATEGORY_BY_PLACE[cat]).toBeTruthy();
+    }
+  });
+});
+
+// Ключи CATEGORY_META без импорта типов (места живут в lib/types)
+const CATEGORY_KEYS = {
+  sight: 1, temple: 1, viewpoint: 1, beach: 1, market: 1, casino: 1,
+  restaurant: 1, cafe: 1, bar: 1, hotel: 1, transport: 1, park: 1,
+} as const;

@@ -40,6 +40,26 @@ export interface PlannedRouteStats {
 
 const hasBudget = (v: number | null | undefined): v is number => v != null && v > 0;
 
+// Категория места → категория трат: план из маршрута попадает в те же группы,
+// что и в «План vs Факт» (BudgetPlan). Неизвестная категория — в «Прочее».
+export const EXPENSE_CATEGORY_BY_PLACE: Record<string, string> = {
+  hotel: "accommodation",
+  restaurant: "food",
+  cafe: "food",
+  bar: "food",
+  transport: "transport",
+  casino: "casino",
+  market: "shopping",
+  sight: "attractions",
+  temple: "attractions",
+  viewpoint: "attractions",
+  beach: "attractions",
+  park: "attractions",
+};
+
+const expenseCategoryOfPlace = (placeCategory: string): string =>
+  EXPENSE_CATEGORY_BY_PLACE[placeCategory] ?? "other";
+
 /**
  * План по дням и по категориям мест маршрута. Дни — в исходном порядке
  * (маршрут уже отсортирован по dayNumber), категории — по убыванию суммы.
@@ -104,4 +124,23 @@ export function calculatePlannedRoute(days: Day[], participantsCount: number): P
     categories,
     unpricedPlaces,
   };
+}
+
+/**
+ * План маршрута, свёрнутый по КАТЕГОРИЯМ ТРАТ (accommodation, food, …) —
+ * для «План vs Факт»: суммы из бюджетов мест складываются в те же группы,
+ * что и ручной план. Ручной план при этом не трогается — они суммируются на клиенте.
+ */
+export function calculateRoutePlanByExpenseCategory(days: Day[]): Record<string, number> {
+  const byCents: Record<string, number> = {};
+  for (const d of days) {
+    for (const p of d.places) {
+      if (!hasBudget(p.budget)) continue;
+      const cat = expenseCategoryOfPlace(p.category);
+      byCents[cat] = (byCents[cat] ?? 0) + toCents(p.budget);
+    }
+  }
+  return Object.fromEntries(
+    Object.entries(byCents).map(([cat, cents]) => [cat, fromCents(cents)])
+  );
 }

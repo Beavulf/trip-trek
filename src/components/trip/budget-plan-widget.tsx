@@ -1,7 +1,9 @@
 "use client";
 
-import { useBudgetPlan, useUpdateBudgetPlan, useExpenses, useTrip } from "@/hooks/use-trip";
+import { useMemo } from "react";
+import { useBudgetPlan, useUpdateBudgetPlan, useExpenses, useTrip, useRouteDays } from "@/hooks/use-trip";
 import { EXPENSE_CATEGORIES } from "@/lib/types";
+import { calculateRoutePlanByExpenseCategory } from "@/lib/budget";
 import { currencySymbol } from "@/lib/currencies";
 import { motion } from "framer-motion";
 import { Target, Pencil, Check, Loader2, X, ChevronDown } from "lucide-react";
@@ -12,6 +14,9 @@ import { cn, plural, fmtMoney } from "@/lib/utils";
 export function BudgetPlanWidget() {
   const { data: trip } = useTrip();
   const { data: plans, isLoading } = useBudgetPlan();
+  // План маршрута: бюджеты мест (Place.budget) автоматически попадают в те же
+  // категории трат. Ручной план (BudgetPlan) остаётся отдельным слагаемым.
+  const { data: days, isLoading: routeLoading } = useRouteDays();
   const { data: expenses } = useExpenses();
   const update = useUpdateBudgetPlan();
   const [editingCat, setEditingCat] = useState<string | null>(null);
@@ -19,7 +24,12 @@ export function BudgetPlanWidget() {
   const [showRest, setShowRest] = useState(false);
   const sym = currencySymbol(trip?.settings.currency);
 
-  if (isLoading || !plans) {
+  const routePlan = useMemo(
+    () => calculateRoutePlanByExpenseCategory(days ?? []),
+    [days]
+  );
+
+  if (isLoading || routeLoading || !plans) {
     return (
       <div className="rounded-2xl bg-card border border-border p-4 flex items-center gap-2 text-muted-foreground text-sm">
         <Loader2 className="size-4 animate-spin" /> Загрузка плана…
@@ -37,14 +47,14 @@ export function BudgetPlanWidget() {
   });
 
   const allCats = Object.keys(EXPENSE_CATEGORIES);
-  const totalPlan = plans.reduce((s, p) => s + p.amount, 0);
+  const manualPlanOf = (cat: string) => plans.find((p) => p.category === cat)?.amount ?? 0;
+  const planOf = (cat: string) => manualPlanOf(cat) + (routePlan[cat] ?? 0); // полный план = вручную + маршрут
+  const totalPlan = allCats.reduce((s, cat) => s + planOf(cat), 0);
+  const routeTotal = Object.values(routePlan).reduce((s, v) => s + v, 0);
   const totalSpent = realExpenses.reduce((s, e) => s + e.amount, 0);
 
-  // По умолчанию показываем только категории с планом или тратами — остальные за кнопкой
-  const relevantCats = allCats.filter((cat) => {
-    const plan = plans.find((p) => p.category === cat)?.amount ?? 0;
-    return plan > 0 || (spentByCat[cat] ?? 0) > 0;
-  });
+  // По умолчанию показываем только категории с планом (включая маршрутный) или тратами — остальные за кнопкой
+  const relevantCats = allCats.filter((cat) => planOf(cat) > 0 || (spentByCat[cat] ?? 0) > 0);
   const restCats = allCats.filter((cat) => !relevantCats.includes(cat));
   const visibleCats = relevantCats.length === 0 || showRest ? allCats : relevantCats;
 
@@ -71,14 +81,16 @@ export function BudgetPlanWidget() {
           <Target className="size-4" /> План vs Факт
         </h2>
         <div className="text-xs text-muted-foreground">
-          План: {sym}{fmtMoney(totalPlan)} · Потрачено: {sym}{totalSpent.toFixed(0)}
+          План: {sym}{fmtMoney(totalPlan)}{routeTotal > 0 ? ` (из маршрута ${sym}${fmtMoney(routeTotal)})` : ""} · Потрачено: {sym}{totalSpent.toFixed(0)}
         </div>
       </div>
 
       <div className="space-y-2.5">
         {visibleCats.map((cat) => {
           const meta = EXPENSE_CATEGORIES[cat];
-          const plan = plans.find((p) => p.category === cat)?.amount ?? 0;
+          const manual = manualPlanOf(cat);
+          const fromRoute = routePlan[cat] ?? 0;
+          const plan = manual + fromRoute;
           const spent = spentByCat[cat] ?? 0;
           const pct = plan > 0 ? Math.min(100, (spent / plan) * 100) : 0;
           const over = spent > plan && plan > 0;
@@ -121,11 +133,13 @@ export function BudgetPlanWidget() {
                     </button>
                   </div>
                 ) : (
-                  /* План — как редактируемое поле: пилюля с пунктирной рамкой и карандашом */
+                  /* Полный план (вручную + маршрут) — как редактируемое поле;
+                     правится только ручная часть, маршрутная подставляется сама */
                   <button
-                    onClick={() => { setEditVal(String(plan)); setEditingCat(cat); }}
+                    onClick={() => { setEditVal(String(manual)); setEditingCat(cat); }}
                     className="min-h-11 flex items-center gap-1.5 rounded-xl border border-dashed border-foreground/25 bg-muted/70 hover:bg-accent px-3 active:scale-95 transition-transform"
-                    aria-label={`Изменить план для категории ${meta.label}`}
+                    aria-label={`Изменить ручной план для категории ${meta.label}${fromRoute > 0 ? `, из маршрута уже ${fmtMoney(fromRoute)}` : ""}`}
+                    title={fromRoute > 0 ? `Правится только ручной план (${fmtMoney(manual)}); из маршрута ${fmtMoney(fromRoute)} подставляются сами` : "Изменить план"}
                   >
                     <Pencil className="size-3.5 text-primary shrink-0" />
                     <span className={cn("text-sm font-bold tabular-nums", over ? "text-red-600" : "text-foreground")}>
@@ -145,8 +159,15 @@ export function BudgetPlanWidget() {
                   )}
                 />
               </div>
-              <div className="flex justify-end mt-1">
-                <span className={cn("text-[11px] tabular-nums", over ? "text-red-500 font-medium" : "text-muted-foreground")}>
+              <div className="flex justify-between mt-1 gap-2">
+                {/* Брейкдаун плана: видим, какая часть пришла из маршрута, чтобы
+                    правка ручной части не выглядела «сломанной» цифрой */}
+                {fromRoute > 0 ? (
+                  <span className="text-[11px] text-muted-foreground tabular-nums truncate">
+                    план: вручную {sym}{fmtMoney(manual)} · из маршрута {sym}{fmtMoney(fromRoute)}
+                  </span>
+                ) : <span />}
+                <span className={cn("text-[11px] tabular-nums shrink-0", over ? "text-red-500 font-medium" : "text-muted-foreground")}>
                   потрачено {sym}{spent.toFixed(0)}
                 </span>
               </div>
