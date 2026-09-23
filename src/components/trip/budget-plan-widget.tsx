@@ -6,7 +6,7 @@ import { EXPENSE_CATEGORIES } from "@/lib/types";
 import { calculateRoutePlanByExpenseCategory } from "@/lib/budget";
 import { currencySymbol } from "@/lib/currencies";
 import { motion } from "framer-motion";
-import { Target, Pencil, Check, Loader2, X, ChevronDown } from "lucide-react";
+import { Target, Pencil, Check, Loader2, X, ChevronDown, RefreshCw } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { cn, plural, fmtMoney } from "@/lib/utils";
@@ -28,6 +28,23 @@ export function BudgetPlanWidget() {
     () => calculateRoutePlanByExpenseCategory(days ?? []),
     [days]
   );
+
+  // «Синхронизировать с маршрутом»: сбрасываем ручные правки плана в 0,
+  // чтобы план снова был ровно тем, что размечено в местах маршрута.
+  const [confirmingSync, setConfirmingSync] = useState(false);
+  const hasManualPlans = plans?.some((p) => p.amount > 0) ?? false;
+  const syncWithRoute = async () => {
+    const rows = (plans ?? []).filter((p) => p.amount > 0);
+    try {
+      await Promise.all(rows.map((p) => update.mutateAsync({ category: p.category, amount: 0 })));
+      toast.success("План синхронизирован с маршрутом", {
+        description: "Ручные правки сброшены — план теперь из бюджетов мест",
+      });
+    } catch {
+      toast.error("Не удалось синхронизировать план");
+    }
+    setConfirmingSync(false);
+  };
 
   if (isLoading || routeLoading || !plans) {
     return (
@@ -76,11 +93,43 @@ export function BudgetPlanWidget() {
 
   return (
     <div className="rounded-2xl bg-card border border-border p-4">
-      <div className="flex items-center justify-between mb-3">
+      <div className="flex items-center justify-between gap-2 mb-3">
         <h2 className="font-semibold text-sm flex items-center gap-2">
           <Target className="size-4" /> План vs Факт
         </h2>
-        <div className="text-xs text-muted-foreground">
+        {/* Возврат к плану маршрута: появляется, только когда есть ручные правки */}
+        {hasManualPlans && !confirmingSync && (
+          <button
+            type="button"
+            onClick={() => setConfirmingSync(true)}
+            className="shrink-0 min-h-9 px-2.5 rounded-full text-[11px] font-medium text-muted-foreground border border-border hover:text-foreground hover:bg-accent flex items-center gap-1 transition-colors active:scale-95"
+            title="Сбросить ручные правки — план станет равен суммам из мест маршрута"
+          >
+            <RefreshCw className="size-3" /> К плану маршрута
+          </button>
+        )}
+        {confirmingSync && (
+          <div className="shrink-0 flex items-center gap-1">
+            <button
+              type="button"
+              onClick={syncWithRoute}
+              disabled={update.isPending}
+              className="btn-confirm-yes text-[11px]"
+            >
+              {update.isPending ? (
+                <>
+                  <Loader2 className="size-3 animate-spin" /> Сбрасываем…
+                </>
+              ) : (
+                "Сбросить ручные"
+              )}
+            </button>
+            <button type="button" onClick={() => setConfirmingSync(false)} className="btn-confirm-no text-[11px]">
+              Отмена
+            </button>
+          </div>
+        )}
+        <div className="text-xs text-muted-foreground text-right">
           План: {sym}{fmtMoney(totalPlan)}{routeTotal > 0 ? ` (из маршрута ${sym}${fmtMoney(routeTotal)})` : ""} · Потрачено: {sym}{totalSpent.toFixed(0)}
         </div>
       </div>
