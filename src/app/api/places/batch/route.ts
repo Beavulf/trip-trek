@@ -88,7 +88,7 @@ export async function POST(req: NextRequest) {
     publish(tripId, "place:created", {
       count: created.length,
       userName: sanitizeUserText(body.userName || user.name || "Кто-то", 60),
-    });
+    }, user.id);
 
     return NextResponse.json({ created: created.length, places: created });
   } catch (e) {

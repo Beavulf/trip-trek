@@ -2573,3 +2573,34 @@ Server was crashing with "Failed to load external module @prisma/client-2c3a283f
 ### Notes
 - IAB-грабли: Playwright-клики по кнопкам перехватываются (невидимый оверлей) — работают evaluate-клики; скриншот иногда таймаутит — просто повторить
 - Dev-сервер оставлен запущенным на :3100 (background-задача сессии) с правильным env
+
+## Session: Пуши — ретрай, логи потерь, пуши без автора
+
+**Date**: 2026-09-24
+
+### Status Before
+- Жалоба юзера: пуши на телефон приходят «как хотят» — с задержкой, пачками или никак
+- Проба с VPS (2026-09-24): fcm.googleapis.com из Москвы — 1 из 4 запросов в 10-секундный таймаут, ещё один шёл 5 с: Google FCM из РФ деградирован, часть пушей умирала прямо на сервере
+- Сбои отправки молча выбрасывались (Promise.allSettled, логировались только 404/410) — потеря пушей была невидима, ретрая не было
+- TTL у событийных пушей не задан → web-push держит недоставленное 4 недели по умолчанию («вчерашние» приходят пачкой)
+- Пуши шлись всем участникам поездки, включая автора действия — он получал пуш о своём же событии, уже увиденном тостом
+- await sendPush в notify.ts держал HTTP-роут на таймаутах пуш-сервера
+
+### Changes
+- `src/lib/push-retry.ts` (новый, чистый) + `push-retry.test.ts` — shouldRetryPush: сеть/таймаут (нет statusCode), 429 и 5xx транзиентны; прочие 4xx постоянны
+- `src/lib/push-send.ts` — deliverPush: попытка + ровно один ретрай на транзиентные, TTL 24 ч, маскированный endpoint в warn-логе при потере; logPushFanout — одна строка на рассылку (sent/gone/failed) для оценки реального % потерь; sendPushToTripMembers принял opts.exceptUserId
+- `src/lib/ws-bus.ts` — publish() взял 4-й аргумент actorId: push автору не шлётся, его ws-тост клиент уже фильтрует по actorUserId (фолбэк — payload.userId, как раньше)
+- `src/lib/notify.ts` — sendPush через deliverPush и без await после записи в БД (роут не ждёт Google); итоги в лог
+- Роуты `api/places`, `api/places/batch`, `api/journal` — пробросили id автора 4-м аргументом (expenses/photos/board уже несли userId в payload — там фолбэк)
+- Побочный эффект: тост «place:created/journal:added» больше не показывается автору (как у expenses/board/photos и так было)
+- Доки: architecture.md §9, AGENTS.md (Realtime + карта src/lib)
+
+### Verification
+- bun run test: 146/146 (16 файлов, включая новые 4 push-retry)
+- tsc --noEmit: 0; eslint по изменённым файлам: чисто (13 ошибок в стейте — старые set-state-in-effect в UI-компонентах, не из этой сессии)
+- Живой деплой не делался — правки серверные, попадут на прод с ближайшим `up -d --build app`; оценить эффект по логам: `docker logs triptrek-app | grep "push: fanout"`
+
+### Notes
+- Сам канал Chrome→телефон из РФ не чинится никак (FCM-нога Google) — фикс убирает потери на серверной ноге и делает их видимыми; гарантированные уведомления — только Telegram-бот/email как дубль (не делалось, решение за юзером)
+- В Китае Chrome-пуши не работают вовсе (FCM заблокирован) — in-app realtime не затронут
+- `place:visited` в NOTIFICATION_MAP не публикуется ни одним роутом — мёртвый конфиг, не трогали

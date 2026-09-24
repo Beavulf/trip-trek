@@ -45,7 +45,7 @@ bun run build            # production-сборка standalone
 | `src/components/trip/` | фичи главного экрана: itinerary, budget/, map/, gallery, board (чат), journal, food/, phrases/, timeline, dashboard/… |
 | `src/components/admin/`, `auth/`, `ui/` | админка, логин/регистрация, shadcn-кит |
 | `src/hooks/trip/` | `use-*.ts` — слой данных клиента (TanStack Query) над API |
-| `src/lib/` | серверная логика: `api-auth.ts`, `rate-limit.ts`, `ws-bus.ts`, `ai.ts` (оркестратор ИИ: runAi, учёт AiUsage, алерты трат, aiFailResponse), `ai-usage.ts` (реестр ИИ-фич AI_FEATURES + чистая математика учёта), `ai-key.ts` (BYOK-резолв: pickAiConfig, маски, https-гвард), `planner.ts` (контракты/валидация планера + sanitizeUserText/extractJsonLoose), `poi.ts` (OSM POI через Overpass: парсер, матчинг выбора ИИ), `geocode-place.ts` (Nominatim для черновиков, троттлинг + бюджет времени), `premium.ts`, `notify.ts`, `mail/`, `storage/`, `budget/`, `outbound.ts`, `db.ts` (Prisma-клиент), `trip-days.ts`, `trip-export.ts`, `trip-templates.ts`, `app-config.ts`; доменные модули маршрута: `time-of-day.ts`, `place-fields.ts` (контракт записи Place), `place-draft.ts`, `route.ts`, `route-threads.ts`, `map-filters.ts`, `map-bus.ts`, `map-layers.ts`, `query-keys.ts`, `place-links.ts`, `onboarding.ts` (шаги welcome-тура и обучалок вкладок + отметки обучения) |
+| `src/lib/` | серверная логика: `api-auth.ts`, `rate-limit.ts`, `ws-bus.ts`, `ai.ts` (оркестратор ИИ: runAi, учёт AiUsage, алерты трат, aiFailResponse), `ai-usage.ts` (реестр ИИ-фич AI_FEATURES + чистая математика учёта), `ai-key.ts` (BYOK-резолв: pickAiConfig, маски, https-гвард), `planner.ts` (контракты/валидация планера + sanitizeUserText/extractJsonLoose), `poi.ts` (OSM POI через Overpass: парсер, матчинг выбора ИИ), `geocode-place.ts` (Nominatim для черновиков, троттлинг + бюджет времени), `premium.ts`, `notify.ts`, `push-retry.ts` (чистое правило ретрая web-push), `mail/`, `storage/`, `budget/`, `outbound.ts`, `db.ts` (Prisma-клиент), `trip-days.ts`, `trip-export.ts`, `trip-templates.ts`, `app-config.ts`; доменные модули маршрута: `time-of-day.ts`, `place-fields.ts` (контракт записи Place), `place-draft.ts`, `route.ts`, `route-threads.ts`, `map-filters.ts`, `map-bus.ts`, `map-layers.ts`, `query-keys.ts`, `place-links.ts`, `onboarding.ts` (шаги welcome-тура и обучалок вкладок + отметки обучения) |
 | `prisma/` | `schema.prisma`, миграции, seed, скрипты переноса |
 | `docker-deploy/` | прод: Dockerfile, compose, Caddy, `DEPLOY.md` (runbook), бэкапы |
 | `docs/` | `architecture.md`, `api.md`, `glossary.md`, `adr/0001–0008`, аудиты фич `audit-*.md`, `PRODUCTION_PLAN.md` |
@@ -72,6 +72,9 @@ API-роут после мутации вызывает `publish(tripId, "place:
 События: `trip:updated, place:created/updated/deleted, photo:added, expense:added,
 budget:updated, board:added, journal:added, checklist:updated, info:updated,
 food:updated, phrase:updated`. Канал read-only для клиента (только уведомления).
+События из NOTIFICATION_MAP дополнительно шлют web-push участникам, кроме автора
+мутации — `publish(tripId, event, payload, actorId)`; детали доставки — §9
+`docs/architecture.md`.
 WS-handshake требует валидный JWT (`server/ws-auth.ts`), анонимов отбиваем.
 
 ## Лимиты, премиум, ИИ

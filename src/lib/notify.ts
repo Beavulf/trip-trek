@@ -1,4 +1,5 @@
 import { db } from "@/lib/db";
+import { logger } from "@/lib/logger";
 
 // Уведомления пользователю: всегда пишем в БД (колокольчик в приложении),
 // при настроенном VAPID дублируем web-push (для закрытого приложения).
@@ -49,51 +50,33 @@ export async function notifyUser(userId: string, payload: NotifyPayload): Promis
     console.error(`[notify] failed to save ${payload.type} for ${userId}:`, e);
     return;
   }
-  await sendPush(userId, payload).catch(() => {});
+  // push не ждём: после записи в БД это независимый канал, а пуш-сервер из РФ
+  // отвечает по 10+ секунд (проба 2026-09-24) — мутация не должна на это тратить
+  // свой латентный бюджет. Сбой доставки не роняет основную операцию.
+  void sendPush(userId, payload).catch(() => {});
 }
 
 /** Web-push по всем подпискам юзера; мёртвые эндпоинты вычищаем. */
 async function sendPush(userId: string, payload: NotifyPayload): Promise<void> {
-  const keys = VAPID_KEYS();
-  if (!keys) return; // push не настроен — уведомление ждёт в БД
+  if (!VAPID_KEYS()) return; // push не настроен — уведомление ждёт в БД
 
   const subs = await db.pushSubscription.findMany({ where: { userId } });
   if (subs.length === 0) return;
 
-  const { sendNotification } = await import("web-push");
+  const { deliverPush, logPushFanout } = await import("./push-send");
   const json = JSON.stringify({
     title: payload.title,
     body: payload.body || "",
     url: payload.url || "/",
   });
 
-  await Promise.allSettled(
-    subs.map(async (sub) => {
-      try {
-        await sendNotification(
-          {
-            endpoint: sub.endpoint,
-            keys: { p256dh: sub.p256dh, auth: sub.auth },
-          },
-          json,
-          {
-            TTL: 86_400,
-            vapidDetails: { subject: "mailto:admin@triptrek.app", ...keys },
-            // дедлайн обязателен: endpoint задаёт клиент, зависший отправитель
-            // тормозил бы ждущий его HTTP-роут (аудит 2026-09-12)
-            timeout: 10_000,
-          }
-        );
-      } catch (e) {
-        const status = (e as { statusCode?: number }).statusCode;
-        if (status === 404 || status === 410) {
-          await db.pushSubscription.delete({ where: { id: sub.id } }).catch(() => {});
-        } else {
-          throw e;
-        }
-      }
-    })
-  );
+  // deliverPush не бросает и сам ретраит транзиентные ошибки
+  const outcomes = await Promise.all(subs.map((sub) => deliverPush(sub, json)));
+
+  for (const sub of subs.filter((_, i) => outcomes[i] === "gone")) {
+    await db.pushSubscription.delete({ where: { id: sub.id } }).catch(() => {});
+  }
+  logPushFanout("user", outcomes, { userId });
 }
 
 /** Уведомить всех участников поездки, кроме одного (например, при удалении поездки). */

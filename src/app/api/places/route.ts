@@ -9,7 +9,7 @@ export async function POST(req: NextRequest) {
   const body = await req.json();
   const input = pickPatchablePlace(body);
   const tripId = typeof body.tripId === "string" ? body.tripId : "";
-  const { response } = await requireTripMember(req, tripId);
+  const { user, response } = await requireTripMember(req, tripId);
   if (response) return response;
   if (!input.name || !input.dayId || !tripId || typeof input.lat !== "number" || typeof input.lng !== "number") {
     return NextResponse.json({ error: "name, dayId, tripId, lat, lng required" }, { status: 400 });
@@ -44,6 +44,6 @@ export async function POST(req: NextRequest) {
       status: "planned",
     },
   });
-  publish(tripId, "place:created", { placeName: place.name, userName: body.userName || "Кто-то" });
+  publish(tripId, "place:created", { placeName: place.name, userName: body.userName || "Кто-то" }, user!.id);
   return NextResponse.json(place);
 }

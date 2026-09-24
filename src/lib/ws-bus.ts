@@ -17,10 +17,20 @@ export function setIo(io: IOServer): void {
  * Побочно (как раньше делал /emit-хендлер):
  *  - событие "notification" для тостов, если событие есть в NOTIFICATION_MAP;
  *  - Web Push участникам (fire-and-forget; без VAPID-ключей — тихий no-op).
+ *
+ * actorId — автор мутации: ему не шлём push (своё событие он уже видел тостом),
+ * а ws-тост клиент выкинет по actorUserId. Фолбэк — userId из payload
+ * (expenses/photos/board кладут его сами).
  */
-export function publish(tripId: string, event: string, payload: Record<string, unknown> = {}): void {
+export function publish(
+  tripId: string,
+  event: string,
+  payload: Record<string, unknown> = {},
+  actorId?: string | null
+): void {
   const io = holder.__tripIo;
   const n = NOTIFICATION_MAP[event];
+  const actor = actorId ?? ((payload.userId as string) || null);
 
   if (io) {
     io.to(`trip:${tripId}`).emit(event, { tripId, ...payload });
@@ -29,7 +39,7 @@ export function publish(tripId: string, event: string, payload: Record<string, u
         type: event.split(":")[0],
         message: n.message(payload),
         emoji: n.emoji,
-        actorUserId: (payload.userId as string) || null,
+        actorUserId: actor,
       });
     }
   }
@@ -37,11 +47,15 @@ export function publish(tripId: string, event: string, payload: Record<string, u
   if (n) {
     void import("./push-send")
       .then(({ sendPushToTripMembers }) =>
-        sendPushToTripMembers(tripId, {
-          title: "TripTrek",
-          body: `${n.emoji} ${n.message(payload)}`,
-          tag: event,
-        })
+        sendPushToTripMembers(
+          tripId,
+          {
+            title: "TripTrek",
+            body: `${n.emoji} ${n.message(payload)}`,
+            tag: event,
+          },
+          { exceptUserId: actor }
+        )
       )
       .catch(() => {
         // push — вспомогательный канал; сбой не должен ронять запрос

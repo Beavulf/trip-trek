@@ -84,7 +84,7 @@ export async function POST(req: NextRequest) {
     journalId: entry.id,
     userName: entry.user?.name || "Кто-то",
     mood: safeMood || "",
-  });
+  }, authorId);
 
   return NextResponse.json(entry);
 }
