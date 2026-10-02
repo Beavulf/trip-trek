@@ -73,8 +73,8 @@ export function RoutePlanCard() {
         className="w-full flex items-center gap-2 text-left"
       >
         <Compass className="size-4 text-primary shrink-0" />
-        <h2 className="font-semibold text-sm">План по маршруту</h2>
-        <span className="ml-auto text-xs text-muted-foreground tabular-nums shrink-0">
+        <h2 className="font-semibold text-sm whitespace-nowrap">План по маршруту</h2>
+        <span className="ml-auto text-xs text-muted-foreground tabular-nums shrink-0 whitespace-nowrap">
           {sym}{fmtMoney(stats.total)}
           {factByDay.total > 0 && <span className={factByDay.total > stats.total ? "text-red-500 font-medium" : "text-green-600"}> · факт {sym}{fmtMoney(factByDay.total)}</span>}
         </span>

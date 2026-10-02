@@ -93,8 +93,10 @@ export function BudgetPlanWidget() {
 
   return (
     <div className="rounded-2xl bg-card border border-border p-4">
-      <div className="flex items-center justify-between gap-2 mb-3">
-        <h2 className="font-semibold text-sm flex items-center gap-2">
+      {/* flex-wrap: на мобильном сводка уезжает на отдельную строку, иначе
+          три слагаемых сжимаются и заголовок рвётся посреди слов */}
+      <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1.5 mb-3">
+        <h2 className="font-semibold text-sm flex items-center gap-2 whitespace-nowrap shrink-0">
           <Target className="size-4" /> План vs Факт
         </h2>
         {/* Возврат к плану маршрута: появляется, только когда есть ручные правки */}
@@ -129,7 +131,7 @@ export function BudgetPlanWidget() {
             </button>
           </div>
         )}
-        <div className="text-xs text-muted-foreground text-right">
+        <div className="w-full sm:w-auto text-left sm:text-right text-xs text-muted-foreground">
           План: {sym}{fmtMoney(totalPlan)}{routeTotal > 0 ? ` (из маршрута ${sym}${fmtMoney(routeTotal)})` : ""} · Потрачено: {sym}{totalSpent.toFixed(0)}
         </div>
       </div>
