@@ -63,6 +63,9 @@ export interface Photo {
   lng: number | null;
   address: string | null;
   takenAt: string;
+  /** Метаданные размеров — для aspect-ratio плиток галереи (могут отсутствовать) */
+  width?: number | null;
+  height?: number | null;
 }
 
 export interface Expense {

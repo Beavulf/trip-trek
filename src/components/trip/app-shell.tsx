@@ -3,7 +3,7 @@
 import { useTrip } from "@/hooks/use-trip";
 import { useTripStore } from "@/lib/trip-store";
 import { cn } from "@/lib/utils";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 import {
   LayoutDashboard,
   ListChecks,
@@ -121,11 +121,21 @@ export function AppShell({ children }: { children: ReactNode }) {
     return () => ro.disconnect();
   }, []);
 
+  // Стрелки рейки табов: rAF-троттлинг + запись только при изменении.
+  // Прямой setState на каждый scroll-файт перерисовывал шапку на каждый кадр
+  // smooth-скролла (аудит 2026-10-02).
+  const tabScrollRaf = useRef(0);
   const handleTabScroll = () => {
-    const el = tabScrollRef.current;
-    if (!el) return;
-    setShowLeftArrow(el.scrollLeft > 10);
-    setShowRightArrow(el.scrollLeft < el.scrollWidth - el.clientWidth - 10);
+    if (tabScrollRaf.current) return;
+    tabScrollRaf.current = requestAnimationFrame(() => {
+      tabScrollRaf.current = 0;
+      const el = tabScrollRef.current;
+      if (!el) return;
+      const left = el.scrollLeft > 10;
+      const right = el.scrollLeft < el.scrollWidth - el.clientWidth - 10;
+      setShowLeftArrow((v) => (v === left ? v : left));
+      setShowRightArrow((v) => (v === right ? v : right));
+    });
   };
 
   /** Keep active tab fully visible / centered in the chip rail. */
@@ -319,7 +329,10 @@ export function AppShell({ children }: { children: ReactNode }) {
                   data-tab={t.key}
                   onClick={() => setActiveTab(t.key)}
                   className={cn(
-                    "relative flex items-center gap-1.5 px-3 min-h-11 rounded-xl text-sm font-medium whitespace-nowrap transition-all duration-200 active:scale-95 shrink-0",
+                    // transition-colors, не transition-all: чипы скроллятся в рейке,
+                    // и all тянет за собой layout-свойства — дешевле красить цвет,
+                    // а scale нажатия оставить мгновенным
+                    "relative flex items-center gap-1.5 px-3 min-h-11 rounded-xl text-sm font-medium whitespace-nowrap transition-colors duration-200 active:scale-95 shrink-0",
                     active
                       ? "text-primary-foreground"
                       : "text-muted-foreground hover:text-foreground hover:bg-accent/60"
@@ -387,11 +400,8 @@ export function AppShell({ children }: { children: ReactNode }) {
         style={{ bottom: "calc(1.25rem + env(safe-area-inset-bottom, 0px))" }}
         aria-label="Быстрое добавление"
       >
-        <motion.div
-          className="absolute inset-0 rounded-full bg-orange-500"
-          animate={{ scale: [1, 1.4], opacity: [0.4, 0] }}
-          transition={{ duration: 2, repeat: Infinity, ease: "easeOut" }}
-        />
+        {/* Хало живёт только при полной анимации: бесконечный пульс при reduced motion не нужен */}
+        <FabHalo />
         <Plus className="size-8 sm:size-7 relative z-10" strokeWidth={2.5} />
       </motion.button>
 
@@ -431,6 +441,19 @@ export function AppShell({ children }: { children: ReactNode }) {
       <TabTour />
       <PWAUpdateNotification />
     </div>
+  );
+}
+
+/** Пульсирующее хало FAB — отдельным компонентом, чтобы уважать reduced motion */
+function FabHalo() {
+  const reduceMotion = useReducedMotion();
+  if (reduceMotion) return null;
+  return (
+    <motion.div
+      className="absolute inset-0 rounded-full bg-orange-500"
+      animate={{ scale: [1, 1.4], opacity: [0.4, 0] }}
+      transition={{ duration: 2, repeat: Infinity, ease: "easeOut" }}
+    />
   );
 }
 

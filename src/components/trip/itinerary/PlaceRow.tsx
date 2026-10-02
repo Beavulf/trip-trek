@@ -54,9 +54,11 @@ export function PlaceRow({ place, accentColor, currency, onOpen }: PlaceRowProps
     setActiveTab("map" as TripTab);
   };
 
+  // Без layout-пропа: он удваивал framer projection-узлы на каждую строку и
+  // фризил вход на вкладку (аудит 2026-10-02); перетаскивание анимирует сам
+  // Reorder.Item, плавное расступание соседей — приемлемая цена.
   return (
     <motion.div
-      layout
       role="button"
       tabIndex={0}
       onClick={onOpen}

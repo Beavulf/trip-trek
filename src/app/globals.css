@@ -179,15 +179,18 @@
     -ms-overflow-style: none;
     scrollbar-width: none;
   }
+  /* Стекло: blur сознательно умеренный. Sticky-поверхности с этим классом
+     перерисовывают блюр КАЖДЫЙ кадр скролла — 20px+200% на телефоне роняли
+     fps (аудит 2026-10-02). Прозрачная подложка держит «стеклянный» вид. */
   .glass {
-    background: color-mix(in oklch, var(--card) 70%, transparent);
-    backdrop-filter: blur(16px) saturate(180%);
-    -webkit-backdrop-filter: blur(16px) saturate(180%);
+    background: color-mix(in oklch, var(--card) 75%, transparent);
+    backdrop-filter: blur(10px) saturate(150%);
+    -webkit-backdrop-filter: blur(10px) saturate(150%);
   }
   .glass-strong {
-    background: color-mix(in oklch, var(--card) 85%, transparent);
-    backdrop-filter: blur(20px) saturate(200%);
-    -webkit-backdrop-filter: blur(20px) saturate(200%);
+    background: color-mix(in oklch, var(--card) 88%, transparent);
+    backdrop-filter: blur(12px) saturate(160%);
+    -webkit-backdrop-filter: blur(12px) saturate(160%);
   }
   .text-balance {
     text-wrap: balance;
@@ -508,6 +511,11 @@ body.chat-dock button[aria-label="Быстрое добавление"] {
   }
   /* Пинг «сегодня/сейчас» на маршруте замирает — остаётся статичная точка */
   .animate-ping {
+    animation: none !important;
+  }
+  /* Скелетоны: пульс/шиммер замирают — остаётся статичная подложка */
+  .animate-pulse,
+  .shimmer {
     animation: none !important;
   }
 }

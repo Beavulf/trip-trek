@@ -195,8 +195,10 @@ function ChatDock({
   // Новые сообщения, пока лента прокручена вверх
   const [newCount, setNewCount] = useState(0);
   // Порционный рендер (аудит 2026-09-13): история до 1000 сообщений целиком
-  // в DOM на мобильном = секунды маунта и джанки на каждом WS-инвалиде
-  const [renderLimit, setRenderLimit] = useState(100);
+  // в DOM на мобильном = секунды маунта и джанки на каждом WS-инвалиде.
+  // Стартовый порцион 50: вход в чат с сотней сообщений фризил поток
+  // (аудит 2026-10-02), остальное докрывается «Показать ещё».
+  const [renderLimit, setRenderLimit] = useState(50);
 
   const participants = trip?.participants ?? [];
   const me = participants.find((p) => p.id === currentUserId);
@@ -746,7 +748,9 @@ function ChatDock({
       <div className="shrink-0 pb-safe">
         {currentUserId ? (
           <div className="px-1.5 sm:px-4 pb-1.5">
-            <div className="mx-auto max-w-3xl rounded-3xl border border-border glass-strong shadow-lg p-2 space-y-1.5">
+            {/* Без backdrop-blur: композер живёт над скроллящейся лентой весь сеанс
+                чата, и постоянный blur под ним — самый дорогой слой (аудит 2026-10-02) */}
+            <div className="mx-auto max-w-3xl rounded-3xl border border-border bg-card/95 shadow-lg p-2 space-y-1.5">
               {/* Режим: ответ / правка */}
               <AnimatePresence initial={false}>
                 {(replyTo || editing) && (

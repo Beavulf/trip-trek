@@ -21,6 +21,8 @@ interface DayCardProps {
   isCurrent?: boolean;
   /** День уже прошёл */
   isPast?: boolean;
+  /** Раскрыт при монтировании (по умолчанию — нет) */
+  defaultExpanded?: boolean;
   onOpenPlace: (p: Place) => void;
   onAddPlace?: (dayId: string) => void;
   onEditDay?: (day: Day) => void;
@@ -45,11 +47,15 @@ export function DayCard({
   participantsCount = 0,
   isCurrent,
   isPast,
+  defaultExpanded = false,
   onOpenPlace,
   onAddPlace,
   onEditDay,
 }: DayCardProps) {
-  const [expanded, setExpanded] = useState(true);
+  // Свёрнутые по умолчанию не смонтированы в DOM: вход на вкладку с длинным
+  // маршрутом раньше фризил поток на сотни мс — motion-дерево росло на каждый
+  // день сразу (аудит 2026-10-02). Раскрытие анимируется как раньше.
+  const [expanded, setExpanded] = useState(defaultExpanded);
   const reduceMotion = useReducedMotion();
   const accent = day.accentColor ?? "#f97316";
   const reorder = useReorderPlaces();

@@ -130,7 +130,10 @@ export function BudgetAnalytics({
           <div className="w-32 h-32 shrink-0">
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
-                <Pie data={byCategory} dataKey="value" cx="50%" cy="50%" innerRadius={32} outerRadius={60} paddingAngle={2}>
+                {/* Анимация выключена: recharts переигрывала её на каждую смену
+                    среза/рефетч, а маунт с анимацией фризил вход на «Бюджет»
+                    (аудит 2026-10-02); числа и тултипы не тронуты */}
+                <Pie data={byCategory} dataKey="value" cx="50%" cy="50%" innerRadius={32} outerRadius={60} paddingAngle={2} isAnimationActive={false}>
                   {byCategory.map((entry) => (
                     <Cell key={entry.key} fill={entry.color} />
                   ))}
@@ -185,7 +188,7 @@ export function BudgetAnalytics({
                   itemStyle={{ color: "var(--foreground)" }}
                   cursor={{ fill: "var(--accent)" }}
                 />
-                <Bar dataKey="amount" radius={[6, 6, 0, 0]} maxBarSize={40}>
+                <Bar dataKey="amount" radius={[6, 6, 0, 0]} maxBarSize={40} isAnimationActive={false}>
                   {dailyData.map((entry, i) => (
                     <Cell key={i} fill={dayColor(entry.city)} />
                   ))}

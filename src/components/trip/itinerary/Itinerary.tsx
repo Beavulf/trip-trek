@@ -223,8 +223,10 @@ export function Itinerary() {
       </section>
 
       {/* Липкая линейка дней + быстрое добавление места в выбранный день.
-          Офсет — реальная высота хедера из --header-h (синхронизирует app-shell) */}
-      <div className="sticky top-[calc(var(--header-h,102px))] z-20 -mx-1 px-1 py-1 bg-background/85 backdrop-blur-sm rounded-xl">
+          Офсет — реальная высота хедера из --header-h (синхронизирует app-shell).
+          Без backdrop-blur: рейка живёт под уже размытой шапкой, второй blur
+          в стопке удваивает композитинг при скролле (аудит 2026-10-02) */}
+      <div className="sticky top-[calc(var(--header-h,102px))] z-20 -mx-1 px-1 py-1 bg-background/95 rounded-xl">
         <div className="flex items-center gap-2">
           <div className="chip-rail no-scrollbar flex-1 gap-1.5">
             <button
@@ -298,22 +300,31 @@ export function Itinerary() {
       <div className="relative">
         <div className="absolute left-[11px] top-3 bottom-3 w-0.5 rounded-full bg-border" aria-hidden="true" />
         <div className="space-y-3">
-          {filteredDays.map((day) => (
-            <DayCard
-              key={day.id}
-              day={day}
-              currency={curSym}
-              participantsCount={trip.participants.length}
-              isCurrent={day.dayNumber === trip.currentDayNumber}
-              isPast={day.dayNumber < trip.currentDayNumber}
-              onOpenPlace={setOpenPlace}
-              onAddPlace={(dayId) => {
-                const d = dayList.find((dd) => dd.id === dayId);
-                if (d) openAddForDay(d);
-              }}
-              onEditDay={setEditDay}
-            />
-          ))}
+          {filteredDays.map((day) => {
+            const isDayCurrent = day.dayNumber === trip.currentDayNumber;
+            return (
+              <DayCard
+                key={day.id}
+                day={day}
+                currency={curSym}
+                participantsCount={trip.participants.length}
+                isCurrent={isDayCurrent}
+                isPast={day.dayNumber < trip.currentDayNumber}
+                defaultExpanded={
+                  // По умолчанию раскрыт только сегодня (или первый день до старта),
+                  // при фильтре по дню — сам выбранный. Остальные дни не монтируем:
+                  // так вход на вкладку не фризит на длинном маршруте.
+                  selectedDay != null ? true : isDayCurrent || (!currentDay && day.id === dayList[0]?.id)
+                }
+                onOpenPlace={setOpenPlace}
+                onAddPlace={(dayId) => {
+                  const d = dayList.find((dd) => dd.id === dayId);
+                  if (d) openAddForDay(d);
+                }}
+                onEditDay={setEditDay}
+              />
+            );
+          })}
         </div>
       </div>
 

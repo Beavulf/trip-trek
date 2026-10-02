@@ -1,16 +1,17 @@
 // Service Worker для TripTrek — push + умное кэширование + авто-обновление
 // Версия кэша — МЕНЯТЬ ПРИ КАЖДОМ ДЕПЛОЕ!
-const CACHE_VERSION = "v26-09-21-brand";
+const CACHE_VERSION = "v26-10-02-perf";
 const CACHE_NAME = `triptrek-${CACHE_VERSION}`;
 const STATIC_ASSETS = ["/", "/login", "/manifest.webmanifest", "/icon-192.png", "/icon-512.png", "/icon-1024.png"];
 
-// Установка — кэшируем базовые страницы + skipWaiting для мгновенного обновления
+// Установка — кэшируем базовые страницы. БЕЗ self.skipWaiting(): новый SW
+// ждёт своей очереди, юзер решает сам по тосту «Обновить» (SKIP_WAITING ниже).
+// Раньше skipWaiting в install + reload на controllerchange перезагружали
+// вкладку под руками пользователя и теряли черновики (аудит 2026-10-02).
 self.addEventListener("install", (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => cache.addAll(STATIC_ASSETS).catch(() => {}))
   );
-  // skipWaiting — новый SW активируется сразу (не ждём закрытия всех вкладок)
-  self.skipWaiting();
 });
 
 // Активация — удаляем СТАРЫЕ версии кэша + claim всех клиентов

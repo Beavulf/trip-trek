@@ -184,6 +184,9 @@ export default function TripMap({ active = true }: { active?: boolean }) {
   // Цель может прийти раньше канваса (спиннер) — доставку повторяем, пока не ack
   useEffect(() => {
     const deliver = () => {
+      // Карта живёт между вкладками (display:none) — опрос не должен тикать,
+      // когда страница не видна; вернувшись, первый же тик разберёт очередь
+      if (document.hidden) return;
       const req = peekMapFocus();
       if (!req) return;
       const canvas = canvasRef.current;
@@ -763,7 +766,8 @@ function CityChip({
 function PhotoPopupContent({ photo, onOpenFullscreen }: { photo: Photo; onOpenFullscreen: () => void }) {
   return (
     <div className="p-1 w-48">
-      <img src={photo.url} alt={photo.caption || ""} className="w-full h-32 object-cover rounded-lg mb-1.5" />
+      {/* thumbnail, не оригинал: попап маленький, декодить full-size ради 192px — трата декодера и памяти */}
+      <img src={photo.thumbUrl || photo.url} alt={photo.caption || ""} className="w-full h-32 object-cover rounded-lg mb-1.5" />
       {photo.caption && <div className="text-xs font-medium">{photo.caption}</div>}
       {photo.address && (
         <div className="text-[10px] text-muted-foreground flex items-center gap-0.5 mt-0.5">

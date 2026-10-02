@@ -34,10 +34,14 @@ export function PWAUpdateNotification() {
       });
     }).catch(() => {});
 
-    // Слушаем смену контроллера (новый SW активировался)
+    // Слушаем смену контроллера (новый SW активировался после SKIP_WAITING).
+    // Reload только если страница ЗАГРУЖАЛАСЬ уже с контроллером: без этой
+    // проверки первый claim() SW на свежей вкладке давал лишний полный
+    // reload сразу после первого захода (аудит 2026-10-02).
     let refreshing = false;
+    const hadController = !!navigator.serviceWorker.controller;
     navigator.serviceWorker.addEventListener("controllerchange", () => {
-      if (refreshing) return;
+      if (!hadController || refreshing) return;
       refreshing = true;
       // Перезагружаем страницу чтобы загрузить новый код
       window.location.reload();

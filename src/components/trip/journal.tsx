@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 import {
   Ban,
@@ -187,6 +187,23 @@ export function Journal() {
     };
   }, [entries]);
 
+  // Дата главы. Стабильная ссылка (useCallback): DayChapter мемизирован и не
+  // должен перерисовываться из-за нового колбэка на каждый keystroke композера
+  const dayDateLabel = useCallback(
+    (dayNumber: number) => {
+      try {
+        if (!trip) return "";
+        return dayDateFor(new Date(trip.settings.startDate), dayNumber).toLocaleDateString("ru-RU", {
+          day: "numeric",
+          month: "short",
+        });
+      } catch {
+        return "";
+      }
+    },
+    [trip]
+  );
+
   if (!tripId) {
     return (
       <div className="space-y-4 animate-fade-up pb-20">
@@ -243,17 +260,6 @@ export function Journal() {
   const isOwnerRole = trip.participants.find((p) => p.id === currentUserId)?.role === "owner";
   const totalDays = trip.days.length;
   const documentedPct = totalDays > 0 ? Math.min(100, Math.round((stats.documentedDays / totalDays) * 100)) : 0;
-
-  const dayDateLabel = (dayNumber: number) => {
-    try {
-      return dayDateFor(new Date(trip.settings.startDate), dayNumber).toLocaleDateString("ru-RU", {
-        day: "numeric",
-        month: "short",
-      });
-    } catch {
-      return "";
-    }
-  };
 
   const autoGrow = (el: HTMLTextAreaElement) => {
     el.style.height = "auto";
@@ -344,13 +350,14 @@ export function Journal() {
             {stats.last && <span className="text-white/55"> · последняя {relTime(stats.last.createdAt)}</span>}
           </p>
 
-          {/* Сколько поездки уже описано */}
+          {/* Сколько поездки уже описано — scaleX, а не width: композитное
+              свойство, не дёргает layout при анимации (как в hero маршрута) */}
           <div className="mt-3 h-1.5 rounded-full bg-white/20 overflow-hidden" aria-hidden="true">
             <motion.div
-              initial={{ width: 0 }}
-              animate={{ width: `${documentedPct}%` }}
+              initial={{ scaleX: 0 }}
+              animate={{ scaleX: documentedPct / 100 }}
               transition={{ duration: 0.8, ease: "easeOut" }}
-              className="h-full rounded-full bg-white"
+              className="h-full w-full origin-left rounded-full bg-white"
             />
           </div>
 
@@ -561,100 +568,15 @@ export function Journal() {
       ) : (
         <div className="space-y-5">
           {grouped.slice(0, dayGroupLimit).map(({ day, list }) => (
-            <div key={day.id} id={`journal-day-${day.id}`} className="scroll-mt-[110px]">
-              {/* Заголовок главы — прилипает под шапкой */}
-              <div className="sticky sticky-under-shell z-10 -mx-1 px-1 py-1.5 mb-1 bg-background/85 backdrop-blur-sm rounded-xl flex items-center gap-2">
-                <div
-                  className="size-7 rounded-lg grid place-items-center text-white text-xs font-bold font-mono shrink-0 shadow-sm"
-                  style={{ background: day.accentColor ?? "#8b5cf6" }}
-                >
-                  {day.dayNumber}
-                </div>
-                <div className="text-sm font-bold whitespace-nowrap">День {day.dayNumber}</div>
-                <div className="text-xs text-muted-foreground truncate min-w-0">{day.city}</div>
-                <div className="ml-auto text-[11px] text-muted-foreground whitespace-nowrap tabular-nums">
-                  {dayDateLabel(day.dayNumber)} · {list.length}
-                </div>
-              </div>
-
-              <div className="space-y-2 pl-9">
-                <AnimatePresence initial={false}>
-                  {list.map((e) => {
-                    const author = e.user;
-                    const isOwn = e.userId === currentUserId;
-                    const isEdited =
-                      e.updatedAt &&
-                      new Date(e.updatedAt).getTime() - new Date(e.createdAt).getTime() > 60_000;
-                    return (
-                      <motion.button
-                        key={e.id}
-                        type="button"
-                        onClick={() => setSheetId(e.id)}
-                        initial={reduceMotion ? false : { opacity: 0, y: 8 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={reduceMotion ? undefined : { opacity: 0, x: -20 }}
-                        className="relative block w-full text-left rounded-2xl bg-card border border-border p-3 card-hover active:scale-[0.99] transition-transform focus-visible:ring-2 focus-visible:ring-ring"
-                      >
-                        {/* точка автора на нити */}
-                        <span
-                          className="absolute -left-7 top-3 size-3 rounded-full border-2 border-background"
-                          style={{ background: author?.color ?? "#94a3b8" }}
-                          aria-hidden="true"
-                        />
-                        <div className="flex items-start gap-2.5">
-                          {e.mood ? (
-                            <span
-                              className="size-10 rounded-xl bg-muted grid place-items-center text-xl shrink-0"
-                              aria-hidden="true"
-                            >
-                              {e.mood}
-                            </span>
-                          ) : (
-                            <span
-                              className="size-10 rounded-xl grid place-items-center text-base shrink-0 border border-black/5"
-                              style={{ background: `${author?.color ?? "#94a3b8"}22` }}
-                              aria-hidden="true"
-                            >
-                              {author?.emoji ?? "📔"}
-                            </span>
-                          )}
-                          <div className="flex-1 min-w-0">
-                            <p className="text-sm leading-relaxed whitespace-pre-wrap break-words line-clamp-4">
-                              {e.content}
-                            </p>
-                            <div className="flex items-center gap-1.5 mt-1.5 text-[11px] text-muted-foreground flex-wrap">
-                              {author && (
-                                <span className="flex items-center gap-1">
-                                  <span
-                                    className="size-3 rounded-full grid place-items-center text-[8px]"
-                                    style={{ background: author.color }}
-                                    aria-hidden="true"
-                                  >
-                                    {author.emoji}
-                                  </span>
-                                  <span className="font-medium text-foreground/70">
-                                    {isOwn ? "Вы" : author.name}
-                                  </span>
-                                </span>
-                              )}
-                              <span aria-hidden="true">·</span>
-                              <span className="tabular-nums">{relTime(e.createdAt)}</span>
-                              {isEdited && (
-                                <>
-                                  <span aria-hidden="true">·</span>
-                                  <span>изменено</span>
-                                </>
-                              )}
-                            </div>
-                          </div>
-                          <ChevronRight className="size-3.5 shrink-0 opacity-30 mt-1" aria-hidden="true" />
-                        </div>
-                      </motion.button>
-                    );
-                  })}
-                </AnimatePresence>
-              </div>
-            </div>
+            <DayChapter
+              key={day.id}
+              day={day}
+              list={list}
+              dateLabel={dayDateLabel}
+              reduceMotion={!!reduceMotion}
+              currentUserId={currentUserId}
+              onOpen={setSheetId}
+            />
           ))}
           {grouped.length > dayGroupLimit && (
             <div className="flex justify-center pt-1">
@@ -1036,3 +958,123 @@ function JournalSkeleton() {
     </div>
   );
 }
+
+/**
+ * Глава дневника (день + записи) — мемизирован: набор текста в композере
+ * перерисовывает Journal на каждый keystroke, и без memo десятки motion-карточек
+ * ленты рендерились бы заново каждый раз (аудит 2026-10-02). Проп-колбэки —
+ * стабильные (setSheetId, useCallback-дата), поэтому memo реально срабатывает.
+ */
+const DayChapter = memo(function DayChapter({
+  day,
+  list,
+  dateLabel,
+  reduceMotion,
+  currentUserId,
+  onOpen,
+}: {
+  day: TripDay;
+  list: JournalEntry[];
+  dateLabel: (dayNumber: number) => string;
+  reduceMotion: boolean;
+  currentUserId: string;
+  onOpen: (id: string) => void;
+}) {
+  return (
+    <div id={`journal-day-${day.id}`} className="scroll-mt-[110px]">
+      {/* Заголовок главы — прилипает под шапкой. Без backdrop-blur: стопка
+          sticky-блюров с шапкой удваивает композитинг при скролле */}
+      <div className="sticky sticky-under-shell z-10 -mx-1 px-1 py-1.5 mb-1 bg-background/95 rounded-xl flex items-center gap-2">
+        <div
+          className="size-7 rounded-lg grid place-items-center text-white text-xs font-bold font-mono shrink-0 shadow-sm"
+          style={{ background: day.accentColor ?? "#8b5cf6" }}
+        >
+          {day.dayNumber}
+        </div>
+        <div className="text-sm font-bold whitespace-nowrap">День {day.dayNumber}</div>
+        <div className="text-xs text-muted-foreground truncate min-w-0">{day.city}</div>
+        <div className="ml-auto text-[11px] text-muted-foreground whitespace-nowrap tabular-nums">
+          {dateLabel(day.dayNumber)} · {list.length}
+        </div>
+      </div>
+
+      <div className="space-y-2 pl-9">
+        <AnimatePresence initial={false}>
+          {list.map((e) => {
+            const author = e.user;
+            const isOwn = e.userId === currentUserId;
+            const isEdited =
+              e.updatedAt &&
+              new Date(e.updatedAt).getTime() - new Date(e.createdAt).getTime() > 60_000;
+            return (
+              <motion.button
+                key={e.id}
+                type="button"
+                onClick={() => onOpen(e.id)}
+                initial={reduceMotion ? false : { opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={reduceMotion ? undefined : { opacity: 0, x: -20 }}
+                className="relative block w-full text-left rounded-2xl bg-card border border-border p-3 card-hover active:scale-[0.99] transition-transform focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                {/* точка автора на нити */}
+                <span
+                  className="absolute -left-7 top-3 size-3 rounded-full border-2 border-background"
+                  style={{ background: author?.color ?? "#94a3b8" }}
+                  aria-hidden="true"
+                />
+                <div className="flex items-start gap-2.5">
+                  {e.mood ? (
+                    <span
+                      className="size-10 rounded-xl bg-muted grid place-items-center text-xl shrink-0"
+                      aria-hidden="true"
+                    >
+                      {e.mood}
+                    </span>
+                  ) : (
+                    <span
+                      className="size-10 rounded-xl grid place-items-center text-base shrink-0 border border-black/5"
+                      style={{ background: `${author?.color ?? "#94a3b8"}22` }}
+                      aria-hidden="true"
+                    >
+                      {author?.emoji ?? "📔"}
+                    </span>
+                  )}
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm leading-relaxed whitespace-pre-wrap break-words line-clamp-4">
+                      {e.content}
+                    </p>
+                    <div className="flex items-center gap-1.5 mt-1.5 text-[11px] text-muted-foreground flex-wrap">
+                      {author && (
+                        <span className="flex items-center gap-1">
+                          <span
+                            className="size-3 rounded-full grid place-items-center text-[8px]"
+                            style={{ background: author.color }}
+                            aria-hidden="true"
+                          >
+                            {author.emoji}
+                          </span>
+                          <span className="font-medium text-foreground/70">
+                            {isOwn ? "Вы" : author.name}
+                          </span>
+                        </span>
+                      )}
+                      <span aria-hidden="true">·</span>
+                      <span className="tabular-nums">{relTime(e.createdAt)}</span>
+                      {isEdited && (
+                        <>
+                          <span aria-hidden="true">·</span>
+                          <span>изменено</span>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                  <ChevronRight className="size-3.5 shrink-0 opacity-30 mt-1" aria-hidden="true" />
+                </div>
+              </motion.button>
+            );
+          })}
+        </AnimatePresence>
+      </div>
+    </div>
+  );
+});

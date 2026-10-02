@@ -341,8 +341,10 @@ export function Gallery() {
         </div>
       </section>
 
-      {/* === Липкий фильтр-бар: измерение + избранное + режим сетки + чипы === */}
-      <div className="sticky sticky-under-shell z-20 glass-strong rounded-2xl border border-border p-2 space-y-2 shadow-sm">
+      {/* === Липкий фильтр-бар: измерение + избранное + режим сетки + чипы ===
+          Без backdrop-blur: бар висит над masonry-фото, blur поверх картинок —
+          самый дорогой композитинг на мобильных (аудит 2026-10-02) */}
+      <div className="sticky sticky-under-shell z-20 bg-background/95 rounded-2xl border border-border p-2 space-y-2 shadow-sm">
         <div className="flex items-center gap-2">
           <div className="flex-1 grid grid-cols-3 gap-0.5 rounded-xl bg-muted p-0.5" role="group" aria-label="Размер фильтра">
             {DIMENSIONS.map((d) => {
@@ -506,6 +508,14 @@ export function Gallery() {
                 alt={photo.caption || "Фото"}
                 className="w-full block bg-muted min-h-[120px] object-cover pointer-events-none"
                 loading="lazy"
+                decoding="async"
+                // Аспект из метаданных: без него колонки masonry пересобираются
+                // после декодирования каждой картинки — контент прыгает
+                style={
+                  photo.width && photo.height
+                    ? { aspectRatio: `${photo.width} / ${photo.height}` }
+                    : undefined
+                }
                 onError={(e) => imgFallback(e, photo)}
               />
               {imgFallbackHidden(photo, "min-h-[120px] grid")}
