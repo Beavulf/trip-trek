@@ -157,8 +157,16 @@ In-memory, сбрасываются рестартом контейнера (ADR
 ## Realtime-события
 
 Канал read-only; клиент после события инвалидирует TanStack Query.
-Публикация: `publish(tripId, event, payload)` из `src/lib/ws-bus.ts`,
+Публикация: `publish(tripId, event, payload, actorId?)` из `src/lib/ws-bus.ts`,
 handshake требует JWT. Актуальный список: `trip:updated`,
-`place:created`, `place:updated`, `place:deleted`, `photo:added`,
-`expense:added`, `budget:updated`, `board:added`, `journal:added`,
-`checklist:updated`, `info:updated`, `food:updated`, `phrase:updated`.
+`place:created/updated/deleted`, `photo:added/deleted`,
+`expense:added/deleted`, `budget:updated`,
+`board:added/pinned/updated/deleted`, `journal:added/updated/deleted`,
+`checklist:updated`, `info:updated`, `food:updated`, `phrase:updated`,
+`member:joined` (вступление по инвайт-коду).
+
+Поверх них `ws-bus.ts` издаёт в комнату мета-событие `notification` (тост) для
+событий из `NOTIFICATION_MAP` (`place:created`, `photo:added`, `expense:added`,
+`journal:added`, `board:added`); те же события дополнительно уходят в web-push
+участникам, кроме автора мутации (`actorId`). Остальные события — тихая
+инвалидация, без тостов и пушей.

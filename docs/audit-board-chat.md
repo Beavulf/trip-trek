@@ -1,5 +1,7 @@
 # TripTrek — бриф: Чат (Board)
 
+> **Исторический бриф** (аудит до релиза): фича давно реализована; актуальное описание — в [glossary.md](glossary.md) («Фичи главного экрана»), код — в `src/components/trip/`. Чеклист ниже не поддерживается — не принимай его за план.
+
 > Для ИИ-агента: **только вкладка Чат**. Mobile-first. Русский UI. Shared auth/`default-trip` — по `FIX-BRIEF.md`; в этом проходе закрыть board API + empty + WS pin + mobile actions.
 
 **Файлы:**

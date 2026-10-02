@@ -50,7 +50,8 @@ server.close → `db.$disconnect`.
   из `src/lib/trip-store.ts` (zustand + persist). Переключение поездок —
   `trip-switcher.tsx`. Корень защищён middleware (307 на `/login` без cookie).
 - `src/components/trip/` — фичи. Тяжёлые блоки вынесены в подпапки:
-  `budget/`, `map/`, `food/`, `phrases/`, `dashboard/`, `rest-chill/`, `profile/`.
+  `budget/`, `map/`, `food/`, `phrases/`, `dashboard/`, `rest-chill/`, `profile/`,
+  `quick-add/`, `onboarding/` (общий каркас welcome-тура и обучалок, §7).
 - **Слой данных — хуки** `src/hooks/trip/use-*.ts` поверх TanStack Query:
   queryKey всегда включает `tripId` (из `use-trip-id`/`getTripId()`), иначе после
   переключения поездки показываются чужие данные. Компоненты не делают `fetch` сами.
@@ -98,10 +99,13 @@ burst событий (загрузка N фото = N `photo:added`) схлоп�
 рефетчей. Reconnect бесконечный (backoff до 30 c) — realtime не умирает после
 сетевой паузы (аудит перфоманса 2026-09-13).
 
-События (полный актуальный список — `grep -r "publish(tripId"` src):
-`trip:updated`, `place:created|updated|deleted`, `photo:added`, `expense:added`,
-`budget:updated`, `board:added`, `journal:added`, `checklist:updated`,
-`info:updated`, `food:updated`, `phrase:updated`.
+События (полный актуальный список — `grep -rn "publish(" src/app/api`):
+`trip:updated`, `place:created|updated|deleted`, `photo:added|deleted`,
+`expense:added|deleted`, `budget:updated`, `board:added|pinned|updated|deleted`,
+`journal:added|updated|deleted`, `checklist:updated`, `info:updated`,
+`food:updated`, `phrase:updated`, `member:joined`. Для событий из
+`NOTIFICATION_MAP` `ws-bus.ts` попутно издаёт в комнату мета-событие
+`notification` (тост) и web-push (§9); остальные события — тихая инвалидация.
 
 Правила: WS-канал отдаёт только «что-то изменилось» (payload минимален или пуст),
 истину клиент добирает через API. Новое событие = добавить publish в роут +
@@ -137,7 +141,8 @@ User ──< TripMember >── Trip ──< Day ──< Place ──< Photo
   `settlementKey` (уникальный **в рамках поездки**, `@@unique([tripId, settlementKey])`;
   формат в схеме) — поэтому одну пару долгов можно гасить многократно.
   Логика дележа/долгов — `src/lib/budget/` (split, balances,
-  settle), не дублируй её в роутах.
+  settle; money — целые центы и округления, personal — «модель реальных денег»
+  для «Моё», planned — план бюджета по местам маршрута), не дублируй её в роутах.
 - **Photo**: `url`/`thumbUrl` (storage пайплайн), координаты из EXIF (`exifr`),
   `userId` — кто загрузил (SetNull при удалении аккаунта).
 - **Phrase**: колонки `ru`/`cn`/`pinyin` исторические; реальный язык — `language`

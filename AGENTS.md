@@ -28,6 +28,8 @@ bun run lint             # ESLint
 bun run test / :watch    # vitest — юнит-тесты чистых функций (src/**/*.test.ts, node-env)
 bun run db:up / db:down  # Postgres в docker (docker-compose.dev.yml)
 bun run db:migrate       # prisma migrate dev
+bun run db:deploy        # prisma migrate deploy — прод-миграции без dev-цикла (так же стартует контейнер)
+bun run db:reset         # prisma migrate reset — СТИРАЕТ dev-базу и накатывает заново
 bun run db:generate      # prisma generate (после правок schema.prisma)
 bun run db:seed          # сид (Китай), db:admin — сделать юзера админом
 bun run build            # production-сборка standalone
@@ -42,13 +44,13 @@ bun run build            # production-сборка standalone
 | `server.ts` | entry: Next + socket.io + `/uploads`, graceful shutdown |
 | `server/` | `ws-auth.ts` (JWT handshake), `socket-handlers.ts`, `rooms.ts` (trip-комнаты), `notification-map.ts`, `static-uploads.ts` |
 | `src/app/` | страницы: `/` (весь SPA поездки), `/login`, `/join/[code]`, `/profile`, `/reset-password`, `/admin/*`; `api/` — все бэкенд-роуты (карта: `docs/api.md`) |
-| `src/components/trip/` | фичи главного экрана: itinerary, budget/, map/, gallery, board (чат), journal, food/, phrases/, timeline, dashboard/… |
+| `src/components/trip/` | фичи главного экрана: itinerary, budget/, map/, gallery, board (чат), journal, food/, phrases/, timeline, dashboard/, rest-chill/, profile/, quick-add/, onboarding/… |
 | `src/components/admin/`, `auth/`, `ui/` | админка, логин/регистрация, shadcn-кит |
 | `src/hooks/trip/` | `use-*.ts` — слой данных клиента (TanStack Query) над API |
-| `src/lib/` | серверная логика: `api-auth.ts`, `rate-limit.ts`, `ws-bus.ts`, `ai.ts` (оркестратор ИИ: runAi, учёт AiUsage, алерты трат, aiFailResponse), `ai-usage.ts` (реестр ИИ-фич AI_FEATURES + чистая математика учёта), `ai-key.ts` (BYOK-резолв: pickAiConfig, маски, https-гвард), `planner.ts` (контракты/валидация планера + sanitizeUserText/extractJsonLoose), `poi.ts` (OSM POI через Overpass: парсер, матчинг выбора ИИ), `geocode-place.ts` (Nominatim для черновиков, троттлинг + бюджет времени), `premium.ts`, `notify.ts`, `push-retry.ts` (чистое правило ретрая web-push), `mail/`, `storage/`, `budget/`, `outbound.ts`, `db.ts` (Prisma-клиент), `trip-days.ts`, `trip-export.ts`, `trip-templates.ts`, `app-config.ts`; доменные модули маршрута: `time-of-day.ts`, `place-fields.ts` (контракт записи Place), `place-draft.ts`, `route.ts`, `route-threads.ts`, `map-filters.ts`, `map-bus.ts`, `map-layers.ts`, `query-keys.ts`, `place-links.ts`, `onboarding.ts` (шаги welcome-тура и обучалок вкладок + отметки обучения) |
+| `src/lib/` | серверная логика: `api-auth.ts`, `rate-limit.ts`, `ws-bus.ts`, `ai.ts` (оркестратор ИИ: runAi, учёт AiUsage, алерты трат, aiFailResponse), `ai-usage.ts` (реестр ИИ-фич AI_FEATURES + чистая математика учёта), `ai-key.ts` (BYOK-резолв: pickAiConfig, маски, https-гвард), `planner.ts` (контракты/валидация планера + sanitizeUserText/extractJsonLoose), `poi.ts` (OSM POI через Overpass: парсер, матчинг выбора ИИ), `geocode-place.ts` (Nominatim для черновиков, троттлинг + бюджет времени), `premium.ts`, `notify.ts`, `push-retry.ts` (чистое правило ретрая web-push) и `push-send.ts` (доставка web-push: ретрай, TTL, логи fanout), `logger.ts` (логи), `admin-log.ts` (журнал админ-действий AdminLog), `trip-join.ts` (вступление по инвайт-коду), `mail/`, `storage/`, `budget/` (split/balances/settle + money/personal/planned), `outbound.ts`, `db.ts` (Prisma-клиент), `trip-days.ts`, `trip-export.ts`, `trip-templates.ts`, `app-config.ts`; доменные модули маршрута: `time-of-day.ts`, `place-fields.ts` (контракт записи Place), `place-draft.ts`, `route.ts`, `route-threads.ts`, `map-filters.ts`, `map-bus.ts`, `map-layers.ts`, `query-keys.ts`, `place-links.ts`, `onboarding.ts` (шаги welcome-тура и обучалок вкладок + отметки обучения) |
 | `prisma/` | `schema.prisma`, миграции, seed, скрипты переноса |
 | `docker-deploy/` | прод: Dockerfile, compose, Caddy, `DEPLOY.md` (runbook), бэкапы |
-| `docs/` | `architecture.md`, `api.md`, `glossary.md`, `adr/0001–0008`, аудиты фич `audit-*.md`, `PRODUCTION_PLAN.md` |
+| `docs/` | `architecture.md`, `api.md`, `glossary.md`, `adr/0001–0008`, `PRODUCTION_PLAN.md`, `audit-*.md` (исторические брифы до релиза: фичи давно реализованы, актуальное описание — в `glossary.md`) |
 | `worklog.md` | журнал сессий разработки (что и зачем менялось) — ищи историю там |
 | `PATCHNOTES.md`, `SUMMARY-OF-FIXES.md` | исторические сводки фиксов |
 
@@ -69,9 +71,11 @@ JWT в cookie `next-auth.session-token`, подпись `NEXTAUTH_SECRET`, 30 д
 
 API-роут после мутации вызывает `publish(tripId, "place:updated", payload)` из
 `src/lib/ws-bus.ts` → socket.io room `trip:<id>` → клиенты инвалидтируют TanStack Query.
-События: `trip:updated, place:created/updated/deleted, photo:added, expense:added,
-budget:updated, board:added, journal:added, checklist:updated, info:updated,
-food:updated, phrase:updated`. Канал read-only для клиента (только уведомления).
+События: `trip:updated, place:created/updated/deleted, photo:added/deleted,
+expense:added/deleted, budget:updated, board:added/pinned/updated/deleted,
+journal:added/updated/deleted, checklist:updated, info:updated, food:updated,
+phrase:updated, member:joined`. Канал read-only для клиента (только уведомления);
+полный список и механика тостов/пушей — `docs/api.md` («Realtime-события»).
 События из NOTIFICATION_MAP дополнительно шлют web-push участникам, кроме автора
 мутации — `publish(tripId, event, payload, actorId)`; детали доставки — §9
 `docs/architecture.md`.

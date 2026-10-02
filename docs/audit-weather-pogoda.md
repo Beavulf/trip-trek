@@ -1,5 +1,7 @@
 # TripTrek — бриф: Погода (WeatherPanel)
 
+> **Исторический бриф** (аудит до релиза): фича давно реализована; актуальное описание — в [glossary.md](glossary.md) («Фичи главного экрана»), код — в `src/components/trip/`. Чеклист ниже не поддерживается — не принимай его за план.
+
 > Для ИИ-агента: **только вкладка Погода**. Mobile-first. Несколько городов из дней маршрута. Русский UI.  
 > Эталон UX: `dashboard.tsx` → `WeatherWidget` (error + places coords). Shared auth/`default-trip` на days — по `FIX-BRIEF` / Обзору.
 

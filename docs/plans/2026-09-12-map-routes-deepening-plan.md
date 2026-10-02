@@ -1,5 +1,7 @@
 # План: углубление карты и маршрутов
 
+> **План закрыт** (2026-10-02): фазы фактически выполнены — в коде живут `time-of-day.ts`, `place-fields.ts`, `route.ts`/`query-keys.ts`, `map-bus.ts`, `map-layers.ts`, слим-`/api/trip` задокументирован в `api.md`. Обещанный планом `CONTEXT.md` не создавался — словарь живёт в [glossary.md](glossary.md). Документ оставлен как история решений, «Открытые решения» внизу не актуальны.
+
 > Источник: архитектурный аудит от 2026-09-12 (отчёт: `%TEMP%\architecture-review-20260912-1939.html`).
 > Скоуп: `src/components/trip/trip-map.tsx`, `itinerary/`, `timeline.tsx`, хуки `use-days/use-places/use-trip`,
 > серверные проекции `/api/days` и `/api/trip`.

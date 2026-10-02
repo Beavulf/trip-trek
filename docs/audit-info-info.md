@@ -1,5 +1,7 @@
 # TripTrek — бриф: Инфо (InfoPanel)
 
+> **Исторический бриф** (аудит до релиза): фича давно реализована; актуальное описание — в [glossary.md](glossary.md) («Фичи главного экрана»), код — в `src/components/trip/`. Чеклист ниже не поддерживается — не принимай его за план.
+
 > Для ИИ-агента: **только вкладка Инфо**. Mobile-first. Русский UI. Shared auth/`default-trip` — по `FIX-BRIEF.md`. Закрыть checklist integrity + Info UI (E5) + backup/push на вкладке.  
 > Эталон empty: `dashboard.tsx`. Confirm-delete: `budget` / `board`.
 

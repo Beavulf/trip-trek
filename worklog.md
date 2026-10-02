@@ -2604,3 +2604,29 @@ Server was crashing with "Failed to load external module @prisma/client-2c3a283f
 - Сам канал Chrome→телефон из РФ не чинится никак (FCM-нога Google) — фикс убирает потери на серверной ноге и делает их видимыми; гарантированные уведомления — только Telegram-бот/email как дубль (не делалось, решение за юзером)
 - В Китае Chrome-пуши не работают вовсе (FCM заблокирован) — in-app realtime не затронут
 - `place:visited` в NOTIFICATION_MAP не публикуется ни одним роутом — мёртвый конфиг, не трогали
+
+## Session: Доки — синхрон с кодом (WS-события, карта AGENTS.md, исторические пометки)
+
+**Date**: 2026-10-02
+
+### Status Before
+- Список WS-событий в api.md и architecture §4 отставал от кода на 8 событий (`photo:deleted`, `expense:deleted`, `board:pinned/updated/deleted`, `journal:updated/deleted`, `member:joined`); мета-событие `notification` из ws-bus не было описано нигде
+- Карта AGENTS.md не упоминала `push-send.ts`, `logger.ts`, `admin-log.ts`, `trip-join.ts`, подмодули `budget/` (money/personal/planned были только в glossary) и подпапки компонентов `rest-chill/`, `profile/`, `quick-add/`, `onboarding/`
+- 14 брифов `docs/audit-*.md` висели с незакрытыми чекбоксами (фичи давно в проде), план deepening не был закрыт, `docker-deploy/README.md` описывал SQLite + Turbopack + `prisma db push` — всё давно не так
+- Корневого README не было вовсе; скрипты `db:deploy`/`db:reset` не были описаны в AGENTS.md
+
+### Changes
+- `docs/api.md` («Realtime-события»), `docs/architecture.md` §4, `AGENTS.md` (Realtime) — полный список событий + мета-событие `notification` (тост из NOTIFICATION_MAP: place:created, photo:added, expense:added, journal:added, board:added) и правило «остальные — тихая инвалидация»; подпись publish с actorId
+- `AGENTS.md` — карта: +`push-send.ts`, `logger.ts`, `admin-log.ts`, `trip-join.ts`, распакован `budget/`; компоненты: +`rest-chill/`, `profile/`, `quick-add/`, `onboarding/`; docs-строка помечает audit-*.md историческими; «Команды»: +`db:deploy` (прод-миграции), `db:reset` (с предупреждением)
+- `docs/architecture.md` §2 — +`quick-add/`, `onboarding/`; §5 — budget-модули money/personal/planned
+- `docker-deploy/README.md` — переписан честно: Postgres 16, webpack, `migrate deploy` из entrypoint, карта файлов папки, отсылка к DEPLOY.md как к runbook
+- 14 брифов `docs/audit-*.md` + `audit-performance.md` — баннер «исторический, актуальное описание в glossary»; `docs/plans/2026-09-12-map-routes-deepening-plan.md` — закрыт (фазы в коде, CONTEXT.md заменён glossary)
+- `README.md` (новый) — для людей: что это, стек, dev-старт с .env, карта доков
+- Правки только доков, код не трогали; роуты/схема не менялись
+
+### Verification
+- Список событий выверен по `grep -rn "publish(" src` (42 вызова) и `server/notification-map.ts`; подпапки компонентов и `src/lib/budget/` сверены `ls`-ом; dev DATABASE_URL в README сверен с docker-compose.dev.yml
+
+### Notes
+- Мёртвый `place:visited` в NOTIFICATION_MAP остаётся кандидатом на удаление в следующей кодовой сессии
+- `TripTrek_presentation.pptx` по-прежнему не в .gitignore (вне скоупа доковой сессии)
