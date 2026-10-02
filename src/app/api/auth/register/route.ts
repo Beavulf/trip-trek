@@ -65,6 +65,8 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ id: user.id, name: user.name, email: user.email });
   } catch (e) {
-    return NextResponse.json({ error: (e as Error).message }, { status: 500 });
+    // Детали (Prisma/SMTP и т.п.) наружу не отдаём — только в лог сервера
+    console.error("[register] failed:", e);
+    return NextResponse.json({ error: "Внутренняя ошибка регистрации. Попробуй позже." }, { status: 500 });
   }
 }

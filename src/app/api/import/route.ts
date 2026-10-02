@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { requireTripOwner } from "@/lib/api-auth";
+import { userRateLimit } from "@/lib/rate-limit";
 
 function newId() {
   return crypto.randomUUID();
@@ -10,12 +11,24 @@ function newId() {
 // Всегда создаём НОВЫЕ id (не upsert по id из файла) — иначе можно привязать к чужой поездке
 export async function POST(req: NextRequest) {
   try {
-    const body = await req.json();
-    const tripId = new URL(req.url).searchParams.get("tripId") || body.tripId;
+    // Гард и кап размера ДО парсинга тела: req.json() материализует всё в памяти
+    // одного bun-процесса, анонимный гигантский JSON был бы бесплатным OOM-DoS
+    // (аудит 2026-10-02). tripId — только из query, клиент так и шлёт.
+    const tripId = new URL(req.url).searchParams.get("tripId");
     if (!tripId) return NextResponse.json({ error: "tripId required" }, { status: 400 });
 
-    const { response } = await requireTripOwner(req, tripId);
+    const { user, response } = await requireTripOwner(req, tripId);
     if (response) return response;
+
+    const limited = userRateLimit(req, user!.id, "import", 10, 3600_000);
+    if (limited) return limited;
+
+    const len = Number(req.headers.get("content-length") || 0);
+    if (len > 5 * 1024 * 1024) {
+      return NextResponse.json({ error: "Файл слишком большой (макс 5MB)" }, { status: 413 });
+    }
+
+    const body = await req.json();
 
     if (body.app && body.app !== "TripTrek") {
       return NextResponse.json({ error: "Это не файл TripTrek" }, { status: 400 });

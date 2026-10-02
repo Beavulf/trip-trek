@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { requireUser } from "@/lib/api-auth";
-import { rateLimitMiddleware } from "@/lib/rate-limit";
+import { rateLimitMiddleware, userRateLimit } from "@/lib/rate-limit";
 import { checkCanJoinTrip } from "@/lib/trip-join";
 import { publish } from "@/lib/ws-bus";
 
@@ -10,10 +10,18 @@ export async function POST(req: NextRequest) {
   const { user, response } = await requireUser(req);
   if (response) return response;
 
+  // Лимит и по IP, и по юзеру: POST — боевой вход по коду (до 3 findUnique на
+  // попытку), без лимита перебор кодов скриптом не ограничен ничем
+  // (аудит 2026-10-02; в docs/api.md лимит был заявлен, но не стоял)
+  const limited =
+    rateLimitMiddleware(req, "join-post", 30, 60_000) ||
+    userRateLimit(req, user!.id, "join-post-user", 30, 60_000);
+  if (limited) return limited;
+
   const { searchParams } = new URL(req.url);
   const code = searchParams.get("code");
 
-  if (!code) {
+  if (!code || code.length > 64) {
     return NextResponse.json({ error: "Invite code required" }, { status: 400 });
   }
 
@@ -57,15 +65,17 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ tripId: trip.id, alreadyMember: true });
   }
 
-  // Добавить участника
+  // Добавить участника; капы полей — как в POST /api/trips, чтобы мусор из тела
+  // не попадал в БД без границ
   const member = await db.tripMember.create({
     data: {
       tripId: trip.id,
       userId,
       role: "member",
-      displayName: displayName || "Новый участник",
-      emoji: emoji || "👤",
-      color: color || "#94a3b8",
+      displayName:
+        (typeof displayName === "string" ? displayName.trim().slice(0, 50) : "") || "Новый участник",
+      emoji: typeof emoji === "string" && emoji ? emoji.slice(0, 16) : "👤",
+      color: typeof color === "string" && /^#[0-9a-fA-F]{3,8}$/.test(color) ? color : "#94a3b8",
     },
   });
 

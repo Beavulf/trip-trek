@@ -2630,3 +2630,43 @@ Server was crashing with "Failed to load external module @prisma/client-2c3a283f
 ### Notes
 - Мёртвый `place:visited` в NOTIFICATION_MAP остаётся кандидатом на удаление в следующей кодовой сессии
 - `TripTrek_presentation.pptx` по-прежнему не в .gitignore (вне скоупа доковой сессии)
+
+## Session: Секьюрити-аудит прода (код 2 агента + чёрный ящик) — P0 нет, 3×P1 исправлены
+
+**Date**: 2026-10-02
+
+### Status Before
+- По просьбе юзера «атакуй прод»: аудит доступа (74 роута) и инфраструктуры (uploads/WS/SSRF/XSS/headers) двумя Explore-агентами + безобидные пробы продa (заголовки, 401-стены, траверсалы, 1 фейк-логин, 1 проба регистрации). Без брутфорса/DoS/ИИ-вызовов/писем живым юзерам.
+- P0 не найдено: гарды стоят на всех 62 непубличных роутах, IDOR/cross-trip инъекций нет, админка вся за requireAdmin (роль из БД), ревокация сессий по passwordChangedAt работает и на WS, /uploads не траверсится, аплоады только magic-bytes + sharp + UUID, XSS-поверхность чистая, secrets не текут.
+- **P1-1**: POST /api/trips/join БЕЗ лимита (в docs/api.md лимит был заявлен!) — перебор кодов и DDoS БД скриптом.
+- **P1-2**: /api/import парсил ТЕЛО до гарда requireTripOwner и без лимита — анонимный гигантский JSON = OOM одного bun-процесса.
+- **P1-3**: photos/avatar/feedback буферизовали файл целиком (arrayBuffer) ДО проверки размера; sharp без limitInputPixels — распаковочная бомба в легальных 20MB.
+- P2: inviteCode утекал участникам через trips/[tripId], trips, user GET при allowMemberInvites=false (политика «отзыва ссылки» не работала); jwt.verify без algorithms в 3 местах; register и nearby отдавали сырой error.message; geocode интерполировал сырые lat/lng (инъекция параметров к Nominatim, проверенные числа вычислялись и выбрасывались); /uploads без nosniff (мимо next.config headers); CSP не было вовсе; WS CORS дефолт `*` (compose `:-*`); participants PATCH принимал произвольную строку в role; корневой Caddyfile проксировал на ЛЮБОЙ localhost-порт из query XTransformPort.
+- Чёрный ящик: заголовки на / — HSTS/nosniff/XFO/Referrer/Permissions OK; на /uploads — ни одного; траверсалы (4 вида) отбиты; HTTP→HTTPS 308; TLS до 09.12; socket.io polling анониму даёт sid (норма, комнаты только после JWT); /api/expenses|photos без tripId отдают 200 [] (несогласованно с board/journal 400, но безвредно).
+- **Сюрприз**: регистрация на проде ОТКРЫТА (registrationEnabled=true, в админке не выключалась; проверка в коде работает) — проба создала живой аккаунт sec-probe@test.local (id cmuqzget8003gqa01vg8scjvw), предложить юзеру удалить.
+
+### Changes
+- `api/trips/join` — POST: rateLimitMiddleware 30/мин/IP + userRateLimit 30/мин/user, кап code≤64, капы displayName(50)/emoji(16)/color(#hex) — как в POST /api/trips
+- `api/import` — гард requireTripOwner + userRateLimit 10/ч + кап Content-Length 5MB ДО req.json(); tripId только из query (клиент так и шлёт; фолбэк body.tripId удалён)
+- `api/photos` — userRateLimit перенесён ДО formData(); file.size>20MB → 413 до arrayBuffer(); lat/lng от клиента Number.isFinite+диапазон, иначе null (NaN падал 500 в Prisma)
+- `api/user/avatar`, `api/feedback` — file.size капы (5MB) до arrayBuffer()
+- `lib/storage` — sharp limitInputPixels: 100 Mpx (дефолт 268 Mpx ловил распаковочные бомбы; 48MP-камеры телефонов проходят)
+- Политика inviteCode в `trips/[tripId]` GET, `trips` GET, `user` GET — код только владельцу или при allowMemberInvites (та же формула, что в GET /api/trip)
+- jwt.verify + `{algorithms:["HS256"]}` — api-auth.ts, custom-session, ws-auth
+- `auth/register`, `nearby` — 500 отдают общий текст, детали в console.error
+- `geocode` — в URL идут latNum/lngNum вместо сырых строк
+- `server/static-uploads` — X-Content-Type-Options: nosniff на 200-ответы
+- `next.config.ts` — базовый CSP: frame-ancestors 'none'; object-src 'none'; base-uri 'self' (nonce-CSP — отдельная задача)
+- `server.ts` — wsAllowedOrigins(): WS_ALLOWED_ORIGINS → иначе origin из NEXTAUTH_URL → иначе `*` (dev); compose-дефолт `:-*` → `:-`
+- `participants/[id]` PATCH — role только member|owner
+- корневой `Caddyfile` — выпилен обработчик XTransformPort (прокси на произвольный localhost-порт из query); .zscripts-сборка не ломается (файл остался)
+- `trips/[tripId]` PATCH — title/destination кап 100, currency 8 (как в POST)
+- Доки: api.md (import лимит/кап, join-сводка), architecture §4 (WS CORS), DEPLOY.md (WS_ALLOWED_ORIGINS теперь «рекомендуется», не «обязателен»)
+
+### Verification
+- bunx tsc --noEmit: 0; eslint по всем 18 изменённым файлам: чисто; vitest 146/146
+- Чёрный ящик до/после кода не сравнивали — правки попадут на прод с ближайшим `up -d --build app`
+
+### Notes
+- Отклонено/отложено: zod-валидация импорта (глубокая, нужен отдельный проход — кап 5MB+лимит закрывает DoS-угол), приватные IP в BYOK aiBaseUrl (юзерский ключ = осознанный self-SSRF, инвариант «юзерский адрес — только с юзерским ключом» не нарушен), XFF-спуфинг (не достижим: наружу только Caddy 80/443, app порт не опубликован), энтропия cuid-инвайткодов (нужна миграция; при лимите 30/мин не перебирается), лимит сокетов на юзера
+- Регистрация: тумблер в /admin → Настройки; юзеру решить + удалить пробный аккаунт

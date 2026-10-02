@@ -18,7 +18,8 @@ export async function GET(req: NextRequest) {
   let decoded: { id: string; iat?: number };
   try {
     const secret = getJwtSecret();
-    decoded = jwt.verify(token, secret) as { id: string; iat?: number };
+    // algorithms задан жёстко — как в api-auth (только тот формат, каким выдаём)
+    decoded = jwt.verify(token, secret, { algorithms: ["HS256"] }) as { id: string; iat?: number };
   } catch {
     // Invalid token
     return NextResponse.json({ user: null });

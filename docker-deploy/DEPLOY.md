@@ -179,8 +179,9 @@ curl -s https://<домен>/api/health                                # db up/d
 - **NEXTAUTH_SECRET** — только `openssl rand -base64 32` (start.sh без openssl
   падает, фолбэков нет); entrypoint не стартует с префиксами
   `change-this-*`/`change-me-*` и `fallback-dev-secret`.
-- **WS_ALLOWED_ORIGINS=https://<домен>** обязателен (дефолт в коде — `*`,
-  реальную защиту несёт JWT-handshake, но явный origin лишним не бывает).
+- **WS_ALLOWED_ORIGINS=https://<домен>** рекомендуется (с 2026-10-02 дефолт в
+  коде — origin из NEXTAUTH_URL, явный `*` остался ручным выбором; реальную
+  защиту несёт JWT-handshake, но явный origin лишним не бывает).
 - **Railway/альтернативный деплой** (railway.toml): обязательно прикрепить
   volume к `/app/public/uploads` (или задать `UPLOADS_DIR`) — без volume
   redeploy теряет все загруженные файлы при живых записях в БД; также помнить,

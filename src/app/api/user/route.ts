@@ -59,6 +59,7 @@ export async function GET(req: NextRequest) {
           totalDays: true,
           status: true,
           inviteCode: true,
+          allowMemberInvites: true,
           _count: {
             select: {
               places: true,
@@ -84,7 +85,8 @@ export async function GET(req: NextRequest) {
     endDate: m.trip.endDate,
     totalDays: m.trip.totalDays,
     status: m.trip.status,
-    inviteCode: m.trip.inviteCode,
+    // та же политика, что в GET /api/trip: без allowMemberInvites код — только владельцу
+    inviteCode: m.role === "owner" || m.trip.allowMemberInvites ? m.trip.inviteCode : null,
     role: m.role,
     members: m.trip._count.members,
     places: m.trip._count.places,

@@ -13,7 +13,9 @@ export async function wsHandshakeAuth(socket: Socket, next: HandshakeNext): Prom
     const cookieHeader = socket.handshake.headers.cookie || "";
     const token = /(?:^|;\s*)next-auth\.session-token=([^;]+)/.exec(cookieHeader)?.[1];
     if (!token) return next(new Error("unauthorized"));
-    const payload = jwt.verify(decodeURIComponent(token), getJwtSecret()) as {
+    const payload = jwt.verify(decodeURIComponent(token), getJwtSecret(), {
+      algorithms: ["HS256"], // задан жёстко — как в api-auth
+    }) as {
       id?: string;
       sub?: string;
       iat?: number;

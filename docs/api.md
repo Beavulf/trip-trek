@@ -50,7 +50,7 @@
 | `trip/dates` | PATCH | O | — | сдвиг дат/дней поездки |
 | `trip/budget` | PATCH | M | — | общий бюджет/валюта поездки |
 | `trip/import` | POST | U | userRateLimit | импорт JSON-бэкапа → новая поездка |
-| `import` | POST | O | — | импорт в существующую поездку (owner) |
+| `import` | POST | O | userRateLimit 10/ч + кап 5MB | импорт в существующую поездку (owner); tripId — только в query, тело парсится после гарда и лимита |
 | `export` | GET | O | — | экспорт поездки в JSON (`src/lib/trip-export.ts`); полный дамп — функция владельца, участникам 403 |
 | `participants` | GET, PATCH | M / U | — | участники поездки; PATCH — профиль «себя в поездке» (displayName/emoji) |
 | `participants/[id]` | PATCH, DELETE | M(owner) | userRateLimit | правка/удаление участника (удаление → уведомление) |
@@ -148,7 +148,7 @@ In-memory, сбрасываются рестартом контейнера (ADR
 - register — 3 / ч / IP
 - forgot-password — 5 / ч / IP и 3 / ч / email
 - reset-password — 20 / ч / IP
-- join (GET превью) — 30 / мин / IP
+- join (GET-превью и POST) — 30 / мин / IP, POST ещё и 30 / мин / user
 - health — 60 / мин / IP (БД-пинг кэшируется на 5 с)
 - weather — 30 / мин / IP
 - geocode — 60 / ч / user

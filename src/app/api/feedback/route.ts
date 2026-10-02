@@ -37,6 +37,10 @@ export async function POST(req: NextRequest) {
     let screenshotUrl: string | null = null;
     const file = formData.get("file");
     if (file instanceof File && file.size > 0) {
+      // Размер до чтения в память (как в photos/avatar)
+      if (file.size > 5 * 1024 * 1024) {
+        return NextResponse.json({ error: "Скриншот слишком большой (макс 5MB)" }, { status: 413 });
+      }
       try {
         const res = await storagePut({ data: Buffer.from(await file.arrayBuffer()), kind: "feedback" });
         screenshotUrl = res.url;

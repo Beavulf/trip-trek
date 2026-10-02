@@ -24,6 +24,8 @@ export async function GET(req: NextRequest) {
 
   const trips = memberships.map((m) => ({
     ...m.trip,
+    // та же политика, что в GET /api/trip: без allowMemberInvites код — только владельцу
+    inviteCode: m.role === "owner" || m.trip.allowMemberInvites ? m.trip.inviteCode : null,
     myRole: m.role,
     myDisplayName: m.displayName,
   }));

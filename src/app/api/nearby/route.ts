@@ -113,8 +113,11 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({ places, source: "OpenStreetMap (Overpass)" });
   } catch (e) {
+    // В ошибку может попадать текст апстрима (endpoint/статус Overpass) —
+    // наружу отдаём общий текст, детали в лог
+    console.error("[nearby] failed:", e);
     return NextResponse.json(
-      { error: (e as Error).message, places: [] },
+      { error: "Не удалось загрузить места поблизости. Попробуй позже.", places: [] },
       { status: 500 }
     );
   }

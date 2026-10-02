@@ -9,7 +9,7 @@ const SAFE_USER_FIELDS = { id: true, name: true, emoji: true, color: true, avata
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ tripId: string }> }) {
   const { tripId } = await params;
-  const { response } = await requireTripMember(req, tripId);
+  const { membership, response } = await requireTripMember(req, tripId);
   if (response) return response;
   const trip = await db.trip.findUnique({
     where: { id: tripId },
@@ -19,6 +19,11 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ trip
     },
   });
   if (!trip) return NextResponse.json({ error: "Trip not found" }, { status: 404 });
+  // Политика приглашений как в GET /api/trip: пока allowMemberInvites=false,
+  // код видит только владелец (иначе «отзыв ссылки» обходился чтением этого роута)
+  if (!(membership!.role === "owner" || trip.allowMemberInvites)) {
+    delete (trip as { inviteCode?: string }).inviteCode;
+  }
   return NextResponse.json(trip);
 }
 
@@ -38,6 +43,11 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ tr
     if (k in body) {
       if (k === "startDate" || k === "endDate") {
         data[k] = body[k] ? new Date(body[k]) : null;
+      } else if (k === "title" || k === "destination") {
+        // тот же кап, что в POST /api/trips — PATCH не должен раздувать поля без границ
+        data[k] = String(body[k]).slice(0, 100);
+      } else if (k === "currency") {
+        data[k] = String(body[k]).slice(0, 8);
       } else {
         data[k] = body[k];
       }

@@ -21,6 +21,11 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "file required" }, { status: 400 });
     }
 
+    // Размер известен из multipart до чтения в память — не буферизуем зря
+    if (file.size > 5 * 1024 * 1024) {
+      return NextResponse.json({ error: "Файл слишком большой (макс 5MB)" }, { status: 413 });
+    }
+
     // Единая политика хранилища: magic bytes, лимит 5MB, sharp-обработка
     // (EXIF/GPS выпиливаются, 512×512 jpeg)
     let url: string;

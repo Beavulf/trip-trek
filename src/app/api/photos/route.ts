@@ -62,6 +62,12 @@ export async function POST(req: NextRequest) {
   const limited = userRateLimit(req, user!.id, "photos", 20, 60 * 60_000);
   if (limited) return limited;
 
+  // Размер файла известен из multipart ДО чтения в память: гигантский файл
+  // не должен буферизоваться, чтобы получить честный 413 от storagePut
+  if (file.size > 20 * 1024 * 1024) {
+    return NextResponse.json({ error: "Файл слишком большой (макс 20MB)" }, { status: 413 });
+  }
+
   // dayId обязан принадлежать этой поездке — проверяем ДО тяжёлой обработки
   // файла (аудит 2026-09-12; как в journal)
   const day = await db.day.findFirst({ where: { id: dayId, tripId }, select: { id: true } });
@@ -72,8 +78,12 @@ export async function POST(req: NextRequest) {
   const placeId = (formData.get("placeId") as string) || null;
   const userId = user!.id;
   const caption = ((formData.get("caption") as string) || "").slice(0, 300) || null;
-  const lat = formData.get("lat") ? parseFloat(formData.get("lat") as string) : null;
-  const lng = formData.get("lng") ? parseFloat(formData.get("lng") as string) : null;
+  // Координаты от клиента — не доверенный ввод: мусор/вне диапазона → null
+  // (NaN в Prisma-Float падал бы 500), GPS из EXIF их всё равно надёжнее
+  const latRaw = formData.get("lat") ? parseFloat(formData.get("lat") as string) : null;
+  const lngRaw = formData.get("lng") ? parseFloat(formData.get("lng") as string) : null;
+  const lat = latRaw !== null && Number.isFinite(latRaw) && Math.abs(latRaw) <= 90 ? latRaw : null;
+  const lng = lngRaw !== null && Number.isFinite(lngRaw) && Math.abs(lngRaw) <= 180 ? lngRaw : null;
   const address = ((formData.get("address") as string) || "").slice(0, 300) || null;
 
   // Единая политика хранилища: magic bytes, лимит 20MB, sharp-обработка

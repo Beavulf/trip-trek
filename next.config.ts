@@ -41,6 +41,13 @@ const nextConfig: NextConfig = {
         headers: [
           { key: "X-Frame-Options", value: "DENY" },
           { key: "X-Content-Type-Options", value: "nosniff" },
+          // Базовый CSP без ограничений на script/style (они сломали бы Next с
+          // inline-гидрацией): запрещаем главное для чужих фреймов/плагинов.
+          // Полноценный CSP с nonce — отдельная задача.
+          {
+            key: "Content-Security-Policy",
+            value: "frame-ancestors 'none'; object-src 'none'; base-uri 'self'",
+          },
           { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
           { key: "Permissions-Policy", value: "camera=(self), microphone=(), geolocation=(self)" },
           // HSTS здесь, а не в Caddyfile: заголовок переживает смену хостинга/прокси.

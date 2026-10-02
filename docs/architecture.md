@@ -113,7 +113,9 @@ burst событий (загрузка N фото = N `photo:added`) схлоп�
 
 Гарантии доступа (hardening 2026-09-12): handshake повторяет HTTP-инварианты —
 JWT + существование юзера + `passwordChangedAt` (токен до смены пароля WS не
-проходит). Удаление TripMember (исключение/бан/выход/админ) обязано звать
+проходит). CORS сокетов: явный `WS_ALLOWED_ORIGINS` (список или `*`), иначе —
+только origin из `NEXTAUTH_URL` (`wsAllowedOrigins` в `server.ts`). Удаление
+TripMember (исключение/бан/выход/админ) обязано звать
 `evictUserFromTrip(tripId, userId)` из `ws-bus.ts` — иначе открытая вкладка
 исключённого продолжала бы получать события комнаты.
 

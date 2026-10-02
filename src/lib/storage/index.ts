@@ -68,7 +68,10 @@ function sniff(buf: Buffer): SniffedType | null {
 async function toJpeg(data: Buffer, kind: StorageKind): Promise<{ full: Buffer; thumb?: Buffer }> {
   let base;
   try {
-    base = sharp(data, { failOn: "none" }).rotate(); // ориентация из EXIF
+    // limitInputPixels — кап декодированных пикселей: байтовый лимит выше не ловит
+    // «распаковочную бомбу» (небольшой JPEG с астрономическими размерами);
+    // 100 Mpx с запасом покрывает камеры телефонов (48 MP), но не 268 Mpx дефолта
+    base = sharp(data, { failOn: "none", limitInputPixels: 100_000_000 }).rotate(); // ориентация из EXIF
   } catch {
     throw new StorageError("Не удалось декодировать изображение", 415);
   }

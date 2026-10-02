@@ -30,7 +30,9 @@ services:
     environment:
       - DATABASE_URL=postgresql://triptrek:${POSTGRES_PASSWORD}@db:5432/triptrek?schema=public&connection_limit=10
       - NEXTAUTH_URL=${NEXTAUTH_URL}
-      - WS_ALLOWED_ORIGINS=${WS_ALLOWED_ORIGINS:-*}
+      # Пусто по умолчанию: server.ts тогда доверяет только origin из NEXTAUTH_URL.
+      # Можно задать список через запятую или "*" (разрешить всем — не рекомендуется)
+      - WS_ALLOWED_ORIGINS=${WS_ALLOWED_ORIGINS:-}
       - NODE_ENV=production
       - PORT=3000
       - HOSTNAME=0.0.0.0

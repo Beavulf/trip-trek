@@ -50,7 +50,11 @@ export async function getUserFromRequest(req: NextRequest): Promise<AuthUser | n
     if (!token) return null;
 
     const secret = getJwtSecret();
-    const decoded = jwt.verify(token, secret) as AuthUser & { iat?: number };
+    // algorithms задан жёстко: не даём токену притвориться другим алгоритмом,
+    // если кто-то подсовывает ключ в другом формате
+    const decoded = jwt.verify(token, secret, { algorithms: ["HS256"] }) as AuthUser & {
+      iat?: number;
+    };
 
     if (!decoded?.id) return null;
 

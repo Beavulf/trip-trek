@@ -27,7 +27,9 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    const url = `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json&accept-language=ru&zoom=18`;
+    // Интерполируем именно провалидированные числа: сырые lat/lng позволяли
+    // инъекцию лишних параметров в URL к Nominatim (аудит 2026-10-02)
+    const url = `https://nominatim.openstreetmap.org/reverse?lat=${latNum}&lon=${lngNum}&format=json&accept-language=ru&zoom=18`;
     // Точку по координатам спрашивают часто и повторно — кэш на сутки
     const data = await fetchJson<{
       display_name?: string;

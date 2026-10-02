@@ -61,6 +61,20 @@ const rooms = new TripRooms();
 // Using `let` + type annotation so the closure can access it.
 let io: import("socket.io").Server;
 
+// CORS WS: явный WS_ALLOWED_ORIGINS (список через запятую или "*"); без него —
+// только origin самого приложения из NEXTAUTH_URL. Дефолт "*" приглашал
+// регрессию: WS-запросы к каналу шли бы с любых чужих страниц (аудит 2026-10-02)
+function wsAllowedOrigins(): string[] {
+  const raw = process.env.WS_ALLOWED_ORIGINS?.trim();
+  if (raw === "*") return ["*"];
+  if (raw) return raw.split(",").map((s) => s.trim()).filter(Boolean);
+  try {
+    return [new URL(process.env.NEXTAUTH_URL || "").origin];
+  } catch {
+    return ["*"]; // dev без NEXTAUTH_URL — как раньше
+  }
+}
+
 app.prepare().then(() => {
   // HTTP server (Next.js) + runtime /uploads from disk volume
   const server = createServer((req, res) => {
@@ -78,7 +92,7 @@ app.prepare().then(() => {
     path: "/socket.io/",
     maxHttpBufferSize: 64 * 1024,
     cors: {
-      origin: process.env.WS_ALLOWED_ORIGINS?.split(",") || ["*"],
+      origin: wsAllowedOrigins(),
       methods: ["GET", "POST"],
     },
   });

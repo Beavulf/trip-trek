@@ -37,8 +37,12 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       // Передача владения: прежний владелец становится участником
       await db.tripMember.updateMany({ where: { tripId: existing.tripId, role: "owner" }, data: { role: "member" } });
       data.role = "owner";
+    } else if (body.role === "member") {
+      data.role = "member";
     } else {
-      data.role = body.role;
+      // роль — не свобода текста: произвольная строка в БД мусорит и ломает
+      // SemVer-инвариант «role === "owner" — единственный владелец»
+      return NextResponse.json({ error: "Роль может быть member или owner" }, { status: 400 });
     }
   }
 

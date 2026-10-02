@@ -80,6 +80,9 @@ function serveUpload(req: IncomingMessage, res: ServerResponse, rawUrl: string):
   res.setHeader("Content-Type", type);
   res.setHeader("Content-Length", String(size));
   res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+  // /uploads отдаётся мимо Next — заголовки из next.config.ts сюда не доезжают;
+  // nosniff запрещает браузеру пере-угадывать тип контента
+  res.setHeader("X-Content-Type-Options", "nosniff");
 
   if (req.method === "HEAD") {
     res.end();
