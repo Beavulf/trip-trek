@@ -1,9 +1,9 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useMemo, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { Share2, Download, X, Loader2, Image as ImageIcon, Copy, Check } from "lucide-react";
+import { Share2, Download, X, Loader2, Image as ImageIcon, Copy, Check, Play, Pause, Film } from "lucide-react";
 import { useTrip, useCurrentTripId } from "@/hooks/use-trip";
 import { useAuth } from "@/hooks/use-auth";
 import { toast } from "sonner";
@@ -13,18 +13,41 @@ import { useTripStore } from "@/lib/trip-store";
 import { CARD_VARIANTS, type CardData, type CardVariantId } from "./share-card-art";
 import { currencySymbol } from "@/lib/currencies";
 
+// GIF кодим в половинном размере (540 по ширине) — 36 кадров дают гладкий
+// бесшовный цикл, а кодирование на слабых телефонах остаётся в пределах пары секунд
+const GIF_FRAMES = 36;
+const GIF_SCALE = 0.5;
+// Превью рисуем в уменьшенном буфере: 720 по ширине хватает и на retina-плотность,
+// при этом рендер карточки каждый кадр остаётся дешёвым
+const PREVIEW_WIDTH = 720;
+
 export function ShareCard({ open, onOpenChange }: { open: boolean; onOpenChange: (v: boolean) => void }) {
   useBodyScrollLock(open);
   const tripId = useCurrentTripId();
   const { data: trip } = useTrip();
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const sliderRef = useRef<HTMLInputElement>(null);
+  const rafRef = useRef<number>(0);
+  const phaseRef = useRef(0); // текущая фаза анимации [0..1)
+  const startRef = useRef(0); // timestamp начала цикла для склейки фазы после паузы
   const [variantId, setVariantId] = useState<CardVariantId>("story");
-  const [generating, setGenerating] = useState(false);
-  const [imageUrl, setImageUrl] = useState<string | null>(null);
+  const [ready, setReady] = useState(false);
+  const [playing, setPlaying] = useState(false);
+  const [manualT, setManualT] = useState<number | null>(null); // фаза при скраббере/паузе
+  const [visibleTick, setVisibleTick] = useState(0); // возврат из скрытой вкладки — перезапустить цикл
+  const [gifProgress, setGifProgress] = useState<number | null>(null);
   const [copied, setCopied] = useState(false);
   const [imageCopied, setImageCopied] = useState(false);
 
   const variant = CARD_VARIANTS.find((v) => v.id === variantId) ?? CARD_VARIANTS[0];
+
+  // Смена варианта: начинаем с постерной фазы, анимация снова играет
+  const pickVariant = (id: CardVariantId) => {
+    setVariantId(id);
+    phaseRef.current = (CARD_VARIANTS.find((v) => v.id === id) ?? CARD_VARIANTS[0]).posterT;
+    setManualT(null);
+    setPlaying(!reducedMotion);
+  };
 
   // При запрете «приглашает только владелец» сервер не отдаёт не-владельцу код —
   // здесь лишь прячем кнопку ссылки, чтобы не дразнить ошибкой
@@ -34,7 +57,7 @@ export function ShareCard({ open, onOpenChange }: { open: boolean; onOpenChange:
   const canShareInvite = isOwner || trip?.settings.allowMemberInvites !== false;
 
   // Собираем данные поездки для отрисовки
-  const buildData = (): CardData | null => {
+  const data: CardData | null = useMemo(() => {
     if (!trip) return null;
     const cities: { name: string; days: number }[] = [];
     for (const d of trip.days ?? []) {
@@ -70,40 +93,82 @@ export function ShareCard({ open, onOpenChange }: { open: boolean; onOpenChange:
       progress: Math.max(0, Math.min(100, trip.dayProgress || 0)),
       inviteCode: trip.settings.inviteCode || trip.trip?.inviteCode || "",
     };
-  };
+  }, [trip]);
 
-  const generate = (id: CardVariantId) => {
-    const v = CARD_VARIANTS.find((x) => x.id === id) ?? CARD_VARIANTS[0];
-    const canvas = canvasRef.current;
-    const data = buildData();
-    if (!canvas || !data) return;
-    setGenerating(true);
-    try {
-      canvas.width = v.width;
-      canvas.height = v.height;
+  const reducedMotion = useMemo(
+    () => typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches,
+    []
+  );
+
+  /** Отрисовать один кадр в видимом canvas превью */
+  const paintPreview = useCallback(
+    (t: number) => {
+      const canvas = canvasRef.current;
+      if (!canvas || !data) return;
       const ctx = canvas.getContext("2d");
       if (!ctx) return;
-      ctx.clearRect(0, 0, v.width, v.height);
-      v.render(ctx, data);
-      setImageUrl(canvas.toDataURL("image/png"));
-    } catch {
-      toast.error("Не удалось создать карточку");
-    } finally {
-      setGenerating(false);
-    }
-  };
+      const s = canvas.width / variant.width;
+      ctx.setTransform(s, 0, 0, s, 0, 0);
+      variant.render(ctx, data, t);
+    },
+    [data, variant]
+  );
 
-  // Автогенерация при открытии и смене варианта
+  // Размер буфера превью под выбранный вариант
   useEffect(() => {
-    if (!open || !trip || !tripId) return;
-    const t = setTimeout(() => generate(variantId), 60);
+    const canvas = canvasRef.current;
+    if (!canvas || !open) return;
+    canvas.width = PREVIEW_WIDTH;
+    canvas.height = Math.round((variant.height / variant.width) * PREVIEW_WIDTH);
+    paintPreview(manualT ?? variant.posterT);
+  }, [open, variantId, data]);
+
+  // Живое превью: rAF-цикл играет фазу, продолжая с того места, где остановились
+  // (пауза, скраб, скрытая вкладка). На паузе рисуем зафиксированный кадр.
+  // rAF не тикает у скрытой вкладки — цикл умрёт и будет перезапущен через visibleTick.
+  useEffect(() => {
+    if (!open || !data || !ready) return;
+    const tick = (now: number) => {
+      phaseRef.current = ((now - startRef.current) / variant.loopMs) % 1;
+      paintPreview(phaseRef.current);
+      if (sliderRef.current) sliderRef.current.value = String(Math.round(phaseRef.current * 1000));
+      rafRef.current = requestAnimationFrame(tick);
+    };
+    if (playing) {
+      startRef.current = performance.now() - phaseRef.current * variant.loopMs;
+      rafRef.current = requestAnimationFrame(tick);
+      return () => cancelAnimationFrame(rafRef.current);
+    }
+    const t = manualT ?? variant.posterT;
+    paintPreview(t);
+    if (sliderRef.current) sliderRef.current.value = String(Math.round(t * 1000));
+    return undefined;
+  }, [open, data, variantId, playing, ready, visibleTick, paintPreview]);
+
+  useEffect(() => {
+    const onVis = () => {
+      if (!document.hidden) setVisibleTick((v) => v + 1);
+    };
+    document.addEventListener("visibilitychange", onVis);
+    return () => document.removeEventListener("visibilitychange", onVis);
+  }, []);
+
+  // При открытии: первый кадр — постерный; анимация играет, если система не просит
+  // reduced motion (её тогда можно включить кнопкой — это явное действие)
+  useEffect(() => {
+    if (!open) return;
+    setReady(false);
+    setManualT(null);
+    setGifProgress(null);
+    phaseRef.current = variant.posterT;
+    setPlaying(!reducedMotion);
+    const t = setTimeout(() => setReady(true), 60);
     return () => clearTimeout(t);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, tripId, variantId, trip]);
+  }, [open, tripId]);
 
   if (!open || typeof document === "undefined") return null;
 
-  if (!tripId || !trip) {
+  if (!tripId || !trip || !data) {
     return createPortal(
       <AnimatePresence>
         <motion.div
@@ -146,20 +211,34 @@ export function ShareCard({ open, onOpenChange }: { open: boolean; onOpenChange:
     );
   }
 
+  /** Полный кадр в натуральном размере варианта (PNG-экспорт, шаринг) */
+  const renderFull = (t: number): HTMLCanvasElement | null => {
+    const c = document.createElement("canvas");
+    c.width = variant.width;
+    c.height = variant.height;
+    const ctx = c.getContext("2d");
+    if (!ctx) return null;
+    variant.render(ctx, data, t);
+    return c;
+  };
+
   const download = () => {
-    if (!imageUrl) return;
+    const c = renderFull(variant.posterT);
+    if (!c) return;
     const link = document.createElement("a");
     link.download = `triptrek-${variantId}-${Date.now()}.png`;
-    link.href = imageUrl;
+    link.href = c.toDataURL("image/png");
     link.click();
     toast.success("Карточка скачана! 📸");
   };
 
   const canCopyImage = typeof window !== "undefined" && !!navigator.clipboard && "ClipboardItem" in window;
   const copyImage = async () => {
-    if (!imageUrl) return;
     try {
-      const blob = await (await fetch(imageUrl)).blob();
+      const c = renderFull(variant.posterT);
+      if (!c) return;
+      const blob = await new Promise<Blob | null>((r) => c.toBlob(r, "image/png"));
+      if (!blob) throw new Error("no blob");
       await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
       setImageCopied(true);
       toast.success("Карточка в буфере! 📋");
@@ -170,9 +249,11 @@ export function ShareCard({ open, onOpenChange }: { open: boolean; onOpenChange:
   };
 
   const share = async () => {
-    if (!imageUrl) return;
     try {
-      const blob = await (await fetch(imageUrl)).blob();
+      const c = renderFull(variant.posterT);
+      if (!c) return;
+      const blob = await new Promise<Blob | null>((r) => c.toBlob(r, "image/png"));
+      if (!blob) return;
       const file = new File([blob], "triptrek.png", { type: "image/png" });
 
       if (navigator.canShare && navigator.canShare({ files: [file] })) {
@@ -189,6 +270,54 @@ export function ShareCard({ open, onOpenChange }: { open: boolean; onOpenChange:
     }
   };
 
+  /** GIF: рендерим кадры цикла в половинном размере и кодируем на месте.
+  Progress-тосты, потому что 36 квантовок занимают пару секунд. */
+  const exportGif = async () => {
+    if (gifProgress !== null) return;
+    // на время кодирования ставим превью на паузу — не делим кадр с rAF-циклом
+    setManualT(phaseRef.current);
+    setPlaying(false);
+    setGifProgress(0);
+    try {
+      const { GIFEncoder, quantize, applyPalette } = await import("gifenc");
+      const w = Math.round(variant.width * GIF_SCALE);
+      const h = Math.round(variant.height * GIF_SCALE);
+      const c = document.createElement("canvas");
+      c.width = w;
+      c.height = h;
+      const ctx = c.getContext("2d", { willReadFrequently: true });
+      if (!ctx) throw new Error("no ctx");
+      const enc = GIFEncoder();
+      const delay = Math.round(variant.loopMs / GIF_FRAMES / 10) * 10;
+      for (let i = 0; i < GIF_FRAMES; i++) {
+        const t = i / GIF_FRAMES;
+        ctx.setTransform(GIF_SCALE, 0, 0, GIF_SCALE, 0, 0);
+        variant.render(ctx, data, t);
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        const { data: px } = ctx.getImageData(0, 0, w, h);
+        const palette = quantize(px, 256);
+        const index = applyPalette(px, palette);
+        enc.writeFrame(index, w, h, { palette, delay });
+        setGifProgress(Math.round(((i + 1) / GIF_FRAMES) * 100));
+        // отдаём поток браузеру, чтобы не подвешивать UI на время кодирования
+        if (i % 3 === 2) await new Promise((r) => setTimeout(r, 0));
+      }
+      enc.finish();
+      // копия в новый буфер: TS не пускает ArrayBufferLike внутрь BlobPart
+      const blob = new Blob([new Uint8Array(enc.bytesView())], { type: "image/gif" });
+      const link = document.createElement("a");
+      link.download = `triptrek-${variantId}-${Date.now()}.gif`;
+      link.href = URL.createObjectURL(blob);
+      link.click();
+      setTimeout(() => URL.revokeObjectURL(link.href), 5000);
+      toast.success("Живая GIF-карточка готова! 🎞️", { description: `${(blob.size / 1024 / 1024).toFixed(1)} МБ` });
+    } catch {
+      toast.error("Не удалось собрать GIF", { description: "Попробуй ещё раз или скачай PNG" });
+    } finally {
+      setGifProgress(null);
+    }
+  };
+
   const copyLink = () => {
     const code = trip.settings.inviteCode || trip.trip?.inviteCode || "";
     if (!code) {
@@ -202,13 +331,15 @@ export function ShareCard({ open, onOpenChange }: { open: boolean; onOpenChange:
     setTimeout(() => setCopied(false), 2000);
   };
 
+  const busy = gifProgress !== null;
+
   return createPortal(
     <AnimatePresence>
       <motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
-        onClick={() => { onOpenChange(false); setImageUrl(null); }}
+        onClick={() => { onOpenChange(false); }}
         className="fixed inset-0 z-[200] bg-black/80 backdrop-blur-sm flex items-end sm:items-center justify-center sm:p-4"
       >
         <motion.div
@@ -231,7 +362,7 @@ export function ShareCard({ open, onOpenChange }: { open: boolean; onOpenChange:
             </h2>
             <button
               type="button"
-              onClick={() => { onOpenChange(false); setImageUrl(null); }}
+              onClick={() => { onOpenChange(false); }}
               aria-label="Закрыть"
               className="size-11 rounded-full hover:bg-accent grid place-items-center"
             >
@@ -246,9 +377,10 @@ export function ShareCard({ open, onOpenChange }: { open: boolean; onOpenChange:
                 <button
                   key={v.id}
                   type="button"
-                  onClick={() => setVariantId(v.id)}
+                  disabled={busy}
+                  onClick={() => pickVariant(v.id)}
                   className={cn(
-                    "shrink-0 min-h-11 px-3.5 rounded-xl border text-left transition-colors flex items-center gap-2",
+                    "shrink-0 min-h-11 px-3.5 rounded-xl border text-left transition-colors flex items-center gap-2 disabled:opacity-60",
                     v.id === variantId
                       ? "bg-primary text-primary-foreground border-primary"
                       : "bg-secondary/60 border-border hover:bg-accent"
@@ -265,47 +397,90 @@ export function ShareCard({ open, onOpenChange }: { open: boolean; onOpenChange:
               ))}
             </div>
 
-            {/* Превью */}
-            {generating || !imageUrl ? (
-              <div className="text-center py-12">
-                <Loader2 className="size-6 animate-spin text-muted-foreground mx-auto mb-3" />
-                <p className="text-sm text-muted-foreground">Рисуем карточку «{variant.label}»…</p>
+            {/* Живое превью: canvas играет цикл варианта */}
+            <div className="relative rounded-2xl overflow-hidden border border-border bg-muted/30">
+              <canvas ref={canvasRef} className="w-full block" aria-label={`Карточка поездки — ${variant.label}`} />
+              {/* Плеер: пауза/плей + скраббер по фазе анимации */}
+              <div className="absolute inset-x-0 bottom-0 flex items-center gap-2 px-2 py-1.5 bg-gradient-to-t from-black/55 to-transparent">
+                <button
+                  type="button"
+                  aria-label={playing ? "Пауза" : "Играть"}
+                  onClick={() => {
+                    if (playing) {
+                      setManualT(phaseRef.current);
+                      setPlaying(false);
+                    } else {
+                      setManualT(null);
+                      setPlaying(true);
+                    }
+                  }}
+                  className="size-8 shrink-0 rounded-full bg-white/15 hover:bg-white/25 text-white grid place-items-center backdrop-blur-sm"
+                >
+                  {playing ? <Pause className="size-4" /> : <Play className="size-4 translate-x-px" />}
+                </button>
+                <input
+                  ref={sliderRef}
+                  type="range"
+                  min={0}
+                  max={1000}
+                  defaultValue={0}
+                  aria-label="Кадр анимации"
+                  onChange={(e) => {
+                    const t = Number(e.target.value) / 1000;
+                    if (playing) setPlaying(false);
+                    setManualT(t);
+                    phaseRef.current = t;
+                    paintPreview(t);
+                  }}
+                  className="flex-1 h-1.5 accent-white cursor-pointer"
+                />
               </div>
-            ) : (
-              <div className="rounded-2xl overflow-hidden border border-border">
-                <img src={imageUrl} alt={`Карточка поездки — ${variant.label}`} className="w-full block" />
-              </div>
-            )}
-
-            {/* Canvas (скрытый) */}
-            <canvas ref={canvasRef} className="hidden" />
+            </div>
 
             {/* Кнопки */}
             <div className="grid grid-cols-2 gap-2">
               <button
                 type="button"
                 onClick={download}
-                disabled={!imageUrl}
+                disabled={busy}
                 className="min-h-11 rounded-xl bg-secondary hover:bg-accent py-3 font-medium flex items-center justify-center gap-2 disabled:opacity-50"
               >
-                <Download className="size-4" /> Скачать
+                <Download className="size-4" /> PNG
               </button>
               <button
                 type="button"
                 onClick={share}
-                disabled={!imageUrl}
+                disabled={busy}
                 className="min-h-11 rounded-xl bg-primary text-primary-foreground py-3 font-medium flex items-center justify-center gap-2 disabled:opacity-50"
               >
                 <Share2 className="size-4" /> Поделиться
               </button>
             </div>
 
+            {/* GIF — анимированная версия карточки */}
+            <button
+              type="button"
+              onClick={exportGif}
+              disabled={busy}
+              className="w-full min-h-11 rounded-xl border border-primary/40 bg-primary/10 hover:bg-primary/15 text-primary py-3 font-medium flex items-center justify-center gap-2 disabled:opacity-70 transition-colors"
+            >
+              {busy ? (
+                <>
+                  <Loader2 className="size-4 animate-spin" /> Собираем GIF… {gifProgress}%
+                </>
+              ) : (
+                <>
+                  <Film className="size-4" /> Скачать анимированный GIF
+                </>
+              )}
+            </button>
+
             {/* Копирование картинки — там, где браузер умеет */}
             {canCopyImage && (
               <button
                 type="button"
                 onClick={copyImage}
-                disabled={!imageUrl}
+                disabled={busy}
                 className="w-full flex items-center justify-center gap-2 min-h-11 rounded-xl border border-border text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-accent disabled:opacity-50 transition-colors"
               >
                 {imageCopied ? <Check className="size-3.5 text-green-500" /> : <Copy className="size-3.5" />}
