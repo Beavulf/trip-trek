@@ -335,7 +335,9 @@ function PlaceDialogBody({
               className="rounded-xl py-3 text-sm font-medium bg-primary text-primary-foreground flex items-center justify-center gap-2 min-h-11"
             >
               <Navigation className="size-4" />
-              Маршрут
+              {/* То же имя, что у действия в строке места: «Маршрут» путался
+                  с названием вкладки (аудит 2026-10-03) */}
+              Как добраться
             </a>
             <button
               type="button"

@@ -118,30 +118,31 @@ export function PlaceRow({ place, accentColor, currency, onOpen }: PlaceRowProps
           ) : null}
           {place.rating ? <span className="flex items-center gap-0.5 text-amber-500"><Star className="size-2.5 fill-current" /> {place.rating}</span> : null}
         </div>
-        {/* Действия: как добраться (внешние карты) · показать на карте поездки */}
-        <div className="flex items-center gap-3 mt-1">
+        {/* Действия иконками, не текстом: на 390px текстовым ссылкам не хватает
+            колонки (аудит 2026-10-03) и они переносились в столбик; size-8 —
+            как «Изменить/Удалить день» в DayCard */}
+        <div className="flex items-center gap-1 mt-1 -ml-1">
           <a
             href={googleDirectionsUrl(place.lat, place.lng)}
             target="_blank"
             rel="noopener noreferrer"
             onClick={(e) => e.stopPropagation()}
-            className="inline-flex items-center gap-1 text-[10px] text-primary hover:underline"
+            title="Как добраться"
+            aria-label="Как добраться"
+            className="size-8 rounded-lg grid place-items-center text-primary hover:bg-accent transition-colors"
           >
-            <Navigation className="size-2.5" /> Как добраться
+            <Navigation className="size-4" />
           </a>
           <button
             onClick={showOnMap}
-            className="inline-flex items-center gap-1 text-[10px] text-muted-foreground hover:text-primary transition-colors"
+            title="Показать на карте поездки"
+            aria-label="Показать на карте поездки"
+            className="size-8 rounded-lg grid place-items-center text-muted-foreground hover:text-primary hover:bg-accent transition-colors"
           >
-            <MapPin className="size-2.5" /> На карте
+            <MapPin className="size-4" />
           </button>
         </div>
       </div>
-      {visited && (
-        <span aria-hidden="true" className="shrink-0 text-[9px] font-bold uppercase tracking-wide text-green-600 bg-green-500/10 px-1.5 py-0.5 rounded">
-          ✓
-        </span>
-      )}
     </motion.div>
   );
 }

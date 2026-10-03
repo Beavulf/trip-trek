@@ -133,7 +133,7 @@ export function Itinerary() {
 
   if (dayList.length === 0) {
     return (
-      <div className="space-y-4 animate-fade-up pb-20">
+      <div className="space-y-4 animate-fade-up pb-20 mx-auto w-full max-w-3xl">
         <div className="rounded-3xl border-2 border-dashed border-border py-14 px-4 text-center">
           <div className="text-5xl mb-3 opacity-60">🧭</div>
           <p className="font-semibold">Маршрут пуст</p>
@@ -178,7 +178,9 @@ export function Itinerary() {
   const accent = currentDay?.accentColor ?? dayList[0]?.accentColor ?? "#f97316";
 
   return (
-    <div className="space-y-3 animate-fade-up pb-4">
+    <div className="space-y-3 animate-fade-up pb-4 mx-auto w-full max-w-3xl">
+      {/* max-w-3xl: нить дней — список для чтения, на 1280px строки
+          растягивались в ~1200px с пустотой справа (аудит 2026-10-03) */}
       {/* Компактный hero: где мы на маршруте и что дальше */}
       <section
         className="rounded-3xl p-4 sm:p-5 text-white shadow-lg relative overflow-hidden"
@@ -228,56 +230,66 @@ export function Itinerary() {
           в стопке удваивает композитинг при скролле (аудит 2026-10-02) */}
       <div className="sticky top-[calc(var(--header-h,102px))] z-20 -mx-1 px-1 py-1 bg-background/95 rounded-xl">
         <div className="flex items-center gap-2">
-          <div className="chip-rail no-scrollbar flex-1 gap-1.5">
-            <button
-              type="button"
-              onClick={() => selectDay(null)}
-              aria-pressed={!selectedDay}
-              className={cn(
-                "min-h-11 px-3.5 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-colors active:scale-95",
-                !selectedDay ? "bg-primary text-primary-foreground" : "bg-card border border-border hover:bg-accent"
-              )}
-            >
-              Все дни
-            </button>
-            {dayList.map((d) => {
-              const visited = d.places.filter((p) => p.status === "visited").length;
-              const isToday = d.dayNumber === trip.currentDayNumber;
-              return (
-                <button
-                  key={d.id}
-                  type="button"
-                  onClick={() => selectDay(d.dayNumber)}
-                  aria-pressed={selectedDay === d.dayNumber}
-                  aria-label={`День ${d.dayNumber} ${visited}/${d.places.length}${isToday ? ", сегодня" : ""}`}
-                  className={cn(
-                    "flex items-center gap-1.5 min-h-11 px-3.5 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-colors active:scale-95",
-                    selectedDay === d.dayNumber
-                      ? "bg-primary text-primary-foreground"
-                      : "bg-card border border-border hover:bg-accent"
-                  )}
-                >
-                  {isToday ? (
-                    <span className="relative flex size-2" aria-hidden="true">
-                      <span className="absolute inline-flex size-full rounded-full bg-emerald-400 opacity-75 animate-ping" />
-                      <span className="relative inline-flex size-2 rounded-full bg-emerald-400" />
+          <div className="relative flex-1 min-w-0">
+            <div className="chip-rail no-scrollbar gap-1.5">
+              <button
+                type="button"
+                onClick={() => selectDay(null)}
+                aria-pressed={!selectedDay}
+                className={cn(
+                  "min-h-11 px-3.5 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-colors active:scale-95",
+                  !selectedDay ? "bg-primary text-primary-foreground" : "bg-card border border-border hover:bg-accent"
+                )}
+              >
+                Все дни
+              </button>
+              {dayList.map((d) => {
+                const visited = d.places.filter((p) => p.status === "visited").length;
+                const isToday = d.dayNumber === trip.currentDayNumber;
+                return (
+                  <button
+                    key={d.id}
+                    type="button"
+                    onClick={() => selectDay(d.dayNumber)}
+                    aria-pressed={selectedDay === d.dayNumber}
+                    aria-label={`День ${d.dayNumber} ${visited}/${d.places.length}${isToday ? ", сегодня" : ""}`}
+                    className={cn(
+                      "flex items-center gap-1.5 min-h-11 px-3.5 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-colors active:scale-95",
+                      selectedDay === d.dayNumber
+                        ? "bg-primary text-primary-foreground"
+                        : "bg-card border border-border hover:bg-accent"
+                    )}
+                  >
+                    {isToday ? (
+                      <span className="relative flex size-2" aria-hidden="true">
+                        <span className="absolute inline-flex size-full rounded-full bg-emerald-400 opacity-75 animate-ping" />
+                        <span className="relative inline-flex size-2 rounded-full bg-emerald-400" />
+                      </span>
+                    ) : (
+                      <span className="size-2 rounded-full" style={{ background: d.accentColor ?? "#f97316" }} />
+                    )}
+                    День {d.dayNumber}
+                    <span className="opacity-70 tabular-nums">
+                      {visited}/{d.places.length}
                     </span>
-                  ) : (
-                    <span className="size-2 rounded-full" style={{ background: d.accentColor ?? "#f97316" }} />
-                  )}
-                  День {d.dayNumber}
-                  <span className="opacity-70 tabular-nums">
-                    {visited}/{d.places.length}
-                  </span>
-                </button>
-              );
-            })}
+                  </button>
+                );
+              })}
+            </div>
+            {/* Фейд на правом срезе: 10px-маска chip-rail не читается, чипы
+                выглядели обрезанными (аудит 2026-10-03) */}
+            <div
+              aria-hidden="true"
+              className="pointer-events-none absolute inset-y-0 right-0 w-7 bg-gradient-to-l from-background to-transparent"
+            />
           </div>
+          {/* Dashed, как «Добавить место» в карточке дня: сплошной оранжевый круг
+              здесь клонировал глобальный FAB быстрого добавления */}
           <button
             type="button"
             onClick={openAdd}
             disabled={!targetDay}
-            className="shrink-0 size-11 rounded-full bg-primary text-primary-foreground grid place-items-center shadow-md active:scale-95 transition-transform disabled:opacity-50"
+            className="shrink-0 size-11 rounded-full border-2 border-dashed border-border text-muted-foreground grid place-items-center hover:border-primary hover:text-primary active:scale-95 transition-colors disabled:opacity-50"
             title={targetDay ? "Добавить место" : "Сначала добавьте день"}
             aria-label="Добавить место"
           >
@@ -341,7 +353,7 @@ export function Itinerary() {
 
 function ItinerarySkeleton() {
   return (
-    <div className="space-y-3 animate-pulse">
+    <div className="space-y-3 animate-pulse mx-auto w-full max-w-3xl">
       <div className="h-36 rounded-3xl bg-muted" />
       <div className="flex gap-1.5 overflow-hidden">
         {[0, 1, 2, 3, 4].map((i) => (
