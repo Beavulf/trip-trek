@@ -2,8 +2,10 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   output: "standalone",
-  // Шрифты PDF-экспорта читаются с диска в рантайме (src/lib/pdf/route-pdf.ts) —
-  // без подсказки трейсер webpack не положит их в standalone-сборку
+  // Шрифты PDF-экспорта читаются с диска в рантайме (src/lib/pdf/route-pdf.ts).
+  // Сейчас прод их получает копией src/lib из Dockerfile (standalone-раскладка
+  // не используется); этот ключ — страховка на случай перехода на .next/standalone,
+  // чтобы шрифты тогда не потерялись молча.
   outputFileTracingIncludes: {
     "/api/export/pdf": ["./src/lib/pdf/fonts/**"],
   },

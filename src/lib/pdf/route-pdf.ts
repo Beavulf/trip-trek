@@ -54,8 +54,11 @@ const LINE_SOFT = rgb(0.85, 0.84, 0.82);
 const ACCENT_FALLBACK = "f97316";
 
 // Шрифты читаются с диска один раз и кэшируются (~700KB каждый, перечитывать
-// на каждый запрос незачем). process.cwd(), а не import.meta.url: трассировка
-// standalone-сборки кладёт файлы по относительному пути от корня — см. next.config.ts.
+// на каждый запрос незачем). process.cwd(), а не import.meta.url (тот указал бы
+// внутрь .next, где шрифтов нет): путь от корня одинаков в dev (корень репо)
+// и в проде — Dockerfile копирует src/lib целиком и запускает `bun server.ts`
+// из /app, без .next/standalone. outputFileTracingIncludes в next.config.ts —
+// запас на будущее, если переедем на standalone-раскладку.
 let regularTtf: Buffer | null = null;
 let boldTtf: Buffer | null = null;
 

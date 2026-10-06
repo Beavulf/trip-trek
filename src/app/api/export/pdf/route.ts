@@ -54,8 +54,10 @@ export async function GET(req: NextRequest) {
       // prisma отдаёт Date — контракту билдера нужны ISO-строки
       days: days.map((d) => ({ ...d, date: d.date.toISOString().slice(0, 10) })),
     });
-    // filename* (RFC 5987) даёт кириллическое имя, filename — ASCII-fallback
-    const safeName = `triptrek-${trip.title.replace(/[^\p{L}\p{N}-]+/gu, "-").slice(0, 40)}.pdf`;
+    // filename* (RFC 5987) даёт кириллическое имя, filename — ASCII-fallback.
+    // Режем по кодпоинтам: slice(0, 40) по UTF-16-юнитам может разорвать
+    // суррогатную пару — encodeURIComponent на одиночном суррогате кинет URIError.
+    const safeName = `triptrek-${Array.from(trip.title.replace(/[^\p{L}\p{N}-]+/gu, "-")).slice(0, 40).join("")}.pdf`;
     // pdf-lib отдаёт Uint8Array<ArrayBufferLike>, а BodyInit в TS >= 5.7 требует
     // буфер именно ArrayBuffer — копируем в свежий типизированный массив
     return new NextResponse(new Uint8Array(bytes), {
