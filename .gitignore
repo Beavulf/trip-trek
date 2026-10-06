@@ -74,3 +74,6 @@ pub-login-*.png
 
 # локальный запуск с секретами (не для репозитория)
 docker-deploy/docker-compose.local.yml
+
+# Черновики brag-видео: node_modules, raw-аудио и captures — не для git-истории
+brag-output/work/
