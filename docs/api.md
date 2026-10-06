@@ -52,6 +52,7 @@
 | `trip/import` | POST | U | userRateLimit | импорт JSON-бэкапа → новая поездка |
 | `import` | POST | O | userRateLimit 10/ч + кап 5MB | импорт в существующую поездку (owner); tripId — только в query, тело парсится после гарда и лимита |
 | `export` | GET | O | — | экспорт поездки в JSON (`src/lib/trip-export.ts`); полный дамп — функция владельца, участникам 403 |
+| `export/pdf` | GET | M | — | маршрут поездки одним PDF-файлом (офлайн, `src/lib/pdf/route-pdf.ts`); tripId — в query; любой участник поездки; 400, если нет мест |
 | `participants` | GET, PATCH | M / U | — | участники поездки; PATCH — профиль «себя в поездке» (displayName/emoji) |
 | `participants/[id]` | PATCH, DELETE | M(owner) | userRateLimit | правка/удаление участника (удаление → уведомление) |
 | `participants/leave` | POST | U | userRateLimit | выйти из поездки |

@@ -1,5 +1,19 @@
 # TripTrek China — Work Log
 
+## Session 2026-10-06 — PDF-экспорт маршрута: /api/export/pdf + buildRoutePdf + кнопка в Itinerary
+
+**Задача**: план «PDF-экспорт маршрута» (задачи 1–4): офлайн-версия маршрута одним файлом, доступная всем участникам поездки.
+
+### Changes
+- PDF-экспорт маршрута: `/api/export/pdf` + `buildRoutePdf` (pdf-lib) + кнопка в Itinerary; шрифты через `outputFileTracingIncludes`.
+- `src/lib/pdf/route-pdf.ts` — чистый билдер: дни с городами/датами, места по слотам времени (адрес, бюджет, описание, заметки); вшитые DejaVu-шрифты (кириллица), переносы, колонтитулы; тесты — `route-pdf.test.ts`.
+- `src/app/api/export/pdf/route.ts` — GET, гард участника (`requireTripMember`), 400, если в поездке нет мест.
+- Кнопка скачивания PDF в шапке вкладки «Маршрут» (`Itinerary`).
+- `next.config.ts` — `outputFileTracingIncludes: { "/api/export/pdf": ["./src/lib/pdf/fonts/**"] }`: шрифты читаются с диска в рантайме (`process.cwd()`), без подсказки webpack-трейсер не кладёт их в standalone-сборку.
+
+### Verification
+- `bunx tsc --noEmit` — 0; `bunx eslint next.config.ts` — чисто; `bun run test` — 156/156 (18 файлов).
+
 ## Session 2026-10-03 — аудит UI вкладки «Маршрут» → полиш
 
 **Задача**: ui-taste аудит вкладки «Маршрут» (390/360/1280, живой стенд + код), затем «правь всё что выявил». Правки — `PlaceRow.tsx`, `Itinerary.tsx`, `PlaceDialog.tsx`.

@@ -2,6 +2,11 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   output: "standalone",
+  // Шрифты PDF-экспорта читаются с диска в рантайме (src/lib/pdf/route-pdf.ts) —
+  // без подсказки трейсер webpack не положит их в standalone-сборку
+  outputFileTracingIncludes: {
+    "/api/export/pdf": ["./src/lib/pdf/fonts/**"],
+  },
   reactStrictMode: false,
   // Не палим стек (X-Powered-By: Next.js)
   poweredByHeader: false,
