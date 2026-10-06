@@ -122,7 +122,7 @@ export function ExpenseRow({ expense, participants }: ExpenseRowProps) {
         )}
 
         {/* Время добавления */}
-        <div className="text-[9px] text-muted-foreground/60 mt-1">{timeStr}</div>
+        <div className="text-[10px] text-muted-foreground/70 mt-0.5">{timeStr}</div>
       </div>
 
       {/* Удаление — только плательщик или owner */}
