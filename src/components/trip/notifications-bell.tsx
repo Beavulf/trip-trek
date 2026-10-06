@@ -20,6 +20,7 @@ import {
   X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useBackDismiss } from "@/hooks/use-back-dismiss";
 import { useBodyScrollLock } from "@/hooks/use-body-scroll-lock";
 import { useNotifications, useMarkNotificationsRead, type UserNotificationItem } from "@/hooks/use-notifications";
 
@@ -102,6 +103,8 @@ export function NotificationsBell({ authed, large }: { authed: boolean; large?: 
 
 function NotificationsSheet({ items, onClose }: { items: UserNotificationItem[]; onClose: () => void }) {
   const markRead = useMarkNotificationsRead();
+  // лист смонтирован только пока открыт — «назад» закрывает его, а не приложение
+  useBackDismiss(true, onClose);
   return createPortal(
     <AnimatePresence>
       <motion.div

@@ -28,6 +28,7 @@ import { TemplatePicker } from "./template-picker";
 import { createPortal } from "react-dom";
 import { cn } from "@/lib/utils";
 import { useTripStore } from "@/lib/trip-store";
+import { useBackDismiss } from "@/hooks/use-back-dismiss";
 import { useBodyScrollLock } from "@/hooks/use-body-scroll-lock";
 
 /** Фаза поездки по датам: ещё не началась / идёт / закончилась */
@@ -116,6 +117,8 @@ export function TripSwitcher() {
   const currentTrip = trips?.find((t) => t.id === currentTripId) || trips?.[0];
   const pendingTripId = useTripStore((s) => s.pendingTripId);
   const setPendingTripId = useTripStore((s) => s.setPendingTripId);
+  // «назад» на телефоне закрывает список поездок, а не сворачивает приложение
+  useBackDismiss(open, () => setOpen(false));
 
   // Фильтр по названию/направлению (в JS — чтобы кириллица не зависела от регистра)
   const visibleTrips = useMemo(() => {

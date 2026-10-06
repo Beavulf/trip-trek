@@ -7,6 +7,7 @@ import { Search, X, Loader2, CornerDownLeft, Clock, Trash2 } from "lucide-react"
 import { useState, useEffect, useMemo, useRef } from "react";
 import { useTripStore } from "@/lib/trip-store";
 import { cn } from "@/lib/utils";
+import { useBackDismiss } from "@/hooks/use-back-dismiss";
 import { useBodyScrollLock } from "@/hooks/use-body-scroll-lock";
 import { useCurrentTripId } from "@/hooks/use-trip";
 
@@ -84,6 +85,8 @@ function Highlight({ text, words }: { text: string; words: string[] }) {
 
 export function GlobalSearch({ open, onOpenChange }: { open: boolean; onOpenChange: (v: boolean) => void }) {
   useBodyScrollLock(open);
+  // «назад» на телефоне закрывает поиск, а не сворачивает приложение
+  useBackDismiss(open, () => onOpenChange(false));
   const [query, setQuery] = useState("");
   const [debounced, setDebounced] = useState("");
   const [selectedIdx, setSelectedIdx] = useState(0);

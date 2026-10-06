@@ -4,12 +4,17 @@ import * as React from "react"
 import * as DialogPrimitive from "@radix-ui/react-dialog"
 import { XIcon } from "lucide-react"
 
+import { useBackDismiss } from "@/hooks/use-back-dismiss"
 import { cn } from "@/lib/utils"
 
 function Dialog({
+  open,
+  onOpenChange,
   ...props
 }: React.ComponentProps<typeof DialogPrimitive.Root>) {
-  return <DialogPrimitive.Root data-slot="dialog" {...props} />
+  // «назад» на телефоне закрывает диалог, а не сворачивает приложение
+  useBackDismiss(open === true, () => onOpenChange?.(false))
+  return <DialogPrimitive.Root data-slot="dialog" open={open} onOpenChange={onOpenChange} {...props} />
 }
 
 function DialogTrigger({

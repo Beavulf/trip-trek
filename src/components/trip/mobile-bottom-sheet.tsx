@@ -6,6 +6,7 @@
 // держала свои ручные копии этой оболочки; теперь сводится к контенту.
 // Фаза 6 углубления карты. Расширенные пропы (header/panelRef/ariaLabel/…)
 // обратно совместимы — остальные вкладки пользуются дефолтами.
+import { useBackDismiss } from "@/hooks/use-back-dismiss";
 import { useBodyScrollLock } from "@/hooks/use-body-scroll-lock";
 import { X } from "lucide-react";
 import { createPortal } from "react-dom";
@@ -53,6 +54,8 @@ export function MobileBottomSheet({
   contentClassName,
 }: MobileBottomSheetProps) {
   useBodyScrollLock(open);
+  // «назад» на телефоне закрывает шит, а не сворачивает приложение
+  useBackDismiss(open, () => onOpenChange(false));
   if (typeof document === "undefined") return null;
 
   // Ранний return при !open убивал AnimatePresence вместе с exit-анимацией:

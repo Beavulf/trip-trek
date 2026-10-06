@@ -24,6 +24,7 @@ import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import type { Photo } from "@/lib/types";
+import { useBackDismiss } from "@/hooks/use-back-dismiss";
 import { MobileBottomSheet } from "./mobile-bottom-sheet";
 import { DayPicker } from "./quick-add/DayPicker";
 import { useTrip } from "@/hooks/use-trip";
@@ -81,6 +82,8 @@ export function PhotoLightbox({
   canEdit,
 }: PhotoLightboxProps) {
   const { data: trip } = useTrip();
+  // «назад» на телефоне закрывает просмотр фото, а не сворачивает приложение
+  useBackDismiss(open, onClose);
   const [menuOpen, setMenuOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);

@@ -10,6 +10,7 @@ import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { ChevronLeft } from "lucide-react";
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
+import { useBackDismiss } from "@/hooks/use-back-dismiss";
 import { cn } from "@/lib/utils";
 
 export interface TourDialogStep {
@@ -37,6 +38,9 @@ export function TourDialog({
   const reduced = useReducedMotion();
   const primaryBtnRef = useRef<HTMLButtonElement>(null);
   const cardRef = useRef<HTMLDivElement>(null);
+
+  // «назад» на телефоне завершает обучение (диалог смонтирован только на время показа)
+  useBackDismiss(true, onClose);
 
   // Esc = «Пропустить»: обучение никогда не держит пользователя силой
   useEffect(() => {
