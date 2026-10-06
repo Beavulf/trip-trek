@@ -48,14 +48,19 @@ export function MobileBottomSheet({
   children,
   zIndexClass = "z-[100]",
   maxWidthClass = "sm:max-w-md",
-  maxHeightClass = "max-h-[92vh]",
+  // dvh, не vh: на мобильных динамический вьюпорт учитывает панель браузера
+  maxHeightClass = "max-h-[92dvh]",
   contentClassName,
 }: MobileBottomSheetProps) {
   useBodyScrollLock(open);
-  if (!open || typeof document === "undefined") return null;
+  if (typeof document === "undefined") return null;
 
+  // Ранний return при !open убивал AnimatePresence вместе с exit-анимацией:
+  // все шиты приложения закрывались мгновенным срезом. Условие переехало
+  // внутрь — закрытый шит больше не рисуется, но успевает уехать вниз (аудит 2026-10-06)
   return createPortal(
     <AnimatePresence>
+      {open && (
       <motion.div
         key="sheet-overlay"
         initial={{ opacity: 0 }}
@@ -106,6 +111,7 @@ export function MobileBottomSheet({
           <div className={cn("px-4 sm:px-5 py-4", contentClassName)}>{children}</div>
         </motion.div>
       </motion.div>
+      )}
     </AnimatePresence>,
     document.body
   );

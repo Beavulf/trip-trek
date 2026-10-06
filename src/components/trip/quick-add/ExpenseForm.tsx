@@ -9,6 +9,7 @@ import { Check, Loader2, Users } from "lucide-react";
 import { toast } from "sonner";
 import { cn, fmtMoney } from "@/lib/utils";
 import { DayPicker } from "./DayPicker";
+import { StickySubmit } from "./StickySubmit";
 
 interface ExpenseFormProps {
   userId: string;
@@ -30,7 +31,9 @@ export function ExpenseForm({ userId, onDone }: ExpenseFormProps) {
   const [category, setCategory] = useState("food");
   const [description, setDescription] = useState("");
   const [dayId, setDayId] = useState("");
-  const [splitUsers, setSplitUsers] = useState<Set<string>>(new Set());
+  // null = юзер ещё не трогал выбор → дефолт «на всех» выводим на рендере,
+  // без эффекта с setState (частый кейс — общая трата, аудит 2026-10-06)
+  const [splitOverride, setSplitOverride] = useState<Set<string> | null>(null);
 
   useEffect(() => {
     if (!trip?.days?.length) return;
@@ -48,6 +51,10 @@ export function ExpenseForm({ userId, onDone }: ExpenseFormProps) {
     if (getSavedCurrency(tripId)) return;
     setCurrencyCode(tripCurrency);
   }, [tripCurrency, tripId, currencyTouched]);
+
+  // «За кого» до первого ручного выбора — все участники поездки
+  const participants = trip?.participants ?? [];
+  const splitUsers = splitOverride ?? new Set(participants.map((p) => p.id));
 
   const usdRate = currency?.rates?.[currencyCode] || 1;
   const amountNum = parseFloat(amount) || 0;
@@ -111,7 +118,6 @@ export function ExpenseForm({ userId, onDone }: ExpenseFormProps) {
       }
       setAmount("");
       setDescription("");
-      setSplitUsers(new Set());
       onDone();
     } catch (err) {
       toast.error("Не удалось добавить трату", {
@@ -121,16 +127,14 @@ export function ExpenseForm({ userId, onDone }: ExpenseFormProps) {
   };
 
   const toggleUser = (id: string) => {
-    setSplitUsers((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
+    const next = new Set(splitUsers);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    setSplitOverride(next);
   };
 
   const selectAll = () => {
-    setSplitUsers(new Set(trip?.participants.map((p) => p.id) || []));
+    setSplitOverride(new Set(participants.map((p) => p.id)));
   };
 
   const splitCount = splitUsers.size > 0 ? splitUsers.size : 1;
@@ -138,12 +142,9 @@ export function ExpenseForm({ userId, onDone }: ExpenseFormProps) {
 
   return (
     <div className="space-y-3">
-      <div>
-        <label className="text-xs text-muted-foreground mb-1 block">День</label>
-        <DayPicker value={dayId} onChange={setDayId} />
-      </div>
-
-      <div className="grid grid-cols-[1fr_auto_1fr] gap-2">
+      {/* Порядок полей — по частоте использования: сумма сразу, день (авто)
+          переехал вниз к submit (аудит 2026-10-06) */}
+      <div className="grid grid-cols-[1fr_auto] gap-2 items-end">
         <div>
           <label className="text-xs text-muted-foreground mb-1 block">Сумма ({sym})</label>
           <input
@@ -151,8 +152,13 @@ export function ExpenseForm({ userId, onDone }: ExpenseFormProps) {
             inputMode="decimal"
             value={amount}
             onChange={(e) => setAmount(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") e.currentTarget.blur();
+            }}
+            enterKeyHint="done"
             placeholder="0"
-            className="w-full rounded-lg border border-input bg-background px-3 py-2.5 text-base input-mobile"
+            min="0"
+            className="w-full rounded-xl border border-input bg-background px-3 py-2.5 text-2xl font-bold input-mobile"
           />
         </div>
         <div>
@@ -163,7 +169,7 @@ export function ExpenseForm({ userId, onDone }: ExpenseFormProps) {
               setCurrencyCode(e.target.value);
               setCurrencyTouched(true);
             }}
-            className="w-full rounded-lg border border-input bg-background px-2 py-2.5 text-base input-mobile max-w-[5.5rem]"
+            className="rounded-xl border border-input bg-background px-2 py-3.5 text-base input-mobile max-w-[5.5rem]"
           >
             {currencySelectOptions(tripCurrency).map((c) => (
               <option key={c.code} value={c.code}>
@@ -172,24 +178,10 @@ export function ExpenseForm({ userId, onDone }: ExpenseFormProps) {
             ))}
           </select>
         </div>
-        <div>
-          <label className="text-xs text-muted-foreground mb-1 block">Категория</label>
-          <select
-            value={category}
-            onChange={(e) => setCategory(e.target.value)}
-            className="w-full rounded-lg border border-input bg-background px-2 py-2.5 text-base input-mobile"
-          >
-            {Object.entries(EXPENSE_CATEGORIES).map(([k, v]) => (
-              <option key={k} value={k}>
-                {v.emoji} {v.label}
-              </option>
-            ))}
-          </select>
-        </div>
       </div>
 
       {currencyCode !== "USD" && amountNum > 0 && (
-        <p className="text-[11px] text-muted-foreground">≈ ${amountUSD.toFixed(2)} USD</p>
+        <p className="text-[11px] text-muted-foreground -mt-1">≈ ${amountUSD.toFixed(2)} USD</p>
       )}
 
       <input
@@ -197,8 +189,35 @@ export function ExpenseForm({ userId, onDone }: ExpenseFormProps) {
         onChange={(e) => setDescription(e.target.value)}
         placeholder="Описание (например, Ужин)"
         maxLength={500}
-        className="w-full rounded-lg border border-input bg-background px-3 py-2.5 text-base input-mobile"
+        className="w-full rounded-xl border border-input bg-background px-3 py-2.5 text-base input-mobile"
       />
+
+      <div>
+        <label className="text-xs text-muted-foreground mb-1 block">Категория</label>
+        {/* Чипы вместо системного select: один тап против «select → шит → пункт» */}
+        <div className="flex gap-1.5 overflow-x-auto no-scrollbar -mx-1 px-1 pb-0.5">
+          {Object.entries(EXPENSE_CATEGORIES).map(([k, v]) => {
+            const active = category === k;
+            return (
+              <button
+                key={k}
+                type="button"
+                onClick={() => setCategory(k)}
+                aria-pressed={active}
+                className={cn(
+                  "shrink-0 inline-flex items-center gap-1.5 min-h-9 px-3 rounded-full border text-sm font-medium transition-colors",
+                  active
+                    ? "bg-primary/10 border-primary/40 text-foreground"
+                    : "border-border text-muted-foreground hover:border-primary/30 hover:text-foreground"
+                )}
+              >
+                <span aria-hidden>{v.emoji}</span>
+                {v.label}
+              </button>
+            );
+          })}
+        </div>
+      </div>
 
       <div>
         <div className="flex items-center justify-between mb-1">
@@ -213,8 +232,8 @@ export function ExpenseForm({ userId, onDone }: ExpenseFormProps) {
             Выбрать всех
           </button>
         </div>
-        <div className="bg-background rounded-lg border border-input p-2 space-y-1">
-          {trip?.participants.map((p) => {
+        <div className="bg-background rounded-xl border border-input p-1.5 space-y-0.5">
+          {participants.map((p) => {
             const checked = splitUsers.has(p.id);
             const isPayer = p.id === userId;
             return (
@@ -222,8 +241,9 @@ export function ExpenseForm({ userId, onDone }: ExpenseFormProps) {
                 key={p.id}
                 type="button"
                 onClick={() => toggleUser(p.id)}
+                aria-pressed={checked}
                 className={cn(
-                  "w-full flex items-center gap-2 p-2 rounded-lg text-sm transition-colors active:scale-98 min-h-11",
+                  "w-full flex items-center gap-2 p-2 rounded-lg text-sm transition-colors active:scale-[0.98] min-h-11",
                   "hover:bg-accent active:bg-accent",
                   checked && "bg-primary/10"
                 )}
@@ -274,15 +294,22 @@ export function ExpenseForm({ userId, onDone }: ExpenseFormProps) {
         </div>
       </div>
 
-      <button
-        type="button"
-        onClick={submit}
-        disabled={addExpense.isPending || splitUsers.size === 0 || !userId}
-        className="w-full min-h-11 rounded-xl bg-primary text-primary-foreground py-3.5 text-base font-medium flex items-center justify-center gap-2 disabled:opacity-50"
-      >
-        {addExpense.isPending ? <Loader2 className="size-4 animate-spin" /> : <Check className="size-4" />}
-        Добавить трату
-      </button>
+      <div>
+        <label className="text-xs text-muted-foreground mb-1 block">День</label>
+        <DayPicker value={dayId} onChange={setDayId} />
+      </div>
+
+      <StickySubmit>
+        <button
+          type="button"
+          onClick={submit}
+          disabled={addExpense.isPending || splitUsers.size === 0 || !userId}
+          className="w-full min-h-[48px] rounded-xl bg-primary text-primary-foreground py-3.5 text-base font-medium flex items-center justify-center gap-2 disabled:opacity-50 transition-transform active:scale-[0.98]"
+        >
+          {addExpense.isPending ? <Loader2 className="size-4 animate-spin" /> : <Check className="size-4" />}
+          Добавить трату
+        </button>
+      </StickySubmit>
     </div>
   );
 }

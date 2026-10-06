@@ -6,6 +6,7 @@ import { Check, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { DayPicker } from "./DayPicker";
+import { StickySubmit } from "./StickySubmit";
 import { MOODS } from "@/lib/moods";
 
 interface JournalFormProps {
@@ -68,10 +69,15 @@ export function JournalForm({ userId, onDone }: JournalFormProps) {
 
   return (
     <div className="space-y-3">
-      <div>
-        <label className="text-xs text-muted-foreground mb-1 block">День</label>
-        <DayPicker value={dayId} onChange={setDayId} />
-      </div>
+      {/* Текст — главное, настроение и день следом (аудит 2026-10-06) */}
+      <textarea
+        value={content}
+        onChange={(e) => setContent(e.target.value)}
+        placeholder="Что запомнилось сегодня?"
+        rows={4}
+        maxLength={5000}
+        className="w-full rounded-xl border border-input bg-background px-3 py-2 text-base input-mobile resize-none"
+      />
 
       <div>
         <label className="text-xs text-muted-foreground mb-1 block">Настроение</label>
@@ -94,24 +100,22 @@ export function JournalForm({ userId, onDone }: JournalFormProps) {
         </div>
       </div>
 
-      <textarea
-        value={content}
-        onChange={(e) => setContent(e.target.value)}
-        placeholder="Что запомнилось сегодня?"
-        rows={4}
-        maxLength={5000}
-        className="w-full rounded-lg border border-input bg-background px-3 py-2 text-base input-mobile resize-none"
-      />
+      <div>
+        <label className="text-xs text-muted-foreground mb-1 block">День</label>
+        <DayPicker value={dayId} onChange={setDayId} />
+      </div>
 
-      <button
-        type="button"
-        onClick={submit}
-        disabled={addJournal.isPending || !dayId || !userId}
-        className="w-full min-h-11 rounded-xl bg-primary text-primary-foreground py-3.5 text-base font-medium flex items-center justify-center gap-2 disabled:opacity-50"
-      >
-        {addJournal.isPending ? <Loader2 className="size-4 animate-spin" /> : <Check className="size-4" />}
-        Сохранить запись
-      </button>
+      <StickySubmit>
+        <button
+          type="button"
+          onClick={submit}
+          disabled={addJournal.isPending || !dayId || !userId}
+          className="w-full min-h-[48px] rounded-xl bg-primary text-primary-foreground py-3.5 text-base font-medium flex items-center justify-center gap-2 disabled:opacity-50 transition-transform active:scale-[0.98]"
+        >
+          {addJournal.isPending ? <Loader2 className="size-4 animate-spin" /> : <Check className="size-4" />}
+          Сохранить запись
+        </button>
+      </StickySubmit>
     </div>
   );
 }

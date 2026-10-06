@@ -394,6 +394,11 @@ export function AppShell({ children }: { children: ReactNode }) {
 
       <motion.button
         onClick={() => setQuickOpen(true)}
+        // Прогрев чанка PhotoForm (exifr ~100 KB) на касании — к моменту открытия
+        // шита форма уже готова, первый FAB-тап не платит за загрузку (аудит 2026-10-06)
+        onPointerDown={() => {
+          void import("./quick-add/PhotoForm");
+        }}
         whileTap={{ scale: 0.88 }}
         whileHover={{ scale: 1.06 }}
         className="fixed z-40 size-16 sm:size-14 rounded-full bg-gradient-to-br from-orange-500 to-rose-500 text-white shadow-2xl shadow-orange-500/40 grid place-items-center border-2 border-white/20 right-4 sm:right-6"
@@ -424,7 +429,9 @@ export function AppShell({ children }: { children: ReactNode }) {
         </div>
       </footer>
 
-      {quickOpen && <QuickAddSheet open onOpenChange={setQuickOpen} />}
+      {/* Всегда смонтирован: условный рендер убивал exit-анимацию и перемонтировал
+          формы на каждом открытии (аудит 2026-10-06) */}
+      <QuickAddSheet open={quickOpen} onOpenChange={setQuickOpen} />
       <GlobalSearch open={searchOpen} onOpenChange={setSearchOpen} />
       {inviteOpen && <InviteFriends open onOpenChange={setInviteOpen} />}
       <TripInfoSheet
