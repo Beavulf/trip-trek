@@ -7,7 +7,7 @@ import { useTripStore } from "@/lib/trip-store";
 import { currencySymbol } from "@/lib/currencies";
 import { type Day, type Place } from "@/lib/types";
 import { resolveCityCoords, decodeCustomKey } from "@/lib/city-coords";
-import { CalendarPlus, Compass, Loader2, Map as MapIcon, PartyPopper, Plane, Plus, Sparkles } from "lucide-react";
+import { CalendarPlus, Compass, FileDown, Loader2, Map as MapIcon, PartyPopper, Plane, Plus, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import { cn, plural } from "@/lib/utils";
 import { AddPlaceSheet, type AddPlaceData } from "../add-place-sheet";
@@ -42,6 +42,7 @@ export function Itinerary() {
   const [daySheetOpen, setDaySheetOpen] = useState(false);
   const [editDay, setEditDay] = useState<Day | null>(null);
   const [plannerOpen, setPlannerOpen] = useState(false);
+  const [pdfLoading, setPdfLoading] = useState(false);
   // Дата-статус считаем на клиенте (SSR показывает скелетон) и обновляем раз в минуту,
   // чтобы «Старт через N дней» не зависал
   const [now, setNow] = useState(() => Date.now());
@@ -129,6 +130,34 @@ export function Itinerary() {
       return;
     }
     openAddForDay(targetDay);
+  };
+
+  const downloadPdf = async () => {
+    if (pdfLoading) return;
+    setPdfLoading(true);
+    try {
+      const res = await fetch(`/api/export/pdf?tripId=${tripId}`);
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || "Не удалось сформировать PDF");
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${trip.settings.title.replace(/[<>:"/\\|?*]+/g, "_")}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      toast.success("Маршрут скачан 📄");
+    } catch (e) {
+      toast.error("PDF не скачался", {
+        description: e instanceof Error ? e.message : "Попробуйте ещё раз",
+      });
+    } finally {
+      setPdfLoading(false);
+    }
   };
 
   if (dayList.length === 0) {
@@ -219,6 +248,16 @@ export function Itinerary() {
               className="flex-1 min-h-11 rounded-xl bg-white/15 hover:bg-white/25 backdrop-blur px-3 flex items-center justify-center gap-1.5 text-xs font-medium transition-colors active:scale-[0.98]"
             >
               <MapIcon className="size-4" /> На карте
+            </button>
+            <button
+              type="button"
+              onClick={downloadPdf}
+              disabled={pdfLoading}
+              aria-label="Скачать маршрут в PDF"
+              title="Скачать маршрут в PDF"
+              className="size-11 shrink-0 rounded-xl bg-white/15 hover:bg-white/25 backdrop-blur grid place-items-center transition-colors active:scale-[0.98] disabled:opacity-60"
+            >
+              {pdfLoading ? <Loader2 className="size-4 animate-spin" /> : <FileDown className="size-4" />}
             </button>
           </div>
         </div>
