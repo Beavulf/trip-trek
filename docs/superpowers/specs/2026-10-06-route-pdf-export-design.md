@@ -63,7 +63,9 @@ interface RoutePdfInput {
     title: string;
     summary: string | null;
     accentColor: string | null;
-    places: Place[];    // поля из select'а /api/route
+  places: RoutePdfPlace[]; // узкий структурный тип (name/category/timeOfDay/address/budget/description/notes);
+                           // полный Place не подходит: prisma-строки дают Date, а не string.
+                           // daySections обобщён под { timeOfDay } — см. src/lib/time-of-day.ts
   }>;
   generatedAt: Date;
 }

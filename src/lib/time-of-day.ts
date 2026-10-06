@@ -59,10 +59,10 @@ export function timeSlotFromHour(hour: number): string | null {
   return "evening";
 }
 
-export interface DaySection {
+export interface DaySection<T extends { timeOfDay: string | null } = Place> {
   key: string;
   label: string;
-  places: Place[];
+  places: T[];
 }
 
 /**
@@ -70,11 +70,11 @@ export interface DaySection {
  * Если ни у одного места нет timeOfDay — одна секция «all» без заголовка.
  * Места без слота при смешанном дне попадают в «other» («Без времени»).
  */
-export function daySections(places: Place[]): DaySection[] {
+export function daySections<T extends { timeOfDay: string | null }>(places: T[]): DaySection<T>[] {
   if (!places.some((p) => p.timeOfDay)) {
     return [{ key: "all", label: "", places }];
   }
-  const sections: DaySection[] = TIME_SLOTS.map((s) => ({
+  const sections: DaySection<T>[] = TIME_SLOTS.map((s) => ({
     key: s.key,
     label: s.label,
     places: places.filter((p) => p.timeOfDay === s.key),
