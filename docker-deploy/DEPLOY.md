@@ -156,6 +156,13 @@ curl -s https://<домен>/api/health                                # db up/d
 - Забыли NEXTAUTH_SECRET → app не стартует с явным FATAL в логах.
 - Миграция не применяется → `docker compose logs app | grep prisma`, чинить
   migration, повторный `up -d` перезапустит entrypoint.
+- `bun install` в билде падает `Fail extracting tarball for "next"` →
+  прямой registry.npmjs.org с VPS рвётся в bun на длинных загрузках (curl
+  при этом проходит; аудит деплоя 2026-10-06). В Dockerfile установки уже
+  идут через зеркало `registry.npmmirror.com` (целостность гарантируют
+  чек-суммы из bun.lock) с общим BuildKit-кэшем и сериализованы между
+  стадиями. Если проблема вернётся — сменить зеркало (`--registry
+  https://registry.yarnpkg.com`) и/или добавить retry-цикл вокруг install.
 - Назначить админа (доступ к `/admin`): зарегистрироваться в приложении, затем
   `docker compose exec app bun prisma/set-admin.mjs <email>` (локально:
   `npm run db:admin -- <email>`). Роль проверяется на сервере при каждом запросе —

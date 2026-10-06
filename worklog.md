@@ -2802,3 +2802,23 @@ Server was crashing with "Failed to load external module @prisma/client-2c3a283f
 ### Notes
 - Глоссарий: в строку `budget` дописано поведение формы «Новая трата».
 - Коммит не делался — юзер не просил в этой задаче.
+
+## Session 2026-10-06 (3) — починка упавшего деплоя на VPS
+
+**Задача**: «ошибка при выкате на впс» — `bun install --frozen-lockfile` в билде стабильно падал `Fail extracting tarball for "next"`.
+
+### Диагностика (по SSH, хост guild-vps)
+- Диск не полон (9.3→14 ГБ после `docker builder prune -af`, кэш билда был 9.2 ГБ), OOM-киллов нет, MTU стандартный.
+- Изоляция: одиночная `bun install` в `docker run` — проходит ~50% (деградирует со временем); две параллельные — падают всегда; `docker build --target deps` — мозаично; curl полного тарболла next (30 МБ) с хоста — стабильно 200.
+- `--network=host` и `BUN_CONFIG_MAX_HTTP_REQUESTS=16` не помогали → не сеть контейнера и не параллелизм как таковой: прямой registry.npmjs.org рвётся именно в TLS-потоках bun на этом маршруте (curl проходит).
+- Решающий тест: `--registry https://registry.npmmirror.com` — 746 пакетов за 14с, стабильно; `registry.yarnpkg.com` тоже проходит.
+
+### Changes
+- `docker-deploy/Dockerfile`: обе `bun install` — через зеркало npmmirror (целостность пакетов гарантируют чек-суммы из bun.lock — зеркало не может подсунуть изменённый пакет); общий BuildKit cache mount `/root/.bun/install/cache` (повторные деплои не перекачивают registry); install runner-стадии перенесён после COPY из builder — BuildKit больше не параллелит две установки.
+- `docker-deploy/DEPLOY.md`: раздел «Если упало» дополнен этим случаем и лечением.
+- Попутно на VPS: `docker builder prune -af` (+5.7 ГБ); остановлен незадействованный `triptrek-caddy` (был Created 2 дня — домен обслуживает docker-caddy-1; triptrek-caddy без портов молотил ACME-ретраи, 1.1.1.1:53 UDP с VPS недоступен).
+
+### Verification
+- Полный `docker compose build app` на VPS — успех, образ от 2026-10-06 10:53 UTC.
+- `up -d`: triptrek-app healthy, миграции применены, WS-клиент подключился, `/api/health` 200 локально, домен снаружи отвечает (307 на /login — неавторизованный редирект).
+- Фикс в репо закоммичен и запушен; на VPS рабочая копия синхронизирована с remote.

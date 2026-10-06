@@ -7,7 +7,14 @@ WORKDIR /app
 RUN apt-get update -y && apt-get install -y --no-install-recommends openssl ca-certificates \
   && rm -rf /var/lib/apt/lists/*
 COPY package.json bun.lock ./
-RUN bun install --frozen-lockfile
+# Кэш пакетов — в BuildKit cache mount: общий между стадиями и сборками,
+# повторный деплой не перекачивает registry (аудит деплоя 2026-10-06).
+# Зеркало npmmirror: прямой registry.npmjs.org с этого VPS рвался в bun
+# («Fail extracting tarball for next»; curl проходил — деградация на
+# длинных TLS-потоках bun). Чек-суммы tarball'ов bun проверяет по bun.lock,
+# зеркало не может подсунуть изменённый пакет
+RUN --mount=type=cache,target=/root/.bun/install/cache \
+  bun install --frozen-lockfile --registry https://registry.npmmirror.com
 
 FROM oven/bun:1.3.14-debian AS builder
 WORKDIR /app
@@ -35,7 +42,6 @@ ENV HOSTNAME=0.0.0.0
 # DATABASE_URL задаёт docker-compose (Postgres сервиса db)
 
 COPY package.json bun.lock ./
-RUN bun install --frozen-lockfile --production
 
 COPY --from=builder /app/.next ./.next
 COPY --from=builder /app/public ./public
@@ -47,6 +53,13 @@ COPY --from=builder /app/server ./server
 COPY --from=builder /app/src/lib ./src/lib
 COPY --from=builder /app/next.config.ts ./next.config.ts
 COPY --from=builder /app/tsconfig.json ./tsconfig.json
+
+# Install — ПОСЛЕ копий из builder: BuildKit иначе запускает его параллельно
+# с deps-установкой, и две одновременные bun install с одного IP рвали
+# загрузку «next» — сборка стабильно падала (аудит деплоя 2026-10-06).
+# Зеркало и общий кэш — по тем же причинам, что в deps-стадии
+RUN --mount=type=cache,target=/root/.bun/install/cache \
+  bun install --frozen-lockfile --production --registry https://registry.npmmirror.com
 
 # Non-root: приложение читает root-owned статику (файлы мир-читаемые), а пишет
 # только в uploads и в node_modules/.prisma + @prisma (prisma generate в
