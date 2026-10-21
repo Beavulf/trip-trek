@@ -38,6 +38,16 @@ describe("normalizeExifGps", () => {
     expect(normalizeExifGps("abc", "N", 10, "E")).toBeNull();
     expect(normalizeExifGps(NaN, "N", 10, "E")).toBeNull();
   });
+
+  it("DMS-массив exifr.parse([градусы, минуты, секунды]) → десятичные градусы (регрессия: Number([...]) = NaN терял все координаты)", () => {
+    // реальные теги DSCN0010.jpg: 43°28'2.814" N, 11°53'6.456" E
+    const out = normalizeExifGps([43, 28, 2.814], "N", [11, 53, 6.456], "E");
+    expect(out).not.toBeNull();
+    expect(out!.lat).toBeCloseTo(43.4674, 3);
+    expect(out!.lng).toBeCloseTo(11.8851, 3);
+    // южное полушарие с DMS даёт минус
+    expect(normalizeExifGps([33, 52, 4], "S", [151, 12, 5], "E")!.lat).toBeCloseTo(-33.8678, 3);
+  });
 });
 
 describe("dayIdForDate", () => {

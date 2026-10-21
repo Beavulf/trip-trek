@@ -23,9 +23,24 @@ export function parseExifDate(value: unknown): Date | null {
 }
 
 /**
- * Нормализация GPS-тегов: десятичные градусы + знак по полушарию (S/W → минус).
- * exifr с reviveValues отдаёт уже числовые градусы, но валидируем диапазон —
- * мусорные теги не должны попадать в БД.
+ * DMS → десятичные градусы. exifr.parse() отдаёт GPS тегами-массивами
+ * [градусы, минуты, секунды] (короткие массивы тоже валидны), а отдельный
+ * пресет exifr.gps() — уже числом; раньше здесь терялись все координаты
+ * (Number([43,28,2.8]) → NaN → null).
+ */
+function dmsToDegrees(value: unknown): number | null {
+  if (typeof value === "number") return Number.isFinite(value) ? value : null;
+  if (Array.isArray(value) && value.length > 0) {
+    const [d = 0, m = 0, s = 0] = value;
+    if ([d, m, s].some((x) => typeof x !== "number" || !Number.isFinite(x))) return null;
+    return d + m / 60 + s / 3600;
+  }
+  return null;
+}
+
+/**
+ * Нормализация GPS-тегов: DMS/десятичные градусы + знак по полушарию
+ * (S/W → минус). Валидируем диапазон — мусорные теги не должны попадать в БД.
  */
 export function normalizeExifGps(
   lat: unknown,
@@ -33,9 +48,9 @@ export function normalizeExifGps(
   lng: unknown,
   lngRef: unknown
 ): { lat: number; lng: number } | null {
-  const la = typeof lat === "number" ? lat : Number(lat);
-  const ln = typeof lng === "number" ? lng : Number(lng);
-  if (!Number.isFinite(la) || !Number.isFinite(ln)) return null;
+  const la = dmsToDegrees(lat);
+  const ln = dmsToDegrees(lng);
+  if (la === null || ln === null) return null;
   const signLat = String(latRef ?? "N").toUpperCase().startsWith("S") ? -1 : 1;
   const signLng = String(lngRef ?? "E").toUpperCase().startsWith("W") ? -1 : 1;
   const out = { lat: la * signLat, lng: ln * signLng };
