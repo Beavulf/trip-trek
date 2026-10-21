@@ -85,6 +85,7 @@
 | `journal` | GET, POST, PATCH, DELETE | `journal:added` | дневник (запись на день, mood) |
 | `checklist` | GET, POST, PATCH, DELETE | `checklist:updated` | чек-лист подготовки |
 | `info` | GET, POST, PATCH, DELETE | `info:updated` | справка (визы, сим-карты…) |
+| `lodgings` | GET, POST, PATCH, DELETE | `lodging:added` (POST), `lodging:updated` (PATCH/DELETE) | проживание: заезд/выезд, адрес на местном языке, бронь, телефон, цена. Вход нормализует `src/lib/lodging.ts` (`pickLodgingInput`), даты — ключи `ГГГГ-ММ-ДД`; чтение — участник, правка — редактор (не зритель); ≤200 записей на поездку |
 | `phrases` | GET, POST, PATCH, DELETE | `phrase:updated` | разговорник (ru/cn/pinyin, language) |
 | `foods` | GET, POST, PATCH, DELETE | `food:updated` | гастрогид (голоса wantedBy) |
 | `nearby` | GET | — | что рядом (внешние API через outbound) |
@@ -173,10 +174,10 @@ handshake требует JWT. Актуальный список: `trip:updated`,
 `expense:added/deleted`, `budget:updated`,
 `board:added/pinned/updated/deleted`, `journal:added/updated/deleted`,
 `checklist:updated`, `info:updated`, `food:updated`, `phrase:updated`,
-`member:joined` (вступление по инвайт-коду).
+`lodging:added/updated`, `member:joined` (вступление по инвайт-коду).
 
 Поверх них `ws-bus.ts` издаёт в комнату мета-событие `notification` (тост) для
 событий из `NOTIFICATION_MAP` (`place:created`, `photo:added`, `expense:added`,
-`journal:added`, `board:added`); те же события дополнительно уходят в web-push
+`journal:added`, `board:added`, `lodging:added`); те же события дополнительно уходят в web-push
 участникам, кроме автора мутации (`actorId`). Остальные события — тихая
 инвалидация, без тостов и пушей.

@@ -194,6 +194,7 @@ model Trip {
   foods        FoodItem[]
   budgetPlans  BudgetPlan[]
   bans         TripBan[]
+  lodgings     Lodging[]
 }
 
 // === Участник поездки (связь User ↔ Trip) ===
@@ -378,6 +379,37 @@ model ChecklistItem {
   done      Boolean  @default(false)
   order     Int      @default(0)
   createdAt DateTime @default(now())
+
+  trip Trip @relation(fields: [tripId], references: [id], onDelete: Cascade)
+
+  @@index([tripId])
+}
+
+// === Проживание ===
+// Отдельная сущность, а не Place категории hotel: маршрут описывает «что делаем»,
+// а жильё — «где ночуем» (заезд/выезд, бронь, телефон, цена). Даты — календарные
+// (без часового пояса): храним полдень UTC, чтобы календарный день не прыгал
+// в зависимости от пояса сервера и клиента (см. src/lib/lodging.ts).
+model Lodging {
+  id           String   @id @default(cuid())
+  tripId       String
+  name         String
+  nameLocal    String? // название на местном языке — для «Показать таксисту»
+  city         String?
+  address      String? // адрес на местном языке, как его читает водитель
+  lat          Float?
+  lng          Float?
+  checkIn      DateTime // день заезда
+  checkOut     DateTime // день выезда: ночь этого дня уже не здесь
+  checkInTime  String? // "14:00"
+  checkOutTime String? // "12:00"
+  bookingRef   String?
+  bookingUrl   String?
+  phone        String?
+  price        Float? // за всё проживание, в валюте поездки
+  notes        String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
   trip Trip @relation(fields: [tripId], references: [id], onDelete: Cascade)
 

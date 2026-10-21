@@ -15,6 +15,7 @@ const TRIP_TAB_KEYS = [
   "dashboard",
   "timeline",
   "itinerary",
+  "lodging",
   "map",
   "gallery",
   "budget",
