@@ -30,7 +30,8 @@ export async function GET(req: NextRequest) {
         orderBy: { joinedAt: "asc" },
         // select на user вместо include user:true — в память сервера не тянет
         // лишние поля ряда юзера (сегодня там даже bcrypt-хеш)
-        include: { user: { select: { name: true, email: true, avatarUrl: true } } },
+        // paymentDetails — реквизиты для возврата долгов (экран расчёта)
+        include: { user: { select: { name: true, email: true, avatarUrl: true, paymentDetails: true } } },
       }),
       db.day.findMany({
         where: { tripId },
@@ -95,6 +96,8 @@ export async function GET(req: NextRequest) {
     // avatarUrl — аватар вместо эмодзи (лента, бюджет); joinedAt — событие «присоединился» в ленте
     avatarUrl: m.user.avatarUrl,
     joinedAt: m.joinedAt,
+    // «Куда переводить долги» в экране расчёта; пусто, если юзер не заполнил
+    paymentDetails: m.user.paymentDetails ?? null,
   }));
 
   return NextResponse.json({

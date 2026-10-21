@@ -79,7 +79,7 @@ export function BudgetHero({
             <button
               type="button"
               onClick={openEditor}
-              className="ml-auto size-11 rounded-lg bg-white/15 hover:bg-white/25 grid place-items-center transition-colors"
+              className="ml-auto size-11 rounded-lg bg-white/15 hover:bg-white/25 grid place-items-center transition-all active:scale-90"
               title="Изменить бюджет"
               aria-label="Изменить бюджет"
             >
@@ -116,7 +116,7 @@ export function BudgetHero({
                 className="w-24 text-2xl font-bold bg-white/15 rounded-lg px-2 py-0.5 outline-none placeholder:text-white/50"
                 placeholder="1100"
               />
-              <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={save} disabled={update.isPending} aria-label="Сохранить бюджет" className="size-11 rounded-lg bg-white/20 hover:bg-white/30 grid place-items-center disabled:opacity-50">
+              <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={save} disabled={update.isPending} aria-label="Сохранить бюджет" className="size-11 rounded-lg bg-white/20 hover:bg-white/30 grid place-items-center disabled:opacity-50 transition-all active:scale-90">
                 <Check className="size-4" />
               </button>
               <button
@@ -125,7 +125,7 @@ export function BudgetHero({
                 onPointerDown={(e) => { e.preventDefault(); closeReason.current = "cancel"; }}
                 onClick={cancel}
                 aria-label="Отменить"
-                className="size-11 rounded-lg bg-white/20 hover:bg-white/30 grid place-items-center"
+                className="size-11 rounded-lg bg-white/20 hover:bg-white/30 grid place-items-center transition-all active:scale-90"
               >
                 <X className="size-4" />
               </button>

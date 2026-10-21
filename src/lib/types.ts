@@ -13,6 +13,8 @@ export interface Participant {
   avatarUrl?: string | null;
   /** Когда вошёл в поездку — событие «присоединился» в ленте */
   joinedAt?: string;
+  /** Реквизиты для возврата долгов («куда переводить») — экран расчёта бюджета */
+  paymentDetails?: string | null;
 }
 
 export interface Place {

@@ -26,6 +26,8 @@ export async function GET(req: NextRequest) {
       aiApiKey: true,
       aiBaseUrl: true,
       aiModel: true,
+      // Реквизиты для возврата: юзер видит и правит свои (не секрет для себя)
+      paymentDetails: true,
     },
   });
 
@@ -170,7 +172,7 @@ export async function PATCH(req: NextRequest) {
   const userId = authUser!.id;
 
   const body = await req.json();
-  const { name, emoji, color, avatarUrl, aiApiKey, aiBaseUrl, aiModel, onboardingCompleted } = body;
+  const { name, emoji, color, avatarUrl, aiApiKey, aiBaseUrl, aiModel, onboardingCompleted, paymentDetails } = body;
 
   const data: Record<string, unknown> = {};
   if (typeof name === "string" && name.trim()) data.name = name.trim();
@@ -217,6 +219,13 @@ export async function PATCH(req: NextRequest) {
   if (typeof onboardingCompleted === "boolean") {
     data.onboardingCompletedAt = onboardingCompleted ? new Date() : null;
   }
+  // Реквизиты для возврата: произвольная строка (карта/телефон), null — убрать.
+  // Не секретнее имени: юзер сам решает, что сюда писать, видят только участники
+  // его поездок (GET /api/trip participants), публичные выгрузки поле не отдают
+  if (paymentDetails !== undefined) {
+    data.paymentDetails =
+      typeof paymentDetails === "string" ? paymentDetails.trim().slice(0, 300) || null : null;
+  }
 
   if (Object.keys(data).length === 0) {
     return NextResponse.json({ error: "no fields to update" }, { status: 400 });
@@ -227,7 +236,7 @@ export async function PATCH(req: NextRequest) {
     data,
     // aiApiKey нужен только чтобы отдать маску aiKeyTail — сам ключ наружу не идёт;
     // адрес/модель возвращаем, чтобы UI профиля синхронизировался без перезагрузки
-    select: { id: true, name: true, emoji: true, color: true, avatarUrl: true, aiApiKey: true, aiBaseUrl: true, aiModel: true, onboardingCompletedAt: true },
+    select: { id: true, name: true, emoji: true, color: true, avatarUrl: true, aiApiKey: true, aiBaseUrl: true, aiModel: true, onboardingCompletedAt: true, paymentDetails: true },
   });
 
   if (data.name || data.emoji || data.color) {

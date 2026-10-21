@@ -8,12 +8,21 @@ import { useTripStore } from "@/lib/trip-store";
 import { EXPENSE_CATEGORIES } from "@/lib/types";
 import { currencySymbol } from "@/lib/currencies";
 import { calculateBalances, calculateSettlements, calculateNetSpent, calculatePersonalSpend } from "@/lib/budget";
+import { motion } from "framer-motion";
 import { cn, plural, fmtMoney } from "@/lib/utils";
 import { CurrencyConverter } from "../currency-converter";
 import { BudgetPlanWidget } from "../budget-plan-widget";
 import { RoutePlanCard } from "./RoutePlanCard";
 import { BudgetHero } from "./BudgetHero";
-import { BudgetAnalytics } from "./BudgetAnalytics";
+import dynamic from "next/dynamic";
+
+// recharts (~344 KB) — самый тяжёлый статический импорт приложения; тянул
+// графики вкладки «Бюджет» в первый бандл «/» (холодный старт PWA). Лениво:
+// чанк грузится при заходе на Бюджет, скелетон держит высоту без прыжка.
+const BudgetAnalytics = dynamic(() => import("./BudgetAnalytics").then((m) => m.BudgetAnalytics), {
+  ssr: false,
+  loading: () => <div className="h-72 rounded-2xl bg-card border border-border animate-pulse" />,
+});
 import { ExpenseRow } from "./ExpenseRow";
 import { AddExpenseForm } from "./AddExpenseForm";
 import { ParticipantBudgetRow } from "./ParticipantBudgetRow";
@@ -23,7 +32,9 @@ import { MobileBottomSheet } from "../mobile-bottom-sheet";
 
 const HISTORY_PREVIEW = 8;
 
-type HistoryFilter = "all" | "mine" | "settlements";
+// «Общие» — с делением на участников, «личные» — только за себя (ретро-кейс
+// 2026-10: половина трат поездки была личной, и их хотелось смотреть отдельно)
+type HistoryFilter = "all" | "mine" | "shared" | "personal" | "settlements";
 
 /** Дней поездки осталось (включая сегодня). До старта — все дни, после финиша — null */
 function daysLeftInTrip(startDate: string, totalDays: number, status?: string): number | null {
@@ -184,10 +195,21 @@ export function Budget() {
   const netSpent = calculateNetSpent(expenses, trip.participants);
   const sym = currencySymbol(trip.settings.currency);
 
+  const isSettlement = (e: (typeof expenses)[number]) => e.category === "settlement";
+  // Предпоездочная подготовка (билеты, брони): внесена до старта поездки.
+  // Переводы сюда не входят — это не траты
+  const isPreTrip = (e: (typeof expenses)[number]) =>
+    !isSettlement(e) && new Date(e.createdAt).getTime() < new Date(trip.settings.startDate).getTime();
+  const isShared = (e: (typeof expenses)[number]) => !isSettlement(e) && !!e.splitWith?.trim();
+
   const myCount = realExpenses.filter((e) => e.paidById === currentUserId).length;
+  const sharedCount = realExpenses.filter(isShared).length;
+  const personalCount = realExpenses.length - sharedCount;
   const filteredHistory = expenses.filter((e) => {
     if (historyFilter === "mine") return e.paidById === currentUserId && e.category !== "settlement";
     if (historyFilter === "settlements") return e.category === "settlement";
+    if (historyFilter === "shared") return isShared(e);
+    if (historyFilter === "personal") return !isSettlement(e) && !e.splitWith?.trim();
     return true;
   });
   const visibleHistory = showAllHistory ? filteredHistory : filteredHistory.slice(0, HISTORY_PREVIEW);
@@ -195,6 +217,8 @@ export function Budget() {
 
   const filterChips: { key: HistoryFilter; label: string; count: number }[] = [
     { key: "all", label: "Все", count: expenses.length },
+    { key: "shared", label: "Общие", count: sharedCount },
+    { key: "personal", label: "Личные", count: personalCount },
     ...(currentUserId ? [{ key: "mine" as const, label: "Мои", count: myCount }] : []),
     ...(settlementCount > 0 ? [{ key: "settlements" as const, label: "Переводы", count: settlementCount }] : []),
   ];
@@ -324,14 +348,52 @@ export function Budget() {
 
             {filteredHistory.length === 0 ? (
               <p className="py-6 text-center text-xs text-muted-foreground">
-                {historyFilter === "mine" ? "Здесь появятся траты, которые оплатишь ты" : "Переводов пока нет"}
+                {{
+                  mine: "Здесь появятся траты, которые оплатишь ты",
+                  shared: "Общих трат пока нет",
+                  personal: "Личных трат пока нет",
+                  settlements: "Переводов пока нет",
+                  all: "Пока нет трат",
+                }[historyFilter]}
               </p>
-            ) : (
+            ) : historyFilter === "all" && visibleHistory.some(isPreTrip) ? (
+              // Предпоездочная подготовка визуально отделена от трат в поездке
               <div className="space-y-1.5">
-                {visibleHistory.map((e) => (
+                <div className="text-[10px] uppercase tracking-widest text-muted-foreground pt-1">
+                  До поездки · билеты и брони
+                </div>
+                {visibleHistory.filter(isPreTrip).map((e) => (
+                  <ExpenseRow key={e.id} expense={e} participants={trip.participants} />
+                ))}
+                <div className="text-[10px] uppercase tracking-widest text-muted-foreground pt-2.5">
+                  В поездке
+                </div>
+                {visibleHistory.filter((e) => !isPreTrip(e)).map((e) => (
                   <ExpenseRow key={e.id} expense={e} participants={trip.participants} />
                 ))}
               </div>
+            ) : (
+              // key по фильтру: смена чипа перемонтирует список и переигрывает
+              // волну входа — смена «Все/Общие/Личные» ощущается откликом
+              <motion.div
+                key={historyFilter}
+                className="space-y-1.5"
+                initial="hidden"
+                animate="show"
+                variants={{ hidden: {}, show: { transition: { staggerChildren: 0.03 } } }}
+              >
+                {visibleHistory.map((e) => (
+                  <motion.div
+                    key={e.id}
+                    variants={{
+                      hidden: { opacity: 0, y: 6 },
+                      show: { opacity: 1, y: 0, transition: { duration: 0.22, ease: [0.22, 1, 0.36, 1] } },
+                    }}
+                  >
+                    <ExpenseRow expense={e} participants={trip.participants} />
+                  </motion.div>
+                ))}
+              </motion.div>
             )}
 
             {(hiddenCount > 0 || showAllHistory) && filteredHistory.length > HISTORY_PREVIEW && (

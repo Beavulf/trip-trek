@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { ArrowRight, Scale, Info, ChevronDown } from "lucide-react";
+import { ArrowRight, Scale, Info, ChevronDown, Copy, CreditCard } from "lucide-react";
+import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import type { Balance, Settlement } from "@/lib/budget";
 import { MarkSettledButton } from "./MarkSettledButton";
@@ -208,6 +209,28 @@ export function SettlementSection({ balances, settlements, totalSpent, participa
                 </div>
                 <span className="font-bold text-primary text-sm shrink-0">{sym}{s.amount.toFixed(2)}</span>
               </div>
+              {/* Куда переводить: реквизиты получателя, если он их заполнил
+                  (иначе номер карты летит в общий чат — кейс реальной поездки) */}
+              {s.to.paymentDetails && (
+                <div className="mt-1.5 flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                  <CreditCard className="size-3 shrink-0" />
+                  <span className="truncate flex-1" title={s.to.paymentDetails}>
+                    {s.to.paymentDetails}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      void navigator.clipboard?.writeText(s.to.paymentDetails ?? "").then(
+                        () => toast.success("Реквизиты скопированы"),
+                        () => toast.error("Не удалось скопировать")
+                      );
+                    }}
+                    className="shrink-0 inline-flex items-center gap-1 min-h-8 px-2 rounded-lg border border-border hover:bg-muted active:scale-95 transition-transform"
+                  >
+                    <Copy className="size-3" /> Копировать
+                  </button>
+                </div>
+              )}
               {/* Кнопка отметки */}
               <div className="mt-2 flex justify-end">
                 <MarkSettledButton from={s.from} to={s.to} amount={s.amount} />

@@ -44,6 +44,8 @@ export function EditProfileSheet({
   const [name, setName] = useState(profile.name);
   const [emoji, setEmoji] = useState(profile.emoji);
   const [color, setColor] = useState(profile.color);
+  // Реквизиты для возврата долгов — отдельная опциональная строка
+  const [paymentDetails, setPaymentDetails] = useState(profile.paymentDetails ?? "");
   const [saving, setSaving] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -53,11 +55,16 @@ export function EditProfileSheet({
       setName(profile.name);
       setEmoji(profile.emoji);
       setColor(profile.color);
+      setPaymentDetails(profile.paymentDetails ?? "");
     }
   }, [open, profile]);
 
   const nameOk = name.trim().length > 0;
-  const dirty = name.trim() !== profile.name || emoji !== profile.emoji || color !== profile.color;
+  const dirty =
+    name.trim() !== profile.name ||
+    emoji !== profile.emoji ||
+    color !== profile.color ||
+    paymentDetails.trim() !== (profile.paymentDetails ?? "");
 
   const save = async () => {
     if (!nameOk || !dirty || saving) return;
@@ -66,7 +73,7 @@ export function EditProfileSheet({
       const r = await fetch("/api/user", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: name.trim(), emoji, color }),
+        body: JSON.stringify({ name: name.trim(), emoji, color, paymentDetails: paymentDetails.trim() || null }),
       });
       if (!r.ok) throw new Error("update failed");
       toast.success("Профиль обновлён ✨");
@@ -192,6 +199,26 @@ export function EditProfileSheet({
             />
           ))}
         </div>
+      </div>
+
+      {/* Реквизиты для возврата долгов */}
+      <div className="mt-5">
+        <label htmlFor="profile-payment" className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
+          Куда возвращать долги
+        </label>
+        <textarea
+          id="profile-payment"
+          value={paymentDetails}
+          onChange={(e) => setPaymentDetails(e.target.value)}
+          maxLength={300}
+          rows={2}
+          placeholder="Номер карты / телефона — увидят участники твоих поездок при расчёте"
+          className="mt-1.5 w-full rounded-xl border border-border bg-background px-3 py-2.5 text-sm outline-none transition-colors focus:border-primary focus:ring-2 focus:ring-primary/25 resize-none"
+        />
+        <p className="mt-1.5 text-[11px] text-muted-foreground leading-snug">
+          Показывается только соучастникам поездки — в экране «Расчёт между друзьями»,
+          чтобы не кидать карту в общий чат
+        </p>
       </div>
 
       {/* Действия */}

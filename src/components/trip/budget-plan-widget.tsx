@@ -131,8 +131,53 @@ export function BudgetPlanWidget() {
             </button>
           </div>
         )}
-        <div className="w-full sm:w-auto text-left sm:text-right text-xs text-muted-foreground">
-          План: {sym}{fmtMoney(totalPlan)}{routeTotal > 0 ? ` (из маршрута ${sym}${fmtMoney(routeTotal)})` : ""} · Потрачено: {sym}{totalSpent.toFixed(0)}
+      </div>
+
+      {/* Итог: крупные числа + общая полоса — перерасход/остаток видны сразу,
+          без сложения в голове (запрос юзера 2026-10: «смотрели часто, но
+          непонятно») */}
+      <div className="mb-3">
+        <div className="flex items-end justify-between gap-2">
+          <div className="min-w-0">
+            <div className="text-2xl font-bold tabular-nums leading-none">
+              {sym}{totalSpent.toFixed(0)}
+              <span className="text-sm font-medium text-muted-foreground"> из {sym}{fmtMoney(totalPlan)}</span>
+            </div>
+            <div className="text-[11px] text-muted-foreground mt-1 truncate">
+              {routeTotal > 0 ? `план: ${sym}${fmtMoney(routeTotal)} из маршрута` : "план задан вручную"}
+            </div>
+          </div>
+          {totalPlan > 0 && (
+            <span
+              className={cn(
+                "shrink-0 min-h-7 px-2.5 inline-flex items-center rounded-full text-[11px] font-semibold tabular-nums",
+                totalSpent > totalPlan
+                  ? "bg-red-500/10 text-red-600"
+                  : "bg-emerald-500/10 text-emerald-600"
+              )}
+            >
+              {totalSpent > totalPlan
+                ? `перерасход ${sym}${(totalSpent - totalPlan).toFixed(0)} · ${Math.round((totalSpent / totalPlan) * 100)}%`
+                : `осталось ${sym}{(totalPlan - totalSpent).toFixed(0)}`}
+            </span>
+          )}
+        </div>
+        <div className="mt-2 h-2 rounded-full bg-muted overflow-hidden">
+          <motion.div
+            initial={{ width: 0 }}
+            animate={{
+              width: `${totalPlan > 0 ? Math.min(100, (totalSpent / totalPlan) * 100) : 0}%`,
+            }}
+            transition={{ duration: 0.6 }}
+            className={cn(
+              "h-full rounded-full",
+              totalSpent > totalPlan
+                ? "bg-red-500"
+                : totalSpent / Math.max(1, totalPlan) > 0.8
+                  ? "bg-amber-500"
+                  : "bg-emerald-500"
+            )}
+          />
         </div>
       </div>
 
@@ -152,6 +197,14 @@ export function BudgetPlanWidget() {
               <div className="flex items-center gap-2 mb-1.5">
                 <span className="text-base shrink-0">{meta.emoji}</span>
                 <span className="text-sm font-medium flex-1 truncate">{meta.label}</span>
+                <span
+                  className={cn(
+                    "text-sm font-bold tabular-nums shrink-0",
+                    over ? "text-red-600" : "text-foreground"
+                  )}
+                >
+                  {sym}{spent.toFixed(0)}
+                </span>
                 {isEditing ? (
                   <div className="flex items-center gap-1">
                     <input
@@ -215,18 +268,21 @@ export function BudgetPlanWidget() {
                     правка ручной части не выглядела «сломанной» цифрой */}
                 {fromRoute > 0 ? (
                   <span className="text-[11px] text-muted-foreground tabular-nums truncate">
-                    план: вручную {sym}{fmtMoney(manual)} · из маршрута {sym}{fmtMoney(fromRoute)}
+                    план: {manual > 0 ? <>вручную {sym}{fmtMoney(manual)} · </> : null}из маршрута {sym}{fmtMoney(fromRoute)}
                   </span>
                 ) : <span />}
-                <span className={cn("text-[11px] tabular-nums shrink-0", over ? "text-red-500 font-medium" : "text-muted-foreground")}>
-                  потрачено {sym}{spent.toFixed(0)}
-                </span>
+                {over ? (
+                  <span className="text-[11px] text-red-500 font-medium tabular-nums shrink-0">
+                    перерасход {sym}{(spent - plan).toFixed(0)}
+                  </span>
+                ) : plan > 0 && spent > 0 ? (
+                  <span className="text-[11px] text-muted-foreground tabular-nums shrink-0">
+                    осталось {sym}{(plan - spent).toFixed(0)}
+                  </span>
+                ) : plan === 0 && spent > 0 ? (
+                  <span className="text-[11px] text-muted-foreground/70 shrink-0">без плана</span>
+                ) : null}
               </div>
-              {over && (
-                <div className="text-[11px] text-red-500 -mt-0.5 text-right font-medium">
-                  Перерасход на {sym}{(spent - plan).toFixed(0)}
-                </div>
-              )}
             </div>
           );
         })}
