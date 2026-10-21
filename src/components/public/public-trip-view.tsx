@@ -348,38 +348,40 @@ export function PublicTripView({ trip, token }: { trip: PublicTrip; token: strin
         </section>
       )}
 
-      {/* ═══ Липкая навигация по дням ═══ */}
-      {trip.days.length > 1 && (
-        <nav
-          className="sticky top-0 z-30 border-y border-border/60 bg-background/85 backdrop-blur-md"
-          aria-label="Дни поездки"
-        >
-          <div className="max-w-2xl mx-auto px-4 flex gap-1.5 overflow-x-auto no-scrollbar py-2">
-            {trip.days.map((d) => (
-              <button
-                key={d.dayNumber}
-                type="button"
-                onClick={() => jumpToDay(d.dayNumber)}
-                aria-current={activeDay === d.dayNumber}
-                className={cn(
-                  "shrink-0 min-h-8 px-2.5 rounded-full text-xs font-semibold tabular-nums transition-colors",
-                  activeDay === d.dayNumber
-                    ? "text-white"
-                    : "text-muted-foreground hover:text-foreground bg-muted/60"
-                )}
-                style={activeDay === d.dayNumber ? { background: trip.accent } : undefined}
-              >
-                Д{d.dayNumber}
-                <span className="hidden sm:inline font-normal opacity-75"> · {d.city}</span>
-              </button>
-            ))}
-          </div>
-        </nav>
-      )}
-
-      {/* ═══ Главы-дни ═══ */}
+      {/* ═══ Зона дней: липкая навигация живёт только внутри неё —
+           на галерее и карте «Д1…ДN» уже не нужны ═══ */}
       {trip.days.length > 0 && (
-        <div className="max-w-2xl mx-auto px-4 divide-y divide-border/60">
+        <div>
+          {trip.days.length > 1 && (
+            <nav
+              className="sticky top-0 z-30 border-y border-border/60 bg-background/85 backdrop-blur-md"
+              aria-label="Дни поездки"
+            >
+              <div className="max-w-2xl mx-auto px-4 flex gap-1.5 overflow-x-auto no-scrollbar py-2">
+                {trip.days.map((d) => (
+                  <button
+                    key={d.dayNumber}
+                    type="button"
+                    onClick={() => jumpToDay(d.dayNumber)}
+                    aria-current={activeDay === d.dayNumber}
+                    className={cn(
+                      "shrink-0 min-h-8 px-2.5 rounded-full text-xs font-semibold tabular-nums transition-colors",
+                      activeDay === d.dayNumber
+                        ? "text-white"
+                        : "text-muted-foreground hover:text-foreground bg-muted/60"
+                    )}
+                    style={activeDay === d.dayNumber ? { background: trip.accent } : undefined}
+                  >
+                    Д{d.dayNumber}
+                    <span className="hidden sm:inline font-normal opacity-75"> · {d.city}</span>
+                  </button>
+                ))}
+              </div>
+            </nav>
+          )}
+
+          {/* ═══ Главы-дни ═══ */}
+          <div className="max-w-2xl mx-auto px-4 divide-y divide-border/60">
           {trip.days.map((d) => {
             const dayPhotos = photosByDay.get(d.dayNumber) ?? [];
             const shown = dayPhotos.slice(0, 6);
@@ -451,6 +453,7 @@ export function PublicTripView({ trip, token }: { trip: PublicTrip; token: strin
               </Reveal>
             );
           })}
+          </div>
         </div>
       )}
 

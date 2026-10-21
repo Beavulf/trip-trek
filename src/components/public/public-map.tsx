@@ -1,12 +1,12 @@
 "use client";
 
-import { useMemo } from "react";
-import { MapContainer, TileLayer, CircleMarker, Tooltip } from "react-leaflet";
+import { useEffect, useMemo } from "react";
+import { MapContainer, TileLayer, CircleMarker, Tooltip, useMap } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
 import { TILE_LAYERS } from "@/lib/map-layers";
 
 // Карта публичной страницы: без императивного API и хендлов — просто точки.
-// Места — крупные круги (посещённые ярче), фото — мелкий оранжевый слой
+// Места — крупные круги (посещённые ярче), фото — мелкий янтарный слой
 // «где снимали». Light-слой ArcGIS: он доступнее OSM в Китае,
 // где ссылку чаще всего и открывают из мессенджера.
 
@@ -17,6 +17,28 @@ export interface PublicMapPlace {
   visited: boolean;
 }
 
+/** Декларативный автозум: подгоняем охват под все точки после монтирования. */
+function FitToPoints({ points }: { points: [number, number][] }) {
+  const map = useMap();
+  useEffect(() => {
+    if (points.length === 0) return;
+    if (points.length === 1) {
+      map.setView(points[0], 11);
+      return;
+    }
+    const lats = points.map((p) => p[0]);
+    const lngs = points.map((p) => p[1]);
+    map.fitBounds(
+      [
+        [Math.min(...lats), Math.min(...lngs)],
+        [Math.max(...lats), Math.max(...lngs)],
+      ],
+      { padding: [28, 28], maxZoom: 12 }
+    );
+  }, [map, points]);
+  return null;
+}
+
 export function PublicMap({
   places,
   photoPoints = [],
@@ -25,23 +47,30 @@ export function PublicMap({
   photoPoints?: { lat: number; lng: number }[];
 }) {
   const points = useMemo(() => places.filter((p) => p.lat && p.lng), [places]);
+  const allPoints = useMemo<[number, number][]>(
+    () => [
+      ...points.map((p) => [p.lat, p.lng] as [number, number]),
+      ...photoPoints.map((p) => [p.lat, p.lng] as [number, number]),
+    ],
+    [points, photoPoints]
+  );
   const center = useMemo(() => {
-    const all = [...points, ...photoPoints];
-    if (!all.length) return { lat: 48, lng: 15 };
+    if (!allPoints.length) return { lat: 48, lng: 15 };
     return {
-      lat: all.reduce((s, p) => s + p.lat, 0) / all.length,
-      lng: all.reduce((s, p) => s + p.lng, 0) / all.length,
+      lat: allPoints.reduce((s, p) => s + p[0], 0) / allPoints.length,
+      lng: allPoints.reduce((s, p) => s + p[1], 0) / allPoints.length,
     };
-  }, [points, photoPoints]);
+  }, [allPoints]);
 
   return (
     <MapContainer
       center={[center.lat, center.lng]}
-      zoom={points.length + photoPoints.length > 1 ? 6 : 11}
+      zoom={allPoints.length > 1 ? 6 : 11}
       scrollWheelZoom={false}
       className="w-full h-[320px] rounded-2xl overflow-hidden z-0"
     >
       <TileLayer url={TILE_LAYERS.light.url} attribution={TILE_LAYERS.light.attr} />
+      <FitToPoints points={allPoints} />
       {/* Фото — нижний слой: мелкие точки «здесь снимали» */}
       {photoPoints.map((p, i) => (
         <CircleMarker
