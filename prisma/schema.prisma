@@ -277,6 +277,9 @@ model Photo {
   takenAt    DateTime @default(now())
   width      Int?
   height     Int?
+  // Отпечаток содержимого (sha256 оригинального файла) — дедуп: повторная
+  // загрузка того же кадра отклоняется, батч заранее помечает дубли
+  contentHash String?
   createdAt  DateTime @default(now())
 
   trip  Trip   @relation(fields: [tripId], references: [id], onDelete: Cascade)
@@ -287,6 +290,7 @@ model Photo {
   @@index([tripId])
   @@index([dayId])
   @@index([placeId])
+  @@index([tripId, contentHash])
 }
 
 // === Трата ===

@@ -6,7 +6,10 @@ import { Check, Loader2, MapPin, RotateCcw, Square, X } from "lucide-react";
 import { toast } from "sonner";
 import { compressImageForUpload } from "@/lib/image-compress";
 import { readPhotoExif } from "@/lib/photo-exif";
+import { computeFileHash } from "@/lib/photo-hash";
 import { dayIdForDate } from "@/lib/trip-days";
+import { usePhotos } from "@/hooks/use-trip";
+import { cn } from "@/lib/utils";
 import { DayPicker } from "./DayPicker";
 import { StickySubmit } from "./StickySubmit";
 
@@ -25,6 +28,9 @@ interface BatchItem {
   preview: string;
   exifCoords: { lat: number; lng: number } | null;
   exifTakenAt: Date | null;
+  /** sha256 оригинала — дедуп повторной загрузки */
+  hash: string | null;
+  duplicate: boolean;
   status: Status;
 }
 
@@ -37,6 +43,9 @@ interface PhotoBatchProps {
 export function PhotoBatch({ files, onDone, onCancel }: PhotoBatchProps) {
   const { data: trip } = useTrip();
   const upload = useUploadPhoto();
+  // Уже загруженные в поездку кадры: по отпечаткам помечаем дубли ещё до
+  // загрузки (запрос 2026-10: «не давал загрузить те что уже есть»)
+  const { data: existingPhotos } = usePhotos();
   const [items, setItems] = useState<BatchItem[]>([]);
   const [running, setRunning] = useState(false);
   const [processed, setProcessed] = useState(0); // готовых к загрузке + упавших в подготовке
@@ -45,6 +54,12 @@ export function PhotoBatch({ files, onDone, onCancel }: PhotoBatchProps) {
   const [pickedDayId, setPickedDayId] = useState<string | null>(null);
   const stopRef = useRef(false);
   const previewsRef = useRef<string[]>([]);
+  const existingHashesRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    const set = new Set<string>();
+    for (const ph of existingPhotos ?? []) if (ph.contentHash) set.add(ph.contentHash);
+    existingHashesRef.current = set;
+  }, [existingPhotos]);
 
   const days = useMemo(() => trip?.days ?? [], [trip]);
   const defaultDayId = useMemo(
@@ -70,13 +85,16 @@ export function PhotoBatch({ files, onDone, onCancel }: PhotoBatchProps) {
           preview,
           exifCoords: null,
           exifTakenAt: null,
+          hash: null,
+          duplicate: false,
           status: "preparing",
         };
         setItems((prev) => [...prev, item]);
         try {
-          const [exif, compressed] = await Promise.all([
+          const [exif, compressed, hash] = await Promise.all([
             readPhotoExif(f),
             compressImageForUpload(f).catch(() => null),
+            computeFileHash(f),
           ]);
           if (stopRef.current) return;
           setItems((prev) =>
@@ -87,6 +105,8 @@ export function PhotoBatch({ files, onDone, onCancel }: PhotoBatchProps) {
                     exifCoords: exif?.coords ?? null,
                     exifTakenAt: exif?.takenAt ?? null,
                     uploadFile: compressed,
+                    hash,
+                    duplicate: !!hash && existingHashesRef.current.has(hash),
                     status: compressed ? "ready" : "error",
                   }
                 : it
@@ -118,8 +138,11 @@ export function PhotoBatch({ files, onDone, onCancel }: PhotoBatchProps) {
   ).length;
 
   const queue = items.filter(
-    (it) => it.status === "ready" || (it.status === "error" && it.uploadFile)
+    (it) =>
+      !it.duplicate &&
+      (it.status === "ready" || (it.status === "error" && it.uploadFile))
   );
+  const duplicateCount = items.filter((it) => it.duplicate).length;
   const doneCount = items.filter((it) => it.status === "done").length;
   const failedCount = items.filter((it) => it.status === "error").length;
   const preparing = processed < files.length;
@@ -127,9 +150,15 @@ export function PhotoBatch({ files, onDone, onCancel }: PhotoBatchProps) {
 
   const runUpload = async () => {
     const run = items.filter(
-      (it) => it.status === "ready" || (it.status === "error" && it.uploadFile)
+      (it) =>
+        !it.duplicate &&
+        (it.status === "ready" || (it.status === "error" && it.uploadFile))
     );
-    if (!run.length || !fallbackDayId) return;
+    if (!run.length) {
+      toast.info("Все выбранные фото уже в поездке");
+      return;
+    }
+    if (!fallbackDayId) return;
     stopRef.current = false;
     setRunning(true);
     let ok = 0;
@@ -148,6 +177,7 @@ export function PhotoBatch({ files, onDone, onCancel }: PhotoBatchProps) {
         fd.append("lng", String(it.exifCoords.lng));
       }
       if (it.exifTakenAt) fd.append("takenAt", it.exifTakenAt.toISOString());
+      if (it.hash) fd.append("contentHash", it.hash);
       // Тихий режим для всех, кроме последнего: один пуш на весь батч
       const remaining = run.length - idx - 1;
       if (remaining > 0) fd.append("suppressPush", "1");
@@ -213,7 +243,10 @@ export function PhotoBatch({ files, onDone, onCancel }: PhotoBatchProps) {
           <div
             key={it.key}
             style={{ animationDelay: `${Math.min(i * 40, 320)}ms` }}
-            className="relative aspect-square rounded-lg overflow-hidden bg-muted animate-fade-up [animation-duration:280ms]"
+            className={cn(
+              "relative aspect-square rounded-lg overflow-hidden bg-muted animate-fade-up [animation-duration:280ms]",
+              it.duplicate && "opacity-50"
+            )}
           >
             <img src={it.preview} alt="" className="size-full object-cover" />
             {it.exifCoords && (
@@ -240,6 +273,11 @@ export function PhotoBatch({ files, onDone, onCancel }: PhotoBatchProps) {
                 title="Не обработалось или не загрузилось"
               >
                 <X className="size-5 text-red-400" />
+              </span>
+            )}
+            {it.duplicate && (
+              <span className="absolute inset-x-0 bottom-0 bg-black/70 px-1 py-0.5 text-center text-[9px] font-medium text-white">
+                уже в поездке
               </span>
             )}
             {!running && (it.status === "ready" || it.status === "error") && (
@@ -322,6 +360,8 @@ export function PhotoBatch({ files, onDone, onCancel }: PhotoBatchProps) {
                 <>
                   <Loader2 className="size-4 animate-spin" /> Подготавливаем…
                 </>
+              ) : queue.length === 0 && duplicateCount > 0 ? (
+                <>Все фото уже в поездке</>
               ) : (
                 <>Загрузить {queue.length} фото</>
               )}

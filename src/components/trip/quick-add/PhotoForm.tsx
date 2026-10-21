@@ -6,6 +6,7 @@ import { Camera, Check, Images, Loader2, MapPin, X } from "lucide-react";
 import { toast } from "sonner";
 import { compressImageForUpload, ImageCompressError } from "@/lib/image-compress";
 import { readPhotoExif } from "@/lib/photo-exif";
+import { computeFileHash } from "@/lib/photo-hash";
 import { DayPicker } from "./DayPicker";
 import { PhotoBatch } from "./PhotoBatch";
 import { StickySubmit } from "./StickySubmit";
@@ -34,6 +35,7 @@ export function PhotoForm({ onDone }: PhotoFormProps) {
   // галереи иначе получает гео отеля), источник виден пользователю в чипе
   const [geoSource, setGeoSource] = useState<"exif" | "device" | null>(null);
   const [exifTakenAt, setExifTakenAt] = useState<Date | null>(null);
+  const [contentHash, setContentHash] = useState<string | null>(null);
   // Мультивыбор из галереи уходит в батч-режим (PhotoBatch)
   const [batchFiles, setBatchFiles] = useState<File[] | null>(null);
   // Сжатие фото — единственная тяжёлая часть пути; гео больше не блокирует
@@ -115,6 +117,7 @@ export function PhotoForm({ onDone }: PhotoFormProps) {
         toast.success("📍 Координаты из фото");
       }
       setExifTakenAt(exif?.takenAt ?? null);
+      void computeFileHash(f).then((h) => setContentHash(h));
 
       const compressed = await compressImageForUpload(f);
 
@@ -171,6 +174,7 @@ export function PhotoForm({ onDone }: PhotoFormProps) {
     fd.append("dayId", dayId);
     if (caption) fd.append("caption", caption);
     if (exifTakenAt) fd.append("takenAt", exifTakenAt.toISOString());
+    if (contentHash) fd.append("contentHash", contentHash);
     if (coords) {
       fd.append("lat", String(coords.lat));
       fd.append("lng", String(coords.lng));
@@ -199,6 +203,7 @@ export function PhotoForm({ onDone }: PhotoFormProps) {
     setPreview(null);
     setExifTakenAt(null);
     setGeoSource(null);
+    setContentHash(null);
   };
 
   const busy = upload.isPending || processing;

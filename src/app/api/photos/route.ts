@@ -88,6 +88,24 @@ export async function POST(req: NextRequest) {
   const lat = latRaw !== null && Number.isFinite(latRaw) && Math.abs(latRaw) <= 90 ? latRaw : null;
   const lng = lngRaw !== null && Number.isFinite(lngRaw) && Math.abs(lngRaw) <= 180 ? lngRaw : null;
   const address = ((formData.get("address") as string) || "").slice(0, 300) || null;
+  // Отпечаток содержимого (sha256 оригинала, считает клиент): тот же кадр —
+  // тот же отпечаток, повтор в поездке отклоняем (дедуп вечерних батчей)
+  const contentHash = ((formData.get("contentHash") as string) || "").toLowerCase();
+  if (contentHash) {
+    if (!/^[0-9a-f]{64}$/.test(contentHash)) {
+      return NextResponse.json({ error: "contentHash: ожидается sha256-hex" }, { status: 400 });
+    }
+    const dup = await db.photo.findFirst({
+      where: { tripId, contentHash },
+      select: { id: true },
+    });
+    if (dup) {
+      return NextResponse.json(
+        { error: "Это фото уже загружено в поездку", duplicateOf: dup.id },
+        { status: 409 }
+      );
+    }
+  }
   // Дата съёмки из EXIF (клиент читает до загрузки — storage EXIF выпиливает).
   // Валидируем: часы камеры врут в обе стороны; мусор → время загрузки как раньше
   const takenAtRaw = formData.get("takenAt") as string | null;
@@ -132,6 +150,7 @@ export async function POST(req: NextRequest) {
       lng,
       address,
       takenAt,
+      ...(contentHash ? { contentHash } : {}),
     },
     // user — проекцией, а не целиком: include user:true тянет в ответ весь ряд
     // юзера вместе с хешем пароля (привычка из journal/photos GET)

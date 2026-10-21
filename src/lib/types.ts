@@ -53,6 +53,8 @@ export interface Photo {
   id: string;
   url: string;
   thumbUrl: string | null;
+  /** sha256 оригинала — дедуп повторных загрузок (батч помечает дубли) */
+  contentHash?: string | null;
   caption: string | null;
   isFavorite: boolean;
   placeId: string | null;
