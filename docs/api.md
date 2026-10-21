@@ -1,6 +1,10 @@
 # Карта API TripTrek
 
 Все роуты — `src/app/api/**/route.ts` (App Router). Документ-карта: что где лежит,
+кто может вызвать, какие лимиты. Роли участников: owner / member / **viewer**
+(зритель — read-only друг: все GET через `requireTripMember` пускают его,
+любые мутации — через `requireTripEditor` и получают 403; слот free-лимита
+участников зритель не занимает, переключает роль владелец в «О поездке»).
 кто может вызвать, какие лимиты. Скелет роута и правила — [architecture.md](architecture.md#3-backend-api-роуты).
 
 ## Уровни доступа
@@ -30,7 +34,7 @@
 | `auth/forgot-password` | POST | 🌐 | 5/ч/IP (+3/ч/email) | одноразовый токен (sha256 в БД, TTL 60 мин) + письмо; анти-перечисление |
 | `auth/reset-password` | POST | 🌐 | 20/ч/IP | сброс по токену, инвалидирует сессии |
 | `auth/[...nextauth]` | * | 🌐 | 5/15 мин/IP (POST) | NextAuth-совместимость; клиент ходит в custom-*; credentials-вход под тем же лимитом, что и custom-login |
-| `user` | GET, PATCH | U | — | свой профиль (имя, emoji, цвет, аватар, ИИ-ключ); PATCH принимает также `onboardingCompleted`: true — обучение пройдено/пропущено, false — сброс («Пройти заново» в профиле) |
+| `user` | GET, PATCH | U | — | свой профиль (имя, emoji, цвет, аватар, ИИ-ключ); PATCH принимает также `onboardingCompleted`: true — обучение пройдено/пропущено, false — сброс («Пройти заново» в профиле); `paymentDetails` (строка ≤300 / null) — «куда возвращать долги», видят участники поездок в `GET /api/trip` participants |
 | `user/password` | POST | U | userRateLimit | смена пароля → инвалидация всех сессий |
 | `user/avatar` | POST | U | userRateLimit | аватар (через `src/lib/storage`) |
 | `user/upgrade` | POST | U | — | переход на premium (ручной сценарий; известная заглушка) |
@@ -47,6 +51,7 @@
 | `trips/join` | GET, POST | U | 30/мин/IP + userRateLimit | превью поездки по инвайт-коду / вступление (проверяет TripBan, freeMemberLimit) |
 | `trips/from-template` | POST | U | — | создать поездку из шаблона (`src/lib/trip-templates.ts`) |
 | `trip` | GET, PATCH | M / O | — | сводка поездки: участники, счётчики, дни-мета БЕЗ мест (слим-формат, аудит 2026-09-13); `email` участников — только владельцу; при `allowMemberInvites:false` `inviteCode` отдаётся только владельцу; дни с местами — `route`; PATCH — только владелец: `{status}` и/или `{title}` и/или `{allowMemberInvites:boolean}` (переключатель «кто приглашает» из «О поездке») |
+| `trip/share` | GET, POST | O | — | публичная read-only ссылка `/p/<shareToken>` для родных (галерея+маршрут+карта, без денег/чата/дневника). GET — `{enabled, token}`; POST `{enabled, rotate?}` — включить/выключить/перегенерировать токен (rotate мгновенно закрывает старую ссылку). Страница — RSC `src/app/p/[token]/page.tsq`, ходит в БД по токену без кэша; noindex |
 | `trip/dates` | PATCH | O | — | сдвиг дат/дней поездки |
 | `trip/budget` | PATCH | M | — | общий бюджет/валюта поездки |
 | `trip/import` | POST | U | userRateLimit | импорт JSON-бэкапа → новая поездка |
@@ -69,7 +74,7 @@
 | `places/batch` | POST | `place:created` (одна публикация с count) | батч-создание до 30 мест из черновиков ИИ (планер/рестораны/прогулка); все dayId — своей поездки |
 | `places/[id]` | PATCH, DELETE | `place:updated/deleted` | правка/удаление места, статус visited |
 | `places/reorder` | POST | `place:updated` (без тоста) | порядок мест внутри дня (drag&drop в карточке дня): полный список id дня одной перестановкой; `order` — серверное поле, обычный PATCH его не пишет |
-| `photos` | GET, POST, DELETE | `photo:added` | галерея; POST — загрузка файла (storage, EXIF-гео); GET отдаёт `place` проекцией {name, lat, lng} |
+| `photos` | GET, POST, DELETE | `photo:added` | галерея; POST — загрузка файла (storage); клиент читает EXIF до отправки (`src/lib/photo-exif.ts`: GPS + дата съёмки) и передаёт `takenAt` (ISO; мусор/будущее → время загрузки), `lat`/`lng`; батч-загрузка помечает все кадры кроме последнего `suppressPush=1`, последний несёт `count=N` — друзья получают один пуш «добавил N фото» (publish optы silent, см. ws-bus); GET отдаёт `place` проекцией {name, lat, lng} |
 | `photos/[id]` | PATCH | `photo:added` | подпись/избранное |
 | `photos/geo` | GET | — | фото с координатами для карты: селект маркерных полей, кап 1000 |
 | `expenses` | GET, POST, DELETE | `expense:added` | траты, делёж (`src/lib/budget/`), погашения (settlementKey) |
@@ -153,6 +158,7 @@ In-memory, сбрасываются рестартом контейнера (ADR
 - health — 60 / мин / IP (БД-пинг кэшируется на 5 с)
 - weather — 30 / мин / IP
 - geocode — 60 / ч / user
+- photos — 150 / ч / user (вечерний батч «фото за день» — 30–50 кадров; раньше 20/ч рвали его на середине)
 - ИИ-роуты (ai-summary, phrases, foods) — 10 / ч / user+trip; ai/planner — 3 / ч, ai/restaurants и ai/walk — 6 / ч (реестр лимитов: `AI_FEATURES` в `src/lib/ai-usage.ts`). Там же per-feature таймаут вызова провайдера (дефолт 60 с; ai-summary — 180 с: «размышляющие» GLM-модели пишут рассказ 70–90 с, walk и ai/planner — 90 с: JSON на все дни большой поездки). Обрезка ответа провайдером (`finish_reason=length`) пишется в AiUsage как `error:"truncated"`
 
 ## Realtime-события

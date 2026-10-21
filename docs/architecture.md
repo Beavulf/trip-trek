@@ -145,12 +145,21 @@ User ──< TripMember >── Trip ──< Day ──< Place ──< Photo
   Логика дележа/долгов — `src/lib/budget/` (split, balances,
   settle; money — целые центы и округления, personal — «модель реальных денег»
   для «Моё», planned — план бюджета по местам маршрута), не дублируй её в роутах.
-- **Photo**: `url`/`thumbUrl` (storage пайплайн), координаты из EXIF (`exifr`),
+- **User.paymentDetails** — «куда возвращать долги» (карта/телефон, ≤300): видят
+  только участники его поездок (participants в `GET /api/trip`), в публичные
+  выгрузки не отдаётся. **Trip.shareEnabled/shareToken** — публичная read-only
+  страница `/p/<token>` (галерея+маршрут+карта, без денег/чата): токен 32 hex,
+  rotate закрывает старую ссылку, страница RSC без кэша — выключение мгновенное.
+- **Photo**: `url`/`thumbUrl` (storage пайплайн), координаты и дата съёмки из EXIF (клиентский `src/lib/photo-exif.ts`, до загрузки — storage EXIF выпиливает; `takenAt` — по EXIF-дате, иначе время загрузки),
   `userId` — кто загрузил (SetNull при удалении аккаунта).
 - **Phrase**: колонки `ru`/`cn`/`pinyin` исторические; реальный язык — `language`
   (код: zh, ja, fr…). null у записей до миграции.
 - **FoodItem**: голоса «хочу попробовать» — `wantedBy` (JSON-строка массива userId).
 - **BoardMessage.reactions** — JSON-строка `{"👍":["userId",…]}`.
+- **TripMember.role** — owner / member / **viewer**: зритель — read-only друг
+  (смотрит маршрут/галерею/бюджет, не мутирует — мутационные роуты за
+  `requireTripEditor`; free-лимит участников не считает зрителей). Переключает
+  владелец в «О поездке» (PATCH /api/participants/[id] c ролью).
 - **Trip.allowMemberInvites** — политика приглашений: `true` (дефолт) — код видят
   все участники, `false` — только владелец (GET /api/trip прячет `inviteCode`,
   join по коду не меняется). Переключается владельцем из «О поездке»
