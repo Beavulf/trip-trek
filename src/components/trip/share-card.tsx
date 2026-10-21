@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect, useMemo, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { Share2, Download, X, Loader2, Image as ImageIcon, Copy, Check, Play, Pause, Film, Globe, RefreshCw } from "lucide-react";
+import { Share2, Download, X, Loader2, Image as ImageIcon, Copy, Check, Play, Pause, Film } from "lucide-react";
 import { useTrip, useCurrentTripId } from "@/hooks/use-trip";
 import { useAuth } from "@/hooks/use-auth";
 import { toast } from "sonner";
@@ -38,9 +38,6 @@ export function ShareCard({ open, onOpenChange }: { open: boolean; onOpenChange:
   const [gifProgress, setGifProgress] = useState<number | null>(null);
   const [copied, setCopied] = useState(false);
   const [imageCopied, setImageCopied] = useState(false);
-  // Публичная страница поездки (read-only журнал для гостей), управляет владелец
-  const [publicShare, setPublicShare] = useState<{ enabled: boolean; token: string | null; allowDownload: boolean } | null>(null);
-  const [publicShareBusy, setPublicShareBusy] = useState(false);
 
   const variant = CARD_VARIANTS.find((v) => v.id === variantId) ?? CARD_VARIANTS[0];
 
@@ -58,49 +55,6 @@ export function ShareCard({ open, onOpenChange }: { open: boolean; onOpenChange:
   const myId = session?.user?.id;
   const isOwner = !!myId && (trip?.participants ?? []).some((m) => m.id === myId && m.role === "owner");
   const canShareInvite = isOwner || trip?.settings.allowMemberInvites !== false;
-
-  // Состояние публичной страницы подтягиваем только владельцу и при открытом шите
-  useEffect(() => {
-    if (!open || !isOwner || !tripId) return;
-    let alive = true;
-    fetch(`/api/trip/share?tripId=${encodeURIComponent(tripId)}`)
-      .then((r) => (r.ok ? r.json() : null))
-      .then((d: { enabled?: boolean; token?: string | null; allowDownload?: boolean } | null) => {
-        if (alive && d)
-          setPublicShare({ enabled: !!d.enabled, token: d.token ?? null, allowDownload: d.allowDownload !== false });
-      })
-      .catch(() => {
-        // состояние ссылки не критично для карточки — тихо пропускаем
-      });
-    return () => {
-      alive = false;
-    };
-  }, [open, isOwner, tripId]);
-
-  const updatePublicShare = async (patch: { enabled?: boolean; rotate?: boolean; allowDownload?: boolean }) => {
-    if (!tripId || publicShareBusy) return;
-    setPublicShareBusy(true);
-    try {
-      const r = await fetch("/api/trip/share", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ tripId, ...patch }),
-      });
-      if (!r.ok) throw new Error("failed");
-      const d = (await r.json()) as { enabled: boolean; token: string | null; allowDownload: boolean };
-      setPublicShare({ enabled: d.enabled, token: d.token, allowDownload: d.allowDownload });
-      if (patch.enabled) toast.success(patch.rotate ? "Свежая ссылка готова — старая закрыта" : "Публичная страница готова 🌍");
-      else if (patch.enabled === false) toast.info("Публичная страница выключена");
-      else toast.success(patch.allowDownload ? "Гости смогут скачать фото" : "Скачивание для гостей запрещено");
-    } catch {
-      toast.error("Не удалось обновить ссылку");
-    } finally {
-      setPublicShareBusy(false);
-    }
-  };
-
-  const publicShareUrl =
-    publicShare?.token && typeof window !== "undefined" ? `${window.location.origin}/p/${publicShare.token}` : "";
 
   // Собираем данные поездки для отрисовки
   const data: CardData | null = useMemo(() => {
@@ -547,100 +501,6 @@ export function ShareCard({ open, onOpenChange }: { open: boolean; onOpenChange:
               </button>
             )}
 
-            {/* Публичная страница — только владелец */}
-            {isOwner && (
-              <div className="rounded-xl border border-border bg-card p-3 space-y-2.5">
-                <div className="flex items-center justify-between gap-2">
-                  <span className="text-xs font-semibold flex items-center gap-1.5">
-                    <Globe className="size-3.5" /> Публичная страница
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => void updatePublicShare({ enabled: !publicShare?.enabled })}
-                    disabled={publicShareBusy}
-                    aria-pressed={!!publicShare?.enabled}
-                    className={cn(
-                      "relative min-h-7 h-7 w-12 rounded-full transition-colors disabled:opacity-50",
-                      publicShare?.enabled ? "bg-emerald-500" : "bg-muted-foreground/30"
-                    )}
-                    aria-label={publicShare?.enabled ? "Выключить публичную страницу" : "Включить публичную страницу"}
-                  >
-                    <span
-                      className={cn(
-                        "absolute top-1 size-5 rounded-full bg-white shadow transition-all",
-                        publicShare?.enabled ? "left-6" : "left-1"
-                      )}
-                    />
-                  </button>
-                </div>
-                <p className="text-[11px] text-muted-foreground leading-snug">
-                  Живой журнал поездки «только смотреть»: фото с подписями, маршрут и карта — без входа в аккаунт.
-                  Деньги, чат и дневник не показываются.
-                </p>
-                {publicShare?.enabled && publicShare.token && (
-                  <div className="space-y-2">
-                    <div className="flex items-center gap-1.5">
-                      <code className="flex-1 min-w-0 truncate text-[11px] bg-muted rounded-lg px-2 py-2">
-                        {publicShareUrl}
-                      </code>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          void navigator.clipboard?.writeText(publicShareUrl).then(
-                            () => toast.success("Ссылка скопирована — можно отправлять кому угодно"),
-                            () => toast.error("Не удалось скопировать")
-                          );
-                        }}
-                        className="shrink-0 size-9 rounded-lg border border-border grid place-items-center hover:bg-muted active:scale-95 transition-transform"
-                        aria-label="Скопировать публичную ссылку"
-                      >
-                        <Copy className="size-3.5" />
-                      </button>
-                    </div>
-
-                    {/* Скачивание фото гостями: ZIP-архив с публичной страницы */}
-                    <label className="flex items-center justify-between gap-2 rounded-lg bg-muted/50 px-2.5 py-2">
-                      <span className="text-[11px] font-medium leading-snug">
-                        Гости могут скачать фото
-                        <span className="block text-muted-foreground font-normal">кнопкой «Скачать все фото» на странице</span>
-                      </span>
-                      <button
-                        type="button"
-                        role="switch"
-                        aria-checked={publicShare.allowDownload}
-                        onClick={() => void updatePublicShare({ allowDownload: !publicShare.allowDownload })}
-                        disabled={publicShareBusy}
-                        className={cn(
-                          "relative shrink-0 min-h-7 h-7 w-12 rounded-full transition-colors disabled:opacity-50",
-                          publicShare.allowDownload ? "bg-emerald-500" : "bg-muted-foreground/30"
-                        )}
-                        aria-label={
-                          publicShare.allowDownload
-                            ? "Запретить гостям скачивать фото"
-                            : "Разрешить гостям скачивать фото"
-                        }
-                      >
-                        <span
-                          className={cn(
-                            "absolute top-1 size-5 rounded-full bg-white shadow transition-all",
-                            publicShare.allowDownload ? "left-6" : "left-1"
-                          )}
-                        />
-                      </button>
-                    </label>
-
-                    <button
-                      type="button"
-                      onClick={() => void updatePublicShare({ enabled: true, rotate: true })}
-                      disabled={publicShareBusy}
-                      className="flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground underline underline-offset-2"
-                    >
-                      <RefreshCw className="size-3" /> Новая ссылка — старая перестанет работать
-                    </button>
-                  </div>
-                )}
-              </div>
-            )}
           </div>
         </motion.div>
       </motion.div>

@@ -26,6 +26,7 @@ import { useTrip, useCurrentTripId } from "@/hooks/use-trip";
 import { useTripStore } from "@/lib/trip-store";
 import { X, Share2 } from "lucide-react";
 import { MemberManager } from "./member-manager";
+import { PublicShareSettings } from "./trip-public-share";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -379,6 +380,8 @@ export function TripInfoSheet({
                   </p>
                 </div>
               )}
+              {/* Публичная страница для родных — только владельцу, рядом с приглашением */}
+              {isOwner && <PublicShareSettings tripId={tripId} />}
 
               {/* Участники (с управлением для владельца) */}
               <MemberManager tripId={tripId} members={trip.participants} refetch={refetch} detailed />
