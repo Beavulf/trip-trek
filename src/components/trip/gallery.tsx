@@ -12,7 +12,12 @@ import { useState, useMemo } from "react";
 import { toast } from "sonner";
 import type { Photo } from "@/lib/types";
 import { cn, plural } from "@/lib/utils";
-import { PhotoLightbox } from "./photo-lightbox";
+
+// YARL (ядро + captions/counter + css) нужен только с тапа по фото — не тащим
+// в первый бандл; чанк подгрузится к моменту открытия лайтбокса
+const PhotoLightbox = dynamic(() => import("./photo-lightbox").then((m) => m.PhotoLightbox), {
+  ssr: false,
+});
 import { MobileBottomSheet } from "./mobile-bottom-sheet";
 
 // PhotoForm тянет exifr (~100 KB) — грузим только при открытии формы (аудит 2026-09-13)
@@ -167,7 +172,7 @@ export function Gallery() {
             refetch();
             refetchTrip();
           }}
-          className="mt-2 text-xs px-3 py-2 rounded-lg bg-primary text-primary-foreground min-h-11"
+          className="mt-2 text-xs px-3 py-2 rounded-lg bg-primary text-primary-foreground min-h-11 transition-transform active:scale-95"
         >
           Обновить
         </button>
@@ -497,10 +502,15 @@ export function Gallery() {
       ) : layout === "masonry" ? (
         <div className="masonry-grid">
           {shown.map((photo, i) => (
-            <button
+            <motion.button
               key={photo.id}
               type="button"
               onClick={() => setLightbox(i)}
+              // Ступенчатый вход сетки: первые ~10 кадров проявляются волной,
+              // остальные сразу — длинные галереи не ждут свою очередь
+              initial={reduceMotion || i > 9 ? false : { opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.28, delay: Math.min(i * 0.03, 0.28), ease: [0.22, 1, 0.36, 1] }}
               className="masonry-item relative rounded-xl overflow-hidden bg-muted block w-full cursor-pointer active:scale-[0.98] transition-transform"
             >
               <img
@@ -541,7 +551,7 @@ export function Gallery() {
                 </span>
                 {photo.caption && <span className="text-white text-xs line-clamp-1">{photo.caption}</span>}
               </span>
-            </button>
+            </motion.button>
           ))}
         </div>
       ) : (
