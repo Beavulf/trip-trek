@@ -26,6 +26,8 @@ export interface CardData {
   totalPlaces: number;
   photos: number;
   spent: number;
+  /** Общий бюджет поездки — для полосы факт/план на «Итогах» */
+  budget: number;
   /** Символ валюты поездки — траты на карточке не всегда в долларах */
   currencySymbol: string;
   members: { emoji: string; color: string; name: string }[];
@@ -34,7 +36,7 @@ export interface CardData {
 }
 
 export interface CardVariant {
-  id: "story" | "ticket" | "polaroid" | "receipt" | "route";
+  id: "story" | "ticket" | "polaroid" | "receipt" | "route" | "summary";
   label: string;
   tag: string;
   emoji: string;
@@ -1303,6 +1305,247 @@ function renderRoute(ctx: CanvasRenderingContext2D, d: CardData, t: number) {
   grain(ctx, W, H, t, 0.7);
 }
 
+
+// ---------- «Итоги»: ночная сводка закрывшейся поездки ----------
+// Ретро-кейс 2026-10: после возвращения хочется красиво отчитаться в телегу —
+// цифры, города, состав и штамп «завершена», без реальных фото (canvas-семейство
+// карточек живёт на процедурной графике, изображения в него не заводим).
+
+function renderSummary(ctx: CanvasRenderingContext2D, d: CardData, t: number) {
+  const W = 1080, H = 1350;
+  const A = hexToRgb(d.accent);
+  const dark = mix(A, [10, 12, 20], 0.82);
+
+  // Ночь поездки: акцент остаётся только подсветкой снизу — цифры читаются первыми
+  const bg = ctx.createLinearGradient(0, 0, 0, H);
+  bg.addColorStop(0, css(shade(dark, 0.06)));
+  bg.addColorStop(1, "#0a0c14");
+  ctx.fillStyle = bg;
+  ctx.fillRect(0, 0, W, H);
+  const glow = ctx.createRadialGradient(W / 2, H + 120, 60, W / 2, H + 120, 900);
+  glow.addColorStop(0, css(A, 0.32));
+  glow.addColorStop(1, css(A, 0));
+  ctx.fillStyle = glow;
+  ctx.fillRect(0, 0, W, H);
+
+  // Конфетти: детерминированные псевдослучайные по i — без Math.random,
+  // иначе каждый кадр анимации дрожал бы (та же причина, что у grain-тайла)
+  const confColors = [css(A), "rgba(255,255,255,0.9)", "rgba(255,205,86,0.9)", css(shade(A, 0.4))];
+  for (let i = 0; i < 34; i++) {
+    const sx = ((i * 197) % 1000) / 1000;
+    const speed = 0.35 + ((i * 61) % 100) / 140;
+    const drift = Math.sin(t * TWO_PI * (1 + (i % 3)) + i) * 34;
+    const y = ((t * speed + ((i * 131) % 100) / 100) % 1.15) * H - 40;
+    const x = 60 + sx * (W - 120) + drift;
+    const w = 7 + (i % 4) * 3;
+    const h = 12 + (i % 3) * 5;
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(t * TWO_PI * (0.5 + (i % 5) / 8) + i);
+    ctx.globalAlpha = 0.5 + ((i * 37) % 40) / 100;
+    ctx.fillStyle = confColors[i % confColors.length];
+    ctx.fillRect(-w / 2, -h / 2, w, h);
+    ctx.restore();
+  }
+
+  ctx.textAlign = "center";
+
+  // Шапка: «итоги поездки» + даты
+  const eHead = win(t, 0.0, 0.12);
+  ctx.globalAlpha = eHead;
+  ctx.fillStyle = css(shade(A, 0.3), 0.98);
+  ctx.font = "bold 30px " + SANS;
+  ctx.fillText("И Т О Г И   П О Е З Д К И", W / 2, 120);
+  ctx.fillStyle = "rgba(255,255,255,0.55)";
+  ctx.font = "26px " + SANS;
+  ctx.fillText(d.dateLabel, W / 2, 168);
+  ctx.globalAlpha = 1;
+
+  // Emoji поездки + название
+  const eTitle = win(t, 0.04, 0.2);
+  ctx.save();
+  ctx.globalAlpha = eTitle;
+  ctx.font = "96px " + SANS;
+  ctx.fillText(d.emoji, W / 2, 296 + (1 - eTitle) * 18);
+  ctx.font = "bold 54px " + SANS;
+  ctx.fillStyle = "#ffffff";
+  ctx.fillText(d.title.length > 26 ? d.title.slice(0, 25) + "…" : d.title, W / 2, 380);
+  ctx.restore();
+
+  // Главная цифра: потрачено — подлетает лёгким «попом» и досчитывает снизу вверх
+  const eMoney = win(t, 0.1, 0.3);
+  const shown = d.spent * Math.min(1, Math.max(0, (t - 0.08) / 0.22));
+  ctx.save();
+  ctx.globalAlpha = eMoney;
+  ctx.translate(W / 2, 520);
+  const pop = 1 + (1 - eMoney) * 0.12;
+  ctx.scale(pop, pop);
+  ctx.font = "bold 132px " + SANS;
+  ctx.fillStyle = "#ffffff";
+  ctx.fillText(d.currencySymbol + Math.round(shown).toLocaleString("ru-RU"), 0, 0);
+  ctx.restore();
+  ctx.fillStyle = "rgba(255,255,255,0.6)";
+  ctx.font = "28px " + SANS;
+  ctx.fillText(
+    "потрачено за " + d.totalDays + " " + pluralRu(d.totalDays, "день", "дня", "дней"),
+    W / 2,
+    576
+  );
+
+  // Стат-чипы: города · места · фото
+  const chips: { value: string; label: string }[] = [
+    { value: String(d.cities.length), label: pluralRu(d.cities.length, "город", "города", "городов") },
+    { value: d.visited + "/" + d.totalPlaces, label: "мест" },
+    { value: String(d.photos), label: "фото" },
+  ];
+  const chipW = 300, chipH = 128, chipGap = 24;
+  const chipX0 = (W - chipW * 3 - chipGap * 2) / 2;
+  chips.forEach((c, i) => {
+    const e = win(t, 0.16 + i * 0.05, 0.3 + i * 0.05);
+    if (e <= 0) return;
+    const x = chipX0 + i * (chipW + chipGap);
+    ctx.save();
+    ctx.globalAlpha = e;
+    ctx.translate(x + chipW / 2, 660 + (1 - e) * 22);
+    ctx.fillStyle = "rgba(255,255,255,0.08)";
+    roundRect(ctx, -chipW / 2, -chipH / 2, chipW, chipH, 24);
+    ctx.fill();
+    ctx.strokeStyle = "rgba(255,255,255,0.12)";
+    ctx.lineWidth = 2;
+    roundRect(ctx, -chipW / 2, -chipH / 2, chipW, chipH, 24);
+    ctx.stroke();
+    ctx.fillStyle = "#ffffff";
+    ctx.font = "bold 44px " + SANS;
+    ctx.fillText(c.value, 0, -4);
+    ctx.fillStyle = "rgba(255,255,255,0.68)";
+    ctx.font = "22px " + SANS;
+    ctx.fillText(c.label, 0, 36);
+    ctx.restore();
+  });
+
+  // Нитка городов со стрелками — появляется по цепочке
+  const cityNames = d.cities.slice(0, 4).map((c) => c.name);
+  if (d.cities.length > 4) cityNames.push("+" + (d.cities.length - 4));
+  const eCities = win(t, 0.24, 0.42);
+  ctx.save();
+  ctx.globalAlpha = eCities;
+  ctx.fillStyle = css(shade(A, 0.55));
+  const cityText = cityNames.join("  →  ");
+  let cityPx = 34;
+  do {
+    ctx.font = "bold " + cityPx + "px " + SANS;
+    if (ctx.measureText(cityText).width <= 960) break;
+    cityPx -= 2;
+  } while (cityPx > 20);
+  ctx.fillText(cityText, W / 2, 800 + (1 - eCities) * 14);
+  ctx.restore();
+
+  // Состав экспедиции: аватары в цветах участников
+  const members = d.members.slice(0, 6);
+  const avSize = 96, avGap = 26;
+  const avX0 = W / 2 - (members.length * (avSize + avGap) - avGap) / 2;
+  members.forEach((m, i) => {
+    const e = win(t, 0.3 + i * 0.04, 0.42 + i * 0.04);
+    if (e <= 0) return;
+    const x = avX0 + i * (avSize + avGap) + avSize / 2;
+    const y = 920;
+    ctx.save();
+    ctx.globalAlpha = e;
+    ctx.beginPath();
+    ctx.arc(x, y, (avSize / 2) * (0.6 + 0.4 * e), 0, TWO_PI);
+    ctx.fillStyle = m.color;
+    ctx.fill();
+    ctx.strokeStyle = "rgba(255,255,255,0.35)";
+    ctx.lineWidth = 3;
+    ctx.stroke();
+    ctx.font = "44px " + SANS;
+    ctx.fillStyle = "#ffffff";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(m.emoji, x, y + 4);
+    ctx.textBaseline = "alphabetic";
+    ctx.restore();
+  });
+  if (d.members.length > 6) {
+    ctx.fillStyle = "rgba(255,255,255,0.5)";
+    ctx.font = "24px " + SANS;
+    ctx.fillText(
+      "+" + (d.members.length - 6),
+      avX0 + 6 * (avSize + avGap) - avGap / 2 + avSize / 2,
+      930
+    );
+  }
+
+  // Бюджет: полоса факт/план; перерасход — красный хвост
+  if (d.budget > 0) {
+    const eBar = win(t, 0.36, 0.52);
+    const barW = 820, barH = 18, barX = (W - barW) / 2, barY = 1010;
+    const fill = Math.min(1, d.spent / d.budget);
+    const over = d.spent > d.budget;
+    ctx.save();
+    ctx.globalAlpha = eBar;
+    ctx.fillStyle = "rgba(255,255,255,0.14)";
+    roundRect(ctx, barX, barY, barW, barH, 9);
+    ctx.fill();
+    const fw = barW * fill * eBar;
+    if (fw > barH) {
+      ctx.fillStyle = over ? "#f87171" : css(A);
+      roundRect(ctx, barX, barY, fw, barH, 9);
+      ctx.fill();
+    }
+    ctx.fillStyle = "rgba(255,255,255,0.55)";
+    ctx.font = "24px " + SANS;
+    ctx.fillText(
+      "бюджет " +
+        d.currencySymbol +
+        Math.round(d.budget).toLocaleString("ru-RU") +
+        " · " +
+        Math.round(fill * 100) +
+        "%",
+      W / 2,
+      barY + 58
+    );
+    ctx.restore();
+  }
+
+  // Штамп «завершена»: прилетает ударом, слегка повёрнут — как печать в паспорте
+  const eStamp = win(t, 0.62, 0.72);
+  if (eStamp > 0) {
+    ctx.save();
+    ctx.translate(W / 2, 1170);
+    ctx.rotate(-0.07);
+    const sk = 1 + (1 - eStamp) * 0.9;
+    ctx.scale(sk, sk);
+    ctx.globalAlpha = Math.min(1, eStamp * 1.4);
+    ctx.strokeStyle = css(A, 0.95);
+    ctx.lineWidth = 6;
+    roundRect(ctx, -330, -58, 660, 116, 16);
+    ctx.stroke();
+    ctx.fillStyle = css(A, 0.14);
+    roundRect(ctx, -330, -58, 660, 116, 16);
+    ctx.fill();
+    ctx.fillStyle = css(shade(A, 0.55));
+    ctx.font = "bold 52px " + SANS;
+    ctx.fillText("ПОЕЗДКА ЗАВЕРШЕНА", 0, 18);
+    ctx.restore();
+  }
+
+  // Футер
+  ctx.fillStyle = "rgba(255,255,255,0.5)";
+  ctx.font = "bold 26px " + SANS;
+  ctx.fillText("TripTrek", W / 2, 1290);
+  ctx.fillStyle = "rgba(255,255,255,0.3)";
+  ctx.font = "20px " + SANS;
+  ctx.fillText("совместное путешествие", W / 2, 1322);
+
+  grain(ctx, W, H, t, 0.7);
+  const vg = ctx.createRadialGradient(W / 2, 640, 480, W / 2, 680, 1080);
+  vg.addColorStop(0, "rgba(0,0,0,0)");
+  vg.addColorStop(1, "rgba(0,0,0,0.4)");
+  ctx.fillStyle = vg;
+  ctx.fillRect(0, 0, W, H);
+}
+
 // ---------- реестр ----------
 
 export const CARD_VARIANTS: CardVariant[] = [
@@ -1311,6 +1554,7 @@ export const CARD_VARIANTS: CardVariant[] = [
   { id: "polaroid", label: "Поляроид", tag: "1:1", emoji: "🖼️", width: 1080, height: 1080, loopMs: 4200, posterT: 0.47, render: renderPolaroid },
   { id: "receipt", label: "Чек", tag: "4:5", emoji: "🧾", width: 1080, height: 1350, loopMs: 3800, posterT: 0.92, render: renderReceipt },
   { id: "route", label: "Маршрут", tag: "4:5", emoji: "🗺️", width: 1080, height: 1350, loopMs: 3400, posterT: 0.8, render: renderRoute },
+  { id: "summary", label: "Итоги", tag: "4:5", emoji: "🏁", width: 1080, height: 1350, loopMs: 4200, posterT: 0.8, render: renderSummary },
 ];
 
 export type CardVariantId = CardVariant["id"];
