@@ -10,6 +10,16 @@ export function setIo(io: IOServer): void {
   holder.__tripIo = io;
 }
 
+export interface PublishOpts {
+  /**
+   * Тихая публикация: само событие уходит (клиенты инвалидируют кэш), но тост
+   * «notification» и Web Push не летят. Для батчевых мутаций (мультизагрузка
+   * фото): 50 отдельных POST не должны оборачиваться 50 пушами друзьям —
+   * клиент помечает все, кроме последнего, silent, а последний несёт count.
+   */
+  silent?: boolean;
+}
+
 /**
  * Рассылка события в комнату поездки. Все мутации идут через HTTP API,
  * API-маршрут в конце вызывает publish() — сокет остаётся read-only каналом.
@@ -26,10 +36,11 @@ export function publish(
   tripId: string,
   event: string,
   payload: Record<string, unknown> = {},
-  actorId?: string | null
+  actorId?: string | null,
+  opts?: PublishOpts
 ): void {
   const io = holder.__tripIo;
-  const n = NOTIFICATION_MAP[event];
+  const n = opts?.silent ? undefined : NOTIFICATION_MAP[event];
   const actor = actorId ?? ((payload.userId as string) || null);
 
   if (io) {

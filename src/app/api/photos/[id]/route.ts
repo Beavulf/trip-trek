@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { requireTripMember } from "@/lib/api-auth";
+import { requireTripEditor } from "@/lib/api-auth";
 
 const PHOTO_INCLUDE = {
   place: true,
@@ -18,7 +18,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
   const existing = await db.photo.findUnique({ where: { id }, select: { tripId: true, userId: true } });
   if (!existing) return NextResponse.json({ error: "not found" }, { status: 404 });
-  const { user, membership, response } = await requireTripMember(req, existing.tripId);
+  const { user, membership, response } = await requireTripEditor(req, existing.tripId);
   if (response) return response;
 
   const isAuthor = existing.userId === user!.id;

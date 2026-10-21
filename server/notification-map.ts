@@ -19,7 +19,9 @@ export const NOTIFICATION_MAP: Record<string, NotificationConfig> = {
   },
   "photo:added": {
     emoji: "📸",
-    message: (d) => `${d.userName || "Кто-то"} добавил(а) фото`,
+    // count — батч-загрузка: последний несёт итоговое число, остальные летят silent
+    message: (d) =>
+      `${d.userName || "Кто-то"} добавил(а)${d.count ? ` ${d.count} фото` : " фото"}`,
   },
   "expense:added": {
     emoji: "💸",

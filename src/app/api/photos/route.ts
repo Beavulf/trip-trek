@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { publish } from "@/lib/ws-bus";
-import { requireTripMember, requireUser } from "@/lib/api-auth";
+import { requireTripMember, requireUser, requireTripEditor } from "@/lib/api-auth";
 import { put as storagePut, remove as storageRemove, StorageError } from "@/lib/storage";
 import { userRateLimit } from "@/lib/rate-limit";
 
@@ -55,11 +55,14 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "file, dayId, tripId required" }, { status: 400 });
   }
 
-  const { user, response } = await requireTripMember(req, tripId);
+  const { user, response } = await requireTripEditor(req, tripId);
   if (response) return response;
 
-  // 20 фото в час на пользователя — sharp тяжёлый, диск не резиновый
-  const limited = userRateLimit(req, user!.id, "photos", 20, 60 * 60_000);
+  // 150 фото в час на пользователя. Ретро-кейс 2026-10 (Китай): вечерний батч
+  // «все фото за день» — 30–50 кадров; прошлые 20/час рвали его на середине,
+  // и вторую половину дня друзья уже не догружали. Sharp ~1–2с/фото, 150/час
+  // размазывает нагрузку VPS без очередей.
+  const limited = userRateLimit(req, user!.id, "photos", 150, 60 * 60_000);
   if (limited) return limited;
 
   // Размер файла известен из multipart ДО чтения в память: гигантский файл
@@ -85,6 +88,23 @@ export async function POST(req: NextRequest) {
   const lat = latRaw !== null && Number.isFinite(latRaw) && Math.abs(latRaw) <= 90 ? latRaw : null;
   const lng = lngRaw !== null && Number.isFinite(lngRaw) && Math.abs(lngRaw) <= 180 ? lngRaw : null;
   const address = ((formData.get("address") as string) || "").slice(0, 300) || null;
+  // Дата съёмки из EXIF (клиент читает до загрузки — storage EXIF выпиливает).
+  // Валидируем: часы камеры врут в обе стороны; мусор → время загрузки как раньше
+  const takenAtRaw = formData.get("takenAt") as string | null;
+  let takenAt = new Date();
+  if (takenAtRaw) {
+    const parsed = new Date(takenAtRaw);
+    const now = Date.now();
+    if (!Number.isFinite(parsed.getTime()) || parsed.getTime() < Date.UTC(2000, 0, 1) || parsed.getTime() > now + 5 * 60_000) {
+      takenAt = new Date();
+    } else {
+      takenAt = parsed;
+    }
+  }
+  // Батч-загрузка: все кадры кроме последнего клиент помечает suppressPush —
+  // друзья получают ОДИН пуш «добавил 50 фото», а не 50 пушей
+  const silent = formData.get("suppressPush") === "1";
+  const batchCount = Math.max(1, Math.min(9999, parseInt(formData.get("count") as string, 10) || 0));
 
   // Единая политика хранилища: magic bytes, лимит 20MB, sharp-обработка
   // (EXIF/GPS выпиливаются), никакого raw-fallback
@@ -111,7 +131,7 @@ export async function POST(req: NextRequest) {
       lat,
       lng,
       address,
-      takenAt: new Date(),
+      takenAt,
     },
     // user — проекцией, а не целиком: include user:true тянет в ответ весь ряд
     // юзера вместе с хешем пароля (привычка из journal/photos GET)
@@ -120,10 +140,17 @@ export async function POST(req: NextRequest) {
       user: { select: { id: true, name: true, emoji: true, color: true, avatarUrl: true } },
     },
   });
-  publish(tripId, "photo:added", {
-    userId: user!.id,
-    userName: user!.name || photo.user?.name || "Кто-то",
-  });
+  publish(
+    tripId,
+    "photo:added",
+    {
+      userId: user!.id,
+      userName: user!.name || photo.user?.name || "Кто-то",
+      ...(batchCount > 1 ? { count: batchCount } : {}),
+    },
+    user!.id,
+    { silent }
+  );
   return NextResponse.json(photo);
 }
 
@@ -138,7 +165,7 @@ export async function DELETE(req: NextRequest) {
     select: { tripId: true, url: true, thumbUrl: true, userId: true },
   });
   if (!existing) return NextResponse.json({ error: "not found" }, { status: 404 });
-  const { user, membership, response } = await requireTripMember(req, existing.tripId);
+  const { user, membership, response } = await requireTripEditor(req, existing.tripId);
   if (response) return response;
 
   // Только автор или owner поездки

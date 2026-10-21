@@ -4,9 +4,10 @@ import { useEffect, useRef, useState } from "react";
 import { useTrip, useUploadPhoto } from "@/hooks/use-trip";
 import { Camera, Check, Images, Loader2, MapPin, X } from "lucide-react";
 import { toast } from "sonner";
-import exifr from "exifr";
 import { compressImageForUpload, ImageCompressError } from "@/lib/image-compress";
+import { readPhotoExif } from "@/lib/photo-exif";
 import { DayPicker } from "./DayPicker";
+import { PhotoBatch } from "./PhotoBatch";
 import { StickySubmit } from "./StickySubmit";
 
 type GeoStatus = "idle" | "requesting" | "granted" | "denied";
@@ -29,6 +30,12 @@ export function PhotoForm({ onDone }: PhotoFormProps) {
   const [geoStatus, setGeoStatus] = useState<GeoStatus>("idle");
   const [geoCoords, setGeoCoords] = useState<GeoCoords | null>(null);
   const [geoAddress, setGeoAddress] = useState<string | null>(null);
+  // Откуда взялись координаты: EXIF честнее устройства (вечерний батч из
+  // галереи иначе получает гео отеля), источник виден пользователю в чипе
+  const [geoSource, setGeoSource] = useState<"exif" | "device" | null>(null);
+  const [exifTakenAt, setExifTakenAt] = useState<Date | null>(null);
+  // Мультивыбор из галереи уходит в батч-режим (PhotoBatch)
+  const [batchFiles, setBatchFiles] = useState<File[] | null>(null);
   // Сжатие фото — единственная тяжёлая часть пути; гео больше не блокирует
   // превью и submit (раньше спиннер висел до 8с в ожидании координат, аудит 2026-10-06)
   const [processing, setProcessing] = useState(false);
@@ -60,6 +67,7 @@ export function PhotoForm({ onDone }: PhotoFormProps) {
           const coords = { lat: pos.coords.latitude, lng: pos.coords.longitude };
           setGeoCoords(coords);
           setGeoStatus("granted");
+          setGeoSource((s) => s ?? "device");
           resolve(coords);
         },
         () => {
@@ -96,19 +104,17 @@ export function PhotoForm({ onDone }: PhotoFormProps) {
   const onFile = async (f: File) => {
     setProcessing(true);
     try {
-      // GPS из EXIF точнее текущего положения — приоритетнее устройства
-      try {
-        const exif = await exifr.gps(f);
-        if (exif?.latitude != null && exif?.longitude != null) {
-          const exifCoords = { lat: exif.latitude, lng: exif.longitude };
-          geoPromiseRef.current = Promise.resolve(exifCoords);
-          setGeoCoords(exifCoords);
-          setGeoStatus("granted");
-          toast.success("📍 Координаты из фото");
-        }
-      } catch {
-        // EXIF optional
+      // GPS и дата съёмки из EXIF точнее текущего положения — приоритетнее
+      // устройства; сервер EXIF выпиливает, читаем здесь (см. lib/photo-exif)
+      const exif = await readPhotoExif(f);
+      if (exif?.coords) {
+        geoPromiseRef.current = Promise.resolve(exif.coords);
+        setGeoCoords(exif.coords);
+        setGeoStatus("granted");
+        setGeoSource("exif");
+        toast.success("📍 Координаты из фото");
       }
+      setExifTakenAt(exif?.takenAt ?? null);
 
       const compressed = await compressImageForUpload(f);
 
@@ -164,6 +170,7 @@ export function PhotoForm({ onDone }: PhotoFormProps) {
     fd.append("file", file, uploadName);
     fd.append("dayId", dayId);
     if (caption) fd.append("caption", caption);
+    if (exifTakenAt) fd.append("takenAt", exifTakenAt.toISOString());
     if (coords) {
       fd.append("lat", String(coords.lat));
       fd.append("lng", String(coords.lng));
@@ -190,9 +197,25 @@ export function PhotoForm({ onDone }: PhotoFormProps) {
     previewUrlRef.current = null;
     setFile(null);
     setPreview(null);
+    setExifTakenAt(null);
+    setGeoSource(null);
   };
 
   const busy = upload.isPending || processing;
+
+  // Батч из галереи — отдельный экран очереди внутри этого же шита
+  if (batchFiles) {
+    return (
+      <PhotoBatch
+        files={batchFiles}
+        onDone={() => {
+          setBatchFiles(null);
+          onDone();
+        }}
+        onCancel={() => setBatchFiles(null)}
+      />
+    );
+  }
 
   return (
     <div className="space-y-3">
@@ -202,14 +225,26 @@ export function PhotoForm({ onDone }: PhotoFormProps) {
         accept="image/*"
         capture="environment"
         className="hidden"
-        onChange={(e) => e.target.files?.[0] && onFile(e.target.files[0])}
+        onChange={(e) => {
+          const f = e.target.files?.[0];
+          e.target.value = "";
+          if (f) void onFile(f);
+        }}
       />
       <input
         ref={galleryRef}
         type="file"
         accept="image/*"
+        multiple
         className="hidden"
-        onChange={(e) => e.target.files?.[0] && onFile(e.target.files[0])}
+        onChange={(e) => {
+          // Мультивыбор: один файл — прежний одиночный флоу, пачка — батч
+          const list = Array.from(e.target.files ?? []);
+          e.target.value = "";
+          if (!list.length) return;
+          if (list.length === 1) void onFile(list[0]);
+          else setBatchFiles(list);
+        }}
       />
 
       {preview ? (
@@ -268,7 +303,11 @@ export function PhotoForm({ onDone }: PhotoFormProps) {
         <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground px-1 truncate">
           <MapPin className="size-3 shrink-0 text-emerald-500" />
           <span className="truncate">
-            {geoAddress ? geoAddress.slice(0, 60) + (geoAddress.length > 60 ? "…" : "") : "Местоположение поймано"}
+            {geoSource === "exif"
+              ? `Из фото: ${geoAddress ? geoAddress.slice(0, 55) : "точка съёмки"}`
+              : geoAddress
+                ? geoAddress.slice(0, 60) + (geoAddress.length > 60 ? "…" : "")
+                : "Местоположение поймано"}
           </span>
         </div>
       )}
