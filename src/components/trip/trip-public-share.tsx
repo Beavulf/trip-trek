@@ -6,7 +6,7 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
 // Управление публичной страницей поездки (/p/<token> — журнал «только
-// смотреть» для родных). Живёт в «О поездке» рядом с кодом приглашения:
+// смотреть» для гостей). Живёт в «О поездке» рядом с кодом приглашения:
 // это настройка доступности поездки наружу, а не действие шаринга.
 // Доступно только владельцу (гарды и в API).
 
@@ -75,7 +75,7 @@ export function PublicShareSettings({ tripId }: { tripId: string }) {
       <div className="flex items-center justify-between gap-2">
         <div className="min-w-0">
           <div className="font-mono text-[9px] uppercase tracking-widest text-muted-foreground/70">
-            ссылка для родных
+            публичный доступ
           </div>
           <div className="text-sm font-semibold flex items-center gap-1.5">
             <Globe className="size-3.5" /> Публичная страница

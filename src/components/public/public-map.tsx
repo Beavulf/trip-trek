@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { MapContainer, TileLayer, CircleMarker, Tooltip, useMap } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
 import { TILE_LAYERS } from "@/lib/map-layers";
@@ -47,6 +47,13 @@ export function PublicMap({
   photoPoints?: { lat: number; lng: number }[];
 }) {
   const points = useMemo(() => places.filter((p) => p.lat && p.lng), [places]);
+  // Подложка под тему страницы: гостям по умолчанию dark — светлая карта
+  // была бы ярким пятном. Гость тему не переключает, выбора при монтировании достаточно.
+  const [layer] = useState(() =>
+    typeof document !== "undefined" && document.documentElement.classList.contains("dark")
+      ? TILE_LAYERS.dark
+      : TILE_LAYERS.light
+  );
   const allPoints = useMemo<[number, number][]>(
     () => [
       ...points.map((p) => [p.lat, p.lng] as [number, number]),
@@ -69,7 +76,7 @@ export function PublicMap({
       scrollWheelZoom={false}
       className="w-full h-[320px] rounded-2xl overflow-hidden z-0"
     >
-      <TileLayer url={TILE_LAYERS.light.url} attribution={TILE_LAYERS.light.attr} />
+      <TileLayer url={layer.url} attribution={layer.attr} />
       <FitToPoints points={allPoints} />
       {/* Фото — нижний слой: мелкие точки «здесь снимали» */}
       {photoPoints.map((p, i) => (

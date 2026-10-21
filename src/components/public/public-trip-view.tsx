@@ -271,9 +271,14 @@ export function PublicTripView({ trip, token }: { trip: PublicTrip; token: strin
           </p>
           {cities.length > 0 && <p className="mt-1 text-sm text-muted-foreground line-clamp-2">{cities.join(" → ")}</p>}
 
-          {/* Счётчики поездки */}
+          {/* Счётчики поездки: «0 из N мест» на витрине выглядит заброшенностью —
+              посещения показываем только когда они есть */}
           <div className="mt-5 flex flex-wrap justify-center gap-2">
-            <StatChip>{visitedCount} из {allPlaces.length} мест</StatChip>
+            {visitedCount > 0 && (
+              <StatChip>
+                {visitedCount} из {allPlaces.length} мест
+              </StatChip>
+            )}
             {cities.length > 0 && (
               <StatChip>
                 {cities.length} {plural(cities.length, ["город", "города", "городов"])}
@@ -339,39 +344,49 @@ export function PublicTripView({ trip, token }: { trip: PublicTrip; token: strin
         <section className="pb-2">
           <div className="max-w-2xl mx-auto px-4">
             <SectionTitle icon={<Star className="size-3.5 fill-current" />}>Лучшие кадры</SectionTitle>
-          </div>
-          <div className="flex gap-3 overflow-x-auto no-scrollbar snap-x snap-mandatory px-4 pb-3 pt-1 -mx-0">
-            {favorites.map((p, i) => (
-              <motion.button
-                key={p.url + i}
-                type="button"
-                onClick={() => setViewer({ list: favorites, index: i })}
-                className="relative shrink-0 snap-start w-40 sm:w-48 aspect-[3/4] rounded-2xl overflow-hidden bg-muted text-left active:scale-[0.97] transition-transform"
-                {...(reducedMotion ? {} : reveal(Math.min(i * 0.05, 0.3)))}
-                aria-label={p.caption ?? "Лучшее фото поездки"}
-              >
-                <img
-                  src={p.thumbUrl}
-                  alt={p.caption ?? ""}
-                  loading={i < 2 ? "eager" : "lazy"}
-                  decoding="async"
-                  className="size-full object-cover"
-                />
-                <span
-                  className="absolute top-2 right-2 grid place-items-center size-6 rounded-full bg-black/40 text-amber-300 backdrop-blur-sm"
-                  aria-hidden
+            {/* Рейл живёт в той же колонке, что и весь контент — на десктопе
+                не спорит с заголовком секции, на мобильном это вся ширина */}
+            <div className="flex gap-3 overflow-x-auto no-scrollbar snap-x snap-mandatory pb-3 pt-1">
+              {favorites.map((p, i) => (
+                <motion.button
+                  key={p.url + i}
+                  type="button"
+                  onClick={() => setViewer({ list: favorites, index: i })}
+                  className="relative shrink-0 snap-start w-40 sm:w-48 aspect-[3/4] rounded-2xl overflow-hidden bg-muted text-left active:scale-[0.97] transition-transform"
+                  {...(reducedMotion ? {} : reveal(Math.min(i * 0.05, 0.3)))}
+                  aria-label={p.caption ?? "Лучшее фото поездки"}
                 >
-                  <Star className="size-3 fill-current" />
-                </span>
-                {p.caption && (
-                  <span className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/75 to-transparent text-white text-[11px] leading-snug p-2.5 pt-6 line-clamp-2">
-                    {p.caption}
+                  <img
+                    src={p.thumbUrl}
+                    alt={p.caption ?? ""}
+                    loading={i < 2 ? "eager" : "lazy"}
+                    decoding="async"
+                    className="size-full object-cover"
+                  />
+                  <span
+                    className="absolute top-2 right-2 grid place-items-center size-6 rounded-full bg-black/40 text-amber-300 backdrop-blur-sm"
+                    aria-hidden
+                  >
+                    <Star className="size-3 fill-current" />
                   </span>
-                )}
-              </motion.button>
-            ))}
+                  {p.caption && (
+                    <span className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/75 to-transparent text-white text-[11px] leading-snug p-2.5 pt-6 line-clamp-2">
+                      {p.caption}
+                    </span>
+                  )}
+                </motion.button>
+              ))}
+            </div>
           </div>
         </section>
+      )}
+
+      {/* Совсем свежая поездка: без маршрута и фото страница — приглашение,
+          а не обрыв после обложки */}
+      {trip.days.length === 0 && trip.photos.length === 0 && (
+        <p className="max-w-md mx-auto px-4 pb-12 text-center text-sm text-muted-foreground leading-relaxed">
+          Маршрут и фото появятся здесь позже — путешествие только собирается. Заглядывайте ещё!
+        </p>
       )}
 
       {/* ═══ Зона дней: липкая навигация живёт только внутри неё —
