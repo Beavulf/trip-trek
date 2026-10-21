@@ -10,7 +10,7 @@
 import { useEffect, useMemo, useState } from "react";
 import dynamic from "next/dynamic";
 import { motion, type MotionProps } from "framer-motion";
-import { Camera, Download, Heart, MapPin, Star } from "lucide-react";
+import { Camera, Download, Heart, Images, MapPin, Star } from "lucide-react";
 import { toast } from "sonner";
 import { Lightbox } from "yet-another-react-lightbox";
 import Captions from "yet-another-react-lightbox/plugins/captions";
@@ -269,16 +269,25 @@ export function PublicTripView({ trip, token }: { trip: PublicTrip; token: strin
             )}
           </div>
 
-          {/* Действия гостя */}
+          {/* Действия гостя: смотреть — главное, скачивание и сердечко — рядом */}
           <div className="mt-6 flex flex-wrap justify-center gap-2.5">
+              {trip.photos.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setViewer({ list: trip.photos, index: 0 })}
+                  className="min-h-11 inline-flex items-center gap-2 rounded-full bg-primary text-primary-foreground px-5 text-sm font-semibold shadow-lg active:scale-95 transition-transform"
+                  style={{ boxShadow: `0 8px 24px ${trip.accent}44` }}
+                >
+                  <Images className="size-4" /> Смотреть все фото
+                </button>
+              )}
               {canDownloadZip && (
                 <a
                   href={zipUrl}
                   download
-                  className="min-h-11 inline-flex items-center gap-2 rounded-full bg-primary text-primary-foreground px-5 text-sm font-semibold shadow-lg active:scale-95 transition-transform"
-                  style={{ boxShadow: `0 8px 24px ${trip.accent}44` }}
+                  className="min-h-11 inline-flex items-center gap-2 rounded-full border border-border bg-card px-5 text-sm font-semibold hover:bg-accent active:scale-95 transition-all"
                 >
-                  <Download className="size-4" /> Скачать все фото
+                  <Download className="size-4" /> Скачать ZIP
                 </a>
               )}
               <button
@@ -549,15 +558,26 @@ export function PublicTripView({ trip, token }: { trip: PublicTrip; token: strin
               !showFloatingBar && "pointer-events-none"
             )}
           >
-            {canDownloadZip && (
-              <a
-                href={zipUrl}
-                download
+            {trip.photos.length > 0 && (
+              <button
+                type="button"
+                onClick={() => setViewer({ list: trip.photos, index: 0 })}
                 tabIndex={showFloatingBar ? 0 : -1}
                 className="min-h-10 inline-flex items-center gap-1.5 rounded-full px-4 text-xs font-semibold text-white active:scale-95 transition-transform"
                 style={{ background: trip.accent }}
               >
-                <Download className="size-3.5" /> Все фото
+                <Images className="size-3.5" /> Смотреть
+              </button>
+            )}
+            {canDownloadZip && (
+              <a
+                href={zipUrl}
+                download
+                aria-label="Скачать все фото ZIP-архивом"
+                tabIndex={showFloatingBar ? 0 : -1}
+                className="min-h-10 inline-flex items-center gap-1.5 rounded-full border border-border bg-background px-4 text-xs font-semibold active:scale-95 transition-all"
+              >
+                <Download className="size-3.5" /> ZIP
               </a>
             )}
             <button
@@ -620,6 +640,7 @@ export function PublicTripView({ trip, token }: { trip: PublicTrip; token: strin
               >
                 <Download className="size-5" />
               </button>,
+              "close",
             ],
           }}
         />
