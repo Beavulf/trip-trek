@@ -158,7 +158,7 @@ export function BudgetPlanWidget() {
             >
               {totalSpent > totalPlan
                 ? `перерасход ${sym}${(totalSpent - totalPlan).toFixed(0)} · ${Math.round((totalSpent / totalPlan) * 100)}%`
-                : `осталось ${sym}{(totalPlan - totalSpent).toFixed(0)}`}
+                : `осталось ${sym}${(totalPlan - totalSpent).toFixed(0)}`}
             </span>
           )}
         </div>
