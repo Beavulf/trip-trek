@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { requireTripMember } from "@/lib/api-auth";
+import { requireTripEditor } from "@/lib/api-auth";
 import { runAi, aiFailResponse } from "@/lib/ai";
 import { fetchOsmPois, matchPicksToPois, haversineMeters } from "@/lib/poi";
 import { sanitizeUserText, extractJsonLoose } from "@/lib/planner";
@@ -38,7 +38,7 @@ export async function POST(req: NextRequest) {
     const hours = Math.min(Math.max(Math.round(body.hours ?? 3), 1), 6);
     const startLabel = /^\d{1,2}:\d{2}$/.test(body.startLabel ?? "") ? body.startLabel! : null;
 
-    const { user, response } = await requireTripMember(req, tripId);
+    const { user, response } = await requireTripEditor(req, tripId);
     if (response) return response;
 
     const pois = await fetchOsmPois({ lat, lng, radius, kinds: ["food", "sight", "park"], cap: 50 });

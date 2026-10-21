@@ -10,10 +10,15 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   const { id } = await params;
   const body = await req.json();
 
-  const existing = await db.tripMember.findUnique({
-    where: { id },
-    select: { tripId: true },
-  });
+  // id — это memberId; клиент может передать ?tripId=, тогда сработает и userId
+  // (в trip.participants с клиента приходит именно userId — как в DELETE)
+  const tripIdParam = new URL(req.url).searchParams.get("tripId");
+  let existing = await db.tripMember.findUnique({ where: { id } }).catch(() => null);
+  if (!existing && tripIdParam) {
+    existing = await db.tripMember.findUnique({
+      where: { tripId_userId: { tripId: tripIdParam, userId: id } },
+    });
+  }
   if (!existing) return NextResponse.json({ error: "not found" }, { status: 404 });
 
   const { user, membership, response } = await requireTripMember(req, existing.tripId);
@@ -39,14 +44,18 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       data.role = "owner";
     } else if (body.role === "member") {
       data.role = "member";
+    } else if (body.role === "viewer") {
+      // Зритель — read-only друг: смотрит поездку, не мутирует (requireTripEditor
+      // режет его на всех POST/PATCH) и не занимает слот free-лимита участников
+      data.role = "viewer";
     } else {
       // роль — не свобода текста: произвольная строка в БД мусорит и ломает
       // SemVer-инвариант «role === "owner" — единственный владелец»
-      return NextResponse.json({ error: "Роль может быть member или owner" }, { status: 400 });
+      return NextResponse.json({ error: "Роль может быть member, viewer или owner" }, { status: 400 });
     }
   }
 
-  const member = await db.tripMember.update({ where: { id }, data });
+  const member = await db.tripMember.update({ where: { id: existing.id }, data });
   publish(existing.tripId, "trip:updated", {});
   return NextResponse.json(member);
 }

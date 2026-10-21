@@ -1,13 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { publish } from "@/lib/ws-bus";
-import { requireTripMember } from "@/lib/api-auth";
+import { requireTripEditor } from "@/lib/api-auth";
 
 // PATCH /api/trip/budget — обновить общий бюджет поездки
 export async function PATCH(req: NextRequest) {
   const body = await req.json();
   const { tripId, totalBudget } = body;
-  const { response } = await requireTripMember(req, tripId);
+  const { response } = await requireTripEditor(req, tripId);
   if (response) return response;
   if (!tripId) return NextResponse.json({ error: "tripId required" }, { status: 400 });
   if (typeof totalBudget !== "number" || totalBudget < 0) {

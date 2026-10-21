@@ -146,6 +146,34 @@ export async function requireTripMember(
  * Require authenticated user + trip ownership.
  * Checks that the user is the owner of the specified trip.
  */
+/**
+ * Редактор поездки = участник или владелец, НО не зритель. Роль viewer —
+ * read-only друг (смотрит маршрут/галерею, не участвует в деньгах и мутациях):
+ * все POST/PATCH/PUT/DELETE поездочных роутов обязаны идти через этот гард,
+ * GET — по-прежнему через requireTripMember.
+ */
+export async function requireTripEditor(
+  req: NextRequest,
+  tripId: string
+): Promise<
+  | { user: AuthUser; membership: { id: string; role: string }; response: null }
+  | { user: null; membership: null; response: NextResponse }
+> {
+  const result = await requireTripMember(req, tripId);
+  if (result.response) return result;
+  if (result.membership!.role === "viewer") {
+    return {
+      user: null,
+      membership: null,
+      response: NextResponse.json(
+        { error: "Вы зритель этой поездки — изменения доступны только участникам" },
+        { status: 403 }
+      ),
+    };
+  }
+  return result;
+}
+
 export async function requireTripOwner(
   req: NextRequest,
   tripId: string

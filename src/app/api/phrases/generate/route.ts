@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { publish } from "@/lib/ws-bus";
-import { requireTripMember } from "@/lib/api-auth";
+import { requireTripEditor } from "@/lib/api-auth";
 
 // Базовые фразы для каждого языка (50+ фраз)
 // Ключ — код языка (zh, ja, ko, fr, de, en, etc.)
@@ -139,7 +139,7 @@ export async function POST(req: NextRequest) {
   }
 
   // P0 #2: auth + membership
-  const { response } = await requireTripMember(req, tripId);
+  const { response } = await requireTripEditor(req, tripId);
   if (response) return response;
 
   const phrases = PHRASES_BY_LANGUAGE[language];

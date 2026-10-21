@@ -101,6 +101,8 @@ export function AppShell({ children }: { children: ReactNode }) {
     (p) => p.id === (session?.user as { id?: string } | undefined)?.id
   )?.role;
   const canInvite = myRole === "owner" || trip?.settings.allowMemberInvites !== false;
+  // Зритель — read-only: FAB быстрых добавлений ему не нужен (API всё равно 403)
+  const isViewer = myRole === "viewer";
   const tabScrollRef = useRef<HTMLDivElement>(null);
   const headerRef = useRef<HTMLElement>(null);
   const [showLeftArrow, setShowLeftArrow] = useState(false);
@@ -392,6 +394,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         {children}
       </main>
 
+      {!isViewer && (
       <motion.button
         onClick={() => setQuickOpen(true)}
         // Прогрев чанка PhotoForm (exifr ~100 KB) на касании — к моменту открытия
@@ -409,6 +412,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         <FabHalo />
         <Plus className="size-8 sm:size-7 relative z-10" strokeWidth={2.5} />
       </motion.button>
+      )}
 
       <footer className="mt-auto border-t border-border bg-card/30 pb-safe">
         <div className="mx-auto max-w-7xl px-4 py-3 flex items-center justify-center gap-2 text-[11px] text-muted-foreground">

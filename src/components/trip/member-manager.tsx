@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Ban, Crown, ShieldCheck, UserMinus } from "lucide-react";
+import { Ban, Eye, EyeOff, Crown, ShieldCheck, UserMinus } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/use-auth";
@@ -123,6 +123,11 @@ export function MemberManager({
                         владелец
                       </span>
                     )}
+                    {m.role === "viewer" && (
+                      <span className="text-[8px] font-black uppercase tracking-wider text-cyan-600 dark:text-cyan-400 shrink-0">
+                        зритель
+                      </span>
+                    )}
                   </div>
                   {detailed && (
                     <div className="font-mono text-[9px] uppercase tracking-widest text-muted-foreground/70 truncate">
@@ -132,6 +137,26 @@ export function MemberManager({
                 </div>
                 {manageable && (
                   <div className="flex items-center gap-0.5 shrink-0">
+                    <button
+                      type="button"
+                      title={m.role === "viewer" ? "Вернуть участником" : "Сделать зрителем (только смотрит)"}
+                      aria-label={m.role === "viewer" ? `Вернуть ${m.name} участником` : `Сделать ${m.name} зрителем`}
+                      onClick={() =>
+                        memberAction.mutate({
+                          url: `/api/participants/${m.id}?tripId=${tripId}`,
+                          method: "PATCH",
+                          body: { role: m.role === "viewer" ? "member" : "viewer" },
+                        })
+                      }
+                      className={cn(
+                        "size-9 rounded-lg grid place-items-center transition-colors",
+                        m.role === "viewer"
+                          ? "text-cyan-600 hover:text-cyan-500 hover:bg-accent"
+                          : "text-muted-foreground hover:text-cyan-500 hover:bg-accent"
+                      )}
+                    >
+                      {m.role === "viewer" ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+                    </button>
                     <button
                       type="button"
                       title="Передать владение"

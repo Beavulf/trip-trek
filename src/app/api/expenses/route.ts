@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { publish } from "@/lib/ws-bus";
-import { requireTripMember } from "@/lib/api-auth";
+import { requireTripMember, requireTripEditor } from "@/lib/api-auth";
 import { currencySymbol } from "@/lib/currencies";
 
 // GET /api/expenses?tripId=...
@@ -31,7 +31,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   const body = await req.json();
   const { amount, category, description, paidById, dayId, tripId, splitWith, excludeSelf, settlementKey, originalAmount, originalCurrency } = body;
-  const { user, response } = await requireTripMember(req, tripId);
+  const { user, response } = await requireTripEditor(req, tripId);
   if (response) return response;
   if (!category || !description || !paidById || !tripId) {
     return NextResponse.json({ error: "category, description, paidById, tripId required" }, { status: 400 });
@@ -135,7 +135,7 @@ export async function DELETE(req: NextRequest) {
   });
   if (!expense) return NextResponse.json({ error: "not found" }, { status: 404 });
 
-  const { user, membership, response } = await requireTripMember(req, expense.tripId);
+  const { user, membership, response } = await requireTripEditor(req, expense.tripId);
   if (response) return response;
 
   // Плательщик, owner поездки, либо получатель перевода (отменить ошибочную отметку «Перевели»)

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { publish } from "@/lib/ws-bus";
-import { requireTripMember } from "@/lib/api-auth";
+import { requireTripEditor } from "@/lib/api-auth";
 
 // POST /api/places/reorder — порядок мест внутри дня (drag&drop в карточке дня).
 // order — серверное поле: обычный PATCH места его не пишет (place-fields),
@@ -20,7 +20,7 @@ export async function POST(req: NextRequest) {
   const day = await db.day.findFirst({ where: { id: dayId, tripId }, select: { id: true } });
   if (!day) return NextResponse.json({ error: "day не принадлежит этой поездке" }, { status: 400 });
 
-  const { response } = await requireTripMember(req, tripId);
+  const { response } = await requireTripEditor(req, tripId);
   if (response) return response;
 
   // Список обязан покрывать все места дня ровно один раз — иначе после

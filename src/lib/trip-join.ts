@@ -40,12 +40,15 @@ export async function checkCanJoinTrip(
     const ownerUser = await db.user.findUnique({ where: { id: owner.userId } });
     if (!ownerUser || !isPremiumUser(ownerUser)) {
       const { maxMembers } = await getPlanLimits();
-      if (members.length >= maxMembers) {
+      // Зрители (viewer) слот free-лимита не занимают: лимит — про активных
+      // участников, а «просто посмотреть» друга лимитом не наказываем
+      const active = members.filter((m) => m.role !== "viewer").length;
+      if (active >= maxMembers) {
         return {
           ok: false,
           status: 403,
           error: `Лимит участников (${maxMembers}) исчерпан. Владелец поездки может перейти на Premium.`,
-          extra: { upgrade: true, current: members.length, max: maxMembers },
+          extra: { upgrade: true, current: active, max: maxMembers },
         };
       }
     }

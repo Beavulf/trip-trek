@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { publish } from "@/lib/ws-bus";
-import { requireTripMember } from "@/lib/api-auth";
+import { requireTripEditor } from "@/lib/api-auth";
 import { pickPatchablePlace } from "@/lib/place-fields";
 
 // PATCH /api/places/[id] — обновить место. Белый список и капы — общий контракт place-fields.
@@ -12,7 +12,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   // Lookup tripId from existing place for auth
   const existing = await db.place.findUnique({ where: { id }, select: { tripId: true } });
   if (!existing) return NextResponse.json({ error: "not found" }, { status: 404 });
-  const { response } = await requireTripMember(req, existing.tripId);
+  const { response } = await requireTripEditor(req, existing.tripId);
   if (response) return response;
 
   const data = pickPatchablePlace(body);
@@ -40,7 +40,7 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
   // Lookup tripId from existing place for auth
   const existing = await db.place.findUnique({ where: { id }, select: { tripId: true } });
   if (!existing) return NextResponse.json({ error: "not found" }, { status: 404 });
-  const { response } = await requireTripMember(req, existing.tripId);
+  const { response } = await requireTripEditor(req, existing.tripId);
   if (response) return response;
 
   const place = await db.place.delete({ where: { id } });

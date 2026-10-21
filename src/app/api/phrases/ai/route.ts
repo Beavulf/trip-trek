@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { publish } from "@/lib/ws-bus";
-import { requireTripMember } from "@/lib/api-auth";
+import { requireTripEditor } from "@/lib/api-auth";
 import { runAi } from "@/lib/ai";
 import { sanitizeUserText } from "@/lib/planner";
 import { AI_FEATURES } from "@/lib/ai-usage";
@@ -96,7 +96,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "language обязателен" }, { status: 400 });
     }
 
-    const { user, response } = await requireTripMember(req, tripId);
+    const { user, response } = await requireTripEditor(req, tripId);
     if (response) return response;
 
     const trip = await db.trip.findUnique({

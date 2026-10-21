@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { requireTripMember } from "@/lib/api-auth";
+import { requireTripEditor } from "@/lib/api-auth";
 import { runAi, aiFailResponse } from "@/lib/ai";
 import { fetchOsmPois, matchPicksToPois } from "@/lib/poi";
 import { sanitizeUserText, extractJsonLoose } from "@/lib/planner";
@@ -23,7 +23,7 @@ export async function POST(req: NextRequest) {
     const { tripId, dayId } = body;
     if (!tripId || !dayId) return NextResponse.json({ error: "tripId и dayId required" }, { status: 400 });
 
-    const { user, response } = await requireTripMember(req, tripId);
+    const { user, response } = await requireTripEditor(req, tripId);
     if (response) return response;
 
     const day = await db.day.findFirst({

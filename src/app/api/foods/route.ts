@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { publish } from "@/lib/ws-bus";
-import { requireTripMember, requireUser } from "@/lib/api-auth";
+import { requireTripMember, requireUser, requireTripEditor } from "@/lib/api-auth";
 import { put as storagePut, remove as storageRemove, StorageError } from "@/lib/storage";
 import { userRateLimit } from "@/lib/rate-limit";
 
@@ -44,7 +44,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "name too long (max 200)" }, { status: 400 });
   }
 
-  const { user: foodUser, response } = await requireTripMember(req, tripId);
+  const { user: foodUser, response } = await requireTripEditor(req, tripId);
   if (response) return response;
 
   // 20 блюд в час на пользователя
@@ -87,7 +87,7 @@ export async function DELETE(req: NextRequest) {
   const food = await db.foodItem.findUnique({ where: { id }, select: { tripId: true } });
   if (!food) return NextResponse.json({ error: "not found" }, { status: 404 });
 
-  const { response } = await requireTripMember(req, food.tripId);
+  const { response } = await requireTripEditor(req, food.tripId);
   if (response) return response;
 
   await db.foodItem.delete({ where: { id } });
@@ -116,7 +116,7 @@ export async function PATCH(req: NextRequest) {
     // P0 #3: membership check via food.tripId
     const existing = await db.foodItem.findUnique({ where: { id }, select: { tripId: true, imageUrl: true } });
     if (!existing) return NextResponse.json({ error: "not found" }, { status: 404 });
-    const { response } = await requireTripMember(req, existing.tripId);
+    const { response } = await requireTripEditor(req, existing.tripId);
     if (response) return response;
 
     // Единая политика хранилища: magic bytes (не доверяем MIME/расширению),
@@ -157,7 +157,7 @@ export async function PATCH(req: NextRequest) {
   // P0 #3: membership check via food.tripId (раньше PATCH не проверял!)
   const existing = await db.foodItem.findUnique({ where: { id }, select: { tripId: true, wantedBy: true } });
   if (!existing) return NextResponse.json({ error: "not found" }, { status: 404 });
-  const { user, response } = await requireTripMember(req, existing.tripId);
+  const { user, response } = await requireTripEditor(req, existing.tripId);
   if (response) return response;
 
   const data: Record<string, unknown> = {};

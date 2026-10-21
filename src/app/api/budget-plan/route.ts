@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { publish } from "@/lib/ws-bus";
-import { requireTripMember } from "@/lib/api-auth";
+import { requireTripMember, requireTripEditor } from "@/lib/api-auth";
 
 // GET /api/budget-plan?tripId=...
 export async function GET(req: NextRequest) {
@@ -18,7 +18,7 @@ export async function GET(req: NextRequest) {
 export async function PATCH(req: NextRequest) {
   const body = await req.json();
   const { category, amount, tripId } = body;
-  const { response } = await requireTripMember(req, tripId);
+  const { response } = await requireTripEditor(req, tripId);
   if (response) return response;
   if (!category || typeof amount !== "number" || !tripId) {
     return NextResponse.json({ error: "category, amount, tripId required" }, { status: 400 });

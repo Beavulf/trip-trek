@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { publish } from "@/lib/ws-bus";
-import { requireTripMember } from "@/lib/api-auth";
+import { requireTripMember, requireTripEditor } from "@/lib/api-auth";
 
 // GET /api/info?tripId=...&type=...
 // P0 #1: tripId required (was leak when empty); P0 #2: auth + membership
@@ -27,7 +27,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   const body = await req.json();
   const { type, title, content, icon, tripId } = body;
-  const { response } = await requireTripMember(req, tripId);
+  const { response } = await requireTripEditor(req, tripId);
   if (response) return response;
   if (!type || !title || !content || !tripId) {
     return NextResponse.json({ error: "type, title, content, tripId required" }, { status: 400 });
@@ -45,7 +45,7 @@ export async function PATCH(req: NextRequest) {
   // Lookup tripId from existing item for auth
   const existing = await db.infoItem.findUnique({ where: { id }, select: { tripId: true } });
   if (!existing) return NextResponse.json({ error: "not found" }, { status: 404 });
-  const { response } = await requireTripMember(req, existing.tripId);
+  const { response } = await requireTripEditor(req, existing.tripId);
   if (response) return response;
 
   const data: Record<string, unknown> = {};
@@ -66,7 +66,7 @@ export async function DELETE(req: NextRequest) {
   // Lookup tripId from existing item for auth
   const existing = await db.infoItem.findUnique({ where: { id }, select: { tripId: true } });
   if (!existing) return NextResponse.json({ error: "not found" }, { status: 404 });
-  const { response } = await requireTripMember(req, existing.tripId);
+  const { response } = await requireTripEditor(req, existing.tripId);
   if (response) return response;
 
   const item = await db.infoItem.delete({ where: { id } });

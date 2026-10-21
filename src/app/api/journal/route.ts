@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { publish } from "@/lib/ws-bus";
-import { requireTripMember, requireUser } from "@/lib/api-auth";
+import { requireTripMember, requireUser, requireTripEditor } from "@/lib/api-auth";
 import { isValidMood } from "@/lib/moods";
 
 // GET /api/journal?tripId=...&dayId=...
@@ -42,7 +42,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   const body = await req.json();
   const { dayId, content, mood, userId, tripId } = body;
-  const { user, response } = await requireTripMember(req, tripId);
+  const { user, response } = await requireTripEditor(req, tripId);
   if (response) return response;
 
   if (!dayId || !content || !tripId) {
@@ -106,7 +106,7 @@ export async function DELETE(req: NextRequest) {
   if (!existing) return NextResponse.json({ error: "not found" }, { status: 404 });
 
   // Membership check
-  const { response: memberResp } = await requireTripMember(req, existing.tripId);
+  const { response: memberResp } = await requireTripEditor(req, existing.tripId);
   if (memberResp) return memberResp;
 
   // P0 #4: ownership — только автор или owner поездки может удалить
@@ -142,7 +142,7 @@ export async function PATCH(req: NextRequest) {
   });
   if (!existing) return NextResponse.json({ error: "not found" }, { status: 404 });
 
-  const { response: memberResp } = await requireTripMember(req, existing.tripId);
+  const { response: memberResp } = await requireTripEditor(req, existing.tripId);
   if (memberResp) return memberResp;
 
   const membership = await db.tripMember.findUnique({

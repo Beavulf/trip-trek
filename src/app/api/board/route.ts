@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { publish } from "@/lib/ws-bus";
-import { requireTripMember, requireUser } from "@/lib/api-auth";
+import { requireTripMember, requireUser, requireTripEditor } from "@/lib/api-auth";
 
 // Хелпер: безопасно разобрать reactions JSON
 function parseReactions(raw: unknown): Record<string, string[]> {
@@ -53,7 +53,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   const body = await req.json();
   const { content, tripId, replyToId } = body;
-  const { user, response } = await requireTripMember(req, tripId);
+  const { user, response } = await requireTripEditor(req, tripId);
   if (response) return response;
 
   if (!tripId) return NextResponse.json({ error: "tripId required" }, { status: 400 });
@@ -104,7 +104,7 @@ export async function PATCH(req: NextRequest) {
     select: { tripId: true, userId: true },
   });
   if (!existing) return NextResponse.json({ error: "not found" }, { status: 404 });
-  const { user, response } = await requireTripMember(req, existing.tripId);
+  const { user, response } = await requireTripEditor(req, existing.tripId);
   if (response) return response;
 
   // 1) Pin
@@ -172,7 +172,7 @@ export async function DELETE(req: NextRequest) {
   });
   if (!existing) return NextResponse.json({ error: "not found" }, { status: 404 });
 
-  const { response: memberResp } = await requireTripMember(req, existing.tripId);
+  const { response: memberResp } = await requireTripEditor(req, existing.tripId);
   if (memberResp) return memberResp;
 
   const membership = await db.tripMember.findUnique({

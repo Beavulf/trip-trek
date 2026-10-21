@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { publish } from "@/lib/ws-bus";
-import { requireTripMember } from "@/lib/api-auth";
+import { requireTripMember, requireTripEditor } from "@/lib/api-auth";
 
 const PHRASE_CATEGORIES = ["basics", "food", "transport", "shopping", "emergency", "social"];
 
@@ -41,7 +41,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "ru и cn обязательны" }, { status: 400 });
   }
 
-  const { response } = await requireTripMember(req, tripId);
+  const { response } = await requireTripEditor(req, tripId);
   if (response) return response;
 
   const cat = PHRASE_CATEGORIES.includes(category) ? category : "basics";
@@ -80,7 +80,7 @@ export async function PATCH(req: NextRequest) {
   // Lookup tripId from existing phrase for auth
   const existing = await db.phrase.findUnique({ where: { id }, select: { tripId: true } });
   if (!existing) return NextResponse.json({ error: "not found" }, { status: 404 });
-  const { response } = await requireTripMember(req, existing.tripId);
+  const { response } = await requireTripEditor(req, existing.tripId);
   if (response) return response;
 
   const data: Record<string, unknown> = {};
@@ -105,7 +105,7 @@ export async function DELETE(req: NextRequest) {
 
   // Групповое удаление по языку
   if (!id && tripId && language) {
-    const { response } = await requireTripMember(req, tripId);
+    const { response } = await requireTripEditor(req, tripId);
     if (response) return response;
 
     const result = await db.phrase.deleteMany({ where: { tripId, language } });
@@ -117,7 +117,7 @@ export async function DELETE(req: NextRequest) {
 
   const existing = await db.phrase.findUnique({ where: { id }, select: { tripId: true } });
   if (!existing) return NextResponse.json({ error: "not found" }, { status: 404 });
-  const { response } = await requireTripMember(req, existing.tripId);
+  const { response } = await requireTripEditor(req, existing.tripId);
   if (response) return response;
 
   await db.phrase.delete({ where: { id } });

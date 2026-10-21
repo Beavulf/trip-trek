@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { requireTripMember } from "@/lib/api-auth";
+import { requireTripEditor } from "@/lib/api-auth";
 import { calculateCurrentDayNumber } from "@/lib/trip-days";
 import { EXPENSE_CATEGORIES, CATEGORY_META } from "@/lib/types";
 import { currencySymbol } from "@/lib/currencies";
@@ -57,7 +57,7 @@ export async function POST(req: NextRequest) {
     }
 
     // P0 #1: auth + membership
-    const { user, response } = await requireTripMember(req, tripId);
+    const { user, response } = await requireTripEditor(req, tripId);
     if (response) return response;
 
     const body = (await req.json().catch(() => ({}))) as {

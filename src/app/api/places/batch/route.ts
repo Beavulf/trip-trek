@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { publish } from "@/lib/ws-bus";
-import { requireTripMember } from "@/lib/api-auth";
+import { requireTripEditor } from "@/lib/api-auth";
 import { pickPatchablePlace } from "@/lib/place-fields";
 import { sanitizeUserText } from "@/lib/planner";
 
@@ -21,7 +21,7 @@ export async function POST(req: NextRequest) {
   try {
     const body = (await req.json().catch(() => ({}))) as Body;
     const tripId = typeof body.tripId === "string" ? body.tripId : "";
-    const { user, response } = await requireTripMember(req, tripId);
+    const { user, response } = await requireTripEditor(req, tripId);
     if (response) return response;
 
     const input = Array.isArray(body.places) ? body.places.slice(0, MAX_BATCH) : [];

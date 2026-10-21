@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { publish } from "@/lib/ws-bus";
-import { requireTripMember } from "@/lib/api-auth";
+import { requireTripEditor } from "@/lib/api-auth";
 import { pickPatchablePlace } from "@/lib/place-fields";
 
 // POST /api/places — создать место. Поля и капы — через общий контракт place-fields.
@@ -9,7 +9,7 @@ export async function POST(req: NextRequest) {
   const body = await req.json();
   const input = pickPatchablePlace(body);
   const tripId = typeof body.tripId === "string" ? body.tripId : "";
-  const { user, response } = await requireTripMember(req, tripId);
+  const { user, response } = await requireTripEditor(req, tripId);
   if (response) return response;
   if (!input.name || !input.dayId || !tripId || typeof input.lat !== "number" || typeof input.lng !== "number") {
     return NextResponse.json({ error: "name, dayId, tripId, lat, lng required" }, { status: 400 });

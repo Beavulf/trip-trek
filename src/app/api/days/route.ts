@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { requireTripMember } from "@/lib/api-auth";
+import { requireTripEditor } from "@/lib/api-auth";
 import { dayDateFor, dayEndFor } from "@/lib/trip-days";
 
 // GET удалён (аудит перфоманса 2026-09-13): модель чтения дней+мест —
@@ -11,7 +11,7 @@ export async function POST(req: NextRequest) {
   const body = await req.json();
   const { tripId, city, cityKey, title, summary, accentColor } = body;
 
-  const { response } = await requireTripMember(req, tripId);
+  const { response } = await requireTripEditor(req, tripId);
   if (response) return response;
 
   if (!tripId) return NextResponse.json({ error: "tripId required" }, { status: 400 });
@@ -66,7 +66,7 @@ export async function DELETE(req: NextRequest) {
   const day = await db.day.findUnique({ where: { id }, select: { tripId: true, dayNumber: true } });
   if (!day) return NextResponse.json({ error: "day not found" }, { status: 404 });
 
-  const { response } = await requireTripMember(req, day.tripId);
+  const { response } = await requireTripEditor(req, day.tripId);
   if (response) return response;
 
   // Не даём удалить если это единственный день
@@ -112,7 +112,7 @@ export async function PATCH(req: NextRequest) {
   // Lookup tripId from existing day for auth
   const existing = await db.day.findUnique({ where: { id }, select: { tripId: true } });
   if (!existing) return NextResponse.json({ error: "day not found" }, { status: 404 });
-  const { response } = await requireTripMember(req, existing.tripId);
+  const { response } = await requireTripEditor(req, existing.tripId);
   if (response) return response;
 
   const data: Record<string, unknown> = {};

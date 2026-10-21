@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { requireTripMember } from "@/lib/api-auth";
+import { requireTripEditor } from "@/lib/api-auth";
 import { runAi, aiFailResponse } from "@/lib/ai";
 import {
   sanitizeUserText,
@@ -71,7 +71,7 @@ export async function POST(req: NextRequest) {
     const mode = ["trip", "day", "replace"].includes(body.mode || "") ? (body.mode as Body["mode"]) : "trip";
     if (!tripId) return NextResponse.json({ error: "tripId required" }, { status: 400 });
 
-    const { user, response } = await requireTripMember(req, tripId);
+    const { user, response } = await requireTripEditor(req, tripId);
     if (response) return response;
 
     const [trip, days, places] = await Promise.all([
