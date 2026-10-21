@@ -42,6 +42,11 @@ interface MapCanvasProps {
   layer: MapLayerKey;
   center: MapPoint;
   zoom: number;
+  /**
+   * Ошибка загрузки тайла (GFW/слабый интернет рвут OSM-подложку целыми
+   * экранами). Потребитель считает окно ошибок и решает, менять ли слой.
+   */
+  onTileError?: () => void;
   /** Полноэкранный режим: контейнер меняется — пересчитать размер после css-перехода */
   fullscreen?: boolean;
   /**
@@ -68,7 +73,7 @@ function flyToPts(map: L.Map, pts: MapPoint[], minZoom: number) {
 }
 
 export const MapCanvas = forwardRef<MapCanvasHandle, MapCanvasProps>(function MapCanvas(
-  { layer, center, zoom, fullscreen, active = true, className, children },
+  { layer, center, zoom, fullscreen, active = true, className, children, onTileError },
   ref
 ) {
   const mapRef = useRef<L.Map | null>(null);
@@ -205,6 +210,7 @@ export const MapCanvas = forwardRef<MapCanvasHandle, MapCanvasProps>(function Ma
         attribution={TILE_LAYERS[layer].attr}
         url={TILE_LAYERS[layer].url}
         keepBuffer={4}
+        eventHandlers={onTileError ? { tileerror: () => onTileError() } : undefined}
       />
       {children}
     </MapContainer>

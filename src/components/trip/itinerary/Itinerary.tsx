@@ -16,6 +16,7 @@ import { DayCard } from "./DayCard";
 import { PlaceDialog } from "./PlaceDialog";
 import { DaySheet, AddDayButton } from "./DaySheet";
 import { PlannerWizard } from "./PlannerWizard";
+import { HotelsStrip } from "./HotelsStrip";
 
 function dayCoords(day: {
   cityKey: string;
@@ -336,6 +337,9 @@ export function Itinerary() {
           </button>
         </div>
       </div>
+
+      {/* Отели под рукой: адрес для такси, прыжок на карту */}
+      <HotelsStrip days={filteredDays} />
 
       {/* Планер: варианты мест от ИИ (не готовый маршрут), только для существующих дней */}
       <button

@@ -90,6 +90,27 @@ export default function TripMap({ active = true }: { active?: boolean }) {
     ? resolvedTheme === "dark" ? "dark" : "voyager"
     : manualLayer;
 
+  // Фолбэк подложки: OSM-тайлы (voyager) из Китая рвутся целыми экранами
+  // (ретро-кейс 2026-10 — «карта иногда не грузилась»). Скользящее окно
+  // ошибок; срабатывает только на автоматическом слое — если юзер выбрал
+  // слой руками, его выбор неприкосновенен. ArcGIS-слои из Китая доступны.
+  const tileErrorsRef = useRef<number[]>([]);
+  const handleTileError = () => {
+    if (!autoTheme || tileLayer !== "voyager") return;
+    const now = Date.now();
+    const recent = tileErrorsRef.current.filter((t) => now - t < 20_000);
+    recent.push(now);
+    tileErrorsRef.current = recent;
+    if (recent.length >= 6) {
+      tileErrorsRef.current = [];
+      setAutoTheme(false);
+      setManualLayer("light");
+      toast.info("Подложка карты не отвечает — включили запасную", {
+        description: "Вернуть прежнюю можно кнопкой слоёв на карте",
+      });
+    }
+  };
+
   const allPlaces = useMemo(
     () => buildRoutePlaces(days ?? []),
     [days]
@@ -380,6 +401,7 @@ export default function TripMap({ active = true }: { active?: boolean }) {
           zoom={mapCityFilter ? 12 : 8}
           fullscreen={fullscreen}
           active={active}
+          onTileError={handleTileError}
         >
           {/* Нити маршрута по дням */}
           {!filters.onlyPhotos && (

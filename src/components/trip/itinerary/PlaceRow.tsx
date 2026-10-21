@@ -76,7 +76,7 @@ export function PlaceRow({ place, accentColor, currency, onOpen }: PlaceRowProps
       />
       <button
         onClick={toggle}
-        className="shrink-0 ml-1 size-11 grid place-items-center rounded-xl"
+        className="shrink-0 ml-1 size-11 grid place-items-center rounded-xl transition-transform active:scale-90"
         aria-label={visited ? "Отметить как запланированное" : "Отметить посещённым"}
       >
         {visited ? (
@@ -137,7 +137,7 @@ export function PlaceRow({ place, accentColor, currency, onOpen }: PlaceRowProps
             onClick={showOnMap}
             title="Показать на карте поездки"
             aria-label="Показать на карте поездки"
-            className="size-8 rounded-lg grid place-items-center text-muted-foreground hover:text-primary hover:bg-accent transition-colors"
+            className="size-8 rounded-lg grid place-items-center text-muted-foreground hover:text-primary hover:bg-accent transition-all active:scale-90"
           >
             <MapPin className="size-4" />
           </button>
