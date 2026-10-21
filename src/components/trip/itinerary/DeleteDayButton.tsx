@@ -25,7 +25,7 @@ export function DeleteDayButton({ dayId, dayNumber }: DeleteDayButtonProps) {
         type="button"
         disabled
         onClick={(e) => e.stopPropagation()}
-        className="btn-icon-touch text-muted-foreground/30 cursor-not-allowed"
+        className="btn-icon-touch text-muted-foreground/80 cursor-not-allowed"
         title="Нельзя удалить единственный день"
         aria-label="Нельзя удалить единственный день"
       >

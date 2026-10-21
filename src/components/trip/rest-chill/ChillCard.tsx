@@ -93,7 +93,7 @@ export function ChillCard({ place, day, currency = "USD", onOpen }: ChillCardPro
                 <span className="size-1.5 rounded-full bg-primary animate-pulse" aria-hidden="true" /> Сейчас
               </span>
             )}
-            {onOpen && <ChevronRight className="size-3.5 shrink-0 text-muted-foreground/50 mt-0.5" />}
+            {onOpen && <ChevronRight className="size-3.5 shrink-0 text-muted-foreground/80 mt-0.5" />}
           </div>
           <div className="text-[11px] text-muted-foreground flex items-center flex-wrap gap-x-2 gap-y-0.5 mt-0.5">
             <span className="flex items-center gap-0.5">
@@ -125,7 +125,7 @@ export function ChillCard({ place, day, currency = "USD", onOpen }: ChillCardPro
               className="p-1.5 -m-0.5 active:scale-90 transition-transform disabled:opacity-50"
             >
               <Star
-                className={cn("size-5", (place.rating ?? 0) >= s ? "fill-amber-400 text-amber-400" : "text-muted-foreground/40")}
+                className={cn("size-5", (place.rating ?? 0) >= s ? "fill-amber-400 text-amber-400" : "text-muted-foreground/80")}
               />
             </button>
           ))}

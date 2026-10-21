@@ -15,7 +15,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn, plural } from "@/lib/utils";
-import { dayDateFor } from "@/lib/trip-days";
+import { dayDateFor, isTripOver } from "@/lib/trip-days";
 import { MOODS, MOOD_META, isValidMood } from "@/lib/moods";
 import { useTripStore } from "@/lib/trip-store";
 import type { JournalEntry, TripDay, TripSummary } from "@/lib/types";
@@ -440,7 +440,7 @@ export function Journal() {
           )}
 
           <MoodRail value={mood} onChange={(m) => setMood(m ?? "😊")} />
-          <DayChips days={trip.days} value={dayId} onChange={setDayId} currentDayNumber={trip.currentDayNumber} />
+          <DayChips days={trip.days} value={dayId} onChange={setDayId} currentDayNumber={isTripOver(trip.settings.endDate) ? undefined : trip.currentDayNumber} />
 
           <button
             type="button"
@@ -512,7 +512,7 @@ export function Journal() {
                     )}
                   >
                     <span
-                      className="size-4 rounded-full grid place-items-center text-[9px]"
+                      className="size-4 rounded-full grid place-items-center text-[10px]"
                       style={{ background: a.color }}
                       aria-hidden="true"
                     >
@@ -533,7 +533,7 @@ export function Journal() {
         hasDays &&
         (stats.total === 0 || moodFilter || authorFilter !== "all" ? (
           <div className="rounded-2xl border-2 border-dashed border-border py-12 px-4 text-center">
-            <BookOpen className="size-10 mx-auto text-muted-foreground/50 mb-3" />
+            <BookOpen className="size-10 mx-auto text-muted-foreground/80 mb-3" />
             {stats.total === 0 ? (
               <>
                 <p className="text-sm font-semibold">Дневник пуст</p>
@@ -822,7 +822,7 @@ function EntrySheet({
           days={trip.days}
           value={editDayId}
           onChange={setEditDayId}
-          currentDayNumber={trip.currentDayNumber}
+          currentDayNumber={isTripOver(trip.settings.endDate) ? undefined : trip.currentDayNumber}
         />
         <div className="flex gap-2 pt-1">
           <button

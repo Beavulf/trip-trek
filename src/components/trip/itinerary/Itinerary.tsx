@@ -5,6 +5,7 @@ import { motion } from "framer-motion";
 import { useRouteDays, useTrip, useCurrentTripId } from "@/hooks/use-trip";
 import { useTripStore } from "@/lib/trip-store";
 import { currencySymbol } from "@/lib/currencies";
+import { isTripOver } from "@/lib/trip-days";
 import { type Day, type Place } from "@/lib/types";
 import { resolveCityCoords, decodeCustomKey } from "@/lib/city-coords";
 import { CalendarPlus, Compass, FileDown, Loader2, Map as MapIcon, PartyPopper, Plane, Plus, Sparkles } from "lucide-react";
@@ -112,6 +113,7 @@ export function Itinerary() {
   const currentDay = dayList.find((d) => d.dayNumber === trip.currentDayNumber);
   const targetDay = dayList.find((d) => d.dayNumber === selectedDay) ?? currentDay ?? dayList[0];
   const curSym = currencySymbol(trip.settings.currency);
+  const tripOver = isTripOver(trip.settings.endDate);
 
   const openAddForDay = (day: (typeof dayList)[number]) => {
     const coords = dayCoords(day);
@@ -285,7 +287,7 @@ export function Itinerary() {
               </button>
               {dayList.map((d) => {
                 const visited = d.places.filter((p) => p.status === "visited").length;
-                const isToday = d.dayNumber === trip.currentDayNumber;
+                const isToday = d.dayNumber === trip.currentDayNumber && !tripOver;
                 return (
                   <button
                     key={d.id}
@@ -363,8 +365,8 @@ export function Itinerary() {
                 day={day}
                 currency={curSym}
                 participantsCount={trip.participants.length}
-                isCurrent={isDayCurrent}
-                isPast={day.dayNumber < trip.currentDayNumber}
+                isCurrent={isDayCurrent && !tripOver}
+                isPast={day.dayNumber < trip.currentDayNumber || tripOver}
                 defaultExpanded={
                   // По умолчанию раскрыт только сегодня (или первый день до старта),
                   // при фильтре по дню — сам выбранный. Остальные дни не монтируем:

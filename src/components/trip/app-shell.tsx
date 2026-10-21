@@ -35,7 +35,7 @@ import {
   Shield,
   UserRound,
 } from "lucide-react";
-import { useState, useEffect, useRef, type ReactNode } from "react";
+import { Fragment, useState, useEffect, useRef, type ReactNode } from "react";
 import dynamic from "next/dynamic";
 import { createPortal } from "react-dom";
 import { useTheme } from "next-themes";
@@ -60,22 +60,28 @@ const InviteFriends = dynamic(() => import("./invite-friends").then((m) => m.Inv
 const ShareCard = dynamic(() => import("./share-card").then((m) => m.ShareCard), { ssr: false });
 const BugReportSheet = dynamic(() => import("./bug-report-sheet").then((m) => m.BugReportSheet), { ssr: false });
 
+// 15 вкладок в одной рейке читались как сплошная лента — группируем по смыслу,
+// между группами рисуется тонкий разделитель (порядок нигде больше не используется).
 const TABS = [
-  { key: "dashboard", label: "Обзор", icon: LayoutDashboard },
-  { key: "timeline", label: "Лента", icon: Rss },
-  { key: "itinerary", label: "Маршрут", icon: ListChecks },
-  { key: "map", label: "Карта", icon: MapIcon },
-  { key: "gallery", label: "Галерея", icon: Images },
-  { key: "budget", label: "Бюджет", icon: Wallet },
-  { key: "rest", label: "Chill", icon: Coffee },
-  { key: "journal", label: "Дневник", icon: BookOpen },
-  { key: "ai", label: "AI", icon: Sparkles },
-  { key: "food", label: "Еда", icon: UtensilsCrossed },
-  { key: "phrases", label: "Фразы", icon: Languages },
-  { key: "weather", label: "Погода", icon: CloudSun },
-  { key: "board", label: "Чат", icon: MessagesSquare },
-  { key: "achievements", label: "Награды", icon: Trophy },
-  { key: "info", label: "Инфо", icon: Info },
+  // Планирование
+  { key: "dashboard", label: "Обзор", icon: LayoutDashboard, group: "plan" },
+  { key: "itinerary", label: "Маршрут", icon: ListChecks, group: "plan" },
+  { key: "map", label: "Карта", icon: MapIcon, group: "plan" },
+  { key: "budget", label: "Бюджет", icon: Wallet, group: "plan" },
+  // Воспоминания
+  { key: "timeline", label: "Лента", icon: Rss, group: "memories" },
+  { key: "gallery", label: "Галерея", icon: Images, group: "memories" },
+  { key: "journal", label: "Дневник", icon: BookOpen, group: "memories" },
+  { key: "achievements", label: "Награды", icon: Trophy, group: "memories" },
+  // В поездке
+  { key: "food", label: "Еда", icon: UtensilsCrossed, group: "onroad" },
+  { key: "rest", label: "Chill", icon: Coffee, group: "onroad" },
+  { key: "weather", label: "Погода", icon: CloudSun, group: "onroad" },
+  { key: "phrases", label: "Фразы", icon: Languages, group: "onroad" },
+  { key: "ai", label: "AI", icon: Sparkles, group: "onroad" },
+  // Вместе
+  { key: "board", label: "Чат", icon: MessagesSquare, group: "together" },
+  { key: "info", label: "Инфо", icon: Info, group: "together" },
 ] as const;
 
 export function AppShell({ children }: { children: ReactNode }) {
@@ -320,13 +326,17 @@ export function AppShell({ children }: { children: ReactNode }) {
             ref={tabScrollRef}
             onScroll={handleTabScroll}
           >
-            {TABS.map((t) => {
+            {TABS.map((t, i) => {
               const Icon = t.icon;
               const active = activeTab === t.key;
               const badge = getTabBadge(t.key, trip);
+              const startsGroup = i > 0 && TABS[i - 1].group !== t.group;
               return (
+                <Fragment key={t.key}>
+                {startsGroup && (
+                  <span aria-hidden="true" className="shrink-0 self-center w-px h-5 mx-1 bg-border" />
+                )}
                 <button
-                  key={t.key}
                   type="button"
                   data-tab={t.key}
                   onClick={() => setActiveTab(t.key)}
@@ -352,7 +362,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                   {badge !== null && (
                     <span
                       className={cn(
-                        "relative z-10 ml-0.5 min-w-4 h-4 px-1 rounded-full text-[9px] font-bold grid place-items-center",
+                        "relative z-10 ml-0.5 min-w-4 h-4 px-1 rounded-full text-[10px] font-bold grid place-items-center",
                         active ? "bg-white/25 text-white" : "bg-primary/15 text-primary"
                       )}
                     >
@@ -360,6 +370,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                     </span>
                   )}
                 </button>
+                </Fragment>
               );
             })}
           </div>

@@ -75,7 +75,7 @@ function TabsArt() {
           key={i}
           className={cn(
             "grid size-9 place-items-center rounded-xl sm:size-10",
-            i === 2 ? "bg-primary text-primary-foreground shadow-md shadow-primary/30" : "text-muted-foreground/60"
+            i === 2 ? "bg-primary text-primary-foreground shadow-md shadow-primary/30" : "text-muted-foreground/80"
           )}
         >
           <Icon className="size-4" />

@@ -295,7 +295,7 @@ export function Budget() {
           <span className="text-xs text-muted-foreground">
             {realExpenses.length} {plural(realExpenses.length, "трата", "траты", "трат")}
             {settlementCount > 0 && (
-              <span className="text-muted-foreground/70">
+              <span className="text-muted-foreground/80">
                 {" "}
                 · {settlementCount} {plural(settlementCount, "перевод", "перевода", "переводов")}
               </span>
@@ -337,7 +337,7 @@ export function Budget() {
                       )}
                     >
                       {chip.label}
-                      <span className={cn("tabular-nums", active ? "text-primary-foreground/80" : "text-muted-foreground/70")}>
+                      <span className={cn("tabular-nums", active ? "text-primary-foreground/80" : "text-muted-foreground/80")}>
                         {chip.count}
                       </span>
                     </button>

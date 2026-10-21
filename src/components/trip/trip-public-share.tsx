@@ -74,7 +74,7 @@ export function PublicShareSettings({ tripId }: { tripId: string }) {
     <div className="rounded-2xl border border-border p-3 space-y-2.5">
       <div className="flex items-center justify-between gap-2">
         <div className="min-w-0">
-          <div className="font-mono text-[9px] uppercase tracking-widest text-muted-foreground/70">
+          <div className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground/80">
             публичный доступ
           </div>
           <div className="text-sm font-semibold flex items-center gap-1.5">

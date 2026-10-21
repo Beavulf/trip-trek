@@ -487,7 +487,7 @@ export function Timeline() {
                 >
                   <span className="text-sm leading-none" aria-hidden="true">{f.emoji}</span>
                   <span className="text-[13px] leading-none tabular-nums">{count}</span>
-                  <span className="text-[9px] leading-none opacity-80">{f.label}</span>
+                  <span className="text-[10px] leading-none opacity-80">{f.label}</span>
                 </button>
               );
             })}

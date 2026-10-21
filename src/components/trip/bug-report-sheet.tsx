@@ -152,7 +152,7 @@ export function BugReportSheet({
                 ? "Расскажи, чего не хватает"
                 : "Спрашивай — ответим"
           }
-          className="w-full rounded-2xl border border-border bg-background px-3.5 py-3 text-sm min-h-28 resize-none focus:outline-none focus:ring-2 focus:ring-ring placeholder:text-muted-foreground/60 input-mobile"
+          className="w-full rounded-2xl border border-border bg-background px-3.5 py-3 text-sm min-h-28 resize-none focus:outline-none focus:ring-2 focus:ring-ring placeholder:text-muted-foreground/80 input-mobile"
         />
 
         {/* Скриншот */}
@@ -191,7 +191,7 @@ export function BugReportSheet({
         )}
 
         {/* Что уйдёт вместе с сообщением */}
-        <p className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground/70 truncate">
+        <p className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground/80 truncate">
           отправится: {typeof window !== "undefined" ? window.location.pathname + window.location.search : "…"}
           {currentTripId ? " · поездка приложена" : ""}
         </p>
@@ -213,7 +213,7 @@ export function BugReportSheet({
         {/* Мои обращения: статус + ответ админа */}
         {mine && mine.length > 0 && (
           <div className="pt-1">
-            <p className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground/70 mb-1.5">
+            <p className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground/80 mb-1.5">
               мои обращения
             </p>
             <div className="space-y-2">
@@ -226,21 +226,21 @@ export function BugReportSheet({
                       <span className="text-sm">{t.emoji}</span>
                       <span
                         className={cn(
-                          "rounded-md border px-1.5 py-0.5 text-[9px] font-black uppercase tracking-widest",
+                          "rounded-md border px-1.5 py-0.5 text-[10px] font-black uppercase tracking-widest",
                           st.cls
                         )}
                       >
                         {st.label}
                       </span>
                       <span className="flex-1" />
-                      <span className="font-mono text-[9px] uppercase tracking-widest text-muted-foreground/60">
+                      <span className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground/80">
                         {new Date(f.createdAt).toLocaleDateString("ru-RU")}
                       </span>
                     </div>
                     <p className="text-xs text-muted-foreground line-clamp-2 whitespace-pre-wrap">{f.message}</p>
                     {f.adminReply && (
                       <div className="rounded-xl bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-2 mt-1">
-                        <p className="font-mono text-[9px] uppercase tracking-widest text-emerald-600 dark:text-emerald-400">
+                        <p className="font-mono text-[10px] uppercase tracking-widest text-emerald-600 dark:text-emerald-400">
                           ответ админа
                         </p>
                         <p className="text-xs mt-0.5 whitespace-pre-wrap">{f.adminReply}</p>

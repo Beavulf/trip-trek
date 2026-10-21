@@ -280,7 +280,7 @@ export function BudgetPlanWidget() {
                     осталось {sym}{(plan - spent).toFixed(0)}
                   </span>
                 ) : plan === 0 && spent > 0 ? (
-                  <span className="text-[11px] text-muted-foreground/70 shrink-0">без плана</span>
+                  <span className="text-[11px] text-muted-foreground/80 shrink-0">без плана</span>
                 ) : null}
               </div>
             </div>

@@ -17,7 +17,7 @@ export default function ErrorBoundary({
           Страница не загрузилась. Попробуйте ещё раз — поездка и все данные на месте.
         </p>
         {error.digest && (
-          <p className="text-[10px] text-muted-foreground/60">код: {error.digest}</p>
+          <p className="text-[10px] text-muted-foreground/80">код: {error.digest}</p>
         )}
         <button
           onClick={reset}

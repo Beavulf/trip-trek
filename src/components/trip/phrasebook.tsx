@@ -371,7 +371,7 @@ export function Phrasebook() {
             >
               <Star className={cn("size-5", favOnly && "fill-current")} />
               {favCount > 0 && (
-                <span className="absolute -right-1 -top-1 grid size-4 place-items-center rounded-full bg-amber-500 text-[9px] font-bold text-white">
+                <span className="absolute -right-1 -top-1 grid size-4 place-items-center rounded-full bg-amber-500 text-[10px] font-bold text-white">
                   {favCount}
                 </span>
               )}
@@ -393,7 +393,7 @@ export function Phrasebook() {
                   )}
                 >
                   Все языки
-                  <span className={cn("tabular-nums", langFilter === "all" ? "text-white/75" : "text-muted-foreground/70")}>
+                  <span className={cn("tabular-nums", langFilter === "all" ? "text-white/75" : "text-muted-foreground/80")}>
                     {phrases?.length ?? 0}
                   </span>
                 </button>
@@ -412,7 +412,7 @@ export function Phrasebook() {
                       )}
                     >
                       <span aria-hidden>{langBadge(code) ?? "💬"}</span> {langLabel(code)}
-                      <span className={cn("tabular-nums", active ? "text-white/75" : "text-muted-foreground/70")}>{count}</span>
+                      <span className={cn("tabular-nums", active ? "text-white/75" : "text-muted-foreground/80")}>{count}</span>
                     </button>
                   );
                 })}
@@ -443,7 +443,7 @@ export function Phrasebook() {
                     style={active ? { background: c.color } : undefined}
                   >
                     <span>{c.emoji}</span> {c.label}
-                    <span className={cn("tabular-nums", active ? "text-white/75" : "text-muted-foreground/70")}>{count}</span>
+                    <span className={cn("tabular-nums", active ? "text-white/75" : "text-muted-foreground/80")}>{count}</span>
                   </button>
                 );
               })}
@@ -809,7 +809,7 @@ function PhraseCard({
       >
         <div className="flex items-center justify-between gap-2">
           <span
-            className="inline-block rounded px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-wide"
+            className="inline-block rounded px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide"
             style={{ background: `${meta?.color}18`, color: meta?.color }}
           >
             {meta?.emoji} {meta?.label}
@@ -822,7 +822,7 @@ function PhraseCard({
           {phrase.pinyin && <span className="text-sm italic text-muted-foreground">{phrase.pinyin}</span>}
         </div>
         <p className="mt-1 text-sm text-foreground/80">{phrase.ru}</p>
-        <p className="mt-0.5 text-[10px] text-muted-foreground/70">{pronunciationLabel(lang.langPrefix)}</p>
+        <p className="mt-0.5 text-[10px] text-muted-foreground/80">{pronunciationLabel(lang.langPrefix)}</p>
       </button>
 
       {/* Действия */}

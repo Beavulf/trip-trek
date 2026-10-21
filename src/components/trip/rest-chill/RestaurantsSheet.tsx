@@ -173,7 +173,7 @@ export function RestaurantsSheet({
                         <span aria-hidden>{FOOD_EMOJI_BY_CATEGORY[d.category] ?? "🍽️"}</span> {d.name}
                       </span>
                       <span className="block text-xs text-muted-foreground leading-snug mt-0.5">{d.why}</span>
-                      <span className="block font-mono text-[10px] text-muted-foreground/70 mt-0.5 truncate">
+                      <span className="block font-mono text-[10px] text-muted-foreground/80 mt-0.5 truncate">
                         {[d.cuisine, d.address].filter(Boolean).join(" · ") || `~${Math.round(d.distance)} м от центра`}
                       </span>
                     </span>

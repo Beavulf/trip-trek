@@ -41,7 +41,10 @@ const CAPS = {
   address: 300,
 } as const;
 
-const isObj = (v: unknown): v is Record<string, unknown> =>
+/** Потолок бюджета одного места в валюте поездки. */
+export const MAX_PLACE_BUDGET = 1_000_000;
+
+const isObj =(v: unknown): v is Record<string, unknown> =>
   typeof v === "object" && v !== null;
 
 /**
@@ -81,9 +84,16 @@ export function pickPatchablePlace(body: unknown): PlacePatch {
         if (typeof v === "number" && Number.isFinite(v)) take(k, v);
         break;
       case "budget":
+        // Отрицательное и заведомо нереальное ($99 999 999 на одно место) раздувает план
+        // дня и «План vs Факт» — такое значение просто не принимаем.
+        if (v === null) take("budget", null);
+        else if (typeof v === "number" && Number.isFinite(v) && v >= 0 && v <= MAX_PLACE_BUDGET) {
+          take("budget", v);
+        }
+        break;
       case "rating":
-        if (v === null) take(k, null);
-        else if (typeof v === "number" && Number.isFinite(v)) take(k, v);
+        if (v === null) take("rating", null);
+        else if (typeof v === "number" && Number.isFinite(v)) take("rating", v);
         break;
       case "status":
         if (v === "planned" || v === "visited" || v === "current") take("status", v);

@@ -130,7 +130,7 @@ export function MemberManager({
                     )}
                   </div>
                   {detailed && (
-                    <div className="font-mono text-[9px] uppercase tracking-widest text-muted-foreground/70 truncate">
+                    <div className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground/80 truncate">
                       {m.email ? `${m.email} · ` : ""}в поездке с {fmtJoined(m.joinedAt) || "—"}
                     </div>
                   )}

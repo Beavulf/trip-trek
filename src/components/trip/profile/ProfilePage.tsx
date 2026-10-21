@@ -204,7 +204,7 @@ export function ProfilePage() {
               Выйти из аккаунта
             </motion.button>
 
-            <p className="text-center font-mono text-[10px] uppercase tracking-widest text-muted-foreground/70 pt-1">
+            <p className="text-center font-mono text-[10px] uppercase tracking-widest text-muted-foreground/80 pt-1">
               TripTrek · travel passport
             </p>
           </>

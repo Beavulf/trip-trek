@@ -334,7 +334,7 @@ export function PhotoBatch({ files, onDone, onCancel }: PhotoBatchProps) {
               <MapPin className="absolute top-1 left-1 size-3 text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.9)]" />
             )}
             {dayNumber(dayOf(it)) != null && (
-              <span className="absolute bottom-1 left-1 rounded bg-black/60 px-1 text-[9px] font-medium text-white">
+              <span className="absolute bottom-1 left-1 rounded bg-black/60 px-1 text-[10px] font-medium text-white">
                 Д{dayNumber(dayOf(it))}
               </span>
             )}
@@ -357,7 +357,7 @@ export function PhotoBatch({ files, onDone, onCancel }: PhotoBatchProps) {
               </span>
             )}
             {it.duplicate && (
-              <span className="absolute inset-x-0 bottom-0 bg-black/70 px-1 py-0.5 text-center text-[9px] font-medium text-white">
+              <span className="absolute inset-x-0 bottom-0 bg-black/70 px-1 py-0.5 text-center text-[10px] font-medium text-white">
                 уже в поездке
               </span>
             )}

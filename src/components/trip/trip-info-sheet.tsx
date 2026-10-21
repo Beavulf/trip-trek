@@ -287,7 +287,7 @@ export function TripInfoSheet({
               {/* Учётная карточка */}
               <div className="grid grid-cols-2 gap-2">
                 <div className="rounded-xl bg-secondary/50 p-2.5 col-span-2">
-                  <div className="font-mono text-[9px] uppercase tracking-widest text-muted-foreground/70 flex items-center gap-1">
+                  <div className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground/80 flex items-center gap-1">
                     <CalendarDays className="size-3" /> даты
                   </div>
                   <div className="text-sm font-semibold mt-0.5">
@@ -295,7 +295,7 @@ export function TripInfoSheet({
                   </div>
                 </div>
                 <div className="rounded-xl bg-secondary/50 p-2.5">
-                  <div className="font-mono text-[9px] uppercase tracking-widest text-muted-foreground/70 flex items-center gap-1">
+                  <div className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground/80 flex items-center gap-1">
                     <Wallet className="size-3" /> бюджет
                   </div>
                   <div className="text-sm font-semibold mt-0.5 truncate">
@@ -303,7 +303,7 @@ export function TripInfoSheet({
                   </div>
                 </div>
                 <div className="rounded-xl bg-secondary/50 p-2.5">
-                  <div className="font-mono text-[9px] uppercase tracking-widest text-muted-foreground/70">
+                  <div className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground/80">
                     потрачено
                   </div>
                   <div className="text-sm font-semibold mt-0.5">
@@ -315,7 +315,7 @@ export function TripInfoSheet({
               {/* Статус поездки — только владельцу */}
               {isOwner && (
                 <div>
-                  <p className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground/70 mb-1.5">
+                  <p className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground/80 mb-1.5">
                     статус поездки
                   </p>
                   <StatusSwitch tripId={tripId} current={t?.status || "planning"} refetch={refetch} />
@@ -327,7 +327,7 @@ export function TripInfoSheet({
                 <div className="rounded-2xl border border-border p-3 space-y-2">
                   <div className="flex items-center justify-between gap-2">
                     <div className="min-w-0">
-                      <div className="font-mono text-[9px] uppercase tracking-widest text-muted-foreground/70">
+                      <div className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground/80">
                         код приглашения
                       </div>
                       <div className="font-mono font-black text-sm tracking-[0.12em] truncate">{s?.inviteCode}</div>
@@ -396,7 +396,7 @@ export function TripInfoSheet({
                   >
                     <Download className="size-4 text-muted-foreground" />
                     <span className="flex-1">Скачать бэкап JSON</span>
-                    <span className="font-mono text-[9px] uppercase tracking-widest text-muted-foreground/60">v2.0</span>
+                    <span className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground/80">v2.0</span>
                   </button>
                 )}
 

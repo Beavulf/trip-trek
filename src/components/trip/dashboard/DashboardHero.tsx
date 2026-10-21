@@ -74,7 +74,7 @@ export function DashboardHero({
     subtitle = `Вылет ${dateRu(trip.settings.startDate)}${currentDay ? ` · ${currentDay.city}` : ""}`;
   } else if (isAfter) {
     title = trip.settings.title;
-    subtitle = `${totalDays} дней · ${trip.visitedPlaces} из ${trip.totalPlaces} мест · ${trip.totalPhotos} фото`;
+    subtitle = `${totalDays} ${plural(totalDays, "день", "дня", "дней")} · ${trip.visitedPlaces} из ${trip.totalPlaces} мест · ${trip.totalPhotos} фото`;
   } else {
     title = currentDay?.title ?? `День ${trip.currentDayNumber}`;
     subtitle = currentDay
@@ -113,7 +113,9 @@ export function DashboardHero({
         {/* Статус · погода · даты (владельцу) */}
         <div className="flex items-center gap-1.5 mb-3">
           <div className="flex items-center gap-1.5 text-[10px] font-medium px-2 py-0.5 rounded-full bg-white/15 backdrop-blur">
-            {status === "completed" ? (
+            {/* Даты прошли, а в архив не ушла — баннер сверху уже говорит «завершена»,
+                бейдж не должен ему противоречить «Планированием» */}
+            {status === "completed" || isAfter ? (
               <><CheckCircle2 className="size-3" /> Завершена</>
             ) : status === "active" ? (
               <><Plane className="size-3" /> В пути</>
@@ -148,7 +150,7 @@ export function DashboardHero({
           <ProgressRow
             label="Прогресс поездки"
             value={trip.dayProgress}
-            right={isAfter ? `${totalDays} дн. позади` : !isBefore && daysRemaining > 0 ? `осталось ${daysRemaining} дн.` : undefined}
+            right={isAfter ? `${totalDays} ${plural(totalDays, "день", "дня", "дней")} позади` : !isBefore && daysRemaining > 0 ? `осталось ${daysRemaining} дн.` : undefined}
           />
           <ProgressRow label="Мест посещено" value={trip.placeProgress} right={`${trip.visitedPlaces}/${trip.totalPlaces}`} />
         </div>
@@ -162,7 +164,7 @@ export function DashboardHero({
           >
             <Users className="size-4" />
             Позвать друзей
-            <span className="font-mono text-[11px] text-white/70">{inviteCode}</span>
+            <span className="text-[11px] text-white/70">код · ссылка · QR</span>
           </button>
         )}
 

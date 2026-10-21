@@ -264,7 +264,7 @@ export function ExpenseForm({ userId, onDone }: ExpenseFormProps) {
                 </div>
                 <span className="flex-1 text-left">{p.name}</span>
                 {isPayer && (
-                  <span className="text-[9px] text-muted-foreground bg-muted px-1.5 py-0.5 rounded">ты</span>
+                  <span className="text-[10px] text-muted-foreground bg-muted px-1.5 py-0.5 rounded">ты</span>
                 )}
               </button>
             );

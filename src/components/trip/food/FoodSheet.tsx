@@ -355,7 +355,7 @@ export function FoodSheet({ food, open, onOpenChange, dayCities, participants, c
                     <Star
                       className={cn(
                         "size-8 transition-transform",
-                        (food.rating ?? 0) >= s ? "fill-amber-400 text-amber-400" : "text-muted-foreground/40"
+                        (food.rating ?? 0) >= s ? "fill-amber-400 text-amber-400" : "text-muted-foreground/80"
                       )}
                     />
                   </button>
