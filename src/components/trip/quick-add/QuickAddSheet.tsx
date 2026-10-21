@@ -11,6 +11,16 @@ import { MobileBottomSheet } from "../mobile-bottom-sheet";
 import { ExpenseForm } from "./ExpenseForm";
 import { JournalForm } from "./JournalForm";
 import { useTripStore } from "@/lib/trip-store";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 // exifr (~100 KB) живёт в PhotoForm — в первичный бандл не тянем (аудит 2026-09-13);
 // чанк дополнительно прогревается на касании FAB (app-shell, аудит 2026-10-06)
@@ -29,11 +39,22 @@ export function QuickAddSheet({ open, onOpenChange }: { open: boolean; onOpenCha
   const tripId = useCurrentTripId();
   const { data: trip } = useTrip();
   const { data: session } = useSession();
-  const { setTripSwitcherOpen } = useTripStore();
+  const { setTripSwitcherOpen, photoBatchRunning, setPhotoBatchRunning } = useTripStore();
+  // Закрытие шита (назад/свайп/Esc) во время батча — только через подтверждение:
+  // размонтирование останавливает очередь, а недогруженные кадры пользователь
+  // уже не отличит от упавших
+  const [confirmBatchClose, setConfirmBatchClose] = useState(false);
+  const requestClose = () => {
+    if (photoBatchRunning) {
+      setConfirmBatchClose(true);
+      return;
+    }
+    onOpenChange(false);
+  };
   const userId = (session?.user as { id?: string } | undefined)?.id || "";
   // Диалог-семантика + Esc + фокус-трап: раньше шит был «безымянным» div-ом
   // без роли, скринридеры не воспринимали его как модалку (аудит 2026-10-06)
-  const panelRef = useDialogA11y<HTMLDivElement>(open, () => onOpenChange(false));
+  const panelRef = useDialogA11y<HTMLDivElement>(open, requestClose);
 
   useEffect(() => {
     if (!open) setMode("photo");
@@ -45,7 +66,10 @@ export function QuickAddSheet({ open, onOpenChange }: { open: boolean; onOpenCha
   return (
     <MobileBottomSheet
       open={open}
-      onOpenChange={onOpenChange}
+      onOpenChange={(v) => {
+        if (!v) requestClose();
+        else onOpenChange(true);
+      }}
       title="Быстрое добавление"
       titleIcon={<PlusIcon className="size-4" />}
       panelRef={panelRef}
@@ -126,6 +150,29 @@ export function QuickAddSheet({ open, onOpenChange }: { open: boolean; onOpenCha
           </div>
         </>
       )}
+      <AlertDialog open={confirmBatchClose} onOpenChange={setConfirmBatchClose}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Идёт загрузка фото</AlertDialogTitle>
+            <AlertDialogDescription>
+              Прервать очередь? Уже загруженные кадры останутся в поездке и не
+              задвоятся — недогруженные можно выбрать заново.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Продолжить загрузку</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                setConfirmBatchClose(false);
+                setPhotoBatchRunning(false);
+                onOpenChange(false);
+              }}
+            >
+              Прервать
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </MobileBottomSheet>
   );
 }

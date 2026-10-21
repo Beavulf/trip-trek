@@ -1,7 +1,9 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useTrip, useUploadPhoto } from "@/hooks/use-trip";
+import { invalidateRouteData } from "@/lib/query-keys";
 import { Check, Loader2, MapPin, RotateCcw, Square, X } from "lucide-react";
 import { toast } from "sonner";
 import { compressImageForUpload } from "@/lib/image-compress";
@@ -10,6 +12,7 @@ import { computeFileHash } from "@/lib/photo-hash";
 import { dayIdForDate } from "@/lib/trip-days";
 import { usePhotos } from "@/hooks/use-trip";
 import { cn } from "@/lib/utils";
+import { useTripStore } from "@/lib/trip-store";
 import { DayPicker } from "./DayPicker";
 import { StickySubmit } from "./StickySubmit";
 
@@ -32,6 +35,8 @@ interface BatchItem {
   hash: string | null;
   duplicate: boolean;
   status: Status;
+  /** Почему упало — показывается в бейдже-подсказке и итоговом тосте */
+  errorMessage?: string;
 }
 
 interface PhotoBatchProps {
@@ -42,7 +47,11 @@ interface PhotoBatchProps {
 
 export function PhotoBatch({ files, onDone, onCancel }: PhotoBatchProps) {
   const { data: trip } = useTrip();
-  const upload = useUploadPhoto();
+  // invalidate:false — батч инвалидирует галерею ОДИН раз после очереди;
+  // раньше каждый кадр дёргал полный рефетч (46 рефетчей = лаги интерфейса)
+  const upload = useUploadPhoto({ invalidate: false });
+  const setPhotoBatchRunning = useTripStore((st) => st.setPhotoBatchRunning);
+  const qc = useQueryClient();
   // Уже загруженные в поездку кадры: по отпечаткам помечаем дубли ещё до
   // загрузки (запрос 2026-10: «не давал загрузить те что уже есть»)
   const { data: existingPhotos } = usePhotos();
@@ -122,11 +131,26 @@ export function PhotoBatch({ files, onDone, onCancel }: PhotoBatchProps) {
     })();
     return () => {
       stopRef.current = true;
+      // принудительное закрытие мимо confirm-диалога: флаг в сторе снять,
+      // иначе следующий открытый шит подумает, что загрузка ещё идёт
+      useTripStore.getState().setPhotoBatchRunning(false);
       previewsRef.current.forEach((u) => URL.revokeObjectURL(u));
       previewsRef.current = [];
     };
     // files фиксируется родителем при выборе — меняется только на новый батч
   }, []);
+
+  // Закрытие вкладки/обновление страницы во время загрузки — браузер спросит.
+  // Свернуть приложение не перехватить: кадры при этом обычно догружаются в фоне,
+  // а недогруженные после возврата не задвоятся (дедуп по хэшу)
+  useEffect(() => {
+    if (!running) return;
+    const guard = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+    };
+    window.addEventListener("beforeunload", guard);
+    return () => window.removeEventListener("beforeunload", guard);
+  }, [running]);
 
   const dayOf = (it: BatchItem): string =>
     (it.exifTakenAt ? dayIdForDate(days, it.exifTakenAt) : null) ?? fallbackDayId;
@@ -161,50 +185,107 @@ export function PhotoBatch({ files, onDone, onCancel }: PhotoBatchProps) {
     if (!fallbackDayId) return;
     stopRef.current = false;
     setRunning(true);
+    setPhotoBatchRunning(true);
     let ok = 0;
     let err = 0;
-    for (const [idx, it] of run.entries()) {
-      if (stopRef.current) break;
-      setItems((prev) =>
-        prev.map((x) => (x.key === it.key ? { ...x, status: "uploading" } : x))
-      );
-      const fd = new FormData();
-      const f = it.uploadFile ?? it.origin;
-      fd.append("file", f, f.name?.trim() || `photo-${it.key}.jpg`);
-      fd.append("dayId", dayOf(it));
-      if (it.exifCoords) {
-        fd.append("lat", String(it.exifCoords.lat));
-        fd.append("lng", String(it.exifCoords.lng));
+    let lastError = "";
+
+    // Одиночная загрузка кадра с одним автоматическим ретраем: мобильные сети
+    // рвут соединения (20 ECONNRESET за поездку в Китае) — вторая попытка
+    // обычно добивает, а дублем это не станет (сервер дедупит по хэшу)
+    const uploadOne = async (it: BatchItem, idx: number): Promise<void> => {
+      for (let attempt = 0; attempt < 2; attempt++) {
+        if (stopRef.current) throw new Error("stopped");
+        try {
+          const fd = new FormData();
+          const f = it.uploadFile ?? it.origin;
+          fd.append("file", f, f.name?.trim() || `photo-${it.key}.jpg`);
+          fd.append("dayId", dayOf(it));
+          if (it.exifCoords) {
+            fd.append("lat", String(it.exifCoords.lat));
+            fd.append("lng", String(it.exifCoords.lng));
+          }
+          if (it.exifTakenAt) fd.append("takenAt", it.exifTakenAt.toISOString());
+          if (it.hash) fd.append("contentHash", it.hash);
+          const remaining = run.length - idx - 1;
+          if (remaining > 0) fd.append("suppressPush", "1");
+          else if (run.length > 1) fd.append("count", String(run.length));
+          await upload.mutateAsync(fd);
+          return;
+        } catch (e) {
+          const msg = e instanceof Error ? e.message : "Ошибка сети";
+          // дедуп/лимит — ретрай бессмысленен
+          if (msg.includes("уже загружено") || msg.includes("лимит") || attempt === 1) throw new Error(msg);
+          await new Promise((r) => setTimeout(r, 1200));
+        }
       }
-      if (it.exifTakenAt) fd.append("takenAt", it.exifTakenAt.toISOString());
-      if (it.hash) fd.append("contentHash", it.hash);
-      // Тихий режим для всех, кроме последнего: один пуш на весь батч
-      const remaining = run.length - idx - 1;
-      if (remaining > 0) fd.append("suppressPush", "1");
-      else if (run.length > 1) fd.append("count", String(run.length));
-      try {
-        await upload.mutateAsync(fd);
-        ok++;
+    };
+
+    // Пул из 2 параллельных загрузок: вдвое быстрее на мобильной сети,
+    // но без шторма соединений; курсор idx общий
+    let idx = 0;
+    let stopped = false;
+    const worker = async (slot: number) => {
+      while (true) {
+        if (stopRef.current) { stopped = true; return; }
+        const i = idx;
+        if (i >= run.length) return;
+        idx++;
+        const it = run[i];
         setItems((prev) =>
-          prev.map((x) => (x.key === it.key ? { ...x, status: "done" } : x))
+          prev.map((x) => (x.key === it.key ? { ...x, status: "uploading" } : x))
         );
-      } catch {
-        err++;
-        setItems((prev) =>
-          prev.map((x) => (x.key === it.key ? { ...x, status: "error" } : x))
-        );
+        try {
+          await uploadOne(it, i);
+          ok++;
+          setItems((prev) =>
+            prev.map((x) =>
+              x.key === it.key
+                ? { ...x, status: "done" as const, errorMessage: undefined }
+                : x
+            )
+          );
+        } catch (e) {
+          const msg = e instanceof Error ? e.message : "Ошибка сети";
+          if (msg === "stopped") { stopped = true; return; }
+          err++;
+          lastError = msg;
+          setItems((prev) =>
+            prev.map((x) =>
+              x.key === it.key ? { ...x, status: "error", errorMessage: msg } : x
+            )
+          );
+        }
+        void slot;
       }
-    }
+    };
+    // suppressPush: последний УШЕДШИЙ в очередь кадр несёт count — при пуле
+    // «последний по idx» может прийти не последним по сети; допустимо: пуш
+    // «добавил N фото» останется одним на батч, порядок кадров не важен
+    await Promise.all([worker(1), worker(2)]);
+
     setRunning(false);
-    if (stopRef.current && ok + err < run.length) {
+    setPhotoBatchRunning(false);
+    if (stopped && ok + err < run.length) {
       toast.info(`Остановлено: загружено ${ok}`);
     } else if (err) {
-      toast.error(`${err} фото не загрузились — можно повторить`);
+      toast.error(`Не загрузилось ${err} из ${run.length} — ${lastError}`, {
+        description: "Нажмите «Повторить» — загруженные кадры не задвоятся",
+        duration: 8000,
+      });
     } else {
       toast.success(`Загружено ${ok} фото 📸`);
-      // Закрываем не сразу: пусть увидят зелёную сетку
       setTimeout(onDone, 700);
     }
+    // Одна инвалидация на весь батч вместо 46 (шторм рефетчей давал лаги)
+    void refetchPhotosAfterBatch();
+  };
+
+  // Один рефетч галереи/маршрута после батча (см. useUploadPhoto invalidate:false)
+  const refetchPhotosAfterBatch = () => {
+    qc.invalidateQueries({ queryKey: ["photos"] });
+    qc.invalidateQueries({ queryKey: ["photos-geo"] });
+    invalidateRouteData(qc);
   };
 
   const removeItem = (key: string) => {
@@ -270,7 +351,7 @@ export function PhotoBatch({ files, onDone, onCancel }: PhotoBatchProps) {
             {it.status === "error" && (
               <span
                 className="absolute inset-0 grid place-items-center bg-red-950/50"
-                title="Не обработалось или не загрузилось"
+                title={it.errorMessage || "Не загрузилось — попробуйте «Повторить»"}
               >
                 <X className="size-5 text-red-400" />
               </span>

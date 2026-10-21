@@ -51,7 +51,9 @@
 | `trips/join` | GET, POST | U | 30/мин/IP + userRateLimit | превью поездки по инвайт-коду / вступление (проверяет TripBan, freeMemberLimit) |
 | `trips/from-template` | POST | U | — | создать поездку из шаблона (`src/lib/trip-templates.ts`) |
 | `trip` | GET, PATCH | M / O | — | сводка поездки: участники, счётчики, дни-мета БЕЗ мест (слим-формат, аудит 2026-09-13); `email` участников — только владельцу; при `allowMemberInvites:false` `inviteCode` отдаётся только владельцу; дни с местами — `route`; PATCH — только владелец: `{status}` и/или `{title}` и/или `{allowMemberInvites:boolean}` (переключатель «кто приглашает» из «О поездке») |
-| `trip/share` | GET, POST | O | — | публичная read-only ссылка `/p/<shareToken>` для родных (галерея+маршрут+карта, без денег/чата/дневника). GET — `{enabled, token}`; POST `{enabled, rotate?}` — включить/выключить/перегенерировать токен (rotate мгновенно закрывает старую ссылку). Страница — RSC `src/app/p/[token]/page.tsq`, ходит в БД по токену без кэша; noindex |
+| `trip/share` | GET, POST | O | — | публичная страница поездки `/p/<shareToken>` («живой журнал»: обложка, лучшие кадры, главы-дни, галерея, карта — без денег/чата/дневника). GET — `{enabled, token, allowDownload}`; POST `{enabled?, rotate?, allowDownload?}` — включить/выключить ссылку, перегенерировать токен (rotate мгновенно закрывает старую), тумблер скачивания фото гостями (независим от enabled). Страница — RSC `src/app/p/[token]/page.tsx`, ходит в БД по токену без кэша; `generateMetadata` отдаёт og:image с обложкой (превью в мессенджерах); noindex |
+| `p/[token]/photos.zip` | GET | публичный | 5/ч/IP | ZIP всех фото поездки (STORE без сжатия — JPEG уже сжат; поток: `src/lib/zip.ts`). Работает только при `shareEnabled` + `shareAllowDownload`; 404/403 иначе. Внутри имена `NNN-день-N-подпись.jpg` в хронологии `takenAt` |
+| `p/[token]/heart` | POST | публичный | 10/ч/IP | гостевое сердечко: `shareHearts += 1`, ответ `{hearts}`. Анонимно, без идентичности — анти-спам только лимитом |
 | `trip/dates` | PATCH | O | — | сдвиг дат/дней поездки |
 | `trip/budget` | PATCH | M | — | общий бюджет/валюта поездки |
 | `trip/import` | POST | U | userRateLimit | импорт JSON-бэкапа → новая поездка |
@@ -159,6 +161,7 @@ In-memory, сбрасываются рестартом контейнера (ADR
 - weather — 30 / мин / IP
 - geocode — 60 / ч / user
 - photos — 150 / ч / user (вечерний батч «фото за день» — 30–50 кадров; раньше 20/ч рвали его на середине)
+- публичные `/p/[token]/*` — photos.zip 5 / ч / IP, heart 10 / ч / IP (анонимные гостевые эндпоинты)
 - ИИ-роуты (ai-summary, phrases, foods) — 10 / ч / user+trip; ai/planner — 3 / ч, ai/restaurants и ai/walk — 6 / ч (реестр лимитов: `AI_FEATURES` в `src/lib/ai-usage.ts`). Там же per-feature таймаут вызова провайдера (дефолт 60 с; ai-summary — 180 с: «размышляющие» GLM-модели пишут рассказ 70–90 с, walk и ai/planner — 90 с: JSON на все дни большой поездки). Обрезка ответа провайдером (`finish_reason=length`) пишется в AiUsage как `error:"truncated"`
 
 ## Realtime-события

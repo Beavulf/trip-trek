@@ -147,9 +147,12 @@ User ──< TripMember >── Trip ──< Day ──< Place ──< Photo
   для «Моё», planned — план бюджета по местам маршрута), не дублируй её в роутах.
 - **User.paymentDetails** — «куда возвращать долги» (карта/телефон, ≤300): видят
   только участники его поездок (participants в `GET /api/trip`), в публичные
-  выгрузки не отдаётся. **Trip.shareEnabled/shareToken** — публичная read-only
-  страница `/p/<token>` (галерея+маршрут+карта, без денег/чата): токен 32 hex,
+  выгрузки не отдаётся. **Trip.shareEnabled/shareToken** — публичная страница
+  `/p/<token>` («живой журнал»: фото/маршрут/карта, без денег/чата): токен 32 hex,
   rotate закрывает старую ссылку, страница RSC без кэша — выключение мгновенное.
+  **Trip.shareAllowDownload** — тумблер «гости могут скачать ZIP фото»
+  (`/p/<token>/photos.zip`); **Trip.shareHearts** — счётчик гостевых сердечек
+  (`/p/<token>/heart`, анонимно + лимит по IP).
 - **Photo**: `url`/`thumbUrl` (storage пайплайн), координаты и дата съёмки из EXIF (клиентский `src/lib/photo-exif.ts`, до загрузки — storage EXIF выпиливает; `takenAt` — по EXIF-дате, иначе время загрузки),
   `userId` — кто загрузил (SetNull при удалении аккаунта).
 - **Phrase**: колонки `ru`/`cn`/`pinyin` исторические; реальный язык — `language`

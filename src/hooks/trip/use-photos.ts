@@ -43,8 +43,9 @@ export function usePhotos(dayId?: string, placeId?: string) {
   });
 }
 
-export function useUploadPhoto() {
+export function useUploadPhoto(opts?: { invalidate?: boolean }) {
   const qc = useQueryClient();
+  const invalidate = opts?.invalidate ?? true;
   return useMutation({
     mutationFn: async (formData: FormData) => {
       formData.append("tripId", getTripId());
@@ -56,6 +57,10 @@ export function useUploadPhoto() {
       return r.json();
     },
     onSuccess: () => {
+      // Батч передаёт invalidate:false: 46 фото × полный рефетч галереи
+      // давали шторм рефотчей и лаги интерфейса — батч инвалидирует один раз
+      // после очереди (ретро 2026-10-21: «интерфейс подлагивает»)
+      if (!invalidate) return;
       qc.invalidateQueries({ queryKey: ["photos"] });
       qc.invalidateQueries({ queryKey: ["photos-geo"] });
       invalidateRouteData(qc);

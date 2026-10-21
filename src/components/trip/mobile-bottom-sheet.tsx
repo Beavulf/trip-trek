@@ -95,7 +95,7 @@ export function MobileBottomSheet({
           {header !== undefined ? (
             header
           ) : (
-            <div className="sticky top-0 bg-card/95 backdrop-blur px-4 sm:px-5 py-3 border-b border-border flex items-center justify-between shrink-0">
+            <div className="sticky top-0 z-20 bg-card/95 backdrop-blur px-4 sm:px-5 py-3 border-b border-border flex items-center justify-between shrink-0">
               <h2 className="font-bold text-base sm:text-lg flex items-center gap-2">
                 {titleIcon}
                 {title}

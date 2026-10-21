@@ -27,6 +27,9 @@ interface TripState {
   // честно строится заново при первом заходе.
   mapEverOpened: boolean;
   setActiveTab: (t: TripTab) => void;
+  // Идёт батч-загрузка фото: QuickAddSheet не даёт закрыть себя без подтверждения
+  photoBatchRunning: boolean;
+  setPhotoBatchRunning: (v: boolean) => void;
   currentUserId: string | null;
   setCurrentUserId: (id: string | null) => void;
   selectedDay: number | null;
@@ -56,7 +59,13 @@ export const useTripStore = create<TripState>()(
     (set) => ({
       activeTab: "dashboard",
       mapEverOpened: false,
-      setActiveTab: (t) =>
+    photoBatchRunning: false,
+      setPhotoBatchRunning: (v) =>
+      set((st) => {
+        if (st.photoBatchRunning === v) return st;
+        return { photoBatchRunning: v };
+      }),
+    setActiveTab: (t) =>
         set((s) => ({ activeTab: t, mapEverOpened: s.mapEverOpened || t === "map" })),
       currentUserId: null,
       setCurrentUserId: (id) => set({ currentUserId: id }),
