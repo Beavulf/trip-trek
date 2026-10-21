@@ -3,7 +3,7 @@ import { db } from "@/lib/db";
 import { publish } from "@/lib/ws-bus";
 import { requireTripMember, requireUser, requireTripEditor } from "@/lib/api-auth";
 import { put as storagePut, remove as storageRemove, StorageError } from "@/lib/storage";
-import { userRateLimit } from "@/lib/rate-limit";
+import { limit } from "@/lib/rate-limit";
 
 // GET /api/photos?tripId=...&dayId=...&placeId=...
 export async function GET(req: NextRequest) {
@@ -58,12 +58,17 @@ export async function POST(req: NextRequest) {
   const { user, response } = await requireTripEditor(req, tripId);
   if (response) return response;
 
-  // 150 фото в час на пользователя. Ретро-кейс 2026-10 (Китай): вечерний батч
-  // «все фото за день» — 30–50 кадров; прошлые 20/час рвали его на середине,
-  // и вторую половину дня друзья уже не догружали. Sharp ~1–2с/фото, 150/час
-  // размазывает нагрузку VPS без очередей.
-  const limited = userRateLimit(req, user!.id, "photos", 150, 60 * 60_000);
-  if (limited) return limited;
+  // 500 фото в час на пользователя. История лимита: 20/час рвали вечерний
+  // батч (Китай), 150/час — исчерпывались активным тестированием (несколько
+  // батчей по 30–50 кадров за час — нормальный сценарий, 2026-10-21: 149
+  // за час и 429 на хвосте). 500/час всё ещё защищает sharp/диск от абьюза.
+  const rl = limit(`photos:${user!.id}`, { max: 500, windowMs: 60 * 60_000 });
+  if (!rl.ok) {
+    return NextResponse.json(
+      { error: `Лимит загрузки фото исчерпан (500 в час). Подожди немного — уже загруженное не задвоится.` },
+      { status: 429, headers: { "Retry-After": String(rl.retryAfterSec || 600) } }
+    );
+  }
 
   // Размер файла известен из multipart ДО чтения в память: гигантский файл
   // не должен буферизоваться, чтобы получить честный 413 от storagePut
