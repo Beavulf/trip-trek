@@ -82,6 +82,15 @@ export function lodgingPhase(l: Pick<Lodging, "checkIn" | "checkOut">, todayKey:
   return todayKey < outKey ? "current" : "past";
 }
 
+/**
+ * Жильё имеет отношение к дню key: заезд, любая ночь или день выезда (утром выезжаем —
+ * адрес ещё нужен). Для фильтра по дню в «Маршруте»; в отличие от lodgingPhase,
+ * день выезда включён.
+ */
+export function lodgingTouchesDay(l: Pick<Lodging, "checkIn" | "checkOut">, key: string): boolean {
+  return key >= toDateKey(l.checkIn) && key <= toDateKey(l.checkOut);
+}
+
 export function sortLodgings<T extends Pick<Lodging, "checkIn" | "checkOut">>(list: T[]): T[] {
   return [...list].sort(
     (a, b) => toDateKey(a.checkIn).localeCompare(toDateKey(b.checkIn)) || toDateKey(a.checkOut).localeCompare(toDateKey(b.checkOut))

@@ -130,25 +130,25 @@ export function LodgingSheet({ lodging, defaults, currencySymbol, onClose }: Lod
       <div className="space-y-5">
         <Section title="Где">
           <Field label="Название *" htmlFor="lg-name">
-            <input id="lg-name" value={name} onChange={(e) => setName(e.target.value)} maxLength={200} placeholder="Отель East Maple" className={inputCls} />
+            <input id="lg-name" value={name} onChange={(e) => setName(e.target.value)} maxLength={200} placeholder="Как называется жильё" className={inputCls} />
           </Field>
           <Field
             label="Название на местном языке"
             htmlFor="lg-local"
-            hint="Это крупно покажем таксисту — так его проще найти"
+            hint="Если страна пишет на другом языке, это крупно покажем таксисту"
           >
-            <input id="lg-local" value={nameLocal} onChange={(e) => setNameLocal(e.target.value)} maxLength={200} placeholder="东枫国际公寓" className={inputCls} />
+            <input id="lg-local" value={nameLocal} onChange={(e) => setNameLocal(e.target.value)} maxLength={200} placeholder="Как написано на вывеске или в брони" className={inputCls} />
           </Field>
           <div className="grid grid-cols-2 gap-3">
             <Field label="Город" htmlFor="lg-city">
-              <input id="lg-city" value={city} onChange={(e) => setCity(e.target.value)} maxLength={100} placeholder="Гуанчжоу" className={inputCls} />
+              <input id="lg-city" value={city} onChange={(e) => setCity(e.target.value)} maxLength={100} placeholder="Город" className={inputCls} />
             </Field>
             <Field label="Телефон" htmlFor="lg-phone">
-              <input id="lg-phone" type="tel" inputMode="tel" value={phone} onChange={(e) => setPhone(e.target.value)} maxLength={40} placeholder="+86 20 …" className={inputCls} />
+              <input id="lg-phone" type="tel" inputMode="tel" value={phone} onChange={(e) => setPhone(e.target.value)} maxLength={40} placeholder="+" className={inputCls} />
             </Field>
           </div>
-          <Field label="Адрес (на местном языке)" htmlFor="lg-address">
-            <textarea id="lg-address" value={address} onChange={(e) => setAddress(e.target.value)} maxLength={400} rows={2} placeholder="广州市天河区…" className={cn(inputCls, "resize-none")} />
+          <Field label="Адрес" htmlFor="lg-address" hint="Лучше на местном языке — его прочтёт водитель">
+            <textarea id="lg-address" value={address} onChange={(e) => setAddress(e.target.value)} maxLength={400} rows={2} placeholder="Улица, дом, город — как в брони" className={cn(inputCls, "resize-none")} />
           </Field>
         </Section>
 
