@@ -146,29 +146,46 @@ export function PublicTripView({ trip, token }: { trip: PublicTrip; token: strin
   const zipUrl = `/p/${token}/photos.zip`;
   const canDownloadZip = trip.allowDownload && trip.photos.length > 0;
 
-  const like = async () => {
-    if (liked || likePending) return;
+  /** Тап по сердечку: поставить или забрать своё (состояние — на устройстве) */
+  const toggleLike = async () => {
+    if (likePending) return;
+    const undo = liked;
     setLikePending(true);
-    setLiked(true);
-    setHearts((h) => h + 1);
+    setLiked(!undo);
+    setHearts((h) => Math.max(0, h + (undo ? -1 : 1)));
     try {
-      localStorage.setItem(likeKey, "1");
+      if (undo) localStorage.removeItem(likeKey);
+      else localStorage.setItem(likeKey, "1");
     } catch {
-      /* не критично */
+      // приватный режим без localStorage — сердечко просто не помнится
     }
     try {
-      const r = await fetch(`/p/${token}/heart`, { method: "POST" });
+      const r = await fetch(`/p/${token}/heart`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ undo }),
+      });
       if (!r.ok) throw new Error("failed");
-      const d = (await r.json()) as { hearts: number };
+      const d = (await r.json()) as { hearts: number; undo: boolean };
       setHearts(d.hearts);
+      if (undo && !d.undo) {
+        // сервер отказал в декременте (счётчик уже пуст) — считаем сердечко поставленным
+        setLiked(true);
+        try {
+          localStorage.setItem(likeKey, "1");
+        } catch {
+          // не критично
+        }
+      }
     } catch {
       // откат — тихо, кнопка снова активна
-      setLiked(false);
-      setHearts((h) => Math.max(trip.hearts, h - 1));
+      setLiked(undo);
+      setHearts((h) => Math.max(0, h + (undo ? 1 : -1)));
       try {
-        localStorage.removeItem(likeKey);
+        if (undo) localStorage.setItem(likeKey, "1");
+        else localStorage.removeItem(likeKey);
       } catch {
-        /* не критично */
+        // не критично
       }
     } finally {
       setLikePending(false);
@@ -292,9 +309,9 @@ export function PublicTripView({ trip, token }: { trip: PublicTrip; token: strin
               )}
               <button
                 type="button"
-                onClick={like}
-                disabled={liked || likePending}
-                aria-label={liked ? "Вы уже оставили сердечко" : "Оставить сердечко"}
+                onClick={toggleLike}
+                disabled={likePending}
+                aria-label={liked ? "Забрать сердечко" : "Оставить сердечко"}
                 className={cn(
                   "min-h-11 inline-flex items-center gap-2 rounded-full px-5 text-sm font-semibold border transition-all active:scale-95",
                   liked
@@ -582,8 +599,9 @@ export function PublicTripView({ trip, token }: { trip: PublicTrip; token: strin
             )}
             <button
               type="button"
-              onClick={like}
-              disabled={liked || likePending}
+              onClick={toggleLike}
+              disabled={likePending}
+              aria-label={liked ? "Забрать сердечко" : "Оставить сердечко"}
               tabIndex={showFloatingBar ? 0 : -1}
               className={cn(
                 "min-h-10 inline-flex items-center gap-1.5 rounded-full px-4 text-xs font-semibold border transition-transform active:scale-95",
