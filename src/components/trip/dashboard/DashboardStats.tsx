@@ -30,7 +30,7 @@ export function DashboardStats({ trip, daysRemaining }: DashboardStatsProps) {
       <button
         type="button"
         onClick={() => setActiveTab("budget")}
-        className="col-span-3 lg:col-span-2 rounded-2xl bg-card border border-border p-4 text-left hover:shadow-lg card-hover group"
+        className="col-span-3 lg:col-span-2 rounded-2xl bg-card border border-border p-4 text-left hover:shadow-lg card-hover group active:scale-[0.99]"
       >
         <div className="flex items-center justify-between mb-2">
           <div className="flex items-center gap-2 text-sm text-muted-foreground">

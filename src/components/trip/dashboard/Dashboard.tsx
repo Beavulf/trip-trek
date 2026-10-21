@@ -11,6 +11,7 @@ import { DashboardSkeleton } from "./DashboardSkeleton";
 import { DailyTip } from "./DashboardWidgets";
 import { RouteRail } from "./RouteRail";
 import { TodayList } from "./TodayList";
+import { TripFinishedBanner } from "./TripFinishedBanner";
 
 const CITY_EMOJI: Record<string, string> = {
   "": "🏙️",
@@ -105,6 +106,8 @@ export function Dashboard() {
 
   return (
     <div className="space-y-4 animate-fade-up">
+      <TripFinishedBanner />
+
       <DashboardHero
         trip={trip}
         currentDay={currentDay}

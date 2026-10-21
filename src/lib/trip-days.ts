@@ -35,3 +35,36 @@ export function dayEndFor(startDate: Date, dayNumber: number): Date {
   d.setHours(23, 59, 59, 999);
   return d;
 }
+
+/**
+ * День маршрута по дате-времени (съёмки) — для автокладки вечернего батча фото:
+ * EXIF-дата снимка кладёт фото в день, на чью календарную дату пришлась съёмка.
+ * Сравнение по локальной дате устройства: EXIF-время — локальное время камеры,
+ * а батч грузит тот, кто снимал. Нет совпадения (снимки до/после поездки) → null.
+ */
+export function dayIdForDate(
+  days: ReadonlyArray<{ id: string; date: string | Date }>,
+  takenAt: Date
+): string | null {
+  const key = (d: Date) => `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+  const wanted = key(takenAt);
+  for (const d of days) {
+    if (key(new Date(d.date)) === wanted) return d.id;
+  }
+  return null;
+}
+
+/**
+ * Поездка «закончилась, но не закрыта»: endDate уже прошёл, а статус ещё не
+ * completed. Триггер баннера-финала с долгами и архивированием (ретро-кейс
+ * 2026-10: поездка в Китай висела в planning через день после возвращения,
+ * с незакрытым хвостом долгов, который никто не увидел).
+ */
+export function isTripFinished(
+  endDate: string | Date | null | undefined,
+  status?: string | null
+): boolean {
+  if (status === "completed") return false;
+  if (!endDate) return false;
+  return new Date(endDate).getTime() < Date.now();
+}

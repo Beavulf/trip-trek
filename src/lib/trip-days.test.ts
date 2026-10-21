@@ -1,5 +1,11 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { calculateCurrentDayNumber, dayDateFor, dayEndFor } from "./trip-days";
+import {
+  calculateCurrentDayNumber,
+  dayDateFor,
+  dayEndFor,
+  dayIdForDate,
+  isTripFinished,
+} from "./trip-days";
 
 afterEach(() => {
   vi.useRealTimers();
@@ -69,5 +75,28 @@ describe("dayDateFor / dayEndFor", () => {
     expect(d.getMinutes()).toBe(59);
     expect(d.getSeconds()).toBe(59);
     expect(d.getMilliseconds()).toBe(999);
+  });
+});
+
+describe("dayIdForDate / isTripFinished", () => {
+  it("dayIdForDate находит день по дате и игнорирует время", () => {
+    const days = [
+      { id: "d1", date: new Date(2026, 9, 8).toISOString() },
+      { id: "d2", date: new Date(2026, 9, 9).toISOString() },
+    ];
+    expect(dayIdForDate(days, new Date(2026, 9, 9, 22, 15))).toBe("d2");
+    expect(dayIdForDate(days, new Date(2026, 9, 1))).toBeNull();
+  });
+
+  it("isTripFinished: endDate прошёл и не completed", () => {
+    vi.setSystemTime(new Date(2026, 9, 21, 12, 0));
+    expect(isTripFinished(new Date(2026, 9, 20, 23, 59), "planning")).toBe(true);
+    expect(isTripFinished(new Date(2026, 9, 20, 23, 59), "active")).toBe(true);
+    // закрытая поездка больше не «незакрытая», даже если endDate прошёл
+    expect(isTripFinished(new Date(2026, 9, 20, 23, 59), "completed")).toBe(false);
+    // ещё едем
+    expect(isTripFinished(new Date(2026, 9, 25), "active")).toBe(false);
+    // без конца (totalDays-only) финал не наступает — конец вычисляется на клиенте
+    expect(isTripFinished(null, "planning")).toBe(false);
   });
 });

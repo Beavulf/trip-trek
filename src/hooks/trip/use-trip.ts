@@ -53,6 +53,29 @@ export function useUpdateTripDates() {
   });
 }
 
+// Статус поездки (planning/active/completed). Меняет только владелец —
+// гард в PATCH /api/trip; completed ставится из баннера-финала поездки
+export function useSetTripStatus() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (status: "planning" | "active" | "completed") => {
+      const r = await fetch(`/api/trip?tripId=${encodeURIComponent(getTripId())}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status }),
+      });
+      if (!r.ok) {
+        const err = (await r.json().catch(() => ({}))) as { error?: string };
+        throw new Error(err.error || "Не удалось обновить статус поездки");
+      }
+      return r.json();
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["trip"] });
+    },
+  });
+}
+
 export function useUpdateTripBudget() {
   const qc = useQueryClient();
   return useMutation({
