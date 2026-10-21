@@ -38,6 +38,11 @@ model User {
   // Момент последнего алерта «порог трат ИИ». Дедуп — раз в UTC-сутки: сравнение
   // «< начала сегодняшних суток» само сбрасывается в полночь, cron не нужен.
   aiAlertedAt DateTime?
+  // Реквизиты для возврата долгов (карта/телефон/что юзер сам решит показать).
+  // Видят участники его поездок в экране расчёта — иначе номер карты летит
+  // в общий чат (наблюдали в реальной поездке 2026-10). В публичные выгрузки
+  // не отдаётся. Юзер осознанно пишет сюда то, чем готов делиться.
+  paymentDetails String?
   // Обучение (welcome-tour): момент завершения/пропуска. null = не показывали
   // (или сброшено кнопкой «Пройти заново» в профиле) — тур откроется при входе на /
   onboardingCompletedAt DateTime?
@@ -164,6 +169,11 @@ model Trip {
   coverColor  String    @default("#f97316")
   coverEmoji  String    @default("🌏")
   status      String    @default("planning") // planning / active / completed
+  // Публичная read-only страница для родных (галерея+маршрут+карта, без денег
+  // и чата): /p/<shareToken>. Токен только при shareEnabled; rotate — замена
+  // токена мгновенно инвалидирует старую ссылку (утекла — перегенерил)
+  shareEnabled Boolean  @default(false)
+  shareToken   String?  @unique
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
