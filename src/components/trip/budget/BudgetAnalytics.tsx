@@ -126,8 +126,15 @@ export function BudgetAnalytics({
       {switcher}
 
       {tab === "cats" && hasCategories && (
-        <div className="flex items-center gap-4">
-          <div className="w-32 h-32 shrink-0">
+        <div className="flex items-center gap-4 animate-fade-up" style={{ animationDuration: "0.25s" }}>
+          <div className="relative w-32 h-32 shrink-0">
+            {/* Итог в центре бублика: число, которое иначе приходится складывать из строк справа */}
+            <div className="absolute inset-0 grid place-items-center pointer-events-none">
+              <div className="text-center leading-tight">
+                <div className="text-sm font-bold tabular-nums">{sym}{Math.round(totalSpent).toLocaleString("ru-RU")}</div>
+                <div className="text-[9px] text-muted-foreground">{isPersonal ? "моё" : "всего"}</div>
+              </div>
+            </div>
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
                 {/* Анимация выключена: recharts переигрывала её на каждую смену
@@ -164,7 +171,7 @@ export function BudgetAnalytics({
       )}
 
       {tab === "days" && hasDays && (
-        <>
+        <div className="animate-fade-up" style={{ animationDuration: "0.25s" }}>
           <div className="h-48">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={dailyData} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
@@ -200,7 +207,7 @@ export function BudgetAnalytics({
             Всего {dailyData.length} {plural(dailyData.length, "день", "дня", "дней")} с тратами · в среднем за такой день: {sym}
             {avgDay}
           </p>
-        </>
+        </div>
       )}
 
       {isPersonal && (

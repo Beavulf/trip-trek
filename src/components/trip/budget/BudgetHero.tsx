@@ -6,6 +6,7 @@ import { Wallet, Pencil, Check, X, Plus, CalendarDays } from "lucide-react";
 import { toast } from "sonner";
 import { cn, plural, fmtMoney } from "@/lib/utils";
 import { useUpdateTripBudget } from "@/hooks/use-trip";
+import { AnimatedNumber } from "./AnimatedNumber";
 
 interface BudgetHeroProps {
   totalSpent: number;
@@ -102,7 +103,9 @@ export function BudgetHero({
         </div>
 
         <div className="flex items-end gap-2 flex-wrap">
-          <span className="text-4xl font-bold tabular-nums">{sym}{totalSpent.toFixed(0)}</span>
+          <span className="text-4xl font-bold tabular-nums">
+            <AnimatedNumber value={totalSpent} format={(v) => `${sym}${v.toFixed(0)}`} />
+          </span>
           {(hasBudget || editing) && <span className="text-white/80 mb-1">/</span>}
           {editing ? (
             <div className="flex items-center gap-1.5 mb-0.5">
@@ -159,15 +162,14 @@ export function BudgetHero({
             initial={{ width: 0 }}
             animate={{ width: `${Math.min(100, budgetPct)}%` }}
             transition={{ duration: 0.8 }}
-            className={cn("h-full rounded-full", budgetPct > 90 ? "bg-red-300" : "bg-white")}
+            className={cn("h-full rounded-full transition-colors duration-500", budgetPct > 90 ? "bg-red-300" : "bg-white")}
           />
         </div>
         <div className="flex items-center justify-between mt-2 text-sm">
           <span className="text-white/80">Потрачено {budgetPct.toFixed(0)}%</span>
           <span className={cn("font-semibold", remaining < 0 ? "text-red-200" : "text-white")}>
-            {remaining >= 0
-              ? `Остаток ${sym}${remaining.toFixed(0)}`
-              : `Перерасход ${sym}${Math.abs(remaining).toFixed(0)}`}
+            {remaining >= 0 ? "Остаток " : "Перерасход "}
+            <AnimatedNumber value={Math.abs(remaining)} format={(v) => `${sym}${v.toFixed(0)}`} />
           </span>
         </div>
         </>)}

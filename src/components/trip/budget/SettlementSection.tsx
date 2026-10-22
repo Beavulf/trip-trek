@@ -7,14 +7,16 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import type { Balance, Settlement } from "@/lib/budget";
 import { MarkSettledButton } from "./MarkSettledButton";
+import { AnimatedNumber } from "./AnimatedNumber";
 import { UserAvatar } from "../user-avatar";
 
 interface SettlementSectionProps {
   balances: Balance[];
   settlements: Settlement[];
-  totalSpent: number;
   participantsCount: number;
   currencySymbol?: string;
+  /** Текущий пользователь: сводка «ты должен / тебе должны» и подсветка его переводов */
+  currentUserId?: string;
 }
 
 // Пометка у вышедшего/исключённого участника: его долги остаются в расчёте (lib/budget/people.ts)
@@ -23,10 +25,18 @@ function FormerTag({ former }: { former?: boolean }) {
 }
 
 // "Расчёт между друзьями" — балансы, расшифровка, список переводов
-export function SettlementSection({ balances, settlements, totalSpent, participantsCount, currencySymbol: sym = "$" }: SettlementSectionProps) {
+export function SettlementSection({ balances, settlements, participantsCount, currencySymbol: sym = "$", currentUserId = "" }: SettlementSectionProps) {
   const [showBalanceHint, setShowBalanceHint] = useState(false);
   const [showSettlementHint, setShowSettlementHint] = useState(false);
   const [expandedBalance, setExpandedBalance] = useState<string | null>(null);
+
+  // Личная позиция: сколько должен я и сколько должны мне — главный вопрос этого экрана.
+  // Свои переводы идут первыми и подсвечены (чужие пары — ниже, как справка)
+  const iAmIn = !!currentUserId && balances.some((b) => b.participant.id === currentUserId);
+  const iOwe = settlements.filter((s) => s.from.id === currentUserId).reduce((a, s) => a + s.amount, 0);
+  const owedToMe = settlements.filter((s) => s.to.id === currentUserId).reduce((a, s) => a + s.amount, 0);
+  const involvesMe = (s: Settlement) => s.from.id === currentUserId || s.to.id === currentUserId;
+  const orderedSettlements = [...settlements].sort((a, b) => Number(involvesMe(b)) - Number(involvesMe(a)));
 
   return (
     <div className="rounded-2xl bg-card border border-border p-4">
@@ -77,6 +87,28 @@ export function SettlementSection({ balances, settlements, totalSpent, participa
         )}
       </AnimatePresence>
 
+      {/* Моя позиция: два крупных числа вместо поиска себя в списке */}
+      {iAmIn && (iOwe > 0 || owedToMe > 0) && (
+        <div className="grid grid-cols-2 gap-2 mb-3">
+          {iOwe > 0 && (
+            <div className="rounded-xl bg-red-500/10 border border-red-500/20 px-3 py-2">
+              <div className="text-[10px] text-red-600 dark:text-red-400 font-medium">Ты должен</div>
+              <div className="text-lg font-bold tabular-nums text-red-600 dark:text-red-400">
+                <AnimatedNumber value={iOwe} format={(v) => `${sym}${v.toFixed(2)}`} />
+              </div>
+            </div>
+          )}
+          {owedToMe > 0 && (
+            <div className="rounded-xl bg-green-500/10 border border-green-500/20 px-3 py-2">
+              <div className="text-[10px] text-green-700 dark:text-green-400 font-medium">Тебе должны</div>
+              <div className="text-lg font-bold tabular-nums text-green-700 dark:text-green-400">
+                <AnimatedNumber value={owedToMe} format={(v) => `${sym}${v.toFixed(2)}`} />
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Балансы участников */}
       <div className="space-y-2 mb-3">
         {balances.map((b) => {
@@ -91,7 +123,11 @@ export function SettlementSection({ balances, settlements, totalSpent, participa
                 textClassName="text-xs"
               />
               <div className="flex-1 min-w-0">
-                <div className="font-medium truncate">{b.participant.name}<FormerTag former={b.participant.former} /></div>
+                <div className="font-medium truncate">
+                  {b.participant.name}
+                  {b.participant.id === currentUserId && <span className="ml-1.5 text-[10px] font-medium text-primary">ты</span>}
+                  <FormerTag former={b.participant.former} />
+                </div>
                 <button
                   onClick={() => setExpandedBalance(expandedBalance === b.participant.id ? null : b.participant.id)}
                   className="text-[10px] text-muted-foreground flex items-center gap-1 active:scale-95 transition-transform"
@@ -149,7 +185,7 @@ export function SettlementSection({ balances, settlements, totalSpent, participa
 
       {/* Кто кому переводит */}
       {settlements.length > 0 ? (
-        <div className="space-y-2 pt-2 border-t border-border">
+        <div className="pt-2 border-t border-border">
           <div className="flex items-center gap-2 mb-1">
             <span className="text-xs text-muted-foreground font-medium">Кому сколько перевести:</span>
             <button
@@ -179,11 +215,21 @@ export function SettlementSection({ balances, settlements, totalSpent, participa
               </motion.div>
             )}
           </AnimatePresence>
-          {/* Ключ — пара участников + сумма, не индекс: после перевода список пересчитывается и
-              меняет порядок/длину (при key={i} React переиспользовал done-состояние кнопки у чужой
-              пары), а сумма в ключе сбрасывает «Получено», если у пары остался новый долг */}
-          {settlements.map((s) => (
-            <div key={`${s.from.id}-${s.to.id}-${Math.round(s.amount * 100)}`} className="bg-muted/40 rounded-xl px-3 py-2.5">
+          {/* Ключ строки — пара участников, не индекс: после перевода список пересчитывается и меняет
+              порядок/длину (при key={i} React переиспользовал done-состояние кнопки у чужой пары).
+              Погашенная пара сворачивается и исчезает (оптимистично — до ответа сервера) */}
+          <AnimatePresence initial={false}>
+          {orderedSettlements.map((s) => (
+            <motion.div
+              key={`${s.from.id}-${s.to.id}`}
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: "auto" }}
+              exit={{ opacity: 0, height: 0 }}
+              transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+              className="overflow-hidden"
+            >
+            <div className="pb-2">
+            <div className={cn("bg-muted/40 rounded-xl px-3 py-2.5", involvesMe(s) && "ring-1 ring-primary/30")}>
               {/* Главная строка: от → кому + сумма */}
               <div className="flex items-center gap-2">
                 <UserAvatar
@@ -237,13 +283,17 @@ export function SettlementSection({ balances, settlements, totalSpent, participa
               )}
               {/* Кнопка отметки */}
               <div className="mt-2 flex justify-end">
-                <MarkSettledButton from={s.from} to={s.to} amount={s.amount} />
+                {/* key по сумме: «Получено» не залипает, если у пары остался новый долг */}
+                <MarkSettledButton key={Math.round(s.amount * 100)} from={s.from} to={s.to} amount={s.amount} />
               </div>
             </div>
+            </div>
+            </motion.div>
           ))}
+          </AnimatePresence>
         </div>
       ) : (
-        <div className="text-xs text-green-600 text-center py-2">Долгов нет 🎉</div>
+        <div className="text-xs text-green-600 text-center py-2 animate-fade-up">Долгов нет 🎉</div>
       )}
     </div>
   );

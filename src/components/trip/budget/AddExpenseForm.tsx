@@ -85,8 +85,8 @@ export function AddExpenseForm({ onDone }: AddExpenseFormProps) {
   const amountUSD = toBaseCurrency(amountNum, currencyCode, fx.rates) ?? 0;
 
   const submit = async () => {
-    if (!amountNum || !description.trim()) {
-      toast.error("Заполните сумму и описание");
+    if (!amountNum) {
+      toast.error("Введите сумму");
       return;
     }
     if (!paidById) {
@@ -116,7 +116,8 @@ export function AddExpenseForm({ onDone }: AddExpenseFormProps) {
       await add.mutateAsync({
         amount: Math.round(amountUSD * 100) / 100,
         category,
-        description: description.trim(),
+        // Без описания — название категории («Питание»): сумма и категория — минимум для записи траты
+        description: description.trim() || EXPENSE_CATEGORIES[category]?.label || "Трата",
         paidById,
         dayId: dayId || undefined,
         splitWith: splitWithArr,
@@ -222,7 +223,7 @@ export function AddExpenseForm({ onDone }: AddExpenseFormProps) {
       <input
         value={description}
         onChange={(e) => setDescription(e.target.value)}
-        placeholder="Описание (например, Ужин в SoHo)"
+        placeholder={`Описание (по умолчанию «${EXPENSE_CATEGORIES[category]?.label ?? "Трата"}»)`}
         maxLength={500}
         className="w-full rounded-xl border border-input bg-background px-3 py-2.5 text-base input-mobile"
       />
@@ -288,13 +289,23 @@ export function AddExpenseForm({ onDone }: AddExpenseFormProps) {
           <label className="text-xs text-muted-foreground flex items-center gap-1">
             <Users className="size-3" /> За кого?
           </label>
-          <button
-            type="button"
-            onClick={selectAll}
-            className="text-xs text-primary font-medium active:scale-95 transition-transform min-h-11 px-2"
-          >
-            Выбрать всех
-          </button>
+          <div className="flex items-center">
+            {/* Личная трата одним тапом: без ручного снятия галочек с остальных */}
+            <button
+              type="button"
+              onClick={() => setSplitOverride(new Set([paidById]))}
+              className="text-xs text-primary font-medium active:scale-95 transition-transform min-h-11 px-2"
+            >
+              {paidById === currentUserId ? "Только я" : "Только плательщик"}
+            </button>
+            <button
+              type="button"
+              onClick={selectAll}
+              className="text-xs text-primary font-medium active:scale-95 transition-transform min-h-11 px-2"
+            >
+              Выбрать всех
+            </button>
+          </div>
         </div>
         <div className="bg-background rounded-xl border border-input p-1.5 space-y-0.5">
           {participants.map((p) => {
@@ -362,7 +373,8 @@ export function AddExpenseForm({ onDone }: AddExpenseFormProps) {
           className="w-full rounded-xl bg-primary text-primary-foreground py-3.5 min-h-[48px] text-base font-medium flex items-center justify-center gap-2 active:scale-[0.98] transition-transform disabled:opacity-50"
         >
           {add.isPending ? <Loader2 className="size-4 animate-spin" /> : <Plus className="size-4" />}
-          Добавить трату
+          {/* Сумма в USD прямо на кнопке: видно, что именно запишется (особенно при вводе в юанях и т.п.) */}
+          Добавить трату{amountUSD > 0 ? ` · $${amountUSD.toFixed(2)}` : ""}
         </button>
       </StickySubmit>
     </div>

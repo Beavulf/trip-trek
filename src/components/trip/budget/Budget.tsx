@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Plus, UserCircle, Pencil, Loader2, Wallet, ChevronDown } from "lucide-react";
+import { Plus, UserCircle, Pencil, Wallet, ChevronDown } from "lucide-react";
 import { useExpenses, useTrip, useCurrentTripId } from "@/hooks/use-trip";
 import { useAuth } from "@/hooks/use-auth";
 import { useTripStore } from "@/lib/trip-store";
@@ -9,7 +9,6 @@ import { EXPENSE_CATEGORIES } from "@/lib/types";
 import { currencySymbol } from "@/lib/currencies";
 import { daysLeftInTrip, isBeforeTripStart } from "@/lib/trip-days";
 import { calculateBalances, calculateSettlements, calculateNetSpent, calculatePersonalSpend, moneyParticipants } from "@/lib/budget";
-import { motion } from "framer-motion";
 import { cn, plural, fmtMoney } from "@/lib/utils";
 import { CurrencyConverter } from "../currency-converter";
 import { BudgetPlanWidget } from "../budget-plan-widget";
@@ -24,7 +23,8 @@ const BudgetAnalytics = dynamic(() => import("./BudgetAnalytics").then((m) => m.
   ssr: false,
   loading: () => <div className="h-72 rounded-2xl bg-card border border-border animate-pulse" />,
 });
-import { ExpenseRow } from "./ExpenseRow";
+import { ExpenseList } from "./ExpenseList";
+import { BudgetSkeleton } from "./BudgetSkeleton";
 import { AddExpenseForm } from "./AddExpenseForm";
 import { ParticipantBudgetRow } from "./ParticipantBudgetRow";
 import { BudgetEditModal } from "./BudgetEditModal";
@@ -174,11 +174,7 @@ export function Budget() {
   }
 
   if (tripLoading || expensesLoading || !expenses || !trip) {
-    return (
-      <div className="py-20 text-center text-muted-foreground flex items-center justify-center gap-2">
-        <Loader2 className="size-4 animate-spin" /> Загрузка бюджета…
-      </div>
-    );
+    return <BudgetSkeleton />;
   }
 
   const settlementCount = expenses.length - realExpenses.length;
@@ -261,9 +257,9 @@ export function Budget() {
       <SettlementSection
         balances={balances}
         settlements={settlements}
-        totalSpent={totalSpent}
         participantsCount={people.length}
         currencySymbol={sym}
+        currentUserId={currentUserId}
       />
 
       <div className="rounded-2xl bg-card border border-border p-4">
@@ -370,42 +366,19 @@ export function Budget() {
               </p>
             ) : historyFilter === "all" && visibleHistory.some(isPreTrip) ? (
               // Предпоездочная подготовка визуально отделена от трат в поездке
-              <div className="space-y-1.5">
+              <div className="space-y-2">
                 <div className="text-[10px] uppercase tracking-widest text-muted-foreground pt-1">
                   До поездки · билеты и брони
                 </div>
-                {visibleHistory.filter(isPreTrip).map((e) => (
-                  <ExpenseRow key={e.id} expense={e} participants={people} />
-                ))}
-                <div className="text-[10px] uppercase tracking-widest text-muted-foreground pt-2.5">
+                <ExpenseList expenses={visibleHistory.filter(isPreTrip)} participants={people} sym={sym} />
+                <div className="text-[10px] uppercase tracking-widest text-muted-foreground pt-1.5">
                   В поездке
                 </div>
-                {visibleHistory.filter((e) => !isPreTrip(e)).map((e) => (
-                  <ExpenseRow key={e.id} expense={e} participants={people} />
-                ))}
+                <ExpenseList expenses={visibleHistory.filter((e) => !isPreTrip(e))} participants={people} sym={sym} />
               </div>
             ) : (
-              // key по фильтру: смена чипа перемонтирует список и переигрывает
-              // волну входа — смена «Все/Общие/Личные» ощущается откликом
-              <motion.div
-                key={historyFilter}
-                className="space-y-1.5"
-                initial="hidden"
-                animate="show"
-                variants={{ hidden: {}, show: { transition: { staggerChildren: 0.03 } } }}
-              >
-                {visibleHistory.map((e) => (
-                  <motion.div
-                    key={e.id}
-                    variants={{
-                      hidden: { opacity: 0, y: 6 },
-                      show: { opacity: 1, y: 0, transition: { duration: 0.22, ease: [0.22, 1, 0.36, 1] } },
-                    }}
-                  >
-                    <ExpenseRow expense={e} participants={people} />
-                  </motion.div>
-                ))}
-              </motion.div>
+              // Группы по дням + плавное появление/исчезновение строк: см. ExpenseList
+              <ExpenseList expenses={visibleHistory} participants={people} sym={sym} />
             )}
 
             {(hiddenCount > 0 || showAllHistory) && filteredHistory.length > HISTORY_PREVIEW && (

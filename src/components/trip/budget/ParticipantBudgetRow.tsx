@@ -83,7 +83,7 @@ export function ParticipantBudgetRow({ participant, spent }: ParticipantBudgetRo
         {pct !== null && (
           <div className="mt-1 h-1 rounded-full bg-muted overflow-hidden max-w-[120px]">
             <div
-              className={cn("h-full rounded-full", pct > 90 ? "bg-red-500" : pct > 70 ? "bg-amber-500" : "bg-green-500")}
+              className={cn("h-full rounded-full transition-[width,background-color] duration-500 ease-out", pct > 90 ? "bg-red-500" : pct > 70 ? "bg-amber-500" : "bg-green-500")}
               style={{ width: `${pct}%` }}
             />
           </div>

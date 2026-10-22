@@ -67,9 +67,10 @@ export function ExpenseForm({ userId, onDone }: ExpenseFormProps) {
   const sym = currencySymbol(currencyCode);
 
   const submit = async () => {
-    const desc = description.trim();
-    if (!amountNum || !desc) {
-      toast.error("Укажите сумму и описание");
+    // Без описания — название категории: сумма и категория — минимум для записи траты
+    const desc = description.trim() || EXPENSE_CATEGORIES[category]?.label || "Трата";
+    if (!amountNum) {
+      toast.error("Укажите сумму");
       return;
     }
     if (desc.length > 500) {
@@ -201,7 +202,7 @@ export function ExpenseForm({ userId, onDone }: ExpenseFormProps) {
       <input
         value={description}
         onChange={(e) => setDescription(e.target.value)}
-        placeholder="Описание (например, Ужин)"
+        placeholder={`Описание (по умолчанию «${EXPENSE_CATEGORIES[category]?.label ?? "Трата"}»)`}
         maxLength={500}
         className="w-full rounded-xl border border-input bg-background px-3 py-2.5 text-base input-mobile"
       />
@@ -238,13 +239,23 @@ export function ExpenseForm({ userId, onDone }: ExpenseFormProps) {
           <label className="text-xs text-muted-foreground flex items-center gap-1">
             <Users className="size-3" /> За кого?
           </label>
-          <button
-            type="button"
-            onClick={selectAll}
-            className="text-xs text-primary font-medium active:scale-95 transition-transform min-h-11 px-2"
-          >
-            Выбрать всех
-          </button>
+          <div className="flex items-center">
+            {/* Личная трата одним тапом: без ручного снятия галочек с остальных */}
+            <button
+              type="button"
+              onClick={() => setSplitOverride(new Set([userId]))}
+              className="text-xs text-primary font-medium active:scale-95 transition-transform min-h-11 px-2"
+            >
+              Только я
+            </button>
+            <button
+              type="button"
+              onClick={selectAll}
+              className="text-xs text-primary font-medium active:scale-95 transition-transform min-h-11 px-2"
+            >
+              Выбрать всех
+            </button>
+          </div>
         </div>
         <div className="bg-background rounded-xl border border-input p-1.5 space-y-0.5">
           {participants.map((p) => {
@@ -321,7 +332,7 @@ export function ExpenseForm({ userId, onDone }: ExpenseFormProps) {
           className="w-full min-h-[48px] rounded-xl bg-primary text-primary-foreground py-3.5 text-base font-medium flex items-center justify-center gap-2 disabled:opacity-50 transition-transform active:scale-[0.98]"
         >
           {addExpense.isPending ? <Loader2 className="size-4 animate-spin" /> : <Check className="size-4" />}
-          Добавить трату
+          Добавить трату{amountUSD > 0 ? ` · $${amountUSD.toFixed(2)}` : ""}
         </button>
       </StickySubmit>
     </div>

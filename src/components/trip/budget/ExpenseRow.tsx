@@ -5,6 +5,7 @@ import { Trash2, Users, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { useDeleteExpense, useTrip } from "@/hooks/use-trip";
+import { isOptimisticExpenseId } from "@/hooks/trip/use-expenses";
 import { useAuth } from "@/hooks/use-auth";
 import { EXPENSE_CATEGORIES, type Expense, type Participant } from "@/lib/types";
 import { currencySymbol } from "@/lib/currencies";
@@ -32,7 +33,9 @@ export function ExpenseRow({ expense, participants }: ExpenseRowProps) {
   const isSettlement = expense.category === "settlement";
   // Отменить ошибочную отметку «Перевели» может любая сторона перевода
   const isSettlementRecipient = isSettlement && splitIds.includes(currentUserId);
-  const canDelete = expense.paidById === currentUserId || myRole === "owner" || isSettlementRecipient;
+  // Оптимистичная запись (ещё не сохранена на сервере): удалить её нельзя, пока не придёт настоящая
+  const saving = isOptimisticExpenseId(expense.id);
+  const canDelete = !saving && (expense.paidById === currentUserId || myRole === "owner" || isSettlementRecipient);
   const sym = currencySymbol(trip?.settings.currency);
   const del = useDeleteExpense();
   const [confirming, setConfirming] = useState(false);
@@ -59,8 +62,9 @@ export function ExpenseRow({ expense, participants }: ExpenseRowProps) {
 
   return (
     <div className={cn(
-      "flex items-start gap-2.5 p-2.5 rounded-xl hover:bg-accent/50 transition-colors",
-      isSettlement && "bg-green-500/5 border border-green-500/20"
+      "flex items-start gap-2.5 p-2.5 rounded-xl hover:bg-accent/50 transition-[background-color,opacity] duration-200",
+      isSettlement && "bg-green-500/5 border border-green-500/20",
+      saving && "opacity-60"
     )}>
       {/* Иконка категории */}
       <div
@@ -128,7 +132,9 @@ export function ExpenseRow({ expense, participants }: ExpenseRowProps) {
         )}
 
         {/* Время добавления */}
-        <div className="text-[10px] text-muted-foreground/80 mt-0.5">{timeStr}</div>
+        <div className="text-[10px] text-muted-foreground/80 mt-0.5">
+          {saving ? "Сохраняется…" : timeStr}
+        </div>
       </div>
 
       {/* Удаление — только плательщик или owner */}
