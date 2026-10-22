@@ -41,6 +41,7 @@ import dynamic from "next/dynamic";
 import { createPortal } from "react-dom";
 import { useTheme } from "next-themes";
 import { useAuth as useSession } from "@/hooks/use-auth";
+import { useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { useWebSocket } from "@/hooks/use-websocket";
 import { GlobalSearch } from "./global-search";
@@ -51,6 +52,8 @@ import { TripInfoSheet } from "./trip-info-sheet";
 import { WelcomeTour } from "./onboarding/welcome-tour";
 import { TabTour } from "./onboarding/tab-tour";
 import { useAdminStats } from "@/hooks/use-admin-stats";
+import { startUploadQueue } from "@/lib/upload-queue/browser";
+import { FabUploadRing, UploadTray } from "./upload/UploadTray";
 
 // Оверлеи, открываемые действием юзера, грузим по требованию — в первичном
 // бандле им делать нечего (аудит 2026-09-13: qrcode/react в InviteFriends,
@@ -88,7 +91,10 @@ const TABS = [
 
 export function AppShell({ children }: { children: ReactNode }) {
   const router = useRouter();
-  const [quickOpen, setQuickOpen] = useState(false);
+  // Шит быстрого добавления в сторе: его открывают и тосты («Вернуть»), и плашка загрузки
+  const quickOpen = useTripStore((s) => s.quickAddOpen);
+  const setQuickOpen = useTripStore((s) => s.setQuickAddOpen);
+  const qc = useQueryClient();
   const [searchOpen, setSearchOpen] = useState(false);
   const [inviteOpen, setInviteOpen] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
@@ -117,6 +123,15 @@ export function AppShell({ children }: { children: ReactNode }) {
   const [showRightArrow, setShowRightArrow] = useState(false);
 
   useWebSocket(trip?.settings.tripId || "");
+
+  // Фоновая очередь загрузки фото: поднимается с входом пользователя, доотправляет то, что не
+  // успело уйти до закрытия приложения, и держит связь с жизненным циклом страницы (сворачивание,
+  // сеть). Живёт в оболочке, а не в шите — закрытие шита загрузку не трогает
+  const sessionUserId = (session?.user as { id?: string } | undefined)?.id;
+  useEffect(() => {
+    if (!sessionUserId) return;
+    return startUploadQueue(qc, sessionUserId);
+  }, [qc, sessionUserId]);
 
   // Реальная высота липкого хедера — в CSS-переменную: её используют
   // sticky-элементы контента (линейка дней и т.п.) вместо захардкоженных пикселей
@@ -414,6 +429,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         // шита форма уже готова, первый FAB-тап не платит за загрузку (аудит 2026-10-06)
         onPointerDown={() => {
           void import("./quick-add/PhotoForm");
+          void import("exifr");
         }}
         whileTap={{ scale: 0.88 }}
         whileHover={{ scale: 1.06 }}
@@ -423,6 +439,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       >
         {/* Хало живёт только при полной анимации: бесконечный пульс при reduced motion не нужен */}
         <FabHalo />
+        <FabUploadRing />
         <Plus className="size-8 sm:size-7 relative z-10" strokeWidth={2.5} />
       </motion.button>
       )}
@@ -449,6 +466,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       {/* Всегда смонтирован: условный рендер убивал exit-анимацию и перемонтировал
           формы на каждом открытии (аудит 2026-10-06) */}
       <QuickAddSheet open={quickOpen} onOpenChange={setQuickOpen} />
+      <UploadTray />
       <GlobalSearch open={searchOpen} onOpenChange={setSearchOpen} />
       {inviteOpen && <InviteFriends open onOpenChange={setInviteOpen} />}
       <TripInfoSheet

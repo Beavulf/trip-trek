@@ -4,6 +4,7 @@ import { publish } from "@/lib/ws-bus";
 import { requireTripMember, requireUser, requireTripEditor } from "@/lib/api-auth";
 import { put as storagePut, remove as storageRemove, StorageError } from "@/lib/storage";
 import { limit } from "@/lib/rate-limit";
+import { withKeyLock } from "@/lib/key-lock";
 
 // GET /api/photos?tripId=...&dayId=...&placeId=...
 export async function GET(req: NextRequest) {
@@ -96,90 +97,99 @@ export async function POST(req: NextRequest) {
   // Отпечаток содержимого (sha256 оригинала, считает клиент): тот же кадр —
   // тот же отпечаток, повтор в поездке отклоняем (дедуп вечерних батчей)
   const contentHash = ((formData.get("contentHash") as string) || "").toLowerCase();
-  if (contentHash) {
-    if (!/^[0-9a-f]{64}$/.test(contentHash)) {
-      return NextResponse.json({ error: "contentHash: ожидается sha256-hex" }, { status: 400 });
+  if (contentHash && !/^[0-9a-f]{64}$/.test(contentHash)) {
+    return NextResponse.json({ error: "contentHash: ожидается sha256-hex" }, { status: 400 });
+  }
+
+  const createPhoto = async (): Promise<NextResponse> => {
+    if (contentHash) {
+      const dup = await db.photo.findFirst({
+        where: { tripId, contentHash },
+        select: { id: true },
+      });
+      if (dup) {
+        return NextResponse.json(
+          { error: "Это фото уже загружено в поездку", duplicateOf: dup.id },
+          { status: 409 }
+        );
+      }
     }
-    const dup = await db.photo.findFirst({
-      where: { tripId, contentHash },
-      select: { id: true },
+    // Дата съёмки из EXIF (клиент читает до загрузки — storage EXIF выпиливает).
+    // Валидируем: часы камеры врут в обе стороны; мусор → время загрузки как раньше
+    const takenAtRaw = formData.get("takenAt") as string | null;
+    let takenAt = new Date();
+    if (takenAtRaw) {
+      const parsed = new Date(takenAtRaw);
+      const now = Date.now();
+      if (!Number.isFinite(parsed.getTime()) || parsed.getTime() < Date.UTC(2000, 0, 1) || parsed.getTime() > now + 5 * 60_000) {
+        takenAt = new Date();
+      } else {
+        takenAt = parsed;
+      }
+    }
+    // Батч-загрузка: все кадры кроме последнего клиент помечает suppressPush —
+    // друзья получают ОДИН пуш «добавил 50 фото», а не 50 пушей
+    const silent = formData.get("suppressPush") === "1";
+    const batchCount = Math.max(1, Math.min(9999, parseInt(formData.get("count") as string, 10) || 0));
+
+    // Единая политика хранилища: magic bytes, лимит 20MB, sharp-обработка
+    // (EXIF/GPS выпиливаются), никакого raw-fallback
+    let urls: { url: string; thumbUrl?: string; width?: number; height?: number };
+    try {
+      urls = await storagePut({ data: Buffer.from(await file.arrayBuffer()), kind: "photo" });
+    } catch (e) {
+      if (e instanceof StorageError) {
+        return NextResponse.json({ error: e.message }, { status: e.status });
+      }
+      console.error("[photos] upload failed:", e);
+      return NextResponse.json({ error: "Ошибка обработки фото" }, { status: 500 });
+    }
+
+    const photo = await db.photo.create({
+      data: {
+        url: urls.url,
+        thumbUrl: urls.thumbUrl ?? urls.url,
+        // Размеры файла → aspect-ratio плитки галереи: без них masonry считает каждую
+        // плитку заглушкой и подтягивает лишние картинки, а колонки прыгают на загрузке
+        width: urls.width ?? null,
+        height: urls.height ?? null,
+        caption,
+        dayId,
+        tripId,
+        placeId,
+        userId,
+        lat,
+        lng,
+        address,
+        takenAt,
+        ...(contentHash ? { contentHash } : {}),
+      },
+      // user — проекцией, а не целиком: include user:true тянет в ответ весь ряд
+      // юзера вместе с хешем пароля (привычка из journal/photos GET)
+      include: {
+        day: true,
+        user: { select: { id: true, name: true, emoji: true, color: true, avatarUrl: true } },
+      },
     });
-    if (dup) {
-      return NextResponse.json(
-        { error: "Это фото уже загружено в поездку", duplicateOf: dup.id },
-        { status: 409 }
-      );
-    }
-  }
-  // Дата съёмки из EXIF (клиент читает до загрузки — storage EXIF выпиливает).
-  // Валидируем: часы камеры врут в обе стороны; мусор → время загрузки как раньше
-  const takenAtRaw = formData.get("takenAt") as string | null;
-  let takenAt = new Date();
-  if (takenAtRaw) {
-    const parsed = new Date(takenAtRaw);
-    const now = Date.now();
-    if (!Number.isFinite(parsed.getTime()) || parsed.getTime() < Date.UTC(2000, 0, 1) || parsed.getTime() > now + 5 * 60_000) {
-      takenAt = new Date();
-    } else {
-      takenAt = parsed;
-    }
-  }
-  // Батч-загрузка: все кадры кроме последнего клиент помечает suppressPush —
-  // друзья получают ОДИН пуш «добавил 50 фото», а не 50 пушей
-  const silent = formData.get("suppressPush") === "1";
-  const batchCount = Math.max(1, Math.min(9999, parseInt(formData.get("count") as string, 10) || 0));
-
-  // Единая политика хранилища: magic bytes, лимит 20MB, sharp-обработка
-  // (EXIF/GPS выпиливаются), никакого raw-fallback
-  let urls: { url: string; thumbUrl?: string; width?: number; height?: number };
-  try {
-    urls = await storagePut({ data: Buffer.from(await file.arrayBuffer()), kind: "photo" });
-  } catch (e) {
-    if (e instanceof StorageError) {
-      return NextResponse.json({ error: e.message }, { status: e.status });
-    }
-    console.error("[photos] upload failed:", e);
-    return NextResponse.json({ error: "Ошибка обработки фото" }, { status: 500 });
-  }
-
-  const photo = await db.photo.create({
-    data: {
-      url: urls.url,
-      thumbUrl: urls.thumbUrl ?? urls.url,
-      // Размеры файла → aspect-ratio плитки галереи: без них masonry считает каждую
-      // плитку заглушкой и подтягивает лишние картинки, а колонки прыгают на загрузке
-      width: urls.width ?? null,
-      height: urls.height ?? null,
-      caption,
-      dayId,
+    publish(
       tripId,
-      placeId,
-      userId,
-      lat,
-      lng,
-      address,
-      takenAt,
-      ...(contentHash ? { contentHash } : {}),
-    },
-    // user — проекцией, а не целиком: include user:true тянет в ответ весь ряд
-    // юзера вместе с хешем пароля (привычка из journal/photos GET)
-    include: {
-      day: true,
-      user: { select: { id: true, name: true, emoji: true, color: true, avatarUrl: true } },
-    },
-  });
-  publish(
-    tripId,
-    "photo:added",
-    {
-      userId: user!.id,
-      userName: user!.name || photo.user?.name || "Кто-то",
-      ...(batchCount > 1 ? { count: batchCount } : {}),
-    },
-    user!.id,
-    { silent }
-  );
-  return NextResponse.json(photo);
+      "photo:added",
+      {
+        userId: user!.id,
+        userName: user!.name || photo.user?.name || "Кто-то",
+        ...(batchCount > 1 ? { count: batchCount } : {}),
+      },
+      user!.id,
+      { silent }
+    );
+    return NextResponse.json(photo);
+  };
+
+  // Параллельные POST одного кадра (повтор после потерянного ответа, два устройства или вкладки
+  // с одним выбором) без замка оба проходят проверку дубля раньше, чем появится запись, и в
+  // поездке оказывается двойник. Процесс один (ADR-0001), поэтому хватает замка по ключу
+  // «поездка + отпечаток»; уникальный индекс потребовал бы миграции по боевой таблице.
+  return contentHash ? withKeyLock(`photo:${tripId}:${contentHash}`, createPhoto) : createPhoto();
 }
 
 // DELETE

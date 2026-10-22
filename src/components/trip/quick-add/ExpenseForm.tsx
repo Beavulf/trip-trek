@@ -1,7 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useTrip, useAddExpense, useCurrentTripId } from "@/hooks/use-trip";
+import { useFormDraft } from "@/hooks/use-form-draft";
+import { draftKey, readDraft, writeDraft } from "@/lib/form-draft";
+import { useTripStore } from "@/lib/trip-store";
 import { useRateFor } from "@/hooks/trip/use-currency";
 import { EXPENSE_CATEGORIES } from "@/lib/types";
 import { BASE_CURRENCY, currencySelectOptions, currencySymbol } from "@/lib/currencies";
@@ -13,6 +16,7 @@ import { Check, Loader2, Users } from "lucide-react";
 import { toast } from "sonner";
 import { cn, fmtMoney } from "@/lib/utils";
 import { DayPicker } from "./DayPicker";
+import { DraftNotice } from "./DraftNotice";
 import { StickySubmit } from "./StickySubmit";
 
 interface ExpenseFormProps {
@@ -20,23 +24,44 @@ interface ExpenseFormProps {
   onDone: () => void;
 }
 
+/** Что переживает закрытие шита: сумма и текст — главное, остальное — контекст к ним. */
+interface ExpenseDraft {
+  amount: string;
+  category: string;
+  description: string;
+  /** null — «на всех» (юзер выбор не трогал) */
+  split: string[] | null;
+  dayId: string;
+  currency: string;
+}
+
+// Черновик стоит сохранять, только если есть сумма или текст: одна «выбранная категория» — не набор
+const isExpenseDraftEmpty = (d: ExpenseDraft): boolean => !d.amount.trim() && !d.description.trim();
+
 export function ExpenseForm({ userId, onDone }: ExpenseFormProps) {
   const { data: trip } = useTrip();
   const tripId = useCurrentTripId();
   const addExpense = useAddExpense();
   const tripCurrency = trip?.settings?.currency;
-  const [amount, setAmount] = useState("");
+  // Черновик прошлого открытия шита (случайный тап по фону, свайп приложения, перезагрузка)
+  const storageKey = draftKey("expense", tripId, userId);
+  const [draft] = useState(() => readDraft<ExpenseDraft>(storageKey));
+  const [restored, setRestored] = useState(() => !!draft && !isExpenseDraftEmpty(draft));
+  const [amount, setAmount] = useState(draft?.amount ?? "");
   const [currencyCode, setCurrencyCode] = useState(() => {
+    if (draft?.currency) return draft.currency;
     if (typeof window === "undefined") return "USD";
     return getSavedCurrency(tripId) || "USD";
   });
-  const [currencyTouched, setCurrencyTouched] = useState(false);
-  const [category, setCategory] = useState("food");
-  const [description, setDescription] = useState("");
-  const [dayId, setDayId] = useState("");
+  const [currencyTouched, setCurrencyTouched] = useState(!!draft?.currency);
+  const [category, setCategory] = useState(draft?.category ?? "food");
+  const [description, setDescription] = useState(draft?.description ?? "");
+  const [dayId, setDayId] = useState(draft?.dayId ?? "");
   // null = юзер ещё не трогал выбор → дефолт «на всех» выводим на рендере,
   // без эффекта с setState (частый кейс — общая трата, аудит 2026-10-06)
-  const [splitOverride, setSplitOverride] = useState<Set<string> | null>(null);
+  const [splitOverride, setSplitOverride] = useState<Set<string> | null>(
+    () => (draft?.split ? new Set(draft.split) : null)
+  );
 
   useEffect(() => {
     if (!trip?.days?.length) return;
@@ -58,7 +83,10 @@ export function ExpenseForm({ userId, onDone }: ExpenseFormProps) {
   // «За кого» до первого ручного выбора — все участники поездки
   // Зрители вне денег (см. lib/budget/people.ts)
   const participants = expenseSelectableParticipants(trip?.participants ?? []);
-  const splitUsers = splitOverride ?? new Set(participants.map((p) => p.id));
+  // Выбор из черновика мог устареть (участник вышел из поездки) — берём только живых
+  const splitUsers = splitOverride
+    ? new Set([...splitOverride].filter((id) => participants.some((p) => p.id === id)))
+    : new Set(participants.map((p) => p.id));
 
   // Конвертация в USD (единая валюта хранения). Нет курса — отправка заблокирована, а не «курс 1»
   const fx = useRateFor(currencyCode);
@@ -66,7 +94,28 @@ export function ExpenseForm({ userId, onDone }: ExpenseFormProps) {
   const amountUSD = toBaseCurrency(amountNum, currencyCode, fx.rates) ?? 0;
   const sym = currencySymbol(currencyCode);
 
-  const submit = async () => {
+  const draftValue = useMemo<ExpenseDraft>(
+    () => ({
+      amount,
+      category,
+      description,
+      split: splitOverride ? [...splitOverride] : null,
+      dayId,
+      currency: currencyCode,
+    }),
+    [amount, category, description, splitOverride, dayId, currencyCode]
+  );
+  const { discard } = useFormDraft(storageKey, draftValue, isExpenseDraftEmpty);
+
+  const clearAll = () => {
+    discard();
+    setAmount("");
+    setDescription("");
+    setSplitOverride(null);
+    setRestored(false);
+  };
+
+  const submit = () => {
     // Без описания — название категории: сумма и категория — минимум для записи траты
     const desc = description.trim() || EXPENSE_CATEGORIES[category]?.label || "Трата";
     if (!amountNum) {
@@ -97,46 +146,56 @@ export function ExpenseForm({ userId, onDone }: ExpenseFormProps) {
     const splitWithArr = Array.from(splitUsers).filter((id) => id !== userId);
     const excludeSelf = !splitUsers.has(userId);
 
-    try {
-      await addExpense.mutateAsync({
-        amount: Math.round(amountUSD * 100) / 100,
-        category,
-        description: desc,
-        paidById: userId,
-        dayId,
-        splitWith: splitWithArr,
-        excludeSelf,
-        // Исходная сумма и валюта — как в расширенной форме: в истории видно «≈ 100 ¥»
-        originalAmount: amountNum,
-        originalCurrency: currencyCode,
-      });
+    const payload = {
+      amount: Math.round(amountUSD * 100) / 100,
+      category,
+      description: desc,
+      paidById: userId,
+      dayId,
+      splitWith: splitWithArr,
+      excludeSelf,
+      // Исходная сумма и валюта — как в расширенной форме: в истории видно «≈ 100 ¥»
+      originalAmount: amountNum,
+      originalCurrency: currencyCode,
+    };
+    const snapshot = draftValue;
+    const usd = amountUSD;
+    const currency = currencyCode;
 
-      saveCurrency(tripId, currencyCode);
-
-      if (splitWithArr.length > 0) {
-        const splitCount = excludeSelf ? splitWithArr.length : splitWithArr.length + 1;
-        const perPerson = (amountUSD / splitCount).toFixed(2);
-        const names = trip?.participants
-          .filter((p) => splitWithArr.includes(p.id))
-          .map((p) => p.name)
-          .join(", ");
-        toast.success("Трата добавлена 💸", {
-          description: excludeSelf
-            ? `${names} должны по $${perPerson} → тебе`
-            : `Каждый должен $${perPerson} (включая тебя)`,
-          duration: 5000,
+    // Оптимистично: форма очищается и шит закрывается сразу, трата уже видна в списке
+    // (useAddExpense кладёт её в кэш до ответа сервера). Не сохранилась — возвращаем
+    // набранное в черновик и предлагаем вернуться к форме, а не просим вводить заново
+    clearAll();
+    onDone();
+    addExpense
+      .mutateAsync(payload)
+      .then(() => {
+        saveCurrency(tripId, currency);
+        if (splitWithArr.length > 0) {
+          const splitCount = excludeSelf ? splitWithArr.length : splitWithArr.length + 1;
+          const perPerson = (usd / splitCount).toFixed(2);
+          const names = trip?.participants
+            .filter((p) => splitWithArr.includes(p.id))
+            .map((p) => p.name)
+            .join(", ");
+          toast.success("Трата добавлена 💸", {
+            description: excludeSelf
+              ? `${names} должны по $${perPerson} → тебе`
+              : `Каждый должен $${perPerson} (включая тебя)`,
+            duration: 5000,
+          });
+        } else {
+          toast.success("Трата добавлена 💸");
+        }
+      })
+      .catch((err) => {
+        writeDraft(storageKey, snapshot);
+        toast.error("Трата не сохранилась", {
+          description: err instanceof Error ? err.message : "Проверьте связь и попробуйте ещё раз",
+          action: { label: "Вернуть", onClick: () => useTripStore.getState().openQuickAdd("expense") },
+          duration: 10_000,
         });
-      } else {
-        toast.success("Трата добавлена 💸");
-      }
-      setAmount("");
-      setDescription("");
-      onDone();
-    } catch (err) {
-      toast.error("Не удалось добавить трату", {
-        description: err instanceof Error ? err.message : "Попробуйте ещё раз",
       });
-    }
   };
 
   const toggleUser = (id: string) => {
@@ -155,6 +214,7 @@ export function ExpenseForm({ userId, onDone }: ExpenseFormProps) {
 
   return (
     <div className="space-y-3">
+      {restored && <DraftNotice onClear={clearAll} />}
       {/* Порядок полей — по частоте использования: сумма сразу, день (авто)
           переехал вниз к submit (аудит 2026-10-06) */}
       <div className="grid grid-cols-[1fr_auto] gap-2 items-end">

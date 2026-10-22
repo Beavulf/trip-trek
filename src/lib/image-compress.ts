@@ -205,3 +205,33 @@ export async function compressImageForUpload(
       : "Не удалось обработать фото — попробуйте другое изображение"
   );
 }
+
+/**
+ * Маленькое превью для сеток (240px по длинной стороне). Делаем из УЖЕ сжатой копии:
+ * оригинал в 12–48 Мп второй раз декодировать незачем. Раньше сетка батча рисовала
+ * полноразмерные оригиналы через object URL — 100 кадров на телефоне означали сотни
+ * мегабайт декодированных картинок и вылет вкладки. Неудача — не ошибка: сетка
+ * покажет заглушку, загрузка от превью не зависит.
+ */
+export async function makeThumbnailBlob(
+  source: Blob,
+  maxSide = 240,
+  quality = 0.7
+): Promise<Blob | null> {
+  const asFile =
+    source instanceof File
+      ? source
+      : new File([source], "thumb.jpg", { type: source.type || "image/jpeg" });
+  try {
+    if (typeof createImageBitmap === "function") {
+      try {
+        return await compressViaBitmap(asFile, maxSide, quality);
+      } catch {
+        // createImageBitmap не потянул формат — пробуем через <img>
+      }
+    }
+    return await compressViaImageElement(asFile, maxSide, quality);
+  } catch {
+    return null;
+  }
+}

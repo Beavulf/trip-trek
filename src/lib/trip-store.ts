@@ -1,6 +1,9 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 
+/** Режимы шита быстрого добавления (FAB) */
+export type QuickAddMode = "photo" | "expense" | "journal";
+
 export type TripTab =
   | "dashboard"
   | "timeline"
@@ -28,9 +31,15 @@ interface TripState {
   // честно строится заново при первом заходе.
   mapEverOpened: boolean;
   setActiveTab: (t: TripTab) => void;
-  // Идёт батч-загрузка фото: QuickAddSheet не даёт закрыть себя без подтверждения
-  photoBatchRunning: boolean;
-  setPhotoBatchRunning: (v: boolean) => void;
+  // Шит быстрого добавления (FAB) и менеджер фоновой загрузки фото. Живут в сторе, а не в
+  // состоянии оболочки: открыть их надо из тостов и плашки загрузки (транзиентное, не в persist)
+  quickAddOpen: boolean;
+  /** Режим, в котором просили открыть шит (тост «Вернуть» → сразу форма траты); null — по умолчанию «Фото» */
+  quickAddMode: QuickAddMode | null;
+  setQuickAddOpen: (v: boolean) => void;
+  openQuickAdd: (mode?: QuickAddMode) => void;
+  uploadManagerOpen: boolean;
+  setUploadManagerOpen: (v: boolean) => void;
   currentUserId: string | null;
   setCurrentUserId: (id: string | null) => void;
   selectedDay: number | null;
@@ -60,13 +69,18 @@ export const useTripStore = create<TripState>()(
     (set) => ({
       activeTab: "dashboard",
       mapEverOpened: false,
-    photoBatchRunning: false,
-      setPhotoBatchRunning: (v) =>
-      set((st) => {
-        if (st.photoBatchRunning === v) return st;
-        return { photoBatchRunning: v };
-      }),
-    setActiveTab: (t) =>
+      quickAddOpen: false,
+      quickAddMode: null,
+      setQuickAddOpen: (v) =>
+        set((st) => {
+          if (st.quickAddOpen === v) return st;
+          // закрытие сбрасывает запрошенный режим: следующее открытие снова начинается с «Фото»
+          return v ? { quickAddOpen: true } : { quickAddOpen: false, quickAddMode: null };
+        }),
+      openQuickAdd: (mode) => set({ quickAddOpen: true, quickAddMode: mode ?? null }),
+      uploadManagerOpen: false,
+      setUploadManagerOpen: (v) => set((st) => (st.uploadManagerOpen === v ? st : { uploadManagerOpen: v })),
+      setActiveTab: (t) =>
         set((s) => ({ activeTab: t, mapEverOpened: s.mapEverOpened || t === "map" })),
       currentUserId: null,
       setCurrentUserId: (id) => set({ currentUserId: id }),

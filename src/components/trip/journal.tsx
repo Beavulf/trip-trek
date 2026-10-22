@@ -24,6 +24,7 @@ import {
   useAddJournal,
   useEditJournal,
   useDeleteJournal,
+  isOptimisticJournalId,
   useTrip,
   useCurrentTripId,
 } from "@/hooks/use-trip";
@@ -1003,6 +1004,8 @@ const DayChapter = memo(function DayChapter({
           {list.map((e) => {
             const author = e.user;
             const isOwn = e.userId === currentUserId;
+            // Запись ещё летит на сервер (оптимистичная): править и удалять её рано
+            const saving = isOptimisticJournalId(e.id);
             const isEdited =
               e.updatedAt &&
               new Date(e.updatedAt).getTime() - new Date(e.createdAt).getTime() > 60_000;
@@ -1011,6 +1014,8 @@ const DayChapter = memo(function DayChapter({
                 key={e.id}
                 type="button"
                 onClick={() => onOpen(e.id)}
+                disabled={saving}
+                aria-busy={saving}
                 initial={reduceMotion ? false : { opacity: 0, y: 8 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={reduceMotion ? undefined : { opacity: 0, x: -20 }}
@@ -1059,7 +1064,7 @@ const DayChapter = memo(function DayChapter({
                         </span>
                       )}
                       <span aria-hidden="true">·</span>
-                      <span className="tabular-nums">{relTime(e.createdAt)}</span>
+                      <span className="tabular-nums">{saving ? "сохраняется…" : relTime(e.createdAt)}</span>
                       {isEdited && (
                         <>
                           <span aria-hidden="true">·</span>

@@ -1,11 +1,16 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useTrip, useAddJournal } from "@/hooks/use-trip";
+import { useEffect, useMemo, useState } from "react";
+import { useTrip, useAddJournal, useCurrentTripId } from "@/hooks/use-trip";
+import { useFormDraft } from "@/hooks/use-form-draft";
+import { draftKey, readDraft, writeDraft } from "@/lib/form-draft";
+import { isValidMood } from "@/lib/moods";
+import { useTripStore } from "@/lib/trip-store";
 import { Check, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { DayPicker } from "./DayPicker";
+import { DraftNotice } from "./DraftNotice";
 import { StickySubmit } from "./StickySubmit";
 import { MOODS } from "@/lib/moods";
 
@@ -14,12 +19,26 @@ interface JournalFormProps {
   onDone: () => void;
 }
 
+interface JournalDraft {
+  content: string;
+  mood: string;
+  dayId: string;
+}
+
+const isJournalDraftEmpty = (d: JournalDraft): boolean => !d.content.trim();
+
 export function JournalForm({ userId, onDone }: JournalFormProps) {
   const { data: trip } = useTrip();
+  const tripId = useCurrentTripId();
   const addJournal = useAddJournal();
-  const [content, setContent] = useState("");
-  const [mood, setMood] = useState<string>("😊");
-  const [dayId, setDayId] = useState("");
+  // Заметка пишется долго и стоит дорого: случайный тап по фону шита или свайп приложения
+  // её не теряют — текст возвращается при следующем открытии
+  const storageKey = draftKey("journal", tripId, userId);
+  const [draft] = useState(() => readDraft<JournalDraft>(storageKey));
+  const [restored, setRestored] = useState(() => !!draft && !isJournalDraftEmpty(draft));
+  const [content, setContent] = useState(draft?.content ?? "");
+  const [mood, setMood] = useState<string>(draft?.mood && isValidMood(draft.mood) ? draft.mood : "😊");
+  const [dayId, setDayId] = useState(draft?.dayId ?? "");
 
   useEffect(() => {
     if (!trip?.days?.length) return;
@@ -31,7 +50,17 @@ export function JournalForm({ userId, onDone }: JournalFormProps) {
     setDayId(today);
   }, [trip, dayId]);
 
-  const submit = async () => {
+  const draftValue = useMemo<JournalDraft>(() => ({ content, mood, dayId }), [content, mood, dayId]);
+  const { discard } = useFormDraft(storageKey, draftValue, isJournalDraftEmpty);
+
+  const clearAll = () => {
+    discard();
+    setContent("");
+    setMood("😊");
+    setRestored(false);
+  };
+
+  const submit = () => {
     const trimmed = content.trim();
     if (!trimmed) {
       toast.error("Напишите что-нибудь");
@@ -49,26 +78,27 @@ export function JournalForm({ userId, onDone }: JournalFormProps) {
       toast.error("Войдите, чтобы добавить запись");
       return;
     }
-    try {
-      await addJournal.mutateAsync({
-        dayId,
-        content: trimmed,
-        mood,
-        userId,
+    const snapshot = draftValue;
+    // Оптимистично: запись уже в ленте (useAddJournal), форма очищается и шит закрывается сразу.
+    // Не сохранилась — текст возвращается в черновик, а не пропадает
+    clearAll();
+    onDone();
+    addJournal
+      .mutateAsync({ dayId, content: trimmed, mood, userId })
+      .then(() => toast.success("Запись добавлена в дневник 📔"))
+      .catch((err) => {
+        writeDraft(storageKey, snapshot);
+        toast.error("Запись не сохранилась", {
+          description: err instanceof Error ? err.message : "Проверьте связь и попробуйте ещё раз",
+          action: { label: "Вернуть", onClick: () => useTripStore.getState().openQuickAdd("journal") },
+          duration: 10_000,
+        });
       });
-      toast.success("Запись добавлена в дневник 📔");
-      setContent("");
-      setMood("😊");
-      onDone();
-    } catch (err) {
-      toast.error("Не удалось добавить запись", {
-        description: err instanceof Error ? err.message : "Попробуйте ещё раз",
-      });
-    }
   };
 
   return (
     <div className="space-y-3">
+      {restored && <DraftNotice onClear={clearAll} />}
       {/* Текст — главное, настроение и день следом (аудит 2026-10-06) */}
       <textarea
         value={content}

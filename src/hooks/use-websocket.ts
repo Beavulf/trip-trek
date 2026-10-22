@@ -4,6 +4,8 @@ import { useEffect, useRef } from "react";
 import { io, type Socket } from "socket.io-client";
 import { useQueryClient } from "@tanstack/react-query";
 
+import { isUploadBusy } from "@/lib/upload-queue/busy";
+
 let socket: Socket | null = null;
 
 export function getSocket(): Socket | null {
@@ -54,21 +56,31 @@ export function useWebSocket(tripId: string) {
       connectedRef.current = false;
     });
 
-    // Дебаунс инвалидаций: burst событий (загрузка 10 фото = 10 photo:added)
-    // схлопывается в одну волну refetch'ей через 400 мс после последнего события.
-    // Свои мутации не страдают: их onSuccess-инвалидации срабатывают мгновенно,
-    // а повторный WS-толчок просто попадает в то же окно дебаунса.
-    const pendingKeys = new Set<string[]>();
+    // Дебаунс инвалидаций: burst событий (загрузка 50 фото = 50 photo:added) схлопывается в одну
+    // волну refetch'ей. Раньше таймер ставился от ПЕРВОГО события и не сдвигался — на потоке
+    // событий каждые ~0,5 с refetch'и (до 1000 фото с join'ами + карта + маршрут) шли каждые
+    // 400 мс у КАЖДОГО участника. Теперь ждём паузу в событиях, но не дольше MAX_WAIT.
+    // Свои мутации не страдают: их onSuccess-инвалидации срабатывают мгновенно.
+    const DEBOUNCE_MS = 500;
+    const MAX_WAIT_MS = 4000;
+    // По содержимому, а не по ссылке: 50 событий подряд — это один рефетч каждого ключа, а не 50
+    const pendingKeys = new Map<string, string[]>();
     let flushTimer: ReturnType<typeof setTimeout> | null = null;
+    let maxTimer: ReturnType<typeof setTimeout> | null = null;
+    const flushInvalidations = () => {
+      if (flushTimer) clearTimeout(flushTimer);
+      if (maxTimer) clearTimeout(maxTimer);
+      flushTimer = null;
+      maxTimer = null;
+      const batch = [...pendingKeys.values()];
+      pendingKeys.clear();
+      batch.forEach((k) => qc.invalidateQueries({ queryKey: k }));
+    };
     const invalidateDebounced = (...keys: string[][]) => {
-      keys.forEach((k) => pendingKeys.add(k));
-      if (flushTimer) return;
-      flushTimer = setTimeout(() => {
-        flushTimer = null;
-        const batch = [...pendingKeys];
-        pendingKeys.clear();
-        batch.forEach((k) => qc.invalidateQueries({ queryKey: k }));
-      }, 400);
+      keys.forEach((k) => pendingKeys.set(k.join("\u0000"), k));
+      if (flushTimer) clearTimeout(flushTimer);
+      flushTimer = setTimeout(flushInvalidations, DEBOUNCE_MS);
+      if (!maxTimer) maxTimer = setTimeout(flushInvalidations, MAX_WAIT_MS);
     };
 
     // Real-time events → invalidate queries
@@ -85,7 +97,12 @@ export function useWebSocket(tripId: string) {
     });
 
     socket.on("photo:added", (data: { tripId: string }) => {
-      if (data.tripId === tripId) invalidateDebounced(["photos"], ["photos-geo"], ["route"], ["trip"]);
+      if (data.tripId !== tripId) return;
+      // Пока идёт СВОЯ загрузка, эхо её же кадров не рефетчим: каждый принятый кадр очередь сама
+      // кладёт в кэш галереи, а один общий рефетч делает по опустошении (lib/upload-queue).
+      // Чужие кадры за это время догонит тот же финальный рефетч
+      if (isUploadBusy()) return;
+      invalidateDebounced(["photos"], ["photos-geo"], ["route"], ["trip"]);
     });
 
     socket.on("photo:deleted", (data: { tripId: string }) => {
@@ -226,11 +243,11 @@ export function useWebSocket(tripId: string) {
     return () => {
       window.removeEventListener("pagehide", onPageHide);
       window.removeEventListener("pageshow", onPageShow);
-      if (flushTimer) {
-        clearTimeout(flushTimer);
-        flushTimer = null;
-        pendingKeys.clear();
-      }
+      if (flushTimer) clearTimeout(flushTimer);
+      if (maxTimer) clearTimeout(maxTimer);
+      flushTimer = null;
+      maxTimer = null;
+      pendingKeys.clear();
       // Leave the old trip room before disconnecting
       const oldTripId = currentTripIdRef.current;
       if (oldTripId && socket?.connected) {

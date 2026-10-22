@@ -20,6 +20,7 @@ const PhotoLightbox = dynamic(() => import("./photo-lightbox").then((m) => m.Pho
 });
 import { MobileBottomSheet } from "./mobile-bottom-sheet";
 import { CompactTile, MasonryTile } from "./gallery-tile";
+import { GalleryUploads } from "./upload/GalleryUploads";
 
 // PhotoForm тянет exifr (~100 KB) — грузим только при открытии формы (аудит 2026-09-13)
 const PhotoForm = dynamic(() => import("./quick-add/PhotoForm").then((m) => m.PhotoForm), { ssr: false });
@@ -338,6 +339,9 @@ export function Gallery() {
           )}
         </div>
       </section>
+
+      {/* Фото, которые прямо сейчас грузятся в фоне: видны сразу после «Загрузить» */}
+      <GalleryUploads tripId={tripId} />
 
       {/* === Липкий фильтр-бар: измерение + избранное + режим сетки + чипы ===
           Без backdrop-blur: бар висит над masonry-фото, blur поверх картинок —
