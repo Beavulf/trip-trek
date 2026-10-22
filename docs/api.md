@@ -54,9 +54,9 @@
 | `p/[token]/photos.zip` | GET | публичный | 5/ч/IP | ZIP всех фото поездки (STORE без сжатия — JPEG уже сжат; поток: `src/lib/zip.ts`). Работает только при `shareEnabled` + `shareAllowDownload`; 404/403 иначе. Внутри имена `NNN-день-N-подпись.jpg` в хронологии `takenAt` |
 | `p/[token]/heart` | POST | публичный | 10/ч/IP | гостевое сердечко-переключатель: `{}` → `shareHearts += 1`, `{undo:true}` → −1 (не ниже 0, ответ `{hearts, undo:false}` если забирать нечего). Анонимно; состояние «моё сердечко» — localStorage на устройстве |
 | `trip/dates` | PATCH | O | — | сдвиг дат/дней поездки |
-| `trip/budget` | PATCH | M | — | общий бюджет/валюта поездки |
-| `trip/import` | POST | U | userRateLimit | импорт JSON-бэкапа → новая поездка; тело ≤ 20 MB (413), битый бэкап → 400, транзакция до 60 с |
-| `import` | POST | O | userRateLimit 10/ч + кап 5MB | импорт в существующую поездку (owner); tripId — только в query, тело парсится после гарда и лимита |
+| `trip/budget` | PATCH | M | — | общий бюджет поездки (конечное число 0…1e9); показывается, только если личные бюджеты не заданы у всех не-зрителей (`settings.budgetSource` в `trip`) |
+| `trip/import` | POST | U | userRateLimit | импорт JSON-бэкапа → новая поездка; тело ≤ 20 MB (413), битый бэкап → 400, транзакция до 60 с; переводы (settlement) не переносятся, делёж трат чистится от id прежних участников (трата становится личной импортёра), валюта всегда USD |
+| `import` | POST | O | userRateLimit 10/ч + кап 5MB | импорт в существующую поездку (owner); tripId — только в query, тело парсится после гарда и лимита; траты: переводы и нулевые суммы пропускаются, делёж ограничивается текущими участниками |
 | `export` | GET | O | — | экспорт поездки в JSON (`src/lib/trip-export.ts`); полный дамп — функция владельца, участникам 403 |
 | `export/pdf` | GET | M | — | маршрут поездки одним PDF-файлом (офлайн, `src/lib/pdf/route-pdf.ts`); tripId — в query; любой участник поездки; 400, если нет мест |
 | `participants` | GET, PATCH | M / U | — | участники поездки; PATCH — профиль «себя в поездке» (displayName/emoji) |
@@ -80,7 +80,7 @@
 | `photos/[id]` | PATCH | `photo:added` | подпись/избранное |
 | `photos/geo` | GET | — | фото с координатами для карты: селект маркерных полей, кап 1000 |
 | `expenses` | GET, POST, DELETE | `expense:added` | траты, делёж (`src/lib/budget/`), погашения (settlementKey); POST нормализует вход (дубли/плательщик в `splitWith`, категория из списка, 1 получатель у перевода), перевод больше реального долга → 409 (сериализуемая транзакция); GET отдаёт все траты поездки (страховочный потолок 5000) |
-| `budget-plan` | GET, PATCH | `budget:updated` | плановый бюджет по категориям |
+| `budget-plan` | GET, PATCH | `budget:updated` | плановый бюджет по категориям (категория из справочника, сумма 0…1e9) |
 | `board` | GET, POST, PATCH, DELETE | `board:added` | чат поездки (реакции JSON, ответы, pin) |
 | `journal` | GET, POST, PATCH, DELETE | `journal:added` | дневник (запись на день, mood) |
 | `checklist` | GET, POST, PATCH, DELETE | `checklist:updated` | чек-лист подготовки |

@@ -31,7 +31,12 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   }
 
   const data: Record<string, unknown> = {};
-  if (typeof body.budget === "number" || body.budget === null) data.budget = body.budget;
+  if (typeof body.budget === "number" || body.budget === null) {
+    if (body.budget !== null && (!Number.isFinite(body.budget) || body.budget < 0 || body.budget > 1_000_000_000)) {
+      return NextResponse.json({ error: "budget must be between 0 and 1000000000" }, { status: 400 });
+    }
+    data.budget = body.budget;
+  }
   if (typeof body.name === "string") data.displayName = body.name;
   // роль меняет только owner
   if (typeof body.role === "string" || body.role === null) {

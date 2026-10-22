@@ -12,7 +12,13 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ tr
   if (response) return response;
   const body = await req.json();
   const data: Record<string, unknown> = {};
-  if (typeof body.budget === "number" || body.budget === null) data.budget = body.budget;
+  if (typeof body.budget === "number" || body.budget === null) {
+    // конечное неотрицательное число: отрицательный бюджет ломал «сумму бюджетов участников»
+    if (body.budget !== null && (!Number.isFinite(body.budget) || body.budget < 0 || body.budget > 1_000_000_000)) {
+      return NextResponse.json({ error: "budget must be between 0 and 1000000000" }, { status: 400 });
+    }
+    data.budget = body.budget;
+  }
   if (typeof body.displayName === "string") data.displayName = body.displayName;
   if (typeof body.emoji === "string") data.emoji = body.emoji;
   if (typeof body.color === "string") data.color = body.color;

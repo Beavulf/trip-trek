@@ -60,7 +60,9 @@ export function BudgetPlanWidget() {
   // Расходы по категориям
   const spentByCat: Record<string, number> = {};
   realExpenses.forEach((e) => {
-    spentByCat[e.category] = (spentByCat[e.category] ?? 0) + e.amount;
+    // Категория вне справочника (старые данные) — в «Прочее»: иначе она есть в «Потрачено», но не в строках
+    const key = e.category in EXPENSE_CATEGORIES ? e.category : "other";
+    spentByCat[key] = (spentByCat[key] ?? 0) + e.amount;
   });
 
   const allCats = Object.keys(EXPENSE_CATEGORIES);
@@ -207,6 +209,13 @@ export function BudgetPlanWidget() {
                 </span>
                 {isEditing ? (
                   <div className="flex items-center gap-1">
+                    {/* Поле правит только ручную часть: без этой подсказки число на кнопке (итог) и число
+                        в поле (ручная часть) расходились, и «250» вместо итога давало 250 + маршрут */}
+                    {fromRoute > 0 && (
+                      <span className="text-[11px] text-muted-foreground tabular-nums whitespace-nowrap">
+                        {sym}{fmtMoney(fromRoute)} из маршрута +
+                      </span>
+                    )}
                     <input
                       type="number"
                       inputMode="decimal"

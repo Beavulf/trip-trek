@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { requireTripOwner } from "@/lib/api-auth";
 import { userRateLimit } from "@/lib/rate-limit";
+import { sanitizeImportedSplit } from "@/lib/budget/expense-input";
 
 function newId() {
   return crypto.randomUUID();
@@ -123,17 +124,25 @@ export async function POST(req: NextRequest) {
             continue;
           }
           const mappedDayId = e.dayId ? dayIdMap.get(e.dayId) ?? null : null;
+          const amount = Number(e.amount);
+          // Нулевые/битые суммы и переводы в бэкапе не переносим: перевод без проверки против долга
+          // создавал бы встречный долг, а трата на 0 — шум в истории
+          if (!(amount > 0) || e.category === "settlement") {
+            imported.skippedExpenses++;
+            continue;
+          }
+          const split = sanitizeImportedSplit(e.splitWith, paidById, memberIds, e.excludeSelf);
           await tx.expense.create({
             data: {
               id: newId(),
               tripId,
-              amount: Number(e.amount) || 0,
+              amount,
               category: e.category || "other",
               description: e.description || "",
               paidById,
               dayId: mappedDayId,
-              splitWith: typeof e.splitWith === "string" ? e.splitWith : "",
-              excludeSelf: !!e.excludeSelf,
+              splitWith: split.splitWith,
+              excludeSelf: split.excludeSelf,
             },
           });
           imported.expenses++;

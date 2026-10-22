@@ -301,7 +301,9 @@ export function MemberManager({
                   onClick={(e) => {
                     e.preventDefault();
                     memberAction.mutate({
-                      url: `/api/trips/${tripId}/members/${pending.userId}`,
+                      // /api/participants/[id] — единственный роут, который меняет role (передача владения);
+                      // /api/trips/[id]/members/[id] role игнорирует: диалог писал «Готово», владелец не менялся
+                      url: `/api/participants/${pending.userId}?tripId=${tripId}`,
                       method: "PATCH",
                       body: { role: "owner" },
                     });

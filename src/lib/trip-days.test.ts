@@ -6,6 +6,9 @@ import {
   dayIdForDate,
   isTripFinished,
   isTripOver,
+  tripDaysElapsed,
+  daysLeftInTrip,
+  isBeforeTripStart,
 } from "./trip-days";
 
 afterEach(() => {
@@ -106,5 +109,51 @@ describe("dayIdForDate / isTripFinished", () => {
     expect(isTripOver(new Date(2026, 9, 20, 23, 59))).toBe(true);
     expect(isTripOver(new Date(2026, 9, 25))).toBe(false);
     expect(isTripOver(null)).toBe(false);
+  });
+});
+
+describe("daysLeftInTrip (единая формула с номером дня)", () => {
+  const start = new Date("2026-09-10T00:00:00Z");
+  const at = (iso: string) => new Date(iso);
+
+  it("до старта — все дни", () => {
+    expect(daysLeftInTrip(start, 7, "planning", at("2026-09-08T12:00:00Z"))).toBe(7);
+  });
+  it("в первый день — все дни, в последний — 1", () => {
+    expect(daysLeftInTrip(start, 7, "active", at("2026-09-10T08:00:00Z"))).toBe(7);
+    expect(daysLeftInTrip(start, 7, "active", at("2026-09-16T23:00:00Z"))).toBe(1);
+  });
+  it("после финиша и у завершённой — null", () => {
+    expect(daysLeftInTrip(start, 7, "active", at("2026-09-17T00:00:00Z"))).toBeNull();
+    expect(daysLeftInTrip(start, 7, "completed", at("2026-09-12T12:00:00Z"))).toBeNull();
+    expect(daysLeftInTrip(start, 0, "active", at("2026-09-12T12:00:00Z"))).toBeNull();
+  });
+  it("согласован с calculateCurrentDayNumber: осталось = totalDays − день + 1", () => {
+    for (const iso of ["2026-09-10T01:00:00Z", "2026-09-13T12:00:00Z", "2026-09-16T23:59:00Z"]) {
+      vi.setSystemTime(new Date(iso));
+      const day = calculateCurrentDayNumber(start, 7);
+      expect(daysLeftInTrip(start, 7, "active", new Date(iso))).toBe(7 - day + 1);
+    }
+  });
+  it("tripDaysElapsed: отрицательное до старта, без клампа после", () => {
+    expect(tripDaysElapsed(start, at("2026-09-08T12:00:00Z"))).toBe(-2);
+    expect(tripDaysElapsed(start, at("2026-10-01T12:00:00Z"))).toBe(21);
+  });
+});
+
+describe("isBeforeTripStart", () => {
+  const start = "2026-03-01T00:00:00.000Z";
+  // Время траты задаём локальными компонентами — результат не зависит от пояса машины с тестами
+  it("в день старта в любое время суток — уже не «до поездки» (раньше UTC+8 в 06:00 попадал в «до»)", () => {
+    expect(isBeforeTripStart(new Date(2026, 2, 1, 6, 0), start)).toBe(false);
+    expect(isBeforeTripStart(new Date(2026, 2, 1, 0, 5), start)).toBe(false);
+    expect(isBeforeTripStart(new Date(2026, 2, 1, 23, 59), start)).toBe(false);
+  });
+  it("накануне старта — до поездки", () => {
+    expect(isBeforeTripStart(new Date(2026, 1, 28, 23, 59), start)).toBe(true);
+    expect(isBeforeTripStart(new Date(2025, 11, 31, 12, 0), start)).toBe(true);
+  });
+  it("после старта — нет", () => {
+    expect(isBeforeTripStart(new Date(2026, 2, 5, 12, 0), start)).toBe(false);
   });
 });

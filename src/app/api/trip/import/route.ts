@@ -5,6 +5,7 @@ import { tripCreateGate } from "@/lib/app-config";
 import { userRateLimit } from "@/lib/rate-limit";
 import { pickLodgingInput, toDateKey } from "@/lib/lodging";
 import { BASE_CURRENCY } from "@/lib/currencies";
+import { sanitizeImportedSplit } from "@/lib/budget/expense-input";
 
 // POST /api/trip/import — импорт поездки из JSON-бэкапа (формат backup v2.0)
 // Создаёт НОВУЮ поездку для текущего пользователя (owner). Все userId-ссылки
@@ -306,9 +307,15 @@ export async function POST(req: NextRequest) {
     });
   }
 
-  // 4) Траты — paidById → текущий пользователь
+  // 4) Траты — paidById → текущий пользователь. Переводы между прежними участниками не переносим:
+  //    плательщик подменяется на импортёра, получателей в новой поездке нет — запись превратилась бы
+  //    в «переводы самому себе» и раздула «потратил» у импортёра. Делёж чистим от id прежних
+  //    участников (в новой поездке только владелец): трата становится личной, а не долгом «в никуда».
+  const importerOnly = new Set([userId]);
   for (const ex of body.expenses || []) {
+    if (ex.category === "settlement") continue;
     const newDayId = ex.dayId ? dayIdMap.get(ex.dayId) : null;
+    const split = sanitizeImportedSplit(ex.splitWith, userId, importerOnly, ex.excludeSelf);
     await tx.expense.create({
       data: {
         tripId: trip.id,
@@ -317,8 +324,8 @@ export async function POST(req: NextRequest) {
         description: ex.description,
         paidById: userId,
         dayId: newDayId || null,
-        splitWith: ex.splitWith || "",
-        excludeSelf: !!ex.excludeSelf,
+        splitWith: split.splitWith,
+        excludeSelf: split.excludeSelf,
       },
     });
   }

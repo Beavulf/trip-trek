@@ -126,3 +126,21 @@ export function checkSettlementAgainstDebt(
   }
   return { ok: true };
 }
+
+/**
+ * Делёж траты из бэкапа: оставляем только тех, кто сейчас в поездке, без дублей и без плательщика.
+ * В бэкапе splitWith — id людей прежней поездки; в новую они не попадают (импорт создаёт поездку
+ * с одним владельцем), и «висячие» id раньше создавали долги несуществующим людям.
+ */
+export function sanitizeImportedSplit(
+  raw: unknown,
+  paidById: string,
+  memberIds: ReadonlySet<string>,
+  excludeSelfRaw: unknown
+): { splitWith: string; excludeSelf: boolean } {
+  const ids = typeof raw === "string" ? raw.split(",").filter(Boolean) : [];
+  const payerListed = ids.includes(paidById);
+  const splitWith = [...new Set(ids)].filter((id) => id !== paidById && memberIds.has(id));
+  const excludeSelf = splitWith.length === 0 ? false : payerListed ? false : excludeSelfRaw === true;
+  return { splitWith: splitWith.join(","), excludeSelf };
+}

@@ -76,7 +76,7 @@ export function RoutePlanCard() {
         <h2 className="font-semibold text-sm whitespace-nowrap">План по маршруту</h2>
         <span className="ml-auto text-xs text-muted-foreground tabular-nums shrink-0 whitespace-nowrap">
           {sym}{fmtMoney(stats.total)}
-          {factByDay.total > 0 && <span className={factByDay.total > stats.total ? "text-red-500 font-medium" : "text-green-600"}> · факт {sym}{fmtMoney(factByDay.total)}</span>}
+          {factByDay.total > 0 && <span title="Все траты с привязкой к дню; план — только места, где указана сумма"> · траты {sym}{fmtMoney(factByDay.total)}</span>}
         </span>
         <motion.span animate={{ rotate: expanded ? 180 : 0 }} transition={{ duration: 0.2 }} className="shrink-0">
           <ChevronDown className="size-4 text-muted-foreground" />
@@ -105,8 +105,10 @@ export function RoutePlanCard() {
                   {withBudget}/{placesCount} {plural(placesCount, "места", "мест", "мест")} с суммой
                 </span>
                 {factByDay.total > 0 && (
-                  <span className={cn("font-medium tabular-nums", factByDay.total > stats.total ? "text-red-500" : "text-green-600")}>
-                    потрачено по факту: {sym}{fmtMoney(factByDay.total)}
+                  // Без красного «перерасхода»: план покрывает только места с суммой, а траты — всё подряд
+                  // (такси, еда вне мест), поэтому прямое сравнение вводило бы в заблуждение
+                  <span className="font-medium tabular-nums text-muted-foreground" title="Все траты с привязкой к дню; план — только места, где указана сумма">
+                    траты по дням: {sym}{fmtMoney(factByDay.total)}
                   </span>
                 )}
               </div>

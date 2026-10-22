@@ -197,7 +197,7 @@ export function BudgetAnalytics({
             </ResponsiveContainer>
           </div>
           <p className="text-[11px] text-muted-foreground mt-2">
-            Всего {dailyData.length} {plural(dailyData.length, "день", "дня", "дней")} с тратами · средний день: {sym}
+            Всего {dailyData.length} {plural(dailyData.length, "день", "дня", "дней")} с тратами · в среднем за такой день: {sym}
             {avgDay}
           </p>
         </>
@@ -205,7 +205,7 @@ export function BudgetAnalytics({
 
       {isPersonal && (
         <p className="text-[11px] text-muted-foreground mt-2">
-          {(scope === "me" ? "Твои трат" : `Траты ${scopeName ?? "участника"}`) + " по факту:"} общая трата целиком
+          {(scope === "me" ? "Твои траты" : `Траты ${scopeName ?? "участника"}`) + " по факту:"} общая трата целиком
           у плательщика, пока долг не закрыт — переводом или встречной тратой (зачёт); закрытая доля переходит
           к тому, кто потребил.
         </p>

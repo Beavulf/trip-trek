@@ -26,6 +26,9 @@ export function ExpenseRow({ expense, participants }: ExpenseRowProps) {
   const splitUsers = participants.filter(p => splitIds.includes(p.id));
   const hasSplit = splitIds.length > 0;
   const excludeSelf = expense.excludeSelf;
+  // Сколько человек делят трату; «За всех» — только если это вся группа (раньше писалось и для части группы)
+  const sharers = excludeSelf ? splitIds.length : splitIds.length + 1;
+  const selectableCount = participants.filter((p) => !p.former && p.role !== "viewer").length;
   const isSettlement = expense.category === "settlement";
   // Отменить ошибочную отметку «Перевели» может любая сторона перевода
   const isSettlementRecipient = isSettlement && splitIds.includes(currentUserId);
@@ -33,7 +36,8 @@ export function ExpenseRow({ expense, participants }: ExpenseRowProps) {
   const sym = currencySymbol(trip?.settings.currency);
   const del = useDeleteExpense();
   const [confirming, setConfirming] = useState(false);
-  const cat = EXPENSE_CATEGORIES[expense.category];
+  // Категория вне справочника (старые данные) рисуется как «Прочее», а не «undefined22»
+  const cat = EXPENSE_CATEGORIES[expense.category] ?? EXPENSE_CATEGORIES.other;
   const paidBy = participants.find((p) => p.id === expense.paidById);
 
   // Время
@@ -115,7 +119,9 @@ export function ExpenseRow({ expense, participants }: ExpenseRowProps) {
                 ? splitUsers.length > 0
                   ? `За ${splitUsers.map(u => u.name).join(", ")}`
                   : `За ${splitIds.length} чел.`
-                : `За всех (${splitIds.length + 1} чел)`
+                : sharers >= selectableCount
+                  ? `За всех (${sharers} чел)`
+                  : `На ${sharers} чел.`
               }
             </span>
           </div>

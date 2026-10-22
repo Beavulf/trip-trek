@@ -5,13 +5,13 @@ import { requireTripEditor } from "@/lib/api-auth";
 
 // PATCH /api/trip/budget — обновить общий бюджет поездки
 export async function PATCH(req: NextRequest) {
-  const body = await req.json();
-  const { tripId, totalBudget } = body;
+  const body = await req.json().catch(() => null);
+  const { tripId, totalBudget } = body ?? {};
+  if (typeof tripId !== "string" || !tripId) return NextResponse.json({ error: "tripId required" }, { status: 400 });
   const { response } = await requireTripEditor(req, tripId);
   if (response) return response;
-  if (!tripId) return NextResponse.json({ error: "tripId required" }, { status: 400 });
-  if (typeof totalBudget !== "number" || totalBudget < 0) {
-    return NextResponse.json({ error: "totalBudget must be a positive number" }, { status: 400 });
+  if (typeof totalBudget !== "number" || !Number.isFinite(totalBudget) || totalBudget < 0 || totalBudget > 1_000_000_000) {
+    return NextResponse.json({ error: "totalBudget must be a non-negative number" }, { status: 400 });
   }
   const trip = await db.trip.update({
     where: { id: tripId },

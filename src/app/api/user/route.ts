@@ -36,7 +36,9 @@ export async function GET(req: NextRequest) {
 
   const [photos, expenses, journals, messages, visitedPlaces] = await Promise.all([
     db.photo.count({ where: { userId } }),
-    db.expense.findMany({ where: { paidById: userId }, select: { amount: true } }),
+    // Переводы (settlement) — не траты: каждая отметка «Перевели» раньше накручивала «Потрачено» и
+    // выдавала «Шопоголика»/«Тяжеловеса» (как и в /api/trip, итог трат считается без переводов)
+    db.expense.findMany({ where: { paidById: userId, category: { not: "settlement" } }, select: { amount: true } }),
     db.journalEntry.count({ where: { userId } }),
     db.boardMessage.count({ where: { userId } }),
     db.place.count({

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { normalizeExpenseInput, checkSettlementAgainstDebt, MAX_EXPENSE_AMOUNT } from "./expense-input";
+import { normalizeExpenseInput, checkSettlementAgainstDebt, sanitizeImportedSplit, MAX_EXPENSE_AMOUNT } from "./expense-input";
 
 const base = { amount: 90, category: "food", description: "Ужин", paidById: "A" };
 const ok = (over: Record<string, unknown> = {}) => {
@@ -137,5 +137,22 @@ describe("checkSettlementAgainstDebt — перевод не больше реа
     const back = { amount: 30, paidById: "B", splitWith: "A", excludeSelf: true }; // A должен B 30
     expect(checkSettlementAgainstDebt([debt, back], "B", "A", 70).ok).toBe(true);
     expect(checkSettlementAgainstDebt([debt, back], "B", "A", 70.01).ok).toBe(false);
+  });
+});
+
+describe("sanitizeImportedSplit — делёж из бэкапа", () => {
+  const members = new Set(["A", "B"]);
+  it("оставляет только текущих участников, без дублей и без плательщика", () => {
+    expect(sanitizeImportedSplit("B,B,X,A", "A", members, true)).toEqual({ splitWith: "B", excludeSelf: false });
+  });
+  it("id прежних участников (их нет в новой поездке) отбрасываются — трата становится личной", () => {
+    expect(sanitizeImportedSplit("old1,old2", "A", new Set(["A"]), true)).toEqual({ splitWith: "", excludeSelf: false });
+  });
+  it("excludeSelf сохраняется, когда плательщика в списке не было", () => {
+    expect(sanitizeImportedSplit("B", "A", members, true)).toEqual({ splitWith: "B", excludeSelf: true });
+  });
+  it("не-строка и пустое значение безопасны", () => {
+    expect(sanitizeImportedSplit(undefined, "A", members, false)).toEqual({ splitWith: "", excludeSelf: false });
+    expect(sanitizeImportedSplit(null, "A", members, true)).toEqual({ splitWith: "", excludeSelf: false });
   });
 });

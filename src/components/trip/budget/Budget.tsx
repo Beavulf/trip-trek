@@ -7,6 +7,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { useTripStore } from "@/lib/trip-store";
 import { EXPENSE_CATEGORIES } from "@/lib/types";
 import { currencySymbol } from "@/lib/currencies";
+import { daysLeftInTrip, isBeforeTripStart } from "@/lib/trip-days";
 import { calculateBalances, calculateSettlements, calculateNetSpent, calculatePersonalSpend, moneyParticipants } from "@/lib/budget";
 import { motion } from "framer-motion";
 import { cn, plural, fmtMoney } from "@/lib/utils";
@@ -32,21 +33,13 @@ import { MobileBottomSheet } from "../mobile-bottom-sheet";
 
 const HISTORY_PREVIEW = 8;
 
+// Категория вне справочника (старые данные, импорт) считается «Прочим»: иначе круг категорий
+// не сходится с итогом «Потрачено»
+const categoryKey = (c: string) => (c in EXPENSE_CATEGORIES ? c : "other");
+
 // «Общие» — с делением на участников, «личные» — только за себя (ретро-кейс
 // 2026-10: половина трат поездки была личной, и их хотелось смотреть отдельно)
 type HistoryFilter = "all" | "mine" | "shared" | "personal" | "settlements";
-
-/** Дней поездки осталось (включая сегодня). До старта — все дни, после финиша — null */
-function daysLeftInTrip(startDate: string, totalDays: number, status?: string): number | null {
-  if (status === "completed" || totalDays <= 0) return null;
-  const now = new Date();
-  const start = new Date(startDate);
-  const nowUTC = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
-  const startUTC = Date.UTC(start.getUTCFullYear(), start.getUTCMonth(), start.getUTCDate());
-  const diffDays = Math.floor((nowUTC - startUTC) / 86_400_000);
-  if (diffDays >= totalDays) return null;
-  return diffDays < 0 ? totalDays : totalDays - diffDays;
-}
 
 export function Budget() {
   const tripId = useCurrentTripId();
@@ -102,7 +95,7 @@ export function Budget() {
         .map((key) => {
           const sum = myPersonal
             ? (myPersonal.byCategory[key] ?? 0)
-            : realExpenses.filter((e) => e.category === key).reduce((s, e) => s + e.amount, 0);
+            : realExpenses.filter((e) => categoryKey(e.category) === key).reduce((s, e) => s + e.amount, 0);
           return {
             key,
             label: EXPENSE_CATEGORIES[key].label,
@@ -209,7 +202,7 @@ export function Budget() {
   // Предпоездочная подготовка (билеты, брони): внесена до старта поездки.
   // Переводы сюда не входят — это не траты
   const isPreTrip = (e: (typeof expenses)[number]) =>
-    !isSettlement(e) && new Date(e.createdAt).getTime() < new Date(trip.settings.startDate).getTime();
+    !isSettlement(e) && isBeforeTripStart(e.createdAt, trip.settings.startDate);
   const isShared = (e: (typeof expenses)[number]) => !isSettlement(e) && !!e.splitWith?.trim();
 
   const myCount = realExpenses.filter((e) => e.paidById === currentUserId).length;
