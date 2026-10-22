@@ -9,6 +9,8 @@ export interface PersonalSpend {
   total: number;
 }
 
+const emptySpend = (): PersonalSpend => ({ byCategory: {}, byDay: {}, total: 0 });
+
 const sumRemaining = (ledger: { remaining: number }[] | undefined) =>
   (ledger ?? []).reduce((s, c) => s + c.remaining, 0);
 
@@ -31,8 +33,10 @@ function offsetClaims(
     const t = Math.min(left, c.remaining);
     c.remaining -= t;
     left -= t;
-    const pCred = result[creditor];
-    const pDeb = result[debtor];
+    // Записи создаём лениво: участник мог выйти из поездки, а его id остался в тратах —
+    // раньше здесь был TypeError, и вкладка «Бюджет» падала у всех (в цикле перезагрузок)
+    const pCred = (result[creditor] ??= emptySpend());
+    const pDeb = (result[debtor] ??= emptySpend());
     pCred.byCategory[c.category] = (pCred.byCategory[c.category] ?? 0) - t;
     if (c.dayId) pCred.byDay[c.dayId] = (pCred.byDay[c.dayId] ?? 0) - t;
     pCred.total -= t;
@@ -51,13 +55,13 @@ function offsetClaims(
 export function calculatePersonalSpend(expenses: Expense[], userIds: string[]): Record<string, PersonalSpend> {
   const result: Record<string, PersonalSpend> = {};
   const spend = (id: string, category: string, dayId: string | null, v: number) => {
-    const p = (result[id] ??= { byCategory: {}, byDay: {}, total: 0 });
+    const p = (result[id] ??= emptySpend());
     p.byCategory[category] = (p.byCategory[category] ?? 0) + v;
     if (dayId) p.byDay[dayId] = (p.byDay[dayId] ?? 0) + v;
     p.total += v;
   };
 
-  for (const id of userIds) result[id] ??= { byCategory: {}, byDay: {}, total: 0 };
+  for (const id of userIds) result[id] ??= emptySpend();
 
   // Долговая книга: claims[должник][кредитор] — доли общих трат, которые должник ещё не вернул кредитору.
   // Каждая запись помнит категорию, день и дату исходной траты: перевод не может закрыть долг
@@ -71,8 +75,9 @@ export function calculatePersonalSpend(expenses: Expense[], userIds: string[]): 
       settlements.push(e);
       continue;
     }
-    // Трата целиком у плательщика — деньги ведь вышли из его кошелька
-    if (result[e.paidById]) spend(e.paidById, e.category, e.dayId, e.amount);
+    // Трата целиком у плательщика — деньги ведь вышли из его кошелька (и у вышедшего тоже:
+    // консервация «Σ по людям = Σ трат» не должна зависеть от текущего состава)
+    spend(e.paidById, e.category, e.dayId, e.amount);
     const splitUsers: string[] = (e.splitWith || "").split(",").filter(Boolean);
     if (splitUsers.length === 0) continue; // личная трата — долгов не создаёт
     const participants = e.excludeSelf ? splitUsers : [...splitUsers, e.paidById];
@@ -123,7 +128,7 @@ export function calculatePersonalSpend(expenses: Expense[], userIds: string[]): 
     const per = s.amount / recipients.length;
     for (const creditor of recipients) {
       const debtor = s.paidById;
-      if (debtor === creditor || !result[creditor] || !result[debtor]) continue;
+      if (debtor === creditor) continue;
       let left = per;
       const settledAt = Date.parse(s.createdAt) || 0;
       // Гасим долг должника перед кредитором: у кредитора трата уменьшается (деньги вернулись),

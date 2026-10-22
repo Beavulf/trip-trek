@@ -7,7 +7,7 @@ import { toast } from "sonner";
 import { useExpenses, useSetTripStatus, useTrip } from "@/hooks/use-trip";
 import { useAuth } from "@/hooks/use-auth";
 import { useTripStore } from "@/lib/trip-store";
-import { calculateSettlements } from "@/lib/budget";
+import { calculateSettlements, moneyParticipants } from "@/lib/budget";
 import { isTripFinished } from "@/lib/trip-days";
 import { currencySymbol } from "@/lib/currencies";
 import { fmtMoney } from "@/lib/utils";
@@ -27,7 +27,9 @@ export function TripFinishedBanner() {
 
   if (!trip || !isTripFinished(trip.settings.endDate, trip.trip?.status)) return null;
 
-  const settlements = calculateSettlements(expenses ?? [], trip.participants);
+  // Те же «участники денег», что на вкладке Бюджет: долги ушедших не должны превращаться в «все закрыто»
+  const people = moneyParticipants(trip.participants, trip.formerParticipants, expenses ?? []);
+  const settlements = calculateSettlements(expenses ?? [], people);
   const debtTotal = settlements.reduce((s, x) => s + x.amount, 0);
   const hasDebts = debtTotal > 0.005;
   const currentUserId = (session?.user as { id?: string } | undefined)?.id || "";

@@ -5,6 +5,7 @@ import { Pencil } from "lucide-react";
 import { toast } from "sonner";
 import { cn, fmtMoney } from "@/lib/utils";
 import { useUpdateMember, useTrip, getTripId } from "@/hooks/use-trip";
+import { useAuth } from "@/hooks/use-auth";
 import { currencySymbol } from "@/lib/currencies";
 import type { Participant } from "@/lib/types";
 import { UserAvatar } from "../user-avatar";
@@ -19,6 +20,11 @@ export function ParticipantBudgetRow({ participant, spent }: ParticipantBudgetRo
   const tripId = getTripId();
   const { data: trip } = useTrip();
   const sym = currencySymbol(trip?.settings.currency);
+  const { data: session } = useAuth();
+  const currentUserId = (session?.user as { id?: string } | undefined)?.id || "";
+  const myRole = trip?.participants.find((p) => p.id === currentUserId)?.role;
+  // Бюджет правит сам участник или владелец (иначе API ответит 403); вышедшему бюджет не нужен
+  const canEditBudget = !participant.former && (participant.id === currentUserId || myRole === "owner");
   const [editing, setEditing] = useState(false);
   const [val, setVal] = useState(participant.budget?.toString() ?? "");
   // "cancel" — закрылись по Escape/отмене, blur не должен сохранять
@@ -69,7 +75,10 @@ export function ParticipantBudgetRow({ participant, spent }: ParticipantBudgetRo
         textClassName="text-sm"
       />
       <div className="flex-1 min-w-0">
-        <div className="text-sm font-medium">{participant.name}</div>
+        <div className="text-sm font-medium">
+          {participant.name}
+          {participant.former && <span className="ml-1.5 text-[10px] font-normal text-muted-foreground">вышел</span>}
+        </div>
         <div className="text-[11px] text-muted-foreground tabular-nums">потратил {sym}{spent.toFixed(2)}</div>
         {pct !== null && (
           <div className="mt-1 h-1 rounded-full bg-muted overflow-hidden max-w-[120px]">
@@ -99,6 +108,17 @@ export function ParticipantBudgetRow({ participant, spent }: ParticipantBudgetRo
             placeholder="—"
             className="w-24 min-h-11 text-base input-mobile rounded-xl border border-input bg-background px-2 py-2 text-right"
           />
+        </div>
+      ) : !canEditBudget ? (
+        <div className="text-right">
+          <div className={cn("text-sm font-semibold", remaining !== null && remaining < 0 && "text-red-500")}>
+            {budget !== null ? `${sym}${fmtMoney(budget)}` : "—"}
+          </div>
+          {remaining !== null && (
+            <div className={cn("text-[10px] tabular-nums", remaining < 0 ? "text-red-500" : "text-muted-foreground")}>
+              ост. {sym}{remaining.toFixed(2)}
+            </div>
+          )}
         </div>
       ) : (
         <button

@@ -4,6 +4,8 @@ import { useState, useEffect } from "react";
 import { Users, Check, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { useTrip, useUpdateMember, getTripId } from "@/hooks/use-trip";
+import { useAuth } from "@/hooks/use-auth";
+import { expenseSelectableParticipants } from "@/lib/budget";
 import { currencySymbol } from "@/lib/currencies";
 import { MobileBottomSheet } from "../mobile-bottom-sheet";
 
@@ -20,6 +22,8 @@ export function BudgetEditModal({ open, onOpenChange }: BudgetEditModalProps) {
   const tripId = getTripId();
   const [budgets, setBudgets] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
+  const { data: session } = useAuth();
+  const currentUserId = (session?.user as { id?: string } | undefined)?.id || "";
 
   // Инициализация при открытии
   useEffect(() => {
@@ -33,7 +37,12 @@ export function BudgetEditModal({ open, onOpenChange }: BudgetEditModalProps) {
   if (!trip) return null;
 
   const sym = currencySymbol(trip.settings.currency);
-  const total = Object.values(budgets).reduce((s, v) => s + (parseFloat(v) || 0), 0);
+  // Зрители вне денег и общий бюджет не задают (так же считает сервер: /api/trip budgetSource).
+  // Чужой бюджет правит только владелец — остальным чужие поля заблокированы, а не «403 из N»
+  const budgetPeople = expenseSelectableParticipants(trip.participants);
+  const myRole = trip.participants.find((p) => p.id === currentUserId)?.role;
+  const canEditOf = (id: string) => id === currentUserId || myRole === "owner";
+  const total = budgetPeople.reduce((s, p) => s + (parseFloat(budgets[p.id] ?? "") || 0), 0);
 
   // P1 #6: используем useUpdateMember hook + try/catch + проверяем r.ok на каждый PATCH.
   // Хук уже инвалидирует ["trip"] и ["budget-plan"] после успеха.
@@ -41,7 +50,8 @@ export function BudgetEditModal({ open, onOpenChange }: BudgetEditModalProps) {
     setSaving(true);
     let errors = 0;
     try {
-      for (const p of trip.participants) {
+      for (const p of budgetPeople) {
+        if (!canEditOf(p.id)) continue;
         const val = budgets[p.id] ?? "";
         const num = val.trim() ? parseFloat(val) : null;
         // Сохраняем только то что изменилось
@@ -54,7 +64,7 @@ export function BudgetEditModal({ open, onOpenChange }: BudgetEditModalProps) {
         }
       }
       if (errors > 0) {
-        toast.error(`Не удалось сохранить ${errors} из ${trip.participants.length}`);
+        toast.error(`Не удалось сохранить ${errors} из ${budgetPeople.filter((p) => canEditOf(p.id)).length}`);
       } else {
         toast.success("Бюджеты обновлены! 💰");
         onOpenChange(false);
@@ -77,11 +87,13 @@ export function BudgetEditModal({ open, onOpenChange }: BudgetEditModalProps) {
     >
       <div className="space-y-3">
         <p className="text-xs text-muted-foreground">
-          Установи личный бюджет для каждого участника. Общий бюджет = сумма всех.
+          {myRole === "owner"
+            ? "Установи личный бюджет для каждого участника. Общий бюджет = сумма всех."
+            : "Свой бюджет правишь ты, чужие — владелец поездки. Общий бюджет = сумма всех."}
         </p>
 
         {/* Список участников */}
-        {trip.participants.map((p) => (
+        {budgetPeople.map((p) => (
           <div key={p.id} className="flex items-center gap-3 p-2.5 rounded-xl bg-muted/50">
             <div className="size-10 rounded-full grid place-items-center text-lg shrink-0" style={{ background: p.color }}>
               {p.emoji}
@@ -97,8 +109,9 @@ export function BudgetEditModal({ open, onOpenChange }: BudgetEditModalProps) {
                 inputMode="decimal"
                 value={budgets[p.id] ?? ""}
                 onChange={(e) => setBudgets({ ...budgets, [p.id]: e.target.value })}
+                disabled={!canEditOf(p.id)}
                 placeholder="—"
-                className="w-24 min-h-11 text-base input-mobile rounded-xl border border-input bg-background px-2 py-2 text-right"
+                className="w-24 min-h-11 text-base input-mobile rounded-xl border border-input bg-background px-2 py-2 text-right disabled:opacity-60"
               />
             </div>
           </div>

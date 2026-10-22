@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { requireTripMember } from "@/lib/api-auth";
 import { calculateCurrentDayNumber } from "@/lib/trip-days";
 import { publish } from "@/lib/ws-bus";
+import { expenseUserIds } from "@/lib/budget/people";
 
 // GET /api/trip?tripId=... — сводка поездки
 // Слим-формат (аудит перфоманса 2026-09-13): дни отдаются БЕЗ мест — только
@@ -23,7 +24,7 @@ export async function GET(req: NextRequest) {
   const trip = await db.trip.findUnique({ where: { id: tripId } });
   if (!trip) return NextResponse.json({ error: "Trip not found" }, { status: 404 });
 
-  const [members, days, visitedByDay, totalPlaces, visitedPlaces, expenseAgg, photos, journals] =
+  const [members, days, visitedByDay, totalPlaces, visitedPlaces, expenseAgg, expenseRefs, photos, journals] =
     await Promise.all([
       db.tripMember.findMany({
         where: { tripId },
@@ -57,16 +58,44 @@ export async function GET(req: NextRequest) {
         _sum: { amount: true },
         where: { tripId, category: { not: "settlement" } },
       }),
+      // Кто упомянут в тратах (плательщик/делящие): из них выделяем ушедших, чтобы расчёт
+      // долгов не терял их доли (вышел/исключён/забанен — TripMember удалён, траты остались)
+      db.expense.findMany({ where: { tripId }, select: { paidById: true, splitWith: true } }),
       db.photo.count({ where: { tripId } }),
       db.journalEntry.count({ where: { tripId } }),
     ]);
 
   const totalSpent = expenseAgg._sum.amount ?? 0;
 
-  // totalBudget = сумма бюджетов участников (если у всех есть budget), иначе из настроек
-  const allHaveBudget = members.length > 0 && members.every((m) => m.budget != null);
+  // Бывшие участники: есть в тратах, но уже не в поездке. Имя/эмодзи/цвет — из профиля
+  // пользователя (displayName в TripMember удалён вместе со строкой участника).
+  const memberIdSet = new Set(members.map((m) => m.userId));
+  const formerIds = [...expenseUserIds(expenseRefs)].filter((id) => !memberIdSet.has(id));
+  const formerUsers = formerIds.length
+    ? await db.user.findMany({
+        where: { id: { in: formerIds } },
+        select: { id: true, name: true, emoji: true, color: true, avatarUrl: true },
+      })
+    : [];
+  const formerParticipants = formerUsers.map((u) => ({
+    id: u.id,
+    name: u.name,
+    color: u.color,
+    emoji: u.emoji,
+    role: null,
+    budget: null,
+    avatarUrl: u.avatarUrl,
+    former: true,
+  }));
+
+  // totalBudget = сумма бюджетов участников (если он задан у ВСЕХ), иначе из настроек.
+  // Зрители не считаются: они вне денег и бюджета не задают — раньше один зритель без
+  // бюджета молча переключал итог на устаревшее общее поле. budgetSource говорит клиенту,
+  // откуда число (карандаш в Hero при "members" правит бюджеты участников, а не общее поле).
+  const budgetMembers = members.filter((m) => m.role !== "viewer");
+  const allHaveBudget = budgetMembers.length > 0 && budgetMembers.every((m) => m.budget != null);
   const calculatedBudget = allHaveBudget
-    ? members.reduce((sum, m) => sum + (m.budget ?? 0), 0)
+    ? budgetMembers.reduce((sum, m) => sum + (m.budget ?? 0), 0)
     : trip.totalBudget;
 
   // P1 #6: shared currentDayNumber formula (была своя здесь + другая в ai-summary)
@@ -108,6 +137,7 @@ export async function GET(req: NextRequest) {
       endDate: trip.endDate,
       totalDays: trip.totalDays,
       totalBudget: calculatedBudget,
+      budgetSource: allHaveBudget ? "members" : "trip",
       currency: trip.currency,
       currentUserId: null,
       inviteCode: canInvite ? trip.inviteCode : null,
@@ -124,6 +154,7 @@ export async function GET(req: NextRequest) {
       status: trip.status,
     },
     participants,
+    formerParticipants,
     // members с вложенным user наружу не отдаём — только participants
     currentDayNumber,
     dayProgress,

@@ -16,6 +16,12 @@ interface BudgetHeroProps {
   /** Сколько дней поездки осталось (включая сегодня). null — темп не показываем */
   daysLeft?: number | null;
   onAddClick?: () => void;
+  /** Зритель деньги не правит: карандаш скрыт */
+  canEdit?: boolean;
+  /** Откуда общий бюджет: "members" — сумма личных бюджетов участников (см. /api/trip) */
+  budgetSource?: "members" | "trip";
+  /** При budgetSource="members" карандаш открывает бюджеты участников, а не правит общее поле */
+  onEditMembers?: () => void;
 }
 
 export function BudgetHero({
@@ -26,6 +32,9 @@ export function BudgetHero({
   currencySymbol: sym = "$",
   daysLeft = null,
   onAddClick,
+  canEdit = true,
+  budgetSource = "trip",
+  onEditMembers,
 }: BudgetHeroProps) {
   const update = useUpdateTripBudget();
   const [editing, setEditing] = useState(false);
@@ -67,7 +76,11 @@ export function BudgetHero({
     setEditing(false);
   };
 
-  const showPace = daysLeft !== null && daysLeft >= 1 && remaining > 0 && totalBudget > 0;
+  const hasBudget = totalBudget > 0;
+  const showPace = daysLeft !== null && daysLeft >= 1 && remaining > 0 && hasBudget;
+  // Общий бюджет = сумма личных: правка общего поля ничего бы не изменила (число считается из
+  // участников), поэтому карандаш ведёт в их бюджеты
+  const fromMembers = budgetSource === "members" && !!onEditMembers;
 
   return (
     <div className="rounded-3xl p-5 bg-gradient-to-br from-orange-500 to-rose-500 text-white shadow-xl relative overflow-hidden">
@@ -75,10 +88,10 @@ export function BudgetHero({
       <div className="relative">
         <div className="flex items-center gap-2 text-white/80 text-sm mb-1">
           <Wallet className="size-4" /> Бюджет поездки
-          {!editing && (
+          {!editing && canEdit && (
             <button
               type="button"
-              onClick={openEditor}
+              onClick={fromMembers ? onEditMembers : openEditor}
               className="ml-auto size-11 rounded-lg bg-white/15 hover:bg-white/25 grid place-items-center transition-all active:scale-90"
               title="Изменить бюджет"
               aria-label="Изменить бюджет"
@@ -90,7 +103,7 @@ export function BudgetHero({
 
         <div className="flex items-end gap-2 flex-wrap">
           <span className="text-4xl font-bold tabular-nums">{sym}{totalSpent.toFixed(0)}</span>
-          <span className="text-white/80 mb-1">/</span>
+          {(hasBudget || editing) && <span className="text-white/80 mb-1">/</span>}
           {editing ? (
             <div className="flex items-center gap-1.5 mb-0.5">
               <span className="text-white/80">{sym}</span>
@@ -130,11 +143,17 @@ export function BudgetHero({
                 <X className="size-4" />
               </button>
             </div>
-          ) : (
+          ) : hasBudget ? (
             <span className="text-white/80 mb-1 font-semibold">{sym}{fmtMoney(totalBudget)}</span>
+          ) : (
+            <span className="text-white/80 mb-1 text-sm">бюджет не задан</span>
           )}
         </div>
+        {fromMembers && hasBudget && !editing && (
+          <div className="text-[11px] text-white/70 mt-0.5">сумма бюджетов участников</div>
+        )}
 
+        {hasBudget && (<>
         <div className="mt-3 h-2.5 rounded-full bg-white/20 overflow-hidden">
           <motion.div
             initial={{ width: 0 }}
@@ -151,6 +170,7 @@ export function BudgetHero({
               : `Перерасход ${sym}${Math.abs(remaining).toFixed(0)}`}
           </span>
         </div>
+        </>)}
         {showPace && (
           <div className="flex items-center gap-1.5 mt-1.5 text-xs text-white/80">
             <CalendarDays className="size-3.5 shrink-0" />

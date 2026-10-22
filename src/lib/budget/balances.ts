@@ -1,6 +1,9 @@
 import type { Expense, Participant } from "@/lib/types";
 import { fromCents, shareCents, toCents } from "./money";
 
+/** Поля траты, нужные расчёту долгов (сервер проверяет переводы по «голым» строкам БД без paidBy/day). */
+export type ExpenseShape = Pick<Expense, "amount" | "paidById" | "splitWith" | "excludeSelf">;
+
 export interface Balance {
   participant: Participant;
   paid: number;
@@ -35,7 +38,7 @@ export function sharePerPerson(e: Expense): number {
 // Участники траты в детерминированном порядке: splitWith как в БД, плательщик последним
 // (когда участвует). От порядка зависит, кому достанется лишняя копейка остатка —
 // поэтому все потребители долгов обязаны брать участников только отсюда.
-export function expenseParticipants(e: Expense): string[] {
+export function expenseParticipants(e: ExpenseShape): string[] {
   const splitUsers: string[] = (e.splitWith || "").split(",").filter(Boolean);
   return e.excludeSelf ? splitUsers : [...splitUsers, e.paidById];
 }
@@ -43,7 +46,7 @@ export function expenseParticipants(e: Expense): string[] {
 // Доли долгов траты в центах: кто (кроме плательщика) и сколько должен.
 // Переводы (settlement) участвуют наравне — встречный долг кредитора гасит исходный,
 // это и есть механизм неттинга пары.
-function debtorShares(e: Expense): { debtorId: string; cents: number }[] {
+function debtorShares(e: ExpenseShape): { debtorId: string; cents: number }[] {
   const participants = expenseParticipants(e);
   const shares = shareCents(e.amount, participants.length);
   return participants
@@ -51,8 +54,27 @@ function debtorShares(e: Expense): { debtorId: string; cents: number }[] {
     .filter((s) => s.debtorId !== e.paidById);
 }
 
+/**
+ * Сколько центов `fromId` должен `toId` по паре — тот же неттинг встречных долгов, что в
+ * calculateSettlements (переводы уже внутри expenses). Отрицательное — должен `toId`.
+ * Сервер проверяет по нему, что «Перевели» не больше реального долга.
+ */
+export function pairDebtCents(expenses: ExpenseShape[], fromId: string, toId: string): number {
+  let net = 0;
+  for (const e of expenses) {
+    if (!e.splitWith) continue; // личная трата — долгов не создаёт
+    for (const { debtorId, cents } of debtorShares(e)) {
+      if (debtorId === fromId && e.paidById === toId) net += cents;
+      else if (debtorId === toId && e.paidById === fromId) net -= cents;
+    }
+  }
+  return net;
+}
+
 // Считаем paid (сколько каждый реально заплатил, без settlement)
-// и долги (кто кому сколько должен)
+// и долги (кто кому сколько должен). Тот, кого нет в participants, из расчёта выпадает —
+// вызывающий обязан передавать людей из moneyParticipants (people.ts), а не голый trip.participants:
+// иначе доли и траты вышедшего участника исчезнут молча.
 export function calculateBalances(expenses: Expense[], participants: Participant[]): Balance[] {
   if (participants.length === 0) return [];
   const paidCents: Record<string, number> = {};

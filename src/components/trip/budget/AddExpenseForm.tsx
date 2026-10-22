@@ -8,6 +8,7 @@ import { useTrip, useAddExpense, useCurrency, useCurrentTripId } from "@/hooks/u
 import { useAuth } from "@/hooks/use-auth";
 import { EXPENSE_CATEGORIES } from "@/lib/types";
 import { currencySelectOptions } from "@/lib/currencies";
+import { expenseSelectableParticipants } from "@/lib/budget";
 import { getSavedCurrency, saveCurrency, clearSavedCurrency } from "@/lib/currency-pref";
 import { StickySubmit } from "../quick-add/StickySubmit";
 
@@ -43,7 +44,9 @@ export function AddExpenseForm({ onDone }: AddExpenseFormProps) {
   }, [tripCurrency, tripId, currencyTouched]);
   const [category, setCategory] = useState("food");
   const [description, setDescription] = useState("");
-  const [paidById, setPaidById] = useState(currentUserId || trip?.participants[0]?.id || "");
+  const [paidById, setPaidById] = useState(
+    currentUserId || expenseSelectableParticipants(trip?.participants ?? [])[0]?.id || ""
+  );
   // Форма монтируется только при открытом шите, когда trip уже в кэше —
   // дефолт дня берём initializer'ом: текущий день поездки, до старта — день 1.
   // «Без дня» раньше был дефолтом, и траты молча выпадали из аналитики по дням
@@ -59,7 +62,8 @@ export function AddExpenseForm({ onDone }: AddExpenseFormProps) {
   // (тот же приём, что в quick-add/ExpenseForm; аудит 2026-10-06)
   const [splitOverride, setSplitOverride] = useState<Set<string> | null>(null);
 
-  const participants = trip?.participants ?? [];
+  // Зрители вне денег: ни плательщиком, ни «за кого» их не выбрать (и по умолчанию на них не делится)
+  const participants = expenseSelectableParticipants(trip?.participants ?? []);
   const splitUsers = splitOverride ?? new Set(participants.map((p) => p.id));
 
   const toggleUser = (id: string) => {

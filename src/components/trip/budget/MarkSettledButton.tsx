@@ -24,6 +24,15 @@ export function MarkSettledButton({ from, to, amount }: MarkSettledButtonProps) 
   const submittingRef = useRef(false);
 
   // from = должник, to = кредитор (ему должны)
+  // Кредитор вышел из поездки: подтвердить получение некому — честно говорим об этом,
+  // вместо вечного «Ждём подтверждения» у должника
+  if (to.former) {
+    return (
+      <span className="shrink-0 min-h-11 text-xs text-muted-foreground flex items-center gap-1 px-3 py-2">
+        <Clock className="size-3.5" /> Получатель вышел из поездки
+      </span>
+    );
+  }
   const isCreditor = currentUserId === to.id;
   const isDebtor = currentUserId === from.id;
 

@@ -6,6 +6,8 @@ import { Ban, Eye, EyeOff, Crown, ShieldCheck, UserMinus } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/use-auth";
+import { useMemberDebts } from "@/hooks/trip/use-member-debts";
+import { DebtWarning } from "./debt-warning";
 import { UserAvatar } from "./user-avatar";
 import {
   AlertDialog,
@@ -56,6 +58,8 @@ export function MemberManager({
   const { data: session } = useAuth();
   const qc = useQueryClient();
   const [pending, setPending] = useState<{ kind: "remove" | "ban" | "transfer"; userId: string; name: string } | null>(null);
+  // Долги исключаемого/блокируемого — предупреждение в диалоге (не блокирует)
+  const pendingDebts = useMemberDebts(tripId, pending?.userId ?? null, !!pending && pending.kind !== "transfer");
 
   const ownerMember = members.find((m) => m.role === "owner");
   const isOwner = !!session?.user?.id && ownerMember?.id === session.user.id;
@@ -239,6 +243,7 @@ export function MemberManager({
                 <AlertDialogDescription>
                   Участник потеряет доступ к поездке и получит уведомление. Его траты останутся в истории бюджета.
                 </AlertDialogDescription>
+                <DebtWarning debts={pendingDebts.data} subject={`У ${pending.name}`} />
               </AlertDialogHeader>
               <AlertDialogFooter className="gap-2">
                 <AlertDialogCancel className="mt-0 rounded-xl">Отмена</AlertDialogCancel>
@@ -262,6 +267,7 @@ export function MemberManager({
                   Участник будет исключён и не сможет вернуться по ссылке или коду приглашения — полезно, если ссылка
                   утекла. Получит уведомление.
                 </AlertDialogDescription>
+                <DebtWarning debts={pendingDebts.data} subject={`У ${pending.name}`} />
               </AlertDialogHeader>
               <AlertDialogFooter className="gap-2">
                 <AlertDialogCancel className="mt-0 rounded-xl">Отмена</AlertDialogCancel>

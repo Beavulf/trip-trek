@@ -19,6 +19,8 @@ import {
 } from "lucide-react";
 import { createPortal } from "react-dom";
 import { toast } from "sonner";
+import { useMemberDebts } from "@/hooks/trip/use-member-debts";
+import { DebtWarning } from "./debt-warning";
 import { cn, plural } from "@/lib/utils";
 import { useBodyScrollLock } from "@/hooks/use-body-scroll-lock";
 import { useAuth } from "@/hooks/use-auth";
@@ -569,6 +571,8 @@ function LeaveDialog({
   onClose: () => void;
   onLeft: () => void;
 }) {
+  // Долги показываем заранее и не блокируем выход: они останутся в расчёте с пометкой «вышел»
+  const debts = useMemberDebts(tripId, null, open);
   const leave = useMutation({
     mutationFn: async () => {
       const r = await fetch("/api/participants/leave", {
@@ -596,6 +600,7 @@ function LeaveDialog({
             Ты больше не будешь видеть поездку и её обновления. Вернуться можно только по новому приглашению владельца.
             Твои траты останутся в общем бюджете.
           </AlertDialogDescription>
+          <DebtWarning debts={debts.data} subject="У тебя" />
         </AlertDialogHeader>
         <AlertDialogFooter className="gap-2">
           <AlertDialogCancel className="mt-0 rounded-xl">Остаться</AlertDialogCancel>

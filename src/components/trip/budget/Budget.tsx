@@ -7,7 +7,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { useTripStore } from "@/lib/trip-store";
 import { EXPENSE_CATEGORIES } from "@/lib/types";
 import { currencySymbol } from "@/lib/currencies";
-import { calculateBalances, calculateSettlements, calculateNetSpent, calculatePersonalSpend } from "@/lib/budget";
+import { calculateBalances, calculateSettlements, calculateNetSpent, calculatePersonalSpend, moneyParticipants } from "@/lib/budget";
 import { motion } from "framer-motion";
 import { cn, plural, fmtMoney } from "@/lib/utils";
 import { CurrencyConverter } from "../currency-converter";
@@ -70,21 +70,29 @@ export function Budget() {
     [expenses]
   );
 
+  // «Участники денег»: активные не-зрители + все, кто фигурирует в тратах (в т.ч. вышедшие).
+  // Расчёт долгов обязан идти по ним, а не по голому trip.participants: иначе доли и траты
+  // ушедшего участника исчезают из балансов (см. lib/budget/people.ts)
+  const people = useMemo(
+    () => moneyParticipants(trip?.participants ?? [], trip?.formerParticipants, expenses ?? []),
+    [trip?.participants, trip?.formerParticipants, expenses]
+  );
+
   // participant.id в /api/trip сериализуется как userId, поэтому сравним с paidById напрямую.
   // Мёртвый id (участник удалён, поездка сменилась) молча откатывается на «Все».
   const scopeUserId = useMemo(() => {
     if (scope === "me") return currentUserId || null;
     if (scope && scope !== "all") {
-      return (trip?.participants ?? []).some((p) => p.id === scope) ? scope : null;
+      return people.some((p) => p.id === scope) ? scope : null;
     }
     return null;
-  }, [scope, currentUserId, trip?.participants]);
+  }, [scope, currentUserId, people]);
 
   // Персональные траты «по реальным деньгам» (см. lib/budget/personal): трата целиком у плательщика,
   // возвращённый долг переносит долю к вернувшему — в категориях/днях исходных трат.
   const personalByUser = useMemo(
-    () => calculatePersonalSpend(expenses ?? [], (trip?.participants ?? []).map((p) => p.id)),
-    [expenses, trip?.participants]
+    () => calculatePersonalSpend(expenses ?? [], people.map((p) => p.id)),
+    [expenses, people]
   );
   const myPersonal = scopeUserId ? personalByUser[scopeUserId] : undefined;
 
@@ -189,10 +197,12 @@ export function Budget() {
   const dayColor = (cityName: string) =>
     trip.days.find((d) => d.city === cityName)?.accentColor ?? "#0ea5e9";
 
-  const balances = calculateBalances(expenses, trip.participants);
-  const settlements = calculateSettlements(expenses, trip.participants);
+  const balances = calculateBalances(expenses, people);
+  const settlements = calculateSettlements(expenses, people);
   // Чистые траты каждого: траты из кошелька минус вернувшиеся переводы (см. SettlementSection)
-  const netSpent = calculateNetSpent(expenses, trip.participants);
+  const netSpent = calculateNetSpent(expenses, people);
+  // Зритель смотрит, но денег не правит (API режет мутации — не показываем кнопки, ведущие в 403)
+  const canEdit = trip.participants.find((p) => p.id === currentUserId)?.role !== "viewer";
   const sym = currencySymbol(trip.settings.currency);
 
   const isSettlement = (e: (typeof expenses)[number]) => e.category === "settlement";
@@ -232,7 +242,10 @@ export function Budget() {
         remaining={remaining}
         currencySymbol={sym}
         daysLeft={daysLeft}
-        onAddClick={() => setShowAdd(true)}
+        onAddClick={canEdit ? () => setShowAdd(true) : undefined}
+        canEdit={canEdit}
+        budgetSource={trip.settings.budgetSource}
+        onEditMembers={() => setShowBudgetModal(true)}
       />
 
       <BudgetPlanWidget />
@@ -248,7 +261,7 @@ export function Budget() {
         // "me" оставляем как есть: по нему чип подсвечивается и подпись говорит «твоя доля»
         scope={scopeUserId ? scope : "all"}
         onScopeChange={setScope}
-        participants={trip.participants}
+        participants={people}
         currentUserId={currentUserId}
       />
 
@@ -256,7 +269,7 @@ export function Budget() {
         balances={balances}
         settlements={settlements}
         totalSpent={totalSpent}
-        participantsCount={trip.participants.length}
+        participantsCount={people.length}
         currencySymbol={sym}
       />
 
@@ -273,7 +286,7 @@ export function Budget() {
           </button>
         </div>
         <div className="space-y-2">
-          {trip.participants.map((p) => (
+          {people.map((p) => (
             <ParticipantBudgetRow
               key={p.id}
               participant={p}
@@ -282,7 +295,11 @@ export function Budget() {
           ))}
         </div>
         <p className="text-[11px] text-muted-foreground mt-2.5">
-          Общий бюджет группы: {sym}{fmtMoney(trip.settings.totalBudget)} — сумма бюджетов участников.
+          {trip.settings.budgetSource === "members"
+            ? `Общий бюджет группы: ${sym}${fmtMoney(trip.settings.totalBudget)} — сумма бюджетов участников.`
+            : trip.settings.totalBudget > 0
+              ? `Общий бюджет группы: ${sym}${fmtMoney(trip.settings.totalBudget)} — задан вручную (бюджеты участников заполнены не у всех).`
+              : "Общий бюджет не задан."}
           {" "}Потраченное учитывает вернувшиеся переводы.
         </p>
       </div>
@@ -311,12 +328,14 @@ export function Budget() {
               Добавь первую трату — обед, билет, сувенир. Бюджет и расчёты между друзьями обновятся
               автоматически.
             </p>
-            <button
-              onClick={() => setShowAdd(true)}
-              className="mt-2 inline-flex items-center gap-1.5 text-xs px-3 py-2 rounded-lg bg-primary text-primary-foreground min-h-[44px]"
-            >
-              <Plus className="size-3.5" /> Добавить первую трату
-            </button>
+            {canEdit && (
+              <button
+                onClick={() => setShowAdd(true)}
+                className="mt-2 inline-flex items-center gap-1.5 text-xs px-3 py-2 rounded-lg bg-primary text-primary-foreground min-h-[44px]"
+              >
+                <Plus className="size-3.5" /> Добавить первую трату
+              </button>
+            )}
           </div>
         ) : (
           <>
@@ -363,13 +382,13 @@ export function Budget() {
                   До поездки · билеты и брони
                 </div>
                 {visibleHistory.filter(isPreTrip).map((e) => (
-                  <ExpenseRow key={e.id} expense={e} participants={trip.participants} />
+                  <ExpenseRow key={e.id} expense={e} participants={people} />
                 ))}
                 <div className="text-[10px] uppercase tracking-widest text-muted-foreground pt-2.5">
                   В поездке
                 </div>
                 {visibleHistory.filter((e) => !isPreTrip(e)).map((e) => (
-                  <ExpenseRow key={e.id} expense={e} participants={trip.participants} />
+                  <ExpenseRow key={e.id} expense={e} participants={people} />
                 ))}
               </div>
             ) : (
@@ -390,7 +409,7 @@ export function Budget() {
                       show: { opacity: 1, y: 0, transition: { duration: 0.22, ease: [0.22, 1, 0.36, 1] } },
                     }}
                   >
-                    <ExpenseRow expense={e} participants={trip.participants} />
+                    <ExpenseRow expense={e} participants={people} />
                   </motion.div>
                 ))}
               </motion.div>

@@ -49,7 +49,7 @@
 | `trips/[tripId]/members/[memberId]` | PATCH | M(owner) | — | роль/имя участника, передача владения (ownership → уведомление) |
 | `trips/join` | GET, POST | U | 30/мин/IP + userRateLimit | превью поездки по инвайт-коду / вступление (проверяет TripBan, freeMemberLimit) |
 | `trips/from-template` | POST | U | — | создать поездку из шаблона (`src/lib/trip-templates.ts`) |
-| `trip` | GET, PATCH | M / O | — | сводка поездки: участники, счётчики, дни-мета БЕЗ мест (слим-формат, аудит 2026-09-13); `email` участников — только владельцу; при `allowMemberInvites:false` `inviteCode` отдаётся только владельцу; дни с местами — `route`; PATCH — только владелец: `{status}` и/или `{title}` и/или `{allowMemberInvites:boolean}` (переключатель «кто приглашает» из «О поездке») |
+| `trip` | GET, PATCH | M / O | — | сводка поездки: участники, счётчики, дни-мета БЕЗ мест (слим-формат, аудит 2026-09-13); `email` участников — только владельцу; `formerParticipants` — вышедшие/исключённые, чьи id остались в тратах (для расчёта долгов); `settings.budgetSource` — `members` (общий бюджет = сумма личных, зрители не в счёт) или `trip`; при `allowMemberInvites:false` `inviteCode` отдаётся только владельцу; дни с местами — `route`; PATCH — только владелец: `{status}` и/или `{title}` и/или `{allowMemberInvites:boolean}` (переключатель «кто приглашает» из «О поездке») |
 | `trip/share` | GET, POST | O | — | публичная страница поездки `/p/<shareToken>` («живой журнал»: обложка, лучшие кадры, главы-дни, галерея, карта — без денег/чата/дневника). GET — `{enabled, token, allowDownload}`; POST `{enabled?, rotate?, allowDownload?}` — включить/выключить ссылку, перегенерировать токен (rotate мгновенно закрывает старую), тумблер скачивания фото гостями (независим от enabled). Страница — RSC `src/app/p/[token]/page.tsx`, ходит в БД по токену без кэша; `generateMetadata` отдаёт og:image с обложкой (превью в мессенджерах); noindex |
 | `p/[token]/photos.zip` | GET | публичный | 5/ч/IP | ZIP всех фото поездки (STORE без сжатия — JPEG уже сжат; поток: `src/lib/zip.ts`). Работает только при `shareEnabled` + `shareAllowDownload`; 404/403 иначе. Внутри имена `NNN-день-N-подпись.jpg` в хронологии `takenAt` |
 | `p/[token]/heart` | POST | публичный | 10/ч/IP | гостевое сердечко-переключатель: `{}` → `shareHearts += 1`, `{undo:true}` → −1 (не ниже 0, ответ `{hearts, undo:false}` если забирать нечего). Анонимно; состояние «моё сердечко» — localStorage на устройстве |
@@ -62,6 +62,7 @@
 | `participants` | GET, PATCH | M / U | — | участники поездки; PATCH — профиль «себя в поездке» (displayName/emoji) |
 | `participants/[id]` | PATCH, DELETE | M(owner) | userRateLimit | правка/удаление участника (удаление → уведомление) |
 | `participants/leave` | POST | U | userRateLimit | выйти из поездки |
+| `participants/debts` | GET | M / M(owner для чужих) | 60/мин | незакрытые долги участника (`?userId=`, по умолчанию свои) — только для предупреждения в диалогах выхода/исключения/бана; не блокирует |
 | `participants/ban` | POST, GET, DELETE | M(owner) / U | userRateLimit | бан/разбан юзера в поездке (TripBan) |
 | `search` | GET | M | — | поиск по объектам поездки; сравнение строк в JS (кириллица/иероглифы) |
 

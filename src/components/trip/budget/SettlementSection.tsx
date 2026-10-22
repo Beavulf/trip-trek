@@ -17,6 +17,11 @@ interface SettlementSectionProps {
   currencySymbol?: string;
 }
 
+// Пометка у вышедшего/исключённого участника: его долги остаются в расчёте (lib/budget/people.ts)
+function FormerTag({ former }: { former?: boolean }) {
+  return former ? <span className="ml-1.5 text-[10px] font-normal text-muted-foreground">вышел</span> : null;
+}
+
 // "Расчёт между друзьями" — балансы, расшифровка, список переводов
 export function SettlementSection({ balances, settlements, totalSpent, participantsCount, currencySymbol: sym = "$" }: SettlementSectionProps) {
   const [showBalanceHint, setShowBalanceHint] = useState(false);
@@ -86,7 +91,7 @@ export function SettlementSection({ balances, settlements, totalSpent, participa
                 textClassName="text-xs"
               />
               <div className="flex-1 min-w-0">
-                <div className="font-medium truncate">{b.participant.name}</div>
+                <div className="font-medium truncate">{b.participant.name}<FormerTag former={b.participant.former} /></div>
                 <button
                   onClick={() => setExpandedBalance(expandedBalance === b.participant.id ? null : b.participant.id)}
                   className="text-[10px] text-muted-foreground flex items-center gap-1 active:scale-95 transition-transform"
@@ -108,7 +113,6 @@ export function SettlementSection({ balances, settlements, totalSpent, participa
         {expandedBalance && (() => {
           const b = balances.find(x => x.participant.id === expandedBalance);
           if (!b) return null;
-          const share = totalSpent / participantsCount;
           return (
             <motion.div
               initial={{ height: 0, opacity: 0 }}
@@ -191,7 +195,7 @@ export function SettlementSection({ balances, settlements, totalSpent, participa
                   textClassName="text-[10px]"
                 />
                 <div className="flex-1 min-w-0">
-                  <div className="text-xs font-medium truncate">{s.from.name}</div>
+                  <div className="text-xs font-medium truncate">{s.from.name}<FormerTag former={s.from.former} /></div>
                   <div className="text-[10px] text-red-500">должен</div>
                 </div>
                 <ArrowRight className="size-3.5 text-muted-foreground shrink-0" />
@@ -204,7 +208,7 @@ export function SettlementSection({ balances, settlements, totalSpent, participa
                   textClassName="text-[10px]"
                 />
                 <div className="flex-1 min-w-0">
-                  <div className="text-xs font-medium truncate">{s.to.name}</div>
+                  <div className="text-xs font-medium truncate">{s.to.name}<FormerTag former={s.to.former} /></div>
                   <div className="text-[10px] text-green-600">получит</div>
                 </div>
                 <span className="font-bold text-primary text-sm shrink-0">{sym}{s.amount.toFixed(2)}</span>

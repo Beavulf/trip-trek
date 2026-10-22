@@ -15,6 +15,8 @@ export interface Participant {
   joinedAt?: string;
   /** Реквизиты для возврата долгов («куда переводить») — экран расчёта бюджета */
   paymentDetails?: string | null;
+  /** Вышел/исключён, но фигурирует в тратах: остаётся в расчёте долгов (см. lib/budget/people.ts) */
+  former?: boolean;
 }
 
 export interface Place {
@@ -130,6 +132,8 @@ export interface TripSummary {
     inviteCode?: string | null;
     /** Кто может приглашать: false — только владелец (код не-владельцам не отдаётся) */
     allowMemberInvites?: boolean;
+    /** Откуда totalBudget: "members" — сумма личных бюджетов (у всех не-зрителей задан), "trip" — общее поле поездки */
+    budgetSource?: "members" | "trip";
     tripId?: string;
   };
   trip?: {
@@ -142,6 +146,8 @@ export interface TripSummary {
     status: string;
   };
   participants: Participant[];
+  /** Бывшие участники, чьи id остались в тратах (вышли/исключены/забанены): нужны расчёту долгов */
+  formerParticipants?: Participant[];
   currentDayNumber: number;
   dayProgress: number;
   placeProgress: number;

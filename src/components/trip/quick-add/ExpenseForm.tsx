@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useTrip, useAddExpense, useCurrency, useCurrentTripId } from "@/hooks/use-trip";
 import { EXPENSE_CATEGORIES } from "@/lib/types";
 import { currencySelectOptions, currencySymbol } from "@/lib/currencies";
+import { expenseSelectableParticipants } from "@/lib/budget";
 import { getSavedCurrency, saveCurrency } from "@/lib/currency-pref";
 import { Check, Loader2, Users } from "lucide-react";
 import { toast } from "sonner";
@@ -53,7 +54,8 @@ export function ExpenseForm({ userId, onDone }: ExpenseFormProps) {
   }, [tripCurrency, tripId, currencyTouched]);
 
   // «За кого» до первого ручного выбора — все участники поездки
-  const participants = trip?.participants ?? [];
+  // Зрители вне денег (см. lib/budget/people.ts)
+  const participants = expenseSelectableParticipants(trip?.participants ?? []);
   const splitUsers = splitOverride ?? new Set(participants.map((p) => p.id));
 
   const usdRate = currency?.rates?.[currencyCode] || 1;

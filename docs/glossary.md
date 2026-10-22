@@ -42,7 +42,7 @@
 | **Day** (день) | день поездки: `dayNumber`, город, `cityKey` (ключ города для погоды/координат) |
 | **Place** (место) | точка маршрута: координаты, категория, `timeOfDay`, статус (`planned`→посещено, `visitedAt`), порядок `order` |
 | **Expense** (трата) | `amount` в валюте поездки; введённое юзером — `originalAmount/`+`originalCurrency`; делёж `splitWith` (csv userId, пусто = личная) + `excludeSelf` |
-| **Долг / settlement** | расчёт «кто кому сколько должен» (`src/lib/budget/`: split → balances → settle); переводы идемпотентны по `settlementKey` |
+| **Долг / settlement** | расчёт «кто кому сколько должен» (`src/lib/budget/`: split → balances → settle); переводы идемпотентны по `settlementKey`; считается по «участникам денег» (`people.ts`): вышедший/исключённый остаётся в долгах с пометкой «вышел», зритель вне денег (пока не фигурирует в тратах) |
 | **BudgetPlan** | плановый бюджет по категории (уникален tripId+category) — не путать с расходами |
 | **BoardMessage** | сообщение чата: реакции (JSON `{"👍":[userId]}`), ответы (`replyToId`), закрепление |
 | **JournalEntry** | запись дневника (день + автор + mood) |
