@@ -32,6 +32,10 @@ export const NOTIFICATION_MAP: Record<string, NotificationConfig> = {
     emoji: "📔",
     message: (d) => `${d.userName || "Кто-то"} написал(а) в дневник ${d.mood || ""}`.trim(),
   },
+  "lodging:added": {
+    emoji: "🏨",
+    message: (d) => `${d.userName || "Кто-то"} добавил(а) жильё: ${d.name}`,
+  },
   "board:added": {
     emoji: "💬",
     message: (d) => `${d.userName || "Кто-то"}: ${String(d.content || "").slice(0, 50)}`,

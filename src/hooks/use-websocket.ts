@@ -143,6 +143,13 @@ export function useWebSocket(tripId: string) {
       if (data.tripId === tripId) invalidateDebounced(["checklist"]);
     });
 
+    // Жильё: added (с тостом) и updated (правка/удаление) обновляют один и тот же кэш
+    for (const ev of ["lodging:added", "lodging:updated"]) {
+      socket.on(ev, (data: { tripId: string }) => {
+        if (data.tripId === tripId) invalidateDebounced(["lodgings"]);
+      });
+    }
+
     socket.on("food:updated", (data: { tripId: string }) => {
       if (data.tripId === tripId) invalidateDebounced(["foods"]);
     });

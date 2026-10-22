@@ -1,0 +1,1 @@
+export { LodgingTab } from "./LodgingTab";

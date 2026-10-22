@@ -6,6 +6,7 @@ import { cn } from "@/lib/utils";
 import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 import {
   LayoutDashboard,
+  BedDouble,
   ListChecks,
   Map as MapIcon,
   Images,
@@ -66,6 +67,7 @@ const TABS = [
   // Планирование
   { key: "dashboard", label: "Обзор", icon: LayoutDashboard, group: "plan" },
   { key: "itinerary", label: "Маршрут", icon: ListChecks, group: "plan" },
+  { key: "lodging", label: "Жильё", icon: BedDouble, group: "plan" },
   { key: "map", label: "Карта", icon: MapIcon, group: "plan" },
   { key: "budget", label: "Бюджет", icon: Wallet, group: "plan" },
   // Воспоминания

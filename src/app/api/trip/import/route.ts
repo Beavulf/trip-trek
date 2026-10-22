@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { requireUser } from "@/lib/api-auth";
 import { tripCreateGate } from "@/lib/app-config";
 import { userRateLimit } from "@/lib/rate-limit";
+import { pickLodgingInput, toDateKey } from "@/lib/lodging";
 
 // POST /api/trip/import — импорт поездки из JSON-бэкапа (формат backup v2.0)
 // Создаёт НОВУЮ поездку для текущего пользователя (owner). Все userId-ссылки
@@ -156,6 +157,8 @@ interface BackupV2 {
     category: string;
     amount: number;
   }>;
+  // Проживания (есть только в бэкапах после появления вкладки «Жильё»)
+  lodgings?: Array<Record<string, unknown>>;
 }
 
 export async function POST(req: NextRequest) {
@@ -405,6 +408,22 @@ export async function POST(req: NextRequest) {
       update: { amount: b.amount },
       create: { tripId: trip.id, category: b.category, amount: b.amount },
     });
+  }
+
+  // 12) Проживания — через тот же нормализатор, что и POST /api/lodgings: даты в бэкапе
+  //     лежат ISO-строками, а нормализатор ждёт ключ ГГГГ-ММ-ДД. Битые записи пропускаем.
+  for (const l of body.lodgings || []) {
+    const parsed = pickLodgingInput(
+      {
+        ...l,
+        checkIn: typeof l.checkIn === "string" ? toDateKey(l.checkIn) : l.checkIn,
+        checkOut: typeof l.checkOut === "string" ? toDateKey(l.checkOut) : l.checkOut,
+      },
+      "create"
+    );
+    if (!parsed.ok || !parsed.data.name || !parsed.data.checkIn || !parsed.data.checkOut) continue;
+    const { name, checkIn, checkOut, ...rest } = parsed.data;
+    await tx.lodging.create({ data: { ...rest, name, checkIn, checkOut, tripId: trip.id } });
   }
 
 

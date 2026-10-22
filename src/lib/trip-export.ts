@@ -4,7 +4,7 @@ import { db } from "@/lib/db";
 // Используется и пользовательским /api/export, и админским экспортом из панели.
 
 export async function buildTripExport(tripId: string) {
-  const [trip, days, places, photos, expenses, journals, messages, checklist, info, phrases, foods, budgetPlans] =
+  const [trip, days, places, photos, expenses, journals, messages, checklist, info, phrases, foods, budgetPlans, lodgings] =
     await Promise.all([
       db.trip.findUnique({ where: { id: tripId } }),
       db.day.findMany({ where: { tripId }, orderBy: { dayNumber: "asc" } }),
@@ -18,6 +18,7 @@ export async function buildTripExport(tripId: string) {
       db.phrase.findMany({ where: { tripId } }),
       db.foodItem.findMany({ where: { tripId } }),
       db.budgetPlan.findMany({ where: { tripId } }),
+      db.lodging.findMany({ where: { tripId }, orderBy: { checkIn: "asc" } }),
     ]);
 
   if (!trip) return null;
@@ -36,6 +37,7 @@ export async function buildTripExport(tripId: string) {
     phrases,
     foods,
     budgetPlans,
+    lodgings,
     exportedAt: new Date().toISOString(),
     version: "2.0",
   };

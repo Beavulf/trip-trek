@@ -128,6 +128,7 @@ User ──< TripMember >── Trip ──< Day ──< Place ──< Photo
               │            │  ├──< Photo, Expense, JournalEntry
               │            │  ├──< BoardMessage (чат, replies, reactions-JSON)
               │            │  ├──< ChecklistItem, InfoItem, Phrase, FoodItem
+              │            │  ├──< Lodging (проживание: заезд/выезд, бронь, цена)
               │            │  └──< BudgetPlan (уникален по tripId+category)
               │            └──< TripBan (бан юзера в конкретной поездке)
    глобальное: AppSettings (singleton id="app"), AdminLog,
@@ -145,6 +146,13 @@ User ──< TripMember >── Trip ──< Day ──< Place ──< Photo
   Логика дележа/долгов — `src/lib/budget/` (split, balances,
   settle; money — целые центы и округления, personal — «модель реальных денег»
   для «Моё», planned — план бюджета по местам маршрута), не дублируй её в роутах.
+- **Lodging** — жильё как отдельная сущность, а не `Place` категории hotel: маршрут
+  описывает «что делаем», жильё — «где ночуем». `checkIn`/`checkOut` — КАЛЕНДАРНЫЕ дни
+  без пояса: в БД полдень UTC выбранного дня (так день не прыгает между поясами
+  сервера и клиента), везде в коде работаем с ключами `ГГГГ-ММ-ДД` (`src/lib/lodging.ts`).
+  Ночь дня `checkOut` уже не в этом жилье (полуинтервал `[checkIn, checkOut)`), поэтому
+  жильё «встык» не пересекается. «Где ночуем сегодня» и «ночи без жилья» считает
+  `lodging.ts`, не дублируй в компонентах.
 - **User.paymentDetails** — «куда возвращать долги» (карта/телефон, ≤300): видят
   только участники его поездок (participants в `GET /api/trip`), в публичные
   выгрузки не отдаётся. **Trip.shareEnabled/shareToken** — публичная страница

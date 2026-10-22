@@ -8,6 +8,7 @@ export * from "./use-expenses";
 export * from "./use-journal";
 export * from "./use-weather";
 export * from "./use-checklist";
+export * from "./use-lodgings";
 export * from "./use-info";
 export * from "./use-currency";
 export * from "./use-phrases";

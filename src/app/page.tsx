@@ -34,6 +34,7 @@ const TabLoader = () => (
 // Каждая прочая вкладка — отдельный чанк: на старте не тащим ~500 KiB неиспользуемого JS.
 const Timeline = dynamic(() => import("@/components/trip/timeline").then(m => m.Timeline), { loading: TabLoader });
 const Itinerary = dynamic(() => import("@/components/trip/itinerary").then(m => m.Itinerary), { loading: TabLoader });
+const LodgingTab = dynamic(() => import("@/components/trip/lodging").then(m => m.LodgingTab), { loading: TabLoader });
 const Gallery = dynamic(() => import("@/components/trip/gallery").then(m => m.Gallery), { loading: TabLoader });
 const Budget = dynamic(() => import("@/components/trip/budget").then(m => m.Budget), { loading: TabLoader });
 const RestChill = dynamic(() => import("@/components/trip/rest-chill").then(m => m.RestChill), { loading: TabLoader });
@@ -129,6 +130,7 @@ export default function Home() {
           {activeTab === "dashboard" && <Dashboard />}
           {activeTab === "timeline" && <Timeline />}
           {activeTab === "itinerary" && <Itinerary />}
+          {activeTab === "lodging" && <LodgingTab />}
           {activeTab === "gallery" && <Gallery />}
           {activeTab === "budget" && <Budget />}
           {activeTab === "rest" && <RestChill />}

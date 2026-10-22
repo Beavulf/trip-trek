@@ -5,6 +5,7 @@ export type TripTab =
   | "dashboard"
   | "timeline"
   | "itinerary"
+  | "lodging"
   | "map"
   | "gallery"
   | "budget"
