@@ -56,6 +56,12 @@ describe("pickPatchablePlace", () => {
     expect(pickPatchablePlace({ lat: NaN, budget: Infinity, rating: "5" })).toEqual({});
   });
 
+  it("budget: отрицательные и нереальные суммы отбрасываются", () => {
+    expect(pickPatchablePlace({ budget: -5 })).toEqual({});
+    expect(pickPatchablePlace({ budget: 99_999_999 })).toEqual({});
+    expect(pickPatchablePlace({ budget: 1_000_000 })).toEqual({ budget: 1_000_000 });
+  });
+
   it("status — только валидные значения enum", () => {
     expect(pickPatchablePlace({ status: "visited" })).toEqual({ status: "visited" });
     expect(pickPatchablePlace({ status: "hacked" })).toEqual({});
