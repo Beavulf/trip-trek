@@ -1,5 +1,11 @@
 import { describe, it, expect } from "vitest";
-import { normalizeExpenseInput, checkSettlementAgainstDebt, sanitizeImportedSplit, MAX_EXPENSE_AMOUNT } from "./expense-input";
+import {
+  normalizeExpenseInput,
+  checkSettlementAgainstDebt,
+  sanitizeImportedSplit,
+  pickOriginalAmount,
+  MAX_EXPENSE_AMOUNT,
+} from "./expense-input";
 
 const base = { amount: 90, category: "food", description: "Ужин", paidById: "A" };
 const ok = (over: Record<string, unknown> = {}) => {
@@ -154,5 +160,21 @@ describe("sanitizeImportedSplit — делёж из бэкапа", () => {
   it("не-строка и пустое значение безопасны", () => {
     expect(sanitizeImportedSplit(undefined, "A", members, false)).toEqual({ splitWith: "", excludeSelf: false });
     expect(sanitizeImportedSplit(null, "A", members, true)).toEqual({ splitWith: "", excludeSelf: false });
+  });
+});
+
+describe("pickOriginalAmount — исходная сумма переживает импорт", () => {
+  it("парой «сумма + валюта» сохраняется, валюта в верхнем регистре", () => {
+    expect(pickOriginalAmount(100, "cny")).toEqual({ originalAmount: 100, originalCurrency: "CNY" });
+    expect(pickOriginalAmount("85,5", "JPY")).toEqual({ originalAmount: 85.5, originalCurrency: "JPY" });
+  });
+  it("без пары, с мусором или нулём — оба null", () => {
+    const none = { originalAmount: null, originalCurrency: null };
+    expect(pickOriginalAmount(100, undefined)).toEqual(none);
+    expect(pickOriginalAmount(undefined, "CNY")).toEqual(none);
+    expect(pickOriginalAmount(0, "CNY")).toEqual(none);
+    expect(pickOriginalAmount(-3, "CNY")).toEqual(none);
+    expect(pickOriginalAmount(100, "yuan")).toEqual(none);
+    expect(pickOriginalAmount(null, null)).toEqual(none);
   });
 });

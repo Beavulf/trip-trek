@@ -39,6 +39,20 @@ function parseAmount(raw: unknown): number | null {
   return null;
 }
 
+/**
+ * Исходная сумма, как её ввёл юзер («100 CNY» под долларовой суммой в истории), — только парой
+ * «сумма + валюта из 3 букв». Общая для POST /api/expenses и импортов: раньше импорт эти поля терял.
+ */
+export function pickOriginalAmount(
+  amountRaw: unknown,
+  currencyRaw: unknown
+): { originalAmount: number | null; originalCurrency: string | null } {
+  const amount = parseAmount(amountRaw);
+  const currency = typeof currencyRaw === "string" && /^[A-Za-z]{3}$/.test(currencyRaw) ? currencyRaw.toUpperCase() : null;
+  const ok = amount !== null && amount > 0 && amount <= 1e12 && currency !== null;
+  return { originalAmount: ok ? amount : null, originalCurrency: ok ? currency : null };
+}
+
 export function normalizeExpenseInput(body: Record<string, unknown>): ExpenseInputResult {
   const rawAmount = parseAmount(body.amount);
   if (rawAmount === null || rawAmount <= 0 || rawAmount > MAX_EXPENSE_AMOUNT) {
@@ -79,12 +93,7 @@ export function normalizeExpenseInput(body: Record<string, unknown>): ExpenseInp
     settlementKey = key;
   }
 
-  const origAmount = parseAmount(body.originalAmount);
-  const origCurrency =
-    typeof body.originalCurrency === "string" && /^[A-Za-z]{3}$/.test(body.originalCurrency)
-      ? body.originalCurrency.toUpperCase()
-      : null;
-  const hasOriginal = origAmount !== null && origAmount > 0 && origAmount <= 1e12 && origCurrency !== null;
+  const original = pickOriginalAmount(body.originalAmount, body.originalCurrency);
 
   return {
     ok: true,
@@ -97,8 +106,8 @@ export function normalizeExpenseInput(body: Record<string, unknown>): ExpenseInp
       splitWith,
       excludeSelf: isSettlement ? true : excludeSelf,
       settlementKey,
-      originalAmount: hasOriginal ? origAmount : null,
-      originalCurrency: hasOriginal ? origCurrency : null,
+      originalAmount: original.originalAmount,
+      originalCurrency: original.originalCurrency,
     },
   };
 }

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { requireTripOwner } from "@/lib/api-auth";
 import { userRateLimit } from "@/lib/rate-limit";
-import { sanitizeImportedSplit } from "@/lib/budget/expense-input";
+import { sanitizeImportedSplit, pickOriginalAmount } from "@/lib/budget/expense-input";
 
 function newId() {
   return crypto.randomUUID();
@@ -143,6 +143,7 @@ export async function POST(req: NextRequest) {
               dayId: mappedDayId,
               splitWith: split.splitWith,
               excludeSelf: split.excludeSelf,
+              ...pickOriginalAmount(e.originalAmount, e.originalCurrency),
             },
           });
           imported.expenses++;

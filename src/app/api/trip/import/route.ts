@@ -5,7 +5,7 @@ import { tripCreateGate } from "@/lib/app-config";
 import { userRateLimit } from "@/lib/rate-limit";
 import { pickLodgingInput, toDateKey } from "@/lib/lodging";
 import { BASE_CURRENCY } from "@/lib/currencies";
-import { sanitizeImportedSplit } from "@/lib/budget/expense-input";
+import { sanitizeImportedSplit, pickOriginalAmount } from "@/lib/budget/expense-input";
 
 // POST /api/trip/import — импорт поездки из JSON-бэкапа (формат backup v2.0)
 // Создаёт НОВУЮ поездку для текущего пользователя (owner). Все userId-ссылки
@@ -87,6 +87,8 @@ interface BackupV2 {
     splitWith?: string;
     excludeSelf?: boolean;
     settlementKey?: string | null;
+    originalAmount?: number | null;
+    originalCurrency?: string | null;
     createdAt?: string;
   }>;
   journals?: Array<{
@@ -326,6 +328,8 @@ export async function POST(req: NextRequest) {
         dayId: newDayId || null,
         splitWith: split.splitWith,
         excludeSelf: split.excludeSelf,
+        // «≈ 100 CNY» под суммой в истории: исходная сумма и валюта переживают бэкап
+        ...pickOriginalAmount(ex.originalAmount, ex.originalCurrency),
       },
     });
   }
