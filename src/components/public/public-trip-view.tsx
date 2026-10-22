@@ -21,7 +21,13 @@ import "yet-another-react-lightbox/styles.css";
 import "yet-another-react-lightbox/plugins/captions.css";
 import "yet-another-react-lightbox/plugins/counter.css";
 import { useBackDismiss } from "@/hooks/use-back-dismiss";
+import { isSlowConnection } from "@/lib/net";
 import { cn } from "@/lib/utils";
+
+// Секция «Все фото» (до 500 кадров) рендерится порциями: целиком это сотни кнопок,
+// картинок и IntersectionObserver'ов в DOM у гостя с телефона. Анимация входа — только у первых.
+const ALL_PHOTOS_PAGE = 60;
+const REVEAL_FIRST = 12;
 
 // Листлет тянет осязаемый CSS/JS — на публичную страницу только по требованию
 const PublicMap = dynamic(() => import("./public-map").then((m) => m.PublicMap), {
@@ -32,6 +38,9 @@ const PublicMap = dynamic(() => import("./public-map").then((m) => m.PublicMap),
 export interface PublicPhoto {
   url: string;
   thumbUrl: string;
+  /** Размеры файла — для aspect-ratio плитки (у старых фото могут отсутствовать) */
+  width?: number | null;
+  height?: number | null;
   caption: string | null;
   isFavorite: boolean;
   lat: number | null;
@@ -94,6 +103,7 @@ export function PublicTripView({ trip, token }: { trip: PublicTrip; token: strin
   const [showFloatingBar, setShowFloatingBar] = useState(false);
   // reduced motion выясняем после монтирования: разница сервер/клиент сломала бы гидрацию
   const [reducedMotion, setReducedMotion] = useState(false);
+  const [allShown, setAllShown] = useState(ALL_PHOTOS_PAGE);
 
   // Сердечко: анонимный лайк страницы, один тап с устройства (localStorage)
   const [hearts, setHearts] = useState(trip.hearts);
@@ -137,6 +147,31 @@ export function PublicTripView({ trip, token }: { trip: PublicTrip; token: strin
     () => trip.photos.filter((p) => p.lat != null && p.lng != null).map((p) => ({ lat: p.lat!, lng: p.lng! })),
     [trip.photos]
   );
+
+  // Слайды лайтбокса: раньше собирались заново на каждый свайп вместе с перерисовкой всей
+  // страницы; viewer.list от свайпа не меняется, так что мемо держится
+  const viewerList = viewer?.list;
+  const viewerOpen = !!viewer;
+  const viewerSlides = useMemo(
+    () =>
+      (viewerList ?? []).map((p) => ({
+        src: p.url,
+        width: p.width ?? undefined,
+        height: p.height ?? undefined,
+        alt: p.caption ?? "Фото поездки",
+        title: p.caption ?? undefined,
+        description: (
+          <div className="flex flex-wrap items-center gap-x-2.5 gap-y-0.5 text-xs opacity-85">
+            {p.dayNumber != null && <span>День {p.dayNumber}</span>}
+            {p.placeName && <span>📍 {p.placeName}</span>}
+            {p.takenAt && <span className="opacity-70">{fmtLong(p.takenAt)}</span>}
+          </div>
+        ),
+      })),
+    [viewerList]
+  );
+  // На слабой связи/экономии трафика соседние фото заранее не тянем (см. lib/net.ts)
+  const viewerPreload = useMemo(() => (viewerOpen && isSlowConnection() ? 0 : 1), [viewerOpen]);
 
   const dateLabel =
     trip.endDate && trip.endDate !== trip.startDate
@@ -505,8 +540,13 @@ export function PublicTripView({ trip, token }: { trip: PublicTrip; token: strin
             Все фото · {trip.photos.length}
           </SectionTitle>
           <div className="columns-2 sm:columns-3 gap-2 [&>*]:mb-2">
-            {trip.photos.map((p, i) => (
-              <Reveal key={p.url + i} disabled={reducedMotion} delay={Math.min((i % 6) * 0.04, 0.2)} className="break-inside-avoid">
+            {trip.photos.slice(0, allShown).map((p, i) => (
+              <Reveal
+                key={p.url + i}
+                disabled={reducedMotion || i >= REVEAL_FIRST}
+                delay={Math.min((i % 6) * 0.04, 0.2)}
+                className="break-inside-avoid"
+              >
                 <button
                   type="button"
                   onClick={() => setViewer({ list: trip.photos, index: i })}
@@ -518,7 +558,10 @@ export function PublicTripView({ trip, token }: { trip: PublicTrip; token: strin
                     alt={p.caption ?? ""}
                     loading="lazy"
                     decoding="async"
-                    className="w-full object-cover"
+                    className={cn("w-full object-cover", !(p.width && p.height) && "min-h-[120px]")}
+                    // Пропорции из метаданных: колонки не прыгают, а ленивая подгрузка не
+                    // считает каждую плитку заглушкой и не тянет вдвое больше, чем видно
+                    style={p.width && p.height ? { aspectRatio: `${p.width} / ${p.height}` } : undefined}
                   />
                   {p.isFavorite && (
                     <span
@@ -537,6 +580,17 @@ export function PublicTripView({ trip, token }: { trip: PublicTrip; token: strin
               </Reveal>
             ))}
           </div>
+          {allShown < trip.photos.length && (
+            <div className="flex justify-center pt-4">
+              <button
+                type="button"
+                onClick={() => setAllShown((n) => n + ALL_PHOTOS_PAGE)}
+                className="inline-flex min-h-11 items-center gap-1.5 rounded-xl bg-secondary border border-border px-5 text-xs font-medium active:scale-95 transition-transform"
+              >
+                Показать ещё · осталось {trip.photos.length - allShown}
+              </button>
+            </div>
+          )}
         </section>
       )}
 
@@ -635,20 +689,9 @@ export function PublicTripView({ trip, token }: { trip: PublicTrip; token: strin
           close={() => setViewer(null)}
           index={viewer!.index}
           on={{ view: ({ index: i }) => setViewer((v) => (v ? { ...v, index: i } : v)) }}
-          slides={viewer!.list.map((p) => ({
-            src: p.url,
-            alt: p.caption ?? "Фото поездки",
-            title: p.caption ?? undefined,
-            description: (
-              <div className="flex flex-wrap items-center gap-x-2.5 gap-y-0.5 text-xs opacity-85">
-                {p.dayNumber != null && <span>День {p.dayNumber}</span>}
-                {p.placeName && <span>📍 {p.placeName}</span>}
-                {p.takenAt && <span className="opacity-70">{fmtLong(p.takenAt)}</span>}
-              </div>
-            ),
-          }))}
+          slides={viewerSlides}
           plugins={[Captions, Counter, Zoom]}
-          carousel={{ finite: false, preload: 1 }}
+          carousel={{ finite: false, preload: viewerPreload }}
           controller={{ closeOnBackdropClick: true, closeOnPullDown: true }}
           captions={{ showToggle: false }}
           zoom={{ scrollToZoom: true, pinchZoomV4: true }}

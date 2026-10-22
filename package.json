@@ -18,7 +18,8 @@
     "db:deploy": "prisma migrate deploy",
     "db:reset": "prisma migrate reset",
     "db:seed": "bun prisma/seed.ts",
-    "db:admin": "bun prisma/set-admin.mjs"
+    "db:admin": "bun prisma/set-admin.mjs",
+    "db:backfill-photos": "bun prisma/backfill-photos.ts"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.1.1",

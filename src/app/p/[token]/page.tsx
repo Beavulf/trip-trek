@@ -44,6 +44,8 @@ async function findSharedTrip(token: string) {
         select: {
           url: true,
           thumbUrl: true,
+          width: true,
+          height: true,
           caption: true,
           isFavorite: true,
           lat: true,
@@ -116,6 +118,8 @@ export default async function PublicTripPage({ params }: { params: Promise<{ tok
     photos: trip.photos.map((p) => ({
       url: p.url,
       thumbUrl: p.thumbUrl ?? p.url,
+      width: p.width,
+      height: p.height,
       caption: p.caption,
       isFavorite: p.isFavorite,
       lat: p.lat,

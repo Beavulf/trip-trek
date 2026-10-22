@@ -20,11 +20,12 @@ import {
   Star,
   Trash2,
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import type { Photo } from "@/lib/types";
 import { useBackDismiss } from "@/hooks/use-back-dismiss";
+import { isSlowConnection } from "@/lib/net";
 import { MobileBottomSheet } from "./mobile-bottom-sheet";
 import { DayPicker } from "./quick-add/DayPicker";
 import { useTrip } from "@/hooks/use-trip";
@@ -64,6 +65,34 @@ function relTime(ts: string): string {
   const yest = new Date(Date.now() - 24 * 60 * 60 * 1000);
   if (d.toDateString() === yest.toDateString()) return `вчера, ${hm}`;
   return d.toLocaleDateString("ru-RU", { day: "numeric", month: "short" });
+}
+
+function toSlide(p: Photo) {
+  return {
+    src: p.url,
+    // Размеры из БД: YARL не раздувает картинку выше натурального размера и считает зум
+    // ещё до загрузки файла (могут отсутствовать у старых фото — тогда как раньше)
+    width: p.width ?? undefined,
+    height: p.height ?? undefined,
+    alt: p.caption ?? "Фото",
+    // Captions plugin reads `title` (top) and `description` (bottom).
+    title: p.caption ?? undefined,
+    description: (
+      <div className="flex items-center gap-2.5 text-xs opacity-80 flex-wrap">
+        {p.isFavorite && (
+          <span className="inline-flex items-center gap-1 text-yellow-300">
+            <Star className="size-3 fill-yellow-300" /> Лучшее
+          </span>
+        )}
+        {p.day && <span>День {p.day.dayNumber}</span>}
+        {p.day?.city && <span>{p.day.city}</span>}
+        {p.place?.name && <span>📍 {p.place.name}</span>}
+        {p.user && <span>{p.user.emoji} {p.user.name}</span>}
+        {p.takenAt && <span className="opacity-70">{relTime(p.takenAt)}</span>}
+        {p.address && <span className="block w-full mt-0.5 opacity-70">{p.address}</span>}
+      </div>
+    ),
+  };
 }
 
 export function PhotoLightbox({
@@ -108,33 +137,19 @@ export function PhotoLightbox({
     }
   }, [editOpen, current]);
 
+  // Слайды на ВСЕ фото списка (до 1000 JSX-описаний) раньше пересобирались на каждый рендер —
+  // а рендер идёт на каждый свайп (смена index → состояние родителя). Теперь — при смене
+  // списка и при открытии/закрытии (заодно освежает подписи «2 ч назад»), но не на свайп.
+  const slides = useMemo(() => photos.map(toSlide), [photos, open]);
+  // Предзагрузка соседних кадров: на слабой связи/в режиме экономии трафика не грузим
+  // лишнее заранее — иначе открытие одного фото тянет три полноразмерных файла
+  const preload = useMemo(() => (open && isSlowConnection() ? 0 : 1), [open]);
+
   if (!current) return null;
 
   const hasMapTarget = !!current.placeId || (current.lat != null && current.lng != null);
   const showOwnerActions = canDelete(current);
   const showEdit = canEdit(current);
-
-  const slides = photos.map((p) => ({
-    src: p.url,
-    alt: p.caption ?? "Фото",
-    // Captions plugin reads `title` (top) and `description` (bottom).
-    title: p.caption ?? undefined,
-    description: (
-      <div className="flex items-center gap-2.5 text-xs opacity-80 flex-wrap">
-        {p.isFavorite && (
-          <span className="inline-flex items-center gap-1 text-yellow-300">
-            <Star className="size-3 fill-yellow-300" /> Лучшее
-          </span>
-        )}
-        {p.day && <span>День {p.day.dayNumber}</span>}
-        {p.day?.city && <span>{p.day.city}</span>}
-        {p.place?.name && <span>📍 {p.place.name}</span>}
-        {p.user && <span>{p.user.emoji} {p.user.name}</span>}
-        {p.takenAt && <span className="opacity-70">{relTime(p.takenAt)}</span>}
-        {p.address && <span className="block w-full mt-0.5 opacity-70">{p.address}</span>}
-      </div>
-    ),
-  }));
 
   // key обязателен: YARL рисует тулбар списком, иначе React ругается на детей без ключей
   const iconBtn = (key: string, label: string, onClick: () => void, node: React.ReactNode, opts?: { disabled?: boolean; className?: string }) => (
@@ -243,7 +258,7 @@ export function PhotoLightbox({
         }}
         slides={slides}
         plugins={[Captions, Counter, Zoom]}
-        carousel={{ finite: false, preload: 1 }}
+        carousel={{ finite: false, preload }}
         // Мобильные удобства: свайп-навигация у YARL из коробки,
         // закрытие — кнопкой, тапом по фону или свайпом вниз
         controller={{ closeOnBackdropClick: true, closeOnPullDown: true }}
