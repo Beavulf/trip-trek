@@ -472,9 +472,9 @@ function ChecklistView() {
       {/* По категориям — схлопываем пустые */}
       {total === 0 ? (
         <div className="rounded-2xl border-2 border-dashed border-border py-8 text-center">
-          <CheckCircle2 className="size-8 mx-auto text-muted-foreground/50 mb-2" />
+          <CheckCircle2 className="size-8 mx-auto text-muted-foreground/80 mb-2" />
           <p className="text-sm text-muted-foreground">Чек-лист пуст</p>
-          <p className="text-xs text-muted-foreground/70 mt-1 mb-3">Начни с готового набора — это быстрее</p>
+          <p className="text-xs text-muted-foreground/80 mt-1 mb-3">Начни с готового набора — это быстрее</p>
           <button
             type="button"
             onClick={() => setTemplatesOpen(true)}
@@ -875,9 +875,9 @@ function InfoView() {
         </div>
       ) : all.length === 0 ? (
         <div className="rounded-2xl border-2 border-dashed border-border py-8 text-center">
-          <Lightbulb className="size-8 mx-auto text-muted-foreground/50 mb-2" />
+          <Lightbulb className="size-8 mx-auto text-muted-foreground/80 mb-2" />
           <p className="text-sm text-muted-foreground">Справка пуста</p>
-          <p className="text-xs text-muted-foreground/70 mt-1 mb-3">
+          <p className="text-xs text-muted-foreground/80 mt-1 mb-3">
             Контакты, транспорт и советы — всё под рукой офлайн
           </p>
           <button

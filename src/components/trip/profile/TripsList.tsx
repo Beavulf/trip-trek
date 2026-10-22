@@ -94,7 +94,7 @@ export function TripsList({ profile, onOpenTrip, onCreateTrip }: TripsListProps)
                   <div className="flex items-center gap-1.5">
                     <span className="font-semibold text-sm truncate">{trip.title}</span>
                     {trip.role === "owner" && (
-                      <span className="shrink-0 text-[9px] font-bold uppercase tracking-wide text-primary bg-primary/10 px-1.5 py-0.5 rounded">
+                      <span className="shrink-0 text-[10px] font-bold uppercase tracking-wide text-primary bg-primary/10 px-1.5 py-0.5 rounded">
                         своя
                       </span>
                     )}

@@ -5,6 +5,7 @@ import {
   dayEndFor,
   dayIdForDate,
   isTripFinished,
+  isTripOver,
 } from "./trip-days";
 
 afterEach(() => {
@@ -98,5 +99,12 @@ describe("dayIdForDate / isTripFinished", () => {
     expect(isTripFinished(new Date(2026, 9, 25), "active")).toBe(false);
     // без конца (totalDays-only) финал не наступает — конец вычисляется на клиенте
     expect(isTripFinished(null, "planning")).toBe(false);
+  });
+
+  it("isTripOver: гасит «сегодня» после финиша независимо от статуса", () => {
+    vi.setSystemTime(new Date(2026, 9, 21, 12, 0));
+    expect(isTripOver(new Date(2026, 9, 20, 23, 59))).toBe(true);
+    expect(isTripOver(new Date(2026, 9, 25))).toBe(false);
+    expect(isTripOver(null)).toBe(false);
   });
 });

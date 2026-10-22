@@ -190,7 +190,7 @@ export function AchievementsGrid({ profile, onOpenPremium }: AchievementsGridPro
             <StampMark emoji={a.emoji} unlocked={a.unlocked} pct={a.progress?.pct ?? 0} />
             <div
               className={cn(
-                "text-[9px] font-medium leading-tight line-clamp-2 break-words w-full",
+                "text-[10px] font-medium leading-tight line-clamp-2 break-words w-full",
                 !a.unlocked && "text-muted-foreground"
               )}
             >

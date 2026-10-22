@@ -793,13 +793,13 @@ function AISummaryInner({ tripId }: { tripId: string }) {
                   <p className="text-xs text-muted-foreground mt-1 line-clamp-2 leading-relaxed">
                     {plainText(h.content).slice(0, 140)}
                   </p>
-                  <p className="text-[10px] text-muted-foreground/70 mt-1">{when(h.createdAt)}</p>
+                  <p className="text-[10px] text-muted-foreground/80 mt-1">{when(h.createdAt)}</p>
                 </button>
                 <button
                   type="button"
                   onClick={() => removeFromHistory(h.id)}
                   aria-label="Удалить из истории"
-                  className="size-9 shrink-0 rounded-lg grid place-items-center text-muted-foreground/60 hover:text-red-500 hover:bg-red-500/10 transition-colors"
+                  className="size-9 shrink-0 rounded-lg grid place-items-center text-muted-foreground/80 hover:text-red-500 hover:bg-red-500/10 transition-colors"
                 >
                   <Trash2 className="size-4" />
                 </button>

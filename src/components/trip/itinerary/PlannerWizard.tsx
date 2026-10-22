@@ -303,7 +303,7 @@ export function PlannerWizard({ open, onOpenChange }: { open: boolean; onOpenCha
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
                 placeholder="Например: с детьми, без лестниц, хотим ночью увидеть подсветку…"
-                className="w-full rounded-2xl border border-border bg-card px-3.5 py-3 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-ring placeholder:text-muted-foreground/60"
+                className="w-full rounded-2xl border border-border bg-card px-3.5 py-3 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-ring placeholder:text-muted-foreground/80"
               />
             </section>
 

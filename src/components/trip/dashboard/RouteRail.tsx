@@ -6,6 +6,7 @@ import { CalendarDays, Check, ChevronRight } from "lucide-react";
 import { type TripSummary } from "@/lib/types";
 import { cn, plural } from "@/lib/utils";
 import { useTripStore } from "@/lib/trip-store";
+import { isTripOver } from "@/lib/trip-days";
 
 /**
  * Линия маршрута: дни как станции на пути, «вы здесь» пульсирует.
@@ -18,6 +19,7 @@ export function RouteRail({ trip }: { trip: TripSummary }) {
 
   if (!trip.days.length) return null;
 
+  const tripOver = isTripOver(trip.settings.endDate);
   const cities = [...new Map(trip.days.map((d) => [d.cityKey, d])).values()];
 
   return (
@@ -39,8 +41,9 @@ export function RouteRail({ trip }: { trip: TripSummary }) {
         <div className="flex items-start">
           {trip.days.map((d, i) => {
             const visited = d.visitedCount;
-            const isCurrent = d.dayNumber === trip.currentDayNumber;
-            const isPast = d.dayNumber < trip.currentDayNumber;
+            // После финиша кламп держит «текущим» последний день — «сегодня» на нём ложь
+            const isCurrent = d.dayNumber === trip.currentDayNumber && !tripOver;
+            const isPast = d.dayNumber < trip.currentDayNumber || tripOver;
             const accent = d.accentColor ?? "#f97316";
             const hasNext = i < trip.days.length - 1;
 
@@ -93,7 +96,7 @@ export function RouteRail({ trip }: { trip: TripSummary }) {
                   <span className="text-[10px] font-medium truncate max-w-[72px] transition-colors group-hover:text-primary">
                     {d.city}
                   </span>
-                  <span className="text-[9px] text-muted-foreground whitespace-nowrap">{meta}</span>
+                  <span className="text-[10px] text-muted-foreground whitespace-nowrap">{meta}</span>
                 </button>
                 {hasNext && (
                   <span

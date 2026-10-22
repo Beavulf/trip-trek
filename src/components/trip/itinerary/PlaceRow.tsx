@@ -102,7 +102,7 @@ export function PlaceRow({ place, accentColor, currency, onOpen }: PlaceRowProps
         )}
         <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground mt-0.5 flex-wrap">
           {isCurrent && (
-            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wide text-orange-600 bg-orange-500/15">
+            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide text-orange-600 bg-orange-500/15">
               <span className="relative flex size-1.5" aria-hidden="true">
                 <span className="absolute inline-flex size-full rounded-full bg-orange-500 opacity-75 animate-ping" />
                 <span className="relative inline-flex size-1.5 rounded-full bg-orange-500" />

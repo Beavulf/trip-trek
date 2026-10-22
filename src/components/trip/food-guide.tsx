@@ -680,7 +680,7 @@ function FoodCard({
                     <span
                       key={v}
                       title={p?.name ?? "Участник"}
-                      className={cn("grid size-5 place-items-center rounded-full text-[9px] ring-2 ring-card", i > 0 && "-ml-1.5")}
+                      className={cn("grid size-5 place-items-center rounded-full text-[10px] ring-2 ring-card", i > 0 && "-ml-1.5")}
                       style={{ background: `${p?.color ?? "#94a3b8"}33` }}
                     >
                       {p?.emoji ?? "👤"}
@@ -738,7 +738,7 @@ function FoodCard({
               {food.tried ? (
                 <CheckCircle2 className="size-6 text-green-500" />
               ) : (
-                <Circle className="size-6 text-muted-foreground/60 transition-colors hover:text-primary" />
+                <Circle className="size-6 text-muted-foreground/80 transition-colors hover:text-primary" />
               )}
             </button>
           </div>

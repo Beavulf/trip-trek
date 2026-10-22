@@ -90,7 +90,7 @@ export function NotificationsBell({ authed, large }: { authed: boolean; large?: 
         >
           <Bell className={cn(large ? "size-5" : "size-4")} />
           {unread > 0 && (
-            <span className="absolute -top-1 -right-1 min-w-4 h-4 px-1 rounded-full bg-rose-500 text-white text-[9px] font-bold grid place-items-center ring-2 ring-background pointer-events-none">
+            <span className="absolute -top-1 -right-1 min-w-4 h-4 px-1 rounded-full bg-rose-500 text-white text-[10px] font-bold grid place-items-center ring-2 ring-background pointer-events-none">
               {unread > 9 ? "9+" : unread}
             </span>
           )}
@@ -173,7 +173,7 @@ function NotificationsSheet({ items, onClose }: { items: UserNotificationItem[];
                       <div className="flex-1 min-w-0">
                         <div className="text-sm font-medium leading-snug">{n.title}</div>
                         {n.body && <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed whitespace-pre-wrap">{n.body}</p>}
-                        <p className="font-mono text-[9px] uppercase tracking-widest text-muted-foreground/60 mt-1" title={fmtDateTime(n.createdAt)}>
+                        <p className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground/80 mt-1" title={fmtDateTime(n.createdAt)}>
                           {relTimeAdmin(n.createdAt)}
                         </p>
                       </div>

@@ -55,6 +55,16 @@ export function dayIdForDate(
 }
 
 /**
+ * Календарный конец поездки уже прошёл. calculateCurrentDayNumber зажимает номер дня
+ * в totalDays, поэтому после финиша «текущим» навсегда остаётся последний день —
+ * подписи «сегодня» на нём гасим этим флагом (сам кламп нужен формам как дефолтный день).
+ */
+export function isTripOver(endDate: string | Date | null | undefined): boolean {
+  if (!endDate) return false;
+  return new Date(endDate).getTime() < Date.now();
+}
+
+/**
  * Поездка «закончилась, но не закрыта»: endDate уже прошёл, а статус ещё не
  * completed. Триггер баннера-финала с долгами и архивированием (ретро-кейс
  * 2026-10: поездка в Китай висела в planning через день после возвращения,
@@ -65,6 +75,5 @@ export function isTripFinished(
   status?: string | null
 ): boolean {
   if (status === "completed") return false;
-  if (!endDate) return false;
-  return new Date(endDate).getTime() < Date.now();
+  return isTripOver(endDate);
 }

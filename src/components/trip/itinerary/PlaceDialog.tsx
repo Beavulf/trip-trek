@@ -282,7 +282,7 @@ function PlaceDialogBody({
                 День {day?.dayNumber} · {day?.city}
               </span>
               <span
-                className="px-1.5 py-0.5 rounded text-[9px] font-medium uppercase"
+                className="px-1.5 py-0.5 rounded text-[10px] font-medium uppercase"
                 style={{ background: `${meta?.color}18`, color: meta?.color }}
               >
                 {meta?.label}
@@ -559,7 +559,7 @@ function PlaceDialogBody({
           <div>
             <div className="text-xs text-muted-foreground mb-1.5">Фото ({photos.length})</div>
             {photos.length === 0 ? (
-              <div className="text-xs text-muted-foreground/60 italic">Пока нет фото — сделайте первое на месте</div>
+              <div className="text-xs text-muted-foreground/80 italic">Пока нет фото — сделайте первое на месте</div>
             ) : (
               <div className="grid grid-cols-3 gap-1.5">
                 {photos.map((ph, i) => (

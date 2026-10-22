@@ -194,7 +194,7 @@ function WishSection({
       <h3 className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground px-1 flex items-center gap-1.5">
         {title === "Посетили" && <CheckCircle2 className="size-3.5 text-green-500" />}
         {title}
-        <span className="text-muted-foreground/60 normal-case tracking-normal font-medium">
+        <span className="text-muted-foreground/80 normal-case tracking-normal font-medium">
           {count} {plural(count, "место", "места", "мест")}
         </span>
       </h3>
@@ -250,7 +250,7 @@ function WishCard({
             {cat?.emoji}
           </span>
           <span className="min-w-0 flex-1">{item.name}</span>
-          <ChevronRight className="size-3.5 shrink-0 text-muted-foreground/50 mt-0.5" />
+          <ChevronRight className="size-3.5 shrink-0 text-muted-foreground/80 mt-0.5" />
         </div>
         {(item.address || hasCoords) && (
           <div className="flex items-center flex-wrap gap-x-2 gap-y-0.5 mt-0.5">
@@ -286,7 +286,7 @@ function WishCard({
                 <Star
                   className={cn(
                     "size-5 transition-transform",
-                    (item.rating ?? 0) >= s ? "fill-amber-400 text-amber-400" : "text-muted-foreground/40"
+                    (item.rating ?? 0) >= s ? "fill-amber-400 text-amber-400" : "text-muted-foreground/80"
                   )}
                 />
               </button>

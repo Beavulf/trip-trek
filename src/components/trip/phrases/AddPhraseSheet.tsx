@@ -110,7 +110,7 @@ export function AddPhraseSheet({
         </div>
         <div>
           <label className="text-xs font-medium text-muted-foreground" htmlFor="add-cn">
-            На языке <span className="text-muted-foreground/60">(пусто — переведём сами)</span>
+            На языке <span className="text-muted-foreground/80">(пусто — переведём сами)</span>
           </label>
           <input
             id="add-cn"

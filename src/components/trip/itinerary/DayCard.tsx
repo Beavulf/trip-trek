@@ -139,12 +139,12 @@ export function DayCard({
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-1.5 text-xs text-muted-foreground flex-wrap">
               {isCurrent && (
-                <span className="px-1.5 py-0.5 rounded-full bg-primary text-primary-foreground text-[9px] font-bold uppercase tracking-wide">
+                <span className="px-1.5 py-0.5 rounded-full bg-primary text-primary-foreground text-[10px] font-bold uppercase tracking-wide">
                   Сегодня
                 </span>
               )}
               {!isCurrent && isPast && (
-                <span className="px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground text-[9px] font-medium uppercase tracking-wide">
+                <span className="px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground text-[10px] font-medium uppercase tracking-wide">
                   Прошёл
                 </span>
               )}
@@ -220,7 +220,7 @@ export function DayCard({
             >
               <div className="px-4 pb-4 pt-3 space-y-1.5">
                 {day.places.length === 0 && (
-                  <p className="text-xs text-muted-foreground/70 italic pb-1">В этот день ещё нет мест</p>
+                  <p className="text-xs text-muted-foreground/80 italic pb-1">В этот день ещё нет мест</p>
                 )}
                 {sections.map((s) =>
                   s.label ? (
@@ -310,7 +310,7 @@ function SortableRow({
         type="button"
         onPointerDown={(e) => controls.start(e)}
         aria-label={`Перетащить «${place.name}», чтобы изменить порядок`}
-        className="shrink-0 size-9 -ml-1.5 grid place-items-center rounded-lg text-muted-foreground/50 hover:text-muted-foreground hover:bg-accent/60 cursor-grab active:cursor-grabbing touch-none"
+        className="shrink-0 size-9 -ml-1.5 grid place-items-center rounded-lg text-muted-foreground/80 hover:text-muted-foreground hover:bg-accent/60 cursor-grab active:cursor-grabbing touch-none"
       >
         <GripVertical className="size-4" />
       </button>

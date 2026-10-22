@@ -175,7 +175,7 @@ export function PremiumModal({ open, onOpenChange }: { open: boolean; onOpenChan
                       <Loader2 className="size-6 animate-spin text-amber-500" />
                     ) : (
                       <>
-                        <span className="absolute -top-2 left-1/2 -translate-x-1/2 bg-amber-500 text-white text-[9px] font-bold px-2 py-0.5 rounded-full">
+                        <span className="absolute -top-2 left-1/2 -translate-x-1/2 bg-amber-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full">
                           ВЫГОДНО
                         </span>
                         <span className="text-xs text-muted-foreground">1 год</span>

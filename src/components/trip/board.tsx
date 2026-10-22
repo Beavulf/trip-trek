@@ -539,7 +539,7 @@ function ChatDock({
             </div>
           ))}
           {participants.length > 4 && (
-            <div className="size-6 rounded-full grid place-items-center text-[9px] font-bold bg-muted border-2 border-background text-muted-foreground">
+            <div className="size-6 rounded-full grid place-items-center text-[10px] font-bold bg-muted border-2 border-background text-muted-foreground">
               +{participants.length - 4}
             </div>
           )}
@@ -652,7 +652,7 @@ function ChatDock({
               <Centered>
                 <div className="text-3xl">🔍</div>
                 <p className="text-sm text-muted-foreground">Ничего не нашлось</p>
-                <p className="text-xs text-muted-foreground/70 mt-0.5">Попробуйте другое слово</p>
+                <p className="text-xs text-muted-foreground/80 mt-0.5">Попробуйте другое слово</p>
               </Centered>
             ) : (
               <EmptyChat
@@ -1082,7 +1082,7 @@ const MessageRow = memo(function MessageRow({
             <div
               className={cn(
                 "flex items-center gap-1.5 justify-end mt-0.5 text-[10px] tabular-nums",
-                isOwn ? "text-primary-foreground/70" : "text-muted-foreground/70"
+                isOwn ? "text-primary-foreground/70" : "text-muted-foreground/80"
               )}
             >
               {m.pending && <Loader2 className="size-3 animate-spin" />}

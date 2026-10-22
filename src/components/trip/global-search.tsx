@@ -301,7 +301,7 @@ export function GlobalSearch({ open, onOpenChange }: { open: boolean; onOpenChan
                 ) : (
                   <div className="text-center text-sm text-muted-foreground py-2">
                     <p>Введи минимум 2 символа</p>
-                    <p className="text-xs mt-1 text-muted-foreground/70">
+                    <p className="text-xs mt-1 text-muted-foreground/80">
                       Города, места, фразы, блюда, траты и дневник
                     </p>
                   </div>
@@ -326,7 +326,7 @@ export function GlobalSearch({ open, onOpenChange }: { open: boolean; onOpenChan
               <div className="py-2">
                 {grouped.map(([type, items]) => (
                   <div key={type} className="mb-1">
-                    <div className="px-4 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground/70 flex items-center gap-1.5">
+                    <div className="px-4 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground/80 flex items-center gap-1.5">
                       <span className="size-1.5 rounded-full" style={{ background: TYPE_COLORS[type] }} />
                       {TYPE_LABELS[type]} ({items.length})
                     </div>
@@ -379,13 +379,13 @@ export function GlobalSearch({ open, onOpenChange }: { open: boolean; onOpenChan
           <div className="px-4 py-2 border-t border-border flex items-center justify-between text-[10px] text-muted-foreground">
             <div className="hidden sm:flex items-center gap-3">
               <span className="flex items-center gap-1">
-                <kbd className="px-1.5 py-0.5 rounded bg-muted text-[9px]">↑↓</kbd> навигация
+                <kbd className="px-1.5 py-0.5 rounded bg-muted text-[10px]">↑↓</kbd> навигация
               </span>
               <span className="flex items-center gap-1">
-                <kbd className="px-1.5 py-0.5 rounded bg-muted text-[9px]">↵</kbd> выбрать
+                <kbd className="px-1.5 py-0.5 rounded bg-muted text-[10px]">↵</kbd> выбрать
               </span>
               <span className="flex items-center gap-1">
-                <kbd className="px-1.5 py-0.5 rounded bg-muted text-[9px]">esc</kbd> закрыть
+                <kbd className="px-1.5 py-0.5 rounded bg-muted text-[10px]">esc</kbd> закрыть
               </span>
             </div>
             <span className="sm:ml-auto">

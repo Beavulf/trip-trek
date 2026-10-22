@@ -410,7 +410,7 @@ export function TripSwitcher() {
                       <div className="text-center py-8">
                         <div className="text-4xl mb-2">🧳</div>
                         <p className="text-sm text-muted-foreground mb-1">Пока ни одной поездки</p>
-                        <p className="text-xs text-muted-foreground/70">Создай первую или присоединись к друзьям</p>
+                        <p className="text-xs text-muted-foreground/80">Создай первую или присоединись к друзьям</p>
                       </div>
                     )}
 
