@@ -1,6 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
+import { BASE_CURRENCY } from "@/lib/currencies";
 
 // === Currency ===
 export interface CurrencyRates {
@@ -8,6 +9,8 @@ export interface CurrencyRates {
   rates: Record<string, number>;
   updated: string | null;
   fallback?: boolean;
+  /** Коды валют, чей курс взят из статичной (устаревшей) таблицы, а не из живого API */
+  approxCodes?: string[];
 }
 
 export function useCurrency() {
@@ -24,4 +27,34 @@ export function useCurrency() {
     },
     staleTime: 60 * 60 * 1000, // 1 час
   });
+}
+
+export interface RateInfo {
+  /** Курсы «единиц валюты за 1 USD» (undefined, пока не загрузились) */
+  rates: Record<string, number> | undefined;
+  /** Курс для кода есть (или это USD) — сумму можно пересчитать и отправить */
+  ready: boolean;
+  /** Курс взят из статичной таблицы — показываем «приблизительный» */
+  approx: boolean;
+  loading: boolean;
+  /** Курсов нет и не будет без повтора (запрос упал или кода нет в ответе) */
+  failed: boolean;
+  refetch: () => void;
+}
+
+// Состояние курса валюты ввода для форм трат: пересчёт в USD без курса запрещён (см. lib/budget/convert.ts)
+export function useRateFor(code: string): RateInfo {
+  const q = useCurrency();
+  const rates = q.data?.rates;
+  const isBase = code === BASE_CURRENCY;
+  const rate = rates?.[code];
+  const ready = isBase || (typeof rate === "number" && rate > 0);
+  return {
+    rates,
+    ready,
+    approx: !isBase && ready && (q.data?.fallback === true || q.data?.approxCodes?.includes(code) === true),
+    loading: !isBase && !ready && q.isLoading,
+    failed: !isBase && !ready && !q.isLoading,
+    refetch: () => void q.refetch(),
+  };
 }

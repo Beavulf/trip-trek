@@ -1,10 +1,13 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useTrip, useAddExpense, useCurrency, useCurrentTripId } from "@/hooks/use-trip";
+import { useTrip, useAddExpense, useCurrentTripId } from "@/hooks/use-trip";
+import { useRateFor } from "@/hooks/trip/use-currency";
 import { EXPENSE_CATEGORIES } from "@/lib/types";
-import { currencySelectOptions, currencySymbol } from "@/lib/currencies";
+import { BASE_CURRENCY, currencySelectOptions, currencySymbol } from "@/lib/currencies";
 import { expenseSelectableParticipants } from "@/lib/budget";
+import { toBaseCurrency } from "@/lib/budget/convert";
+import { FxHint } from "../fx-hint";
 import { getSavedCurrency, saveCurrency } from "@/lib/currency-pref";
 import { Check, Loader2, Users } from "lucide-react";
 import { toast } from "sonner";
@@ -21,7 +24,6 @@ export function ExpenseForm({ userId, onDone }: ExpenseFormProps) {
   const { data: trip } = useTrip();
   const tripId = useCurrentTripId();
   const addExpense = useAddExpense();
-  const { data: currency } = useCurrency();
   const tripCurrency = trip?.settings?.currency;
   const [amount, setAmount] = useState("");
   const [currencyCode, setCurrencyCode] = useState(() => {
@@ -58,9 +60,10 @@ export function ExpenseForm({ userId, onDone }: ExpenseFormProps) {
   const participants = expenseSelectableParticipants(trip?.participants ?? []);
   const splitUsers = splitOverride ?? new Set(participants.map((p) => p.id));
 
-  const usdRate = currency?.rates?.[currencyCode] || 1;
+  // Конвертация в USD (единая валюта хранения). Нет курса — отправка заблокирована, а не «курс 1»
+  const fx = useRateFor(currencyCode);
   const amountNum = parseFloat(amount) || 0;
-  const amountUSD = currencyCode === "USD" ? amountNum : amountNum / usdRate;
+  const amountUSD = toBaseCurrency(amountNum, currencyCode, fx.rates) ?? 0;
   const sym = currencySymbol(currencyCode);
 
   const submit = async () => {
@@ -85,6 +88,10 @@ export function ExpenseForm({ userId, onDone }: ExpenseFormProps) {
       toast.error("Выберите хотя бы одного участника");
       return;
     }
+    if (!fx.ready) {
+      toast.error(`Курс ${currencyCode} ещё не загрузился`, { description: "Подожди секунду, повтори или выбери USD" });
+      return;
+    }
 
     const splitWithArr = Array.from(splitUsers).filter((id) => id !== userId);
     const excludeSelf = !splitUsers.has(userId);
@@ -98,6 +105,9 @@ export function ExpenseForm({ userId, onDone }: ExpenseFormProps) {
         dayId,
         splitWith: splitWithArr,
         excludeSelf,
+        // Исходная сумма и валюта — как в расширенной форме: в истории видно «≈ 100 ¥»
+        originalAmount: amountNum,
+        originalCurrency: currencyCode,
       });
 
       saveCurrency(tripId, currencyCode);
@@ -182,8 +192,10 @@ export function ExpenseForm({ userId, onDone }: ExpenseFormProps) {
         </div>
       </div>
 
-      {currencyCode !== "USD" && amountNum > 0 && (
-        <p className="text-[11px] text-muted-foreground -mt-1">≈ ${amountUSD.toFixed(2)} USD</p>
+      {currencyCode !== BASE_CURRENCY && amountNum > 0 && (
+        <p className="text-[11px] -mt-1">
+          <FxHint code={currencyCode} amountNum={amountNum} amountUSD={amountUSD} fx={fx} />
+        </p>
       )}
 
       <input
@@ -305,7 +317,7 @@ export function ExpenseForm({ userId, onDone }: ExpenseFormProps) {
         <button
           type="button"
           onClick={submit}
-          disabled={addExpense.isPending || splitUsers.size === 0 || !userId}
+          disabled={addExpense.isPending || splitUsers.size === 0 || !userId || !fx.ready}
           className="w-full min-h-[48px] rounded-xl bg-primary text-primary-foreground py-3.5 text-base font-medium flex items-center justify-center gap-2 disabled:opacity-50 transition-transform active:scale-[0.98]"
         >
           {addExpense.isPending ? <Loader2 className="size-4 animate-spin" /> : <Check className="size-4" />}

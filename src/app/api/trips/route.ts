@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { requireUser } from "@/lib/api-auth";
 import { tripCreateGate } from "@/lib/app-config";
+import { BASE_CURRENCY } from "@/lib/currencies";
 
 // GET /api/trips — только поездки текущего пользователя (из сессии, не из query)
 export async function GET(req: NextRequest) {
@@ -43,6 +44,10 @@ export async function POST(req: NextRequest) {
   if (!title) {
     return NextResponse.json({ error: "title required" }, { status: 400 });
   }
+  // Единая валюта хранения — USD (см. BASE_CURRENCY): другая сломала бы подписи и суммы бюджета
+  if (currency && String(currency).toUpperCase() !== BASE_CURRENCY) {
+    return NextResponse.json({ error: "Пока поддерживается только валюта USD" }, { status: 400 });
+  }
 
   // Лимит free-плана — как в /api/limits. Аудит 2026-09-12: здесь создания
   // шли без проверки, и лимит обходился этим путём
@@ -67,7 +72,7 @@ export async function POST(req: NextRequest) {
       endDate: endDate ? new Date(endDate) : null,
       totalDays: totalDays || 12,
       totalBudget: totalBudget || 1100,
-      currency: (currency || "USD").slice(0, 8),
+      currency: BASE_CURRENCY,
       members: {
         create: {
           userId: user!.id,

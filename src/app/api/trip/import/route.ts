@@ -4,6 +4,7 @@ import { requireUser } from "@/lib/api-auth";
 import { tripCreateGate } from "@/lib/app-config";
 import { userRateLimit } from "@/lib/rate-limit";
 import { pickLodgingInput, toDateKey } from "@/lib/lodging";
+import { BASE_CURRENCY } from "@/lib/currencies";
 
 // POST /api/trip/import — импорт поездки из JSON-бэкапа (формат backup v2.0)
 // Создаёт НОВУЮ поездку для текущего пользователя (owner). Все userId-ссылки
@@ -220,7 +221,8 @@ export async function POST(req: NextRequest) {
       endDate: body.trip.endDate ? new Date(body.trip.endDate) : null,
       totalDays: body.trip.totalDays || body.days.length,
       totalBudget: body.trip.totalBudget ?? 0,
-      currency: body.trip.currency || "USD",
+      // Суммы в бэкапе — USD (единая валюта хранения); чужую метку валюты не принимаем
+      currency: BASE_CURRENCY,
       coverColor: body.trip.coverColor || "#f97316",
       coverEmoji: body.trip.coverEmoji || "🌏",
       status: body.trip.status || "active",

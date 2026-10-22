@@ -30,6 +30,15 @@ export const CURRENCIES = [
 
 export const CURRENCY_CODES = CURRENCIES.map((c) => c.code);
 
+/**
+ * Единая валюта хранения: Expense.amount, бюджеты (Trip.totalBudget, TripMember.budget, BudgetPlan)
+ * и Place.budget — всегда в USD (решение владельца 2026-10-22, «модель A»). Формы траты пересчитывают
+ * введённую сумму в USD по курсу и хранят исходную в originalAmount/originalCurrency. Trip.currency
+ * не выбирается: сервер принимает только USD (POST/PATCH /api/trips, импорт). Настоящая валюта поездки
+ * потребует хранения в ней, выбора валюты в UI и пересчёта достижений/профиля — отдельная задача.
+ */
+export const BASE_CURRENCY = "USD";
+
 /** Символ валюты для UI (бюджет, награды, поиск). */
 export function currencySymbol(code: string | undefined | null): string {
   const map: Record<string, string> = {

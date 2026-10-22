@@ -138,11 +138,17 @@ User ──< TripMember >── Trip ──< Day ──< Place ──< Photo
 
 Соглашения, которые легко сломать:
 
-- **Expense**: `amount` — всегда в валюте поездки; то, что ввёл юзер, —
-  `originalAmount`/`originalCurrency`. Делёж — `splitWith` (строка с userId через
-  запятую, пусто = личная) + `excludeSelf`. Переводы-погашения идемпотентны по
-  `settlementKey` (уникальный **в рамках поездки**, `@@unique([tripId, settlementKey])`;
-  формат в схеме) — поэтому одну пару долгов можно гасить многократно.
+- **Expense**: `amount` — всегда в **USD** (единая валюта хранения, `BASE_CURRENCY` в
+  `src/lib/currencies.ts`, решение владельца 2026-10-22; бюджеты и `Place.budget` — тоже USD,
+  сервер принимает `Trip.currency` только USD). То, что ввёл юзер, —
+  `originalAmount`/`originalCurrency`; формы пересчитывают в USD по курсу и без курса не отправляют
+  (`lib/budget/convert.ts`, `useRateFor`). Делёж — `splitWith` (строка с userId через
+  запятую, пусто = личная) + `excludeSelf`; вход POST нормализует `normalizeExpenseInput`
+  (`lib/budget/expense-input.ts`: дубли и плательщик в `splitWith`, известная категория, форма перевода).
+  Переводы-погашения идемпотентны по `settlementKey` (уникальный **в рамках поездки**,
+  `@@unique([tripId, settlementKey])`; формат в схеме) — поэтому одну пару долгов можно гасить
+  многократно. Перевод не может быть больше реального долга пары (`checkSettlementAgainstDebt`,
+  проверка в сериализуемой транзакции; иначе 409) — «Перевели» с двух устройств не создаёт встречный долг.
   Логика дележа/долгов — `src/lib/budget/` (split, balances,
   settle; money — целые центы и округления, personal — «модель реальных денег»
   для «Моё», planned — план бюджета по местам маршрута), не дублируй её в роутах.

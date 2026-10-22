@@ -179,11 +179,11 @@ export function SettlementSection({ balances, settlements, totalSpent, participa
               </motion.div>
             )}
           </AnimatePresence>
-          {/* Ключ — пара участников, не индекс: после перевода список
-              пересчитывается и меняет порядок/длину, при key={i} React
-              переиспользовал done-состояние кнопки у чужой пары */}
+          {/* Ключ — пара участников + сумма, не индекс: после перевода список пересчитывается и
+              меняет порядок/длину (при key={i} React переиспользовал done-состояние кнопки у чужой
+              пары), а сумма в ключе сбрасывает «Получено», если у пары остался новый долг */}
           {settlements.map((s) => (
-            <div key={`${s.from.id}-${s.to.id}`} className="bg-muted/40 rounded-xl px-3 py-2.5">
+            <div key={`${s.from.id}-${s.to.id}-${Math.round(s.amount * 100)}`} className="bg-muted/40 rounded-xl px-3 py-2.5">
               {/* Главная строка: от → кому + сумма */}
               <div className="flex items-center gap-2">
                 <UserAvatar

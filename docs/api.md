@@ -79,7 +79,7 @@
 | `photos` | GET, POST, DELETE | `photo:added` | галерея; POST — загрузка файла (storage); клиент читает EXIF до отправки (`src/lib/photo-exif.ts`: GPS + дата съёмки) и передаёт `takenAt` (ISO; мусор/будущее → время загрузки), `lat`/`lng`; клиент считает sha256 оригинала (`src/lib/photo-hash.ts`) и шлёт `contentHash` — повтор кадра в поездке отклоняется **409** «Это фото уже загружено» (дедуп вечерних батчей); батч-загрузка помечает все кадры кроме последнего `suppressPush=1`, последний несёт `count=N` — друзья получают один пуш «добавил N фото» (publish optы silent, см. ws-bus); GET отдаёт `place` проекцией {name, lat, lng}; в ответах `width`/`height` — размеры файла (aspect-ratio плитки; у старых фото `null` до `prisma/backfill-photos.ts`) |
 | `photos/[id]` | PATCH | `photo:added` | подпись/избранное |
 | `photos/geo` | GET | — | фото с координатами для карты: селект маркерных полей, кап 1000 |
-| `expenses` | GET, POST, DELETE | `expense:added` | траты, делёж (`src/lib/budget/`), погашения (settlementKey) |
+| `expenses` | GET, POST, DELETE | `expense:added` | траты, делёж (`src/lib/budget/`), погашения (settlementKey); POST нормализует вход (дубли/плательщик в `splitWith`, категория из списка, 1 получатель у перевода), перевод больше реального долга → 409 (сериализуемая транзакция); GET отдаёт все траты поездки (страховочный потолок 5000) |
 | `budget-plan` | GET, PATCH | `budget:updated` | плановый бюджет по категориям |
 | `board` | GET, POST, PATCH, DELETE | `board:added` | чат поездки (реакции JSON, ответы, pin) |
 | `journal` | GET, POST, PATCH, DELETE | `journal:added` | дневник (запись на день, mood) |
@@ -97,7 +97,7 @@
 | `geocode` | GET | U | — | Nominatim через `outbound.ts` |
 | `city-search` | GET | 🌐 | rateLimitMiddleware | автодополнение городов (`src/lib/city-coords.ts` + Nominatim) |
 | `weather` | GET | 🌐 | — | Open-Meteo (публично: панель погоды без сессии не ломает UX) |
-| `currency` | GET | 🌐 | rateLimitMiddleware | курсы open.er-api.com (`src/lib/currencies.ts`) |
+| `currency` | GET | 🌐 | rateLimitMiddleware | курсы open.er-api.com (`src/lib/currencies.ts`); `approxCodes` — коды, чей курс взят из статичной таблицы (формы показывают «курс приблизительный»), `fallback` — API недоступен целиком |
 | `health` | GET | 🌐 | — | `{"status":"ok","db":"up"}` — для мониторинга/uptime |
 
 ## ИИ

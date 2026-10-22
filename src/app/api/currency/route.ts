@@ -49,8 +49,13 @@ export async function GET(req: NextRequest) {
     // в валюте вне списка UI (EGP, BRL, ISK…). Для валют UI без живого курса — статичный fallback.
     const apiRates = data.rates;
     const rates: Record<string, number> = { ...apiRates };
+    // Коды, для которых живого курса не было и подставлен статичный: клиент предупреждает «курс приблизительный»
+    const approxCodes: string[] = [];
     for (const [code, fbRate] of Object.entries(FALLBACK_RATES)) {
-      if (!(typeof rates[code] === "number" && rates[code] > 0)) rates[code] = fbRate;
+      if (!(typeof rates[code] === "number" && rates[code] > 0)) {
+        rates[code] = fbRate;
+        approxCodes.push(code);
+      }
     }
 
     return NextResponse.json({
@@ -58,6 +63,7 @@ export async function GET(req: NextRequest) {
       rates,
       updated: data.time_last_update_utc ?? null,
       fallback: false,
+      approxCodes,
     });
   } catch {
     // Фолбэк статичные курсы (полный набор — covers all 24 currencies UI shows)
@@ -66,6 +72,7 @@ export async function GET(req: NextRequest) {
       rates: FALLBACK_RATES,
       updated: null,
       fallback: true,
+      approxCodes: Object.keys(FALLBACK_RATES),
     });
   }
 }

@@ -4,11 +4,14 @@ import { useEffect, useState } from "react";
 import { Wallet, Plus, Users, Check, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import { useTrip, useAddExpense, useCurrency, useCurrentTripId } from "@/hooks/use-trip";
+import { useTrip, useAddExpense, useCurrentTripId } from "@/hooks/use-trip";
+import { useRateFor } from "@/hooks/trip/use-currency";
 import { useAuth } from "@/hooks/use-auth";
 import { EXPENSE_CATEGORIES } from "@/lib/types";
 import { currencySelectOptions } from "@/lib/currencies";
 import { expenseSelectableParticipants } from "@/lib/budget";
+import { toBaseCurrency } from "@/lib/budget/convert";
+import { FxHint } from "../fx-hint";
 import { getSavedCurrency, saveCurrency, clearSavedCurrency } from "@/lib/currency-pref";
 import { StickySubmit } from "../quick-add/StickySubmit";
 
@@ -20,7 +23,6 @@ export function AddExpenseForm({ onDone }: AddExpenseFormProps) {
   const tripId = useCurrentTripId();
   const { data: trip } = useTrip();
   const add = useAddExpense();
-  const { data: currency } = useCurrency();
   const { data: session } = useAuth();
   const currentUserId = (session?.user as { id?: string } | undefined)?.id || "";
 
@@ -29,10 +31,9 @@ export function AddExpenseForm({ onDone }: AddExpenseFormProps) {
     if (typeof window === "undefined") return "USD";
     return getSavedCurrency(tripId) || "USD";
   });
-  const [rememberCurrency, setRememberCurrency] = useState(() => {
-    if (typeof window === "undefined") return false;
-    return !!getSavedCurrency(tripId);
-  });
+  // Запоминаем валюту по умолчанию: иначе следующая трата снова открывается в USD, и «85» в юанях
+  // легко записать как $85 (ошибка в 7 раз). Снять галочку — забыть выбор
+  const [rememberCurrency, setRememberCurrency] = useState(true);
   const [currencyTouched, setCurrencyTouched] = useState(false);
   const tripCurrency = trip?.settings?.currency;
 
@@ -78,10 +79,10 @@ export function AddExpenseForm({ onDone }: AddExpenseFormProps) {
     setSplitOverride(new Set(participants.map(p => p.id)));
   };
 
-  // Конвертация в USD
-  const usdRate = currency?.rates?.[currencyCode] || 1;
+  // Конвертация в USD (единая валюта хранения). Нет курса — отправка заблокирована, а не «курс 1»
+  const fx = useRateFor(currencyCode);
   const amountNum = parseFloat(amount) || 0;
-  const amountUSD = currencyCode === "USD" ? amountNum : amountNum / usdRate;
+  const amountUSD = toBaseCurrency(amountNum, currencyCode, fx.rates) ?? 0;
 
   const submit = async () => {
     if (!amountNum || !description.trim()) {
@@ -90,6 +91,10 @@ export function AddExpenseForm({ onDone }: AddExpenseFormProps) {
     }
     if (!paidById) {
       toast.error("Выберите кто заплатил");
+      return;
+    }
+    if (!fx.ready) {
+      toast.error(`Курс ${currencyCode} ещё не загрузился`, { description: "Подожди секунду, повтори или выбери USD" });
       return;
     }
     if (splitUsers.size === 0) {
@@ -194,13 +199,7 @@ export function AddExpenseForm({ onDone }: AddExpenseFormProps) {
 
       {/* Конвертация + галочка запомнить */}
       <div className="flex items-center justify-between text-[11px] -mt-1">
-        {currencyCode !== "USD" && amountNum > 0 ? (
-          <span className="text-muted-foreground">
-            ≈ <b className="text-foreground">${amountUSD.toFixed(2)}</b> по курсу {usdRate.toFixed(2)}
-          </span>
-        ) : (
-          <span />
-        )}
+        <FxHint code={currencyCode} amountNum={amountNum} amountUSD={amountUSD} fx={fx} withRate />
         <label className="flex items-center gap-1.5 cursor-pointer active:scale-95 transition-transform shrink-0 min-h-9">
           <input
             type="checkbox"
@@ -359,8 +358,8 @@ export function AddExpenseForm({ onDone }: AddExpenseFormProps) {
         <button
           type="button"
           onClick={submit}
-          disabled={add.isPending}
-          className="w-full rounded-xl bg-primary text-primary-foreground py-3.5 min-h-[48px] text-base font-medium flex items-center justify-center gap-2 active:scale-[0.98] transition-transform"
+          disabled={add.isPending || !fx.ready}
+          className="w-full rounded-xl bg-primary text-primary-foreground py-3.5 min-h-[48px] text-base font-medium flex items-center justify-center gap-2 active:scale-[0.98] transition-transform disabled:opacity-50"
         >
           {add.isPending ? <Loader2 className="size-4 animate-spin" /> : <Plus className="size-4" />}
           Добавить трату

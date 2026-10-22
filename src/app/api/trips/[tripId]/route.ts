@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { publish } from "@/lib/ws-bus";
 import { requireTripMember, requireTripOwner } from "@/lib/api-auth";
+import { BASE_CURRENCY } from "@/lib/currencies";
 
 // GET /api/trips/[id] — детали поездки (только для участников).
 // P0: раньше был без авторизации и отдавал user-записи участников вместе с хешами паролей.
@@ -47,7 +48,11 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ tr
         // тот же кап, что в POST /api/trips — PATCH не должен раздувать поля без границ
         data[k] = String(body[k]).slice(0, 100);
       } else if (k === "currency") {
-        data[k] = String(body[k]).slice(0, 8);
+        // Суммы всех трат и бюджетов хранятся в USD: смена метки валюты без пересчёта исказила бы их
+        if (String(body[k]).toUpperCase() !== BASE_CURRENCY) {
+          return NextResponse.json({ error: "Пока поддерживается только валюта USD" }, { status: 400 });
+        }
+        data[k] = BASE_CURRENCY;
       } else {
         data[k] = body[k];
       }
