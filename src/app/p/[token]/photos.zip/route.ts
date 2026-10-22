@@ -11,8 +11,8 @@ export const dynamic = "force-dynamic";
 // GET /p/<token>/photos.zip — ZIP всех фото поездки для гостей публичной страницы.
 // Работает только при shareEnabled и тумблере владельца shareAllowDownload;
 // по IP — 5 архивов в час (публичный эндпоинт, жёсткий лимит от качалок).
-
-const MAX_PHOTOS = 1000;
+// Без потолка на число фото: генератор держит в памяти один файл, а zip64
+// (src/lib/zip.ts) снимает классические 4 ГБ / 65535 записей формата.
 
 export async function GET(req: NextRequest, ctx: { params: Promise<{ token: string }> }) {
   const limited = rateLimitMiddleware(req, "share-zip", 5, 60 * 60_000);
@@ -27,7 +27,6 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ token: stri
       photos: {
         // Хронологический порядок — архив читается как история поездки
         orderBy: { takenAt: "asc" },
-        take: MAX_PHOTOS,
         select: {
           url: true,
           caption: true,

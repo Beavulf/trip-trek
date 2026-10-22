@@ -24,7 +24,7 @@ import { useBackDismiss } from "@/hooks/use-back-dismiss";
 import { isSlowConnection } from "@/lib/net";
 import { cn } from "@/lib/utils";
 
-// Секция «Все фото» (до 500 кадров) рендерится порциями: целиком это сотни кнопок,
+// Секция «Все фото» рендерится порциями: целиком это сотни кнопок,
 // картинок и IntersectionObserver'ов в DOM у гостя с телефона. Анимация входа — только у первых.
 const ALL_PHOTOS_PAGE = 60;
 const REVEAL_FIRST = 12;
@@ -36,6 +36,8 @@ const PublicMap = dynamic(() => import("./public-map").then((m) => m.PublicMap),
 });
 
 export interface PublicPhoto {
+  /** Стабильный ключ фото; из него же клиент собирает keyset-курсор порций */
+  id: string;
   url: string;
   thumbUrl: string;
   /** Размеры файла — для aspect-ratio плитки (у старых фото могут отсутствовать) */
@@ -60,6 +62,8 @@ export interface PublicTrip {
   totalDays: number;
   allowDownload: boolean;
   hearts: number;
+  /** Всего фото в поездке; в photos лежит первая партия, остальное докачивается фоном */
+  photosTotal: number;
   days: {
     dayNumber: number;
     date: string;
@@ -105,6 +109,40 @@ export function PublicTripView({ trip, token }: { trip: PublicTrip; token: strin
   const [reducedMotion, setReducedMotion] = useState(false);
   const [allShown, setAllShown] = useState(ALL_PHOTOS_PAGE);
 
+  // Фото приходят двумя волнами: первая партия — в SSR (page.tsx), остальные
+  // докачиваются фоном порциями с /p/<token>/photos. Полный список нужен странице
+  // целиком — главы-дни, «Лучшие кадры», карта и лайтбокс считаются по нему, —
+  // поэтому докачку не привязываем к клику «Показать ещё».
+  const [photos, setPhotos] = useState(trip.photos);
+
+  useEffect(() => {
+    if (trip.photos.length >= trip.photosTotal) return;
+    let stopped = false;
+    (async () => {
+      try {
+        // keyset-курсор от последнего фото SSR-партии; дальше сервер в nextCursor
+        // сам говорит, откуда брать следующую порцию
+        const last = trip.photos[trip.photos.length - 1];
+        let cursor: string | null = last ? `${last.takenAt}~${last.id}` : null;
+        while (!stopped) {
+          const res = await fetch(`/p/${token}/photos${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ""}`);
+          if (!res.ok) return;
+          const data = (await res.json()) as { photos: PublicPhoto[]; nextCursor: string | null };
+          if (stopped) return;
+          if (data.photos.length === 0) return;
+          setPhotos((prev) => [...prev, ...data.photos]);
+          if (!data.nextCursor) return;
+          cursor = data.nextCursor;
+        }
+      } catch {
+        // сеть пропала — гость видит, что успело догрузиться; секции не ломаются
+      }
+    })();
+    return () => {
+      stopped = true;
+    };
+  }, [trip.photos, trip.photosTotal, token]);
+
   // Сердечко: анонимный лайк страницы, один тап с устройства (localStorage)
   const [hearts, setHearts] = useState(trip.hearts);
   const [liked, setLiked] = useState(false);
@@ -132,20 +170,20 @@ export function PublicTripView({ trip, token }: { trip: PublicTrip; token: strin
 
   const allPlaces = useMemo(() => trip.days.flatMap((d) => d.places), [trip.days]);
   const visitedCount = allPlaces.filter((p) => p.visited).length;
-  const favorites = useMemo(() => trip.photos.filter((p) => p.isFavorite), [trip.photos]);
+  const favorites = useMemo(() => photos.filter((p) => p.isFavorite), [photos]);
   const photosByDay = useMemo(() => {
     const map = new Map<number, PublicPhoto[]>();
-    for (const p of trip.photos) {
+    for (const p of photos) {
       if (p.dayNumber == null) continue;
       const list = map.get(p.dayNumber) ?? [];
       list.push(p);
       map.set(p.dayNumber, list);
     }
     return map;
-  }, [trip.photos]);
+  }, [photos]);
   const photoPoints = useMemo(
-    () => trip.photos.filter((p) => p.lat != null && p.lng != null).map((p) => ({ lat: p.lat!, lng: p.lng! })),
-    [trip.photos]
+    () => photos.filter((p) => p.lat != null && p.lng != null).map((p) => ({ lat: p.lat!, lng: p.lng! })),
+    [photos]
   );
 
   // Слайды лайтбокса: раньше собирались заново на каждый свайп вместе с перерисовкой всей
@@ -179,7 +217,7 @@ export function PublicTripView({ trip, token }: { trip: PublicTrip; token: strin
       : fmtShort(trip.startDate) || "скоро в путь";
 
   const zipUrl = `/p/${token}/photos.zip`;
-  const canDownloadZip = trip.allowDownload && trip.photos.length > 0;
+  const canDownloadZip = trip.allowDownload && photos.length > 0;
 
   /** Тап по сердечку: поставить или забрать своё (состояние — на устройстве) */
   const toggleLike = async () => {
@@ -319,19 +357,19 @@ export function PublicTripView({ trip, token }: { trip: PublicTrip; token: strin
                 {cities.length} {plural(cities.length, ["город", "города", "городов"])}
               </StatChip>
             )}
-            {trip.photos.length > 0 && (
+            {trip.photosTotal > 0 && (
               <StatChip>
-                {trip.photos.length} {plural(trip.photos.length, ["фото", "фото", "фото"])}
+                {trip.photosTotal} {plural(trip.photosTotal, ["фото", "фото", "фото"])}
               </StatChip>
             )}
           </div>
 
           {/* Действия гостя: смотреть — главное, скачивание и сердечко — рядом */}
           <div className="mt-6 flex flex-wrap justify-center gap-2.5">
-              {trip.photos.length > 0 && (
+              {photos.length > 0 && (
                 <button
                   type="button"
-                  onClick={() => setViewer({ list: trip.photos, index: 0 })}
+                  onClick={() => setViewer({ list: photos, index: 0 })}
                   className="min-h-11 inline-flex items-center gap-2 rounded-full bg-primary text-primary-foreground px-5 text-sm font-semibold shadow-lg active:scale-95 transition-transform"
                   style={{ boxShadow: `0 8px 24px ${trip.accent}44` }}
                 >
@@ -418,7 +456,7 @@ export function PublicTripView({ trip, token }: { trip: PublicTrip; token: strin
 
       {/* Совсем свежая поездка: без маршрута и фото страница — приглашение,
           а не обрыв после обложки */}
-      {trip.days.length === 0 && trip.photos.length === 0 && (
+      {trip.days.length === 0 && trip.photosTotal === 0 && (
         <p className="max-w-md mx-auto px-4 pb-12 text-center text-sm text-muted-foreground leading-relaxed">
           Маршрут и фото появятся здесь позже — путешествие только собирается. Заглядывайте ещё!
         </p>
@@ -534,13 +572,13 @@ export function PublicTripView({ trip, token }: { trip: PublicTrip; token: strin
       )}
 
       {/* ═══ Все фото ═══ */}
-      {trip.photos.length > 0 && (
+      {photos.length > 0 && (
         <section className="max-w-2xl mx-auto px-4 py-7 border-t border-border/60">
           <SectionTitle icon={<Camera className="size-3.5" />}>
-            Все фото · {trip.photos.length}
+            Все фото · {trip.photosTotal}
           </SectionTitle>
           <div className="columns-2 sm:columns-3 gap-2 [&>*]:mb-2">
-            {trip.photos.slice(0, allShown).map((p, i) => (
+            {photos.slice(0, allShown).map((p, i) => (
               <Reveal
                 key={p.url + i}
                 disabled={reducedMotion || i >= REVEAL_FIRST}
@@ -549,7 +587,7 @@ export function PublicTripView({ trip, token }: { trip: PublicTrip; token: strin
               >
                 <button
                   type="button"
-                  onClick={() => setViewer({ list: trip.photos, index: i })}
+                  onClick={() => setViewer({ list: photos, index: i })}
                   className="relative w-full rounded-xl overflow-hidden bg-muted active:scale-[0.98] transition-transform block"
                   aria-label={p.caption ?? "Фото поездки"}
                 >
@@ -580,14 +618,20 @@ export function PublicTripView({ trip, token }: { trip: PublicTrip; token: strin
               </Reveal>
             ))}
           </div>
-          {allShown < trip.photos.length && (
+          {/* Кнопка живёт в двух состояниях: есть что раскрыть из загруженного —
+              раскрываем; порции ещё едут с сервера — ждём (остаток честный, от
+              photosTotal, а не от длины загруженного списка) */}
+          {(allShown < photos.length || allShown < trip.photosTotal) && (
             <div className="flex justify-center pt-4">
               <button
                 type="button"
+                disabled={allShown >= photos.length}
                 onClick={() => setAllShown((n) => n + ALL_PHOTOS_PAGE)}
-                className="inline-flex min-h-11 items-center gap-1.5 rounded-xl bg-secondary border border-border px-5 text-xs font-medium active:scale-95 transition-transform"
+                className="inline-flex min-h-11 items-center gap-1.5 rounded-xl bg-secondary border border-border px-5 text-xs font-medium active:scale-95 transition-transform disabled:opacity-60 disabled:active:scale-100"
               >
-                Показать ещё · осталось {trip.photos.length - allShown}
+                {allShown < photos.length
+                  ? `Показать ещё · осталось ${trip.photosTotal - allShown}`
+                  : "Загружаем ещё…"}
               </button>
             </div>
           )}
@@ -644,10 +688,10 @@ export function PublicTripView({ trip, token }: { trip: PublicTrip; token: strin
               !showFloatingBar && "pointer-events-none"
             )}
           >
-            {trip.photos.length > 0 && (
+            {photos.length > 0 && (
               <button
                 type="button"
-                onClick={() => setViewer({ list: trip.photos, index: 0 })}
+                onClick={() => setViewer({ list: photos, index: 0 })}
                 tabIndex={showFloatingBar ? 0 : -1}
                 className="min-h-10 inline-flex items-center gap-1.5 rounded-full px-4 text-xs font-semibold text-white active:scale-95 transition-transform"
                 style={{ background: trip.accent }}

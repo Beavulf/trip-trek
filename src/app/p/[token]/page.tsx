@@ -1,3 +1,4 @@
+import { cache } from "react";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { db } from "@/lib/db";
@@ -11,8 +12,15 @@ import { PublicTripView, type PublicTrip } from "@/components/public/public-trip
 
 export const dynamic = "force-dynamic"; // фото грузятся прямо в поездке — всегда свежие
 
-async function findSharedTrip(token: string) {
-  return db.trip.findFirst({
+// Первая партия фото летит в SSR-пейлоад: 200 — компромисс между мгновенной
+// отрисовкой (главы-дни, избранные, карта уже полные у свежих поездок) и весом
+// HTML на телефоне. Остальное гость докачивает порциями через /p/<token>/photos.
+const FIRST_BATCH = 200;
+
+// generateMetadata и страница зовут один запрос: cache() склеивает их в один
+// вызов на реквест — иначе база дважды тянет дни и первую партию фото
+const findSharedTrip = cache(async (token: string) =>
+  db.trip.findFirst({
     where: { shareToken: token, shareEnabled: true },
     select: {
       title: true,
@@ -24,6 +32,7 @@ async function findSharedTrip(token: string) {
       totalDays: true,
       shareAllowDownload: true,
       shareHearts: true,
+      _count: { select: { photos: true } },
       days: {
         orderBy: { dayNumber: "asc" },
         select: {
@@ -39,9 +48,12 @@ async function findSharedTrip(token: string) {
         },
       },
       photos: {
-        orderBy: { takenAt: "desc" },
-        take: 500,
+        // Детерминированный порядок [takenAt desc, id desc] — продолжение этого
+        // списка порциями из /photos идёт keyset-курсором ровно отсюда
+        orderBy: [{ takenAt: "desc" }, { id: "desc" }],
+        take: FIRST_BATCH,
         select: {
+          id: true,
           url: true,
           thumbUrl: true,
           width: true,
@@ -56,8 +68,8 @@ async function findSharedTrip(token: string) {
         },
       },
     },
-  });
-}
+  })
+);
 
 // Превью ссылки в мессенджерах: карточка с обложкой поездки и фото.
 // metadataBase из корневого layout резолвит /uploads в абсолютный URL.
@@ -66,7 +78,7 @@ export async function generateMetadata({ params }: { params: Promise<{ token: st
   const trip = await findSharedTrip(token);
   const title = trip ? `${trip.title} — TripTrek` : "Поездка в TripTrek";
   const description = trip
-    ? `${trip.destination} · ${trip.photos.length} фото из путешествия — маршрут, места и кадры`
+    ? `${trip.destination} · ${trip._count.photos} фото из путешествия — маршрут, места и кадры`
     : "Публичная страница путешествия";
   const ogImage = trip?.photos.find((p) => p.thumbUrl)?.thumbUrl ?? undefined;
   return {
@@ -101,6 +113,7 @@ export default async function PublicTripPage({ params }: { params: Promise<{ tok
     totalDays: trip.totalDays,
     allowDownload: trip.shareAllowDownload,
     hearts: trip.shareHearts,
+    photosTotal: trip._count.photos,
     days: trip.days.map((d) => ({
       dayNumber: d.dayNumber,
       date: d.date.toISOString(),
@@ -116,6 +129,7 @@ export default async function PublicTripPage({ params }: { params: Promise<{ tok
       })),
     })),
     photos: trip.photos.map((p) => ({
+      id: p.id,
       url: p.url,
       thumbUrl: p.thumbUrl ?? p.url,
       width: p.width,

@@ -10,6 +10,7 @@ vi.mock("yet-another-react-lightbox/plugins/counter.css", () => ({}));
 
 // Поездка без дней и мест: карта (dynamic ssr:false) не рисуется, остаётся секция «Все фото»
 const photo = (i: number, over: Partial<PublicPhoto> = {}): PublicPhoto => ({
+  id: `p${i}`,
   url: `/uploads/${i}.jpg`,
   thumbUrl: `/uploads/${i}-thumb.jpg`,
   caption: null,
@@ -22,7 +23,7 @@ const photo = (i: number, over: Partial<PublicPhoto> = {}): PublicPhoto => ({
   ...over,
 });
 
-const trip = (photos: PublicPhoto[]): PublicTrip => ({
+const trip = (photos: PublicPhoto[], over: Partial<PublicTrip> = {}): PublicTrip => ({
   title: "Тест",
   destination: "Китай",
   emoji: "🌏",
@@ -34,9 +35,13 @@ const trip = (photos: PublicPhoto[]): PublicTrip => ({
   hearts: 0,
   days: [],
   photos,
+  // по умолчанию загружено всё (маленький альбом); догрузка — через over
+  photosTotal: photos.length,
+  ...over,
 });
 
-const render = (photos: PublicPhoto[]) => renderToStaticMarkup(createElement(PublicTripView, { trip: trip(photos), token: "t" }));
+const render = (photos: PublicPhoto[], over?: Partial<PublicTrip>) =>
+  renderToStaticMarkup(createElement(PublicTripView, { trip: trip(photos, over), token: "t" }));
 const imgCount = (html: string) => (html.match(/<img /g) ?? []).length;
 
 describe("PublicTripView: «Все фото» порциями", () => {
@@ -70,5 +75,16 @@ describe("PublicTripView: «Все фото» порциями", () => {
       (render(Array.from({ length: n }, (_, i) => photo(i))).match(/opacity:0/g) ?? []).length;
     expect(hidden(12) - hidden(1)).toBe(11); // каждый кадр до 12-го добавляет свой Reveal
     expect(hidden(30)).toBe(hidden(12)); // кадры после 12-го — без framer-motion
+  });
+
+  it("счётчик галереи — от photosTotal из БД, а не от длины загруженного списка", () => {
+    // первая SSR-партия (60) при 900 фото в поездке
+    const html = render(Array.from({ length: 60 }, (_, i) => photo(i)), { photosTotal: 900 });
+    expect(html).toContain("Все фото · 900");
+  });
+
+  it("загружена не вся галерея → кнопка ждёт догрузку порций с сервера", () => {
+    const html = render(Array.from({ length: 60 }, (_, i) => photo(i)), { photosTotal: 900 });
+    expect(html).toContain("Загружаем ещё");
   });
 });
