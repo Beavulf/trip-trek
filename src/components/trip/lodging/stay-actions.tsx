@@ -4,6 +4,7 @@
 // скопировать адрес. Одни и те же кнопки живут в герое («сегодня ночуем здесь») и
 // в раскрытой карточке — тон меняется (на тёмном градиенте или на карточке).
 
+import type { ReactNode } from "react";
 import { Copy, Navigation, Phone } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -43,6 +44,31 @@ export function StayActions({
   const route = routeUrl(lodging);
   const tel = phoneHref(lodging.phone);
 
+  // Второстепенные кнопки идут парами; при нечётном числе последняя тянется на всю
+  // ширину, иначе она одиноко повисает на полстроки
+  const extras: ((cls: string) => ReactNode)[] = [];
+  if (route) {
+    extras.push((cls) => (
+      <a key="route" href={route} target="_blank" rel="noopener noreferrer" className={cls}>
+        <Navigation className="size-3.5" /> Маршрут
+      </a>
+    ));
+  }
+  if (tel) {
+    extras.push((cls) => (
+      <a key="tel" href={tel} className={cls}>
+        <Phone className="size-3.5" /> Позвонить
+      </a>
+    ));
+  }
+  if (lodging.address) {
+    extras.push((cls) => (
+      <button key="addr" type="button" onClick={() => copyText(lodging.address ?? "", "Адрес скопирован")} className={cls}>
+        <Copy className="size-3.5" /> Адрес
+      </button>
+    ));
+  }
+
   return (
     <div className="grid grid-cols-2 gap-2">
       <button
@@ -56,24 +82,8 @@ export function StayActions({
       >
         🚕 Показать таксисту
       </button>
-      {route && (
-        <a href={route} target="_blank" rel="noopener noreferrer" className={cn(base, secondary[tone])}>
-          <Navigation className="size-3.5" /> Маршрут
-        </a>
-      )}
-      {tel && (
-        <a href={tel} className={cn(base, secondary[tone])}>
-          <Phone className="size-3.5" /> Позвонить
-        </a>
-      )}
-      {lodging.address && (
-        <button
-          type="button"
-          onClick={() => copyText(lodging.address ?? "", "Адрес скопирован")}
-          className={cn(base, secondary[tone])}
-        >
-          <Copy className="size-3.5" /> Адрес
-        </button>
+      {extras.map((render, i) =>
+        render(cn(base, secondary[tone], extras.length % 2 === 1 && i === extras.length - 1 && "col-span-2"))
       )}
     </div>
   );

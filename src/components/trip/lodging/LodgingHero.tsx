@@ -25,10 +25,14 @@ interface LodgingHeroProps {
   lodgings: Lodging[];
   todayKey: string;
   currencySymbol: string;
+  /** Последний день поездки уже прошёл: «ночёвки позади» говорим только тогда */
+  tripEnded: boolean;
+  /** Добавить жильё на сегодня (нет у зрителя) — кнопка в состоянии «жилья на сегодня нет» */
+  onAddToday?: () => void;
   onTaxi: (l: Lodging) => void;
 }
 
-export function LodgingHero({ lodgings, todayKey, currencySymbol, onTaxi }: LodgingHeroProps) {
+export function LodgingHero({ lodgings, todayKey, currencySymbol, tripEnded, onAddToday, onTaxi }: LodgingHeroProps) {
   const reduceMotion = useReducedMotion();
   const now = currentLodging(lodgings, todayKey);
   const next = nextLodging(lodgings, todayKey);
@@ -59,6 +63,11 @@ export function LodgingHero({ lodgings, todayKey, currencySymbol, onTaxi }: Lodg
       inDays === 1 ? "Завтра" : `Через ${inDays} ${plural(inDays, "день", "дня", "дней")}`,
       [next.city, formatStayRange(next)].filter(Boolean).join(" · "),
     ];
+  } else if (!tripEnded) {
+    // Поездка идёт, а жильё на сегодня (и дальше) не указано — не «ночёвки позади»
+    eyebrow = "🌙 Сегодня";
+    title = "Жильё на эту ночь не указано";
+    lines = ["Добавьте, где ночуете: адрес будет под рукой, а таксисту покажем одним нажатием"];
   } else {
     const nights = lodgings.reduce((s, l) => s + nightsOf(l), 0);
     const total = lodgings.reduce((s, l) => s + (l.price ?? 0), 0);
@@ -94,6 +103,15 @@ export function LodgingHero({ lodgings, todayKey, currencySymbol, onTaxi }: Lodg
           {focus?.address && <p className="text-xs text-white/65 break-words pt-1">{focus.address}</p>}
         </div>
         {focus && <StayActions lodging={focus} tone="hero" onTaxi={() => onTaxi(focus)} />}
+        {!focus && !tripEnded && onAddToday && (
+          <button
+            type="button"
+            onClick={onAddToday}
+            className="w-full min-h-12 rounded-xl bg-white text-indigo-950 text-sm font-semibold inline-flex items-center justify-center gap-1.5 hover:bg-white/90 active:scale-[0.97] transition-transform"
+          >
+            + Добавить жильё
+          </button>
+        )}
       </div>
     </motion.section>
   );

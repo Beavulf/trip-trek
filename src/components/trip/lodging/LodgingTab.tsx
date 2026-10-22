@@ -83,7 +83,9 @@ export function LodgingTab() {
   const isOpen = (l: Lodging) => open[l.id] ?? lodgingPhase(l, todayKey) === "current";
 
   return (
-    <div className="space-y-4">
+    // Одна колонка ограничена по ширине: на десктопе растянутые на 1200px герой и
+    // кнопки теряют форму, а лента читается лучше в узкой колонке
+    <div className="space-y-4 mx-auto w-full max-w-2xl">
       <div className="flex items-center gap-2">
         <h1 className="text-xl font-bold flex items-center gap-2">
           <BedDouble className="size-5 text-primary" /> Жильё
@@ -103,7 +105,14 @@ export function LodgingTab() {
         <EmptyState canEdit={canEdit} onAdd={() => setSheet({ lodging: null, defaults: newDefaults() })} />
       ) : (
         <>
-          <LodgingHero lodgings={sorted} todayKey={todayKey} currencySymbol={sym} onTaxi={setTaxi} />
+          <LodgingHero
+            lodgings={sorted}
+            todayKey={todayKey}
+            currencySymbol={sym}
+            tripEnded={!!range && todayKey > range.lastKey}
+            onAddToday={canEdit ? () => setSheet({ lodging: null, defaults: { checkIn: todayKey, checkOut: addDaysKey(todayKey, 1) } }) : undefined}
+            onTaxi={setTaxi}
+          />
 
           <div className="grid grid-cols-3 gap-2">
             <Stat value={String(sorted.length)} label={plural(sorted.length, "проживание", "проживания", "проживаний")} />
@@ -213,7 +222,7 @@ function EmptyState({ canEdit, onAdd }: { canEdit: boolean; onAdd: () => void })
 
 function LodgingSkeleton() {
   return (
-    <div className="space-y-4 animate-pulse" aria-busy="true" aria-label="Загрузка жилья">
+    <div className="space-y-4 animate-pulse mx-auto w-full max-w-2xl" aria-busy="true" aria-label="Загрузка жилья">
       <div className="h-8 w-32 rounded-lg bg-muted" />
       <div className="h-56 rounded-3xl bg-muted" />
       <div className="grid grid-cols-3 gap-2">
