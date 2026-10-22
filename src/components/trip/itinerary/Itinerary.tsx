@@ -17,7 +17,8 @@ import { DayCard } from "./DayCard";
 import { PlaceDialog } from "./PlaceDialog";
 import { DaySheet, AddDayButton } from "./DaySheet";
 import { PlannerWizard } from "./PlannerWizard";
-import { HotelsStrip } from "./HotelsStrip";
+import { LodgingStrip } from "../lodging";
+import { localTodayKey } from "@/lib/lodging";
 
 function dayCoords(day: {
   cityKey: string;
@@ -114,6 +115,9 @@ export function Itinerary() {
   const targetDay = dayList.find((d) => d.dayNumber === selectedDay) ?? currentDay ?? dayList[0];
   const curSym = currencySymbol(trip.settings.currency);
   const tripOver = isTripOver(trip.settings.endDate);
+  // Календарный день выбранного дня маршрута (локальный, как его видит пользователь)
+  const selectedDayDate = selectedDay ? dayList.find((d) => d.dayNumber === selectedDay)?.date : undefined;
+  const selectedDayKey = selectedDayDate ? localTodayKey(new Date(selectedDayDate)) : null;
 
   const openAddForDay = (day: (typeof dayList)[number]) => {
     const coords = dayCoords(day);
@@ -340,8 +344,8 @@ export function Itinerary() {
         </div>
       </div>
 
-      {/* Отели под рукой: адрес для такси, прыжок на карту */}
-      <HotelsStrip days={filteredDays} />
+      {/* Жильё под рукой: адрес для такси, маршрут — из вкладки «Жильё» */}
+      <LodgingStrip selectedDayKey={selectedDayKey} tripOver={tripOver} />
 
       {/* Планер: варианты мест от ИИ (не готовый маршрут), только для существующих дней */}
       <button

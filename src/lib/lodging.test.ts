@@ -9,6 +9,7 @@ import {
   keyToStoredDate,
   localTodayKey,
   lodgingPhase,
+  lodgingTouchesDay,
   MAX_LODGING_PRICE,
   nextLodging,
   nightNumber,
@@ -76,6 +77,14 @@ describe("фазы и текущее проживание", () => {
     expect(currentLodging(list, "2026-10-09")).toBeUndefined();
     expect(nextLodging(list, "2026-09-01")?.id).toBe("a");
     expect(nextLodging(list, "2026-10-02")?.id).toBe("b");
+  });
+
+  it("lodgingTouchesDay: заезд, ночи и день выезда включены, соседние дни — нет", () => {
+    const s = L("a", "2026-10-01", "2026-10-05");
+    expect(lodgingTouchesDay(s, "2026-09-30")).toBe(false);
+    expect(lodgingTouchesDay(s, "2026-10-01")).toBe(true);
+    expect(lodgingTouchesDay(s, "2026-10-05")).toBe(true);
+    expect(lodgingTouchesDay(s, "2026-10-06")).toBe(false);
   });
 
   it("номер ночи и сортировка", () => {
