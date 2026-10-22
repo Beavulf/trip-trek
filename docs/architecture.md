@@ -215,8 +215,11 @@ S3» — ADR-0003.
 ## 7. Сессии, аккаунты, почта
 
 - Логин: `POST /api/auth/custom-login` (bcrypt, `src/lib/password.ts`) → ставит
-  JWT-cookie; `[...nextauth]` оставлен для совместимости, но клиент ходит в
-  custom-роуты (`custom-login/custom-session/custom-signout`) — Turbopack-совместимость.
+  JWT-cookie; клиент ходит в custom-роуты (`custom-login/custom-session/custom-signout`).
+  NextAuth удалён (2026-10-22): его Credentials-вход был параллельным неиспользуемым путём,
+  а пакет тянул критичную уязвимость. Имя cookie `next-auth.session-token` осталось прежним —
+  иначе все сессии разлогинились бы. Лимиты логина: 20/15 мин на IP (все попытки) и 8 неудач
+  за 15 мин на email (успех сбрасывает; цена — вход жертвы можно закрыть на 15 мин нарочными ошибками).
 - Регистрация: `register` (+ welcome-письмо), сброс пароля: `forgot-password` →
   одноразовый токен (в БД только sha256-хеш, TTL 60 мин) → письмо → `reset-password`.
   Смена пароля в профиле: `user/password` — инвалидирует все сессии через
@@ -242,6 +245,9 @@ S3» — ADR-0003.
   (полный BYOK: + свой `aiBaseUrl`/`aiModel`; инвариант — юзерский адрес
   получает только юзерский ключ) → `AppSettings` админа → `OPENAI_API_KEY`.
   Пользователь видит только маску; проверка своего трио — `user/ai-key-check`.
+  Юзерский `aiBaseUrl` проходит SSRF-гард (`src/lib/net-guard.ts`): хост должен быть
+  публичным при сохранении и при каждом вызове (DNS-резолв). Не закрыто: DNS rebinding
+  между проверкой и fetch — для этого нужен пиннинг IP в собственном HTTP-клиенте.
 - Учёт и алерты: каждая попытка вызова пишется в `AiUsage` (только метаданные:
   feature, keySource, токены, длительность; промпты/ответы — никогда). Пороги
   `AppSettings.aiAlertCallsPerDay/aiAlertTokensPerDay` (0 = выключено) — при

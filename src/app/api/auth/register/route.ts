@@ -22,10 +22,15 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const { email, password, name } = await req.json();
+    const { email, password, name } = (await req.json().catch(() => null)) ?? {};
 
     if (!email || !password || !name) {
       return NextResponse.json({ error: "email, password, name обязательны" }, { status: 400 });
+    }
+    // Имя уходит в письма, уведомления и промпты ИИ: не-строка роняла Prisma 500-кой,
+    // а мегабайтная строка раздувала бы каждый ответ с участниками
+    if (typeof name !== "string" || !name.trim() || name.trim().length > 80) {
+      return NextResponse.json({ error: "Имя: от 1 до 80 символов" }, { status: 400 });
     }
     // Формат email: это же значение потом уходит адресатом в SMTP (письма сброса),
     // так что мусор/CRLF отсекаем на входе. Тот же regex, что в admin PATCH.
@@ -50,13 +55,14 @@ export async function POST(req: NextRequest) {
     }
 
     const hashedPassword = await hashPassword(password);
+    const displayName = name.trim();
     const user = await db.user.create({
-      data: { name, email: emailNorm, password: hashedPassword },
+      data: { name: displayName, email: emailNorm, password: hashedPassword },
     });
 
     // Приветственное письмо — fire-and-forget: SMTP не ждём, регистрацию не роняем.
     // Без SMTP_HOST mailer молча (с предупреждением в лог) пропустит отправку.
-    void sendMail({ to: user.email, ...welcomeEmail(name) });
+    void sendMail({ to: user.email, ...welcomeEmail(displayName) });
 
     // Вступление в поездку — ТОЛЬКО через POST /api/trips/join по invite-коду
     // (join page делает это после логина). Автоджойн здесь по tripId/inviteCode

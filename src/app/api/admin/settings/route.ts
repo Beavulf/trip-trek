@@ -75,7 +75,8 @@ export async function PUT(req: NextRequest) {
     // scheme/host делал из сервера прокси утечки ключей (аудит 2026-09-12).
     // Валидация одна с профилем юзера (validateAiBaseUrl); localhost — только dev.
     if (typeof aiBaseUrl === "string" && aiBaseUrl.trim()) {
-      const checked = validateAiBaseUrl(aiBaseUrl.trim());
+      // allowPrivateHost: адрес задаёт админ, а не пользователь — SSRF-ограничение юзерского пути не нужно
+      const checked = validateAiBaseUrl(aiBaseUrl.trim(), { allowPrivateHost: true });
       if (!checked.ok) {
         return NextResponse.json({ error: `aiBaseUrl: ${checked.error}` }, { status: 400 });
       }

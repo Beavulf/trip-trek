@@ -2,15 +2,12 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { requireUser, requireTripMember } from "@/lib/api-auth";
 import { getPlanLimits } from "@/lib/app-config";
+import { isPremiumUser } from "@/lib/premium";
 
 const PREMIUM_LIMITS = {
   maxTrips: Infinity,
   maxMembers: Infinity,
 };
-
-function isUserPremium(user: { plan: string; planExpiry: Date | null }) {
-  return user.plan === "premium" && (!user.planExpiry || user.planExpiry > new Date());
-}
 
 // GET /api/limits — лимиты текущего пользователя (сессия)
 export async function GET(req: NextRequest) {
@@ -20,7 +17,7 @@ export async function GET(req: NextRequest) {
   const dbUser = await db.user.findUnique({ where: { id: user!.id } });
   if (!dbUser) return NextResponse.json({ error: "User not found" }, { status: 404 });
 
-  const premium = isUserPremium(dbUser);
+  const premium = isPremiumUser(dbUser);
   // Лимиты free-плана настраиваются админом (Настройки → Приложение)
   const freeLimits = await getPlanLimits();
   const limits = premium ? PREMIUM_LIMITS : freeLimits;
@@ -68,7 +65,7 @@ export async function POST(req: NextRequest) {
   const dbUser = await db.user.findUnique({ where: { id: user!.id } });
   if (!dbUser) return NextResponse.json({ error: "User not found" }, { status: 404 });
 
-  const premium = isUserPremium(dbUser);
+  const premium = isPremiumUser(dbUser);
   const { maxTrips: freeMaxTrips } = await getPlanLimits();
   const maxTrips = premium ? Infinity : freeMaxTrips;
 
@@ -123,7 +120,7 @@ export async function PATCH(req: NextRequest) {
   if (memberResp) return memberResp;
 
   const dbUser = await db.user.findUnique({ where: { id: user!.id } });
-  const premium = dbUser ? isUserPremium(dbUser) : false;
+  const premium = dbUser ? isPremiumUser(dbUser) : false;
   const { maxMembers: freeMaxMembers } = await getPlanLimits();
   const maxMembers = premium ? Infinity : freeMaxMembers;
 

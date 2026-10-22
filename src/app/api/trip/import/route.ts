@@ -161,6 +161,11 @@ interface BackupV2 {
   lodgings?: Array<Record<string, unknown>>;
 }
 
+const MAX_IMPORT_BYTES = 20 * 1024 * 1024;
+
+// Prisma-коды «данные не подошли»: слишком длинное значение, дубль, битая ссылка, null/обязательное поле
+const IMPORT_DATA_ERROR_CODES = new Set(["P2000", "P2002", "P2003", "P2011", "P2012"]);
+
 export async function POST(req: NextRequest) {
   const { user: authUser, response } = await requireUser(req);
   if (response) return response;
@@ -186,6 +191,12 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  // Бэкап — текст (фото в нём только ссылками), десятки МБ не бывает; тело читается в память целиком
+  const contentLength = Number(req.headers.get("content-length") ?? 0);
+  if (contentLength > MAX_IMPORT_BYTES) {
+    return NextResponse.json({ error: "Файл бэкапа слишком большой (макс 20MB)" }, { status: 413 });
+  }
+
   let body: BackupV2;
   try {
     body = await req.json();
@@ -199,7 +210,7 @@ export async function POST(req: NextRequest) {
   // Создаём новую поездку и текущего пользователя как owner-участника
   // Атомарность (Phase 3): битый элемент в середине бэкапа не должен оставить
   // в БД полусобранную поездку — весь импорт в одной транзакции
-  const trip = await db.$transaction(async (tx) => {
+  const imported = await db.$transaction(async (tx) => {
   // Создаём новую поездку и текущего пользователя как owner-участника
   const trip = await tx.trip.create({
     data: {
@@ -428,7 +439,25 @@ export async function POST(req: NextRequest) {
 
 
     return trip;
+  }, {
+    // Дефолт интерактивной транзакции Prisma — 5 с: большой бэкап (сотни мест и трат
+    // отдельными create) упирался в него и отдавал 500 «Transaction already closed»
+    timeout: 60_000,
+    maxWait: 10_000,
+  }).catch((e: unknown) => {
+    // Битый бэкап (неверный тип поля, невалидная дата, нарушение ограничения) — ошибка
+    // файла, а не сервера: 400 с понятным текстом. Остальное (БД недоступна, таймаут) — 500.
+    const name = (e as { name?: string } | null)?.name;
+    const code = (e as { code?: string } | null)?.code;
+    if (name === "PrismaClientValidationError" || (typeof code === "string" && IMPORT_DATA_ERROR_CODES.has(code))) {
+      console.error("[import] backup rejected:", e);
+      return null;
+    }
+    throw e;
   });
+  if (!imported) {
+    return NextResponse.json({ error: "Не удалось импортировать: файл бэкапа повреждён или не подходит" }, { status: 400 });
+  }
 
-  return NextResponse.json({ ok: true, tripId: trip.id, title: trip.title });
+  return NextResponse.json({ ok: true, tripId: imported.id, title: imported.title });
 }

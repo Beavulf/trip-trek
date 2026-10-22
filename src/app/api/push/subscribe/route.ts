@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { requireUser } from "@/lib/api-auth";
 import { rateLimitMiddleware } from "@/lib/rate-limit";
+import { checkResolvesToPublic } from "@/lib/net-guard";
 
 // POST /api/push/subscribe — сохранить push подписку текущего пользователя
 export async function POST(req: NextRequest) {
@@ -36,14 +37,12 @@ export async function POST(req: NextRequest) {
     } catch {
       return NextResponse.json({ error: "endpoint: некорректный URL" }, { status: 400 });
     }
-    if (
-      endpointHost === "localhost" ||
-      endpointHost === "127.0.0.1" ||
-      endpointHost === "0.0.0.0" ||
-      endpointHost.endsWith(".local") ||
-      endpointHost.endsWith(".internal") ||
-      /^\d{1,3}(\.\d{1,3}){3}$/.test(endpointHost)
-    ) {
+    // Общий SSRF-гард: IP-литералы (в т.ч. IPv6), внутренние зоны, одно-лейблные имена
+    // и домены, чьи DNS-записи ведут на закрытые адреса (127.0.0.1.nip.io). Список
+    // известных push-сервисов не фиксируем: у браузеров и UnifiedPush-дистрибьюторов
+    // он открытый, и белый список молча отрезал бы часть юзеров.
+    const hostCheck = await checkResolvesToPublic(endpointHost);
+    if (!hostCheck.ok) {
       return NextResponse.json({ error: "endpoint: недопустимый хост" }, { status: 400 });
     }
 

@@ -1,4 +1,5 @@
 import { db } from "@/lib/db";
+import { checkPublicHostname, checkResolvesToPublic, type HostCheck } from "@/lib/net-guard";
 
 export type AiKeySource = "user" | "admin" | "env" | "none";
 
@@ -12,6 +13,8 @@ export interface ResolvedAiConfig {
   source: AiKeySource;
   /** Полный запрет ИИ для юзера (админ-блок). Проверяется в runAi — единой точке. */
   aiBlocked: boolean;
+  /** baseUrl задал сам юзер (а не админ/env) — такой адрес перед вызовом проверяем на SSRF. */
+  userBaseUrl: boolean;
 }
 
 // ─── Чистое ядро резолва: env / AppSettings / User ──────────────────────────
@@ -49,11 +52,12 @@ export function pickAiConfig(
   env: AiEnvConfig,
   settings: AiSettingsConfig | null,
   user: AiUserConfig | null
-): { key: string | null; baseUrl: string | null; model: string | null; source: AiKeySource } {
+): { key: string | null; baseUrl: string | null; model: string | null; source: AiKeySource; userBaseUrl: boolean } {
   let key = settings?.aiApiKey ?? env.key;
   let baseUrl = settings?.aiBaseUrl ?? env.baseUrl;
   let model = settings?.aiModel ?? env.model;
   let source: AiKeySource = settings?.aiApiKey ? "admin" : env.key ? "env" : "none";
+  let userBaseUrl = false;
 
   if (user?.aiApiKey) {
     key = user.aiApiKey;
@@ -62,6 +66,7 @@ export function pickAiConfig(
       // Полный BYOK: свой провайдер — модель своя или нейтральный дефолт
       // (админская модель от чужого провайдера не сработает).
       baseUrl = user.aiBaseUrl;
+      userBaseUrl = true;
       model = user.aiModel ?? DEFAULT_AI_MODEL;
     } else {
       // Только ключ, адрес общий — прежнее поведение.
@@ -69,7 +74,7 @@ export function pickAiConfig(
     }
   }
 
-  return { key, baseUrl, model, source };
+  return { key, baseUrl, model, source, userBaseUrl };
 }
 
 /** Загрузить конфиг из БД и env и отдать полный резолв (с флагом блока). */
@@ -108,18 +113,48 @@ export function maskKey(key: string): string {
  * Валидация Base URL провайдера — единственная для админки и профиля юзера.
  * https-only (аудит 2026-09-12): на этот URL уходят Bearer-ключи, не-https
  * или не-URL значение отклоняется. http://localhost — только в dev (моки).
+ *
+ * Хост юзерского адреса обязан быть публичным (net-guard): иначе пользователь
+ * заставит сервер стучаться во внутренние https-сервисы docker-сети и читать
+ * начало их ответа через /api/user/ai-key-check. Админский адрес — доверенный:
+ * ему `allowPrivateHost` разрешает, например, свой шлюз во внутренней сети.
  */
-export function validateAiBaseUrl(raw: string): { ok: true; value: string } | { ok: false; error: string } {
+export function validateAiBaseUrl(
+  raw: string,
+  opts: { allowPrivateHost?: boolean } = {}
+): { ok: true; value: string } | { ok: false; error: string } {
   try {
     const u = new URL(raw);
     const isLocal = u.hostname === "localhost" || u.hostname === "127.0.0.1";
-    if (u.protocol !== "https:" && !(isLocal && process.env.NODE_ENV !== "production")) {
+    const devLocal = isLocal && process.env.NODE_ENV !== "production";
+    if (u.protocol !== "https:" && !devLocal) {
       return { ok: false, error: "только https" };
+    }
+    if (!devLocal && !opts.allowPrivateHost) {
+      const host = checkPublicHostname(u.hostname);
+      if (!host.ok) return { ok: false, error: `недопустимый адрес (${host.error})` };
     }
     return { ok: true, value: raw };
   } catch {
     return { ok: false, error: "некорректный URL" };
   }
+}
+
+/**
+ * Проверка перед вызовом юзерского провайдера: валидация при сохранении видит только
+ * имя, а DNS-запись может вести на закрытую сеть (127.0.0.1.nip.io) или смениться
+ * после сохранения. dev-localhost для моков пропускаем — как и в validateAiBaseUrl.
+ */
+export async function checkProviderHost(baseUrl: string): Promise<HostCheck> {
+  let hostname: string;
+  try {
+    hostname = new URL(baseUrl).hostname;
+  } catch {
+    return { ok: false, error: "некорректный URL" };
+  }
+  const isLocal = hostname === "localhost" || hostname === "127.0.0.1";
+  if (isLocal && process.env.NODE_ENV !== "production") return { ok: true };
+  return checkResolvesToPublic(hostname);
 }
 
 /**

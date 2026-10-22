@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { userRateLimit } from "@/lib/rate-limit";
-import { resolveAiConfig, openaiChatUrl, DEFAULT_AI_MODEL, type AiKeySource } from "@/lib/ai-key";
+import { resolveAiConfig, openaiChatUrl, checkProviderHost, DEFAULT_AI_MODEL, type AiKeySource } from "@/lib/ai-key";
 import { AI_FEATURES, parseAiUsage, utcMidnight, isSpendOverLimit, type AiFeature, type AiUsageTokens } from "@/lib/ai-usage";
 import { notifyUser } from "@/lib/notify";
 import { isPremiumUser } from "@/lib/premium";
@@ -79,6 +79,22 @@ export async function runAi(input: RunAiInput): Promise<AiResult> {
   const model = cfg.model ?? DEFAULT_AI_MODEL;
   const base = openaiChatUrl(cfg.baseUrl);
   const startedAt = Date.now();
+
+  // Адрес провайдера задал сам юзер — сервер не должен стучаться в закрытую сеть
+  // (SSRF). Админский/env адрес доверенный и не проверяется.
+  if (cfg.userBaseUrl && !(await checkProviderHost(base)).ok) {
+    void logAiUsage({
+      userId: input.userId,
+      tripId: input.tripId ?? null,
+      feature: input.feature,
+      keySource: cfg.source,
+      model,
+      ok: false,
+      error: "host_blocked",
+      durationMs: Date.now() - startedAt,
+    });
+    return { ok: false, reason: "provider" };
+  }
 
   // Таймер живёт до конца чтения тела: провайдер может отдать заголовки
   // и замереть на потоке — abort должен разорвать и чтение json тоже.

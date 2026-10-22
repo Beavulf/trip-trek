@@ -12,7 +12,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   // Lookup tripId from existing place for auth
   const existing = await db.place.findUnique({ where: { id }, select: { tripId: true } });
   if (!existing) return NextResponse.json({ error: "not found" }, { status: 404 });
-  const { response } = await requireTripEditor(req, existing.tripId);
+  const { user, response } = await requireTripEditor(req, existing.tripId);
   if (response) return response;
 
   const data = pickPatchablePlace(body);
@@ -28,7 +28,11 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
   // WS: уведомить участников поездки
   const tripId = (place as { tripId?: string }).tripId;
-  if (tripId) publish(tripId, "place:updated", { placeId: id, placeName: place.name, userName: body.userName || "Кто-то" });
+  if (tripId) {
+    // Имя автора — с сервера (БД, а не JWT: токен хранит имя на момент логина), не из тела запроса
+    const author = await db.user.findUnique({ where: { id: user!.id }, select: { name: true } });
+    publish(tripId, "place:updated", { placeId: id, placeName: place.name, userName: author?.name || "Кто-то" });
+  }
 
   return NextResponse.json(place);
 }

@@ -28,7 +28,7 @@ export async function POST(req: NextRequest) {
     }
 
     const user = await db.user.findUnique({ where: { id: auth!.id }, select: { id: true, password: true } });
-    if (!user || !bcrypt.compareSync(currentPassword, user.password)) {
+    if (!user || !(await bcrypt.compare(currentPassword, user.password))) {
       return NextResponse.json({ error: "Текущий пароль неверен" }, { status: 400 });
     }
 

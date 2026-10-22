@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { requireUser } from "@/lib/api-auth";
 import { maskKey, validateAiBaseUrl } from "@/lib/ai-key";
+import { isPremiumUser } from "@/lib/premium";
 
 // GET /api/user — профиль текущего пользователя (сессия)
 export async function GET(req: NextRequest) {
@@ -130,7 +131,7 @@ export async function GET(req: NextRequest) {
     { emoji: "👑", label: "Premium", req: "Premium подписка" },
   ];
 
-  const isPremium = user.plan === "premium" && (!user.planExpiry || user.planExpiry > new Date());
+  const isPremium = isPremiumUser(user);
   const ownedTrips = trips.filter((t) => t.role === "owner").length;
   const maxOwnedTrips = isPremium ? null : 1;
   const maxMembersPerTrip = isPremium ? null : 5;
@@ -175,7 +176,7 @@ export async function PATCH(req: NextRequest) {
   const { name, emoji, color, avatarUrl, aiApiKey, aiBaseUrl, aiModel, onboardingCompleted, paymentDetails } = body;
 
   const data: Record<string, unknown> = {};
-  if (typeof name === "string" && name.trim()) data.name = name.trim();
+  if (typeof name === "string" && name.trim()) data.name = name.trim().slice(0, 80);
   if (typeof emoji === "string") data.emoji = emoji;
   if (typeof color === "string" && color.match(/^#[0-9a-fA-F]{6}$/)) data.color = color;
   // avatarUrl: строка — установить фото, null — убрать фото (вернуться к эмодзи).

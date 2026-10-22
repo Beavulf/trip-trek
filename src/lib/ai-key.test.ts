@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { pickAiConfig, openaiChatUrl, type AiEnvConfig, type AiSettingsConfig, type AiUserConfig } from "./ai-key";
+import { pickAiConfig, openaiChatUrl, validateAiBaseUrl, checkProviderHost, type AiEnvConfig, type AiSettingsConfig, type AiUserConfig } from "./ai-key";
 
 const ENV: AiEnvConfig = { key: "env-key", baseUrl: "https://env.example.com/v1", model: "env-model" };
 const ADMIN: AiSettingsConfig = { aiApiKey: "admin-key", aiBaseUrl: "https://admin.example.com/v1", aiModel: "admin-model" };
@@ -39,6 +39,15 @@ describe("pickAiConfig — приоритет конфига", () => {
       baseUrl: "https://user.example.com/v1",
       model: "user-model",
     });
+  });
+
+  it("userBaseUrl: true только когда адрес задал сам юзер (SSRF-проверка нужна лишь ему)", () => {
+    expect(pickAiConfig(ENV, ADMIN, USER_FULL).userBaseUrl).toBe(true);
+    // свой ключ, но адрес общий — админский адрес доверенный
+    expect(pickAiConfig(ENV, ADMIN, { aiApiKey: "user-key", aiBaseUrl: null, aiModel: null }).userBaseUrl).toBe(false);
+    // адрес без своего ключа игнорируется резолвом
+    expect(pickAiConfig(ENV, ADMIN, { aiApiKey: null, aiBaseUrl: "https://sneaky.example.com/v1", aiModel: null }).userBaseUrl).toBe(false);
+    expect(pickAiConfig(ENV, null, null).userBaseUrl).toBe(false);
   });
 
   it("свой адрес без модели — нейтральный дефолт вместо чужой модели", () => {
@@ -88,5 +97,49 @@ describe("openaiChatUrl", () => {
     const fallback = openaiChatUrl(null);
     expect(openaiChatUrl("не url")).toBe(fallback);
     expect(openaiChatUrl("http://evil.example.com")).toBe(fallback);
+  });
+});
+
+describe("validateAiBaseUrl", () => {
+  it("публичный https-адрес проходит", () => {
+    expect(validateAiBaseUrl("https://api.deepseek.com/v1")).toEqual({ ok: true, value: "https://api.deepseek.com/v1" });
+  });
+
+  it("не-https и не-URL отклоняются", () => {
+    expect(validateAiBaseUrl("http://api.example.com/v1").ok).toBe(false);
+    expect(validateAiBaseUrl("не url").ok).toBe(false);
+  });
+
+  it.each([
+    "https://10.0.0.5/v1",
+    "https://192.168.1.10/v1",
+    "https://169.254.169.254/latest",
+    "https://[::1]/v1",
+    "https://[::ffff:127.0.0.1]/v1",
+    "https://0x0a000005/v1", // шестнадцатеричная запись 10.0.0.5 — URL нормализует её в IP
+    "https://db/v1", // docker-сервис
+    "https://kong.internal/v1",
+  ])("закрытый адрес %s отклоняется для юзера", (url) => {
+    expect(validateAiBaseUrl(url).ok).toBe(false);
+  });
+
+  it("админу закрытый адрес разрешён (allowPrivateHost) — https по-прежнему обязателен", () => {
+    expect(validateAiBaseUrl("https://10.0.0.5/v1", { allowPrivateHost: true }).ok).toBe(true);
+    expect(validateAiBaseUrl("http://10.0.0.5/v1", { allowPrivateHost: true }).ok).toBe(false);
+  });
+});
+
+describe("checkProviderHost", () => {
+  it("закрытые адреса отбиваются без запроса в DNS", async () => {
+    expect((await checkProviderHost("https://10.0.0.5/v1")).ok).toBe(false);
+    expect((await checkProviderHost("https://db/v1")).ok).toBe(false);
+  });
+
+  it("публичный IP-литерал проходит", async () => {
+    expect((await checkProviderHost("https://8.8.8.8/v1")).ok).toBe(true);
+  });
+
+  it("не-URL — отказ", async () => {
+    expect((await checkProviderHost("не url")).ok).toBe(false);
   });
 });

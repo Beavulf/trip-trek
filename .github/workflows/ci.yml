@@ -1,0 +1,51 @@
+# Проверки на каждый push в main и на каждый PR: типы, линтер, юнит-тесты.
+# Деплой отсюда не делается — выкатывает владелец на VPS (docker-deploy/DEPLOY.md).
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      # vitest 5 требует Node ^22.12; bun запускает скрипты (vitest, eslint) через node
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      # Версия bun — как в docker-deploy/Dockerfile: CI и прод-образ ставят зависимости одинаково
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.14
+
+      - name: Install
+        run: bun install --frozen-lockfile
+
+      # Типы @prisma/client генерируются из схемы; БД для generate не нужна
+      - name: Prisma generate
+        run: bunx prisma generate
+        env:
+          DATABASE_URL: postgresql://build:build@localhost:5432/build
+
+      - name: Typecheck
+        run: bunx tsc --noEmit
+
+      # Ошибки валят сборку, предупреждения (react-hooks/set-state-in-effect) — нет
+      - name: Lint
+        run: bun run lint --quiet
+
+      - name: Unit tests
+        run: bun run test

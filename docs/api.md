@@ -27,18 +27,17 @@
 
 | Роут | Методы | Доступ | Лимит | Что делает |
 |---|---|---|---|---|
-| `auth/custom-login` | POST | 🌐 | 5/15 мин/IP | логин (bcrypt), ставит JWT-cookie; проверяет Origin (NEXTAUTH_URL) и Content-Type: application/json (login-CSRF) |
+| `auth/custom-login` | POST | 🌐 | 20/15 мин/IP + 8 неудач/15 мин/email | логин (bcrypt), ставит JWT-cookie; проверяет Origin (NEXTAUTH_URL) и Content-Type: application/json (login-CSRF) |
 | `auth/custom-session` | GET | 🌐 | — | текущая сессия (учитывает `passwordChangedAt`); в `user` входит `onboardingCompletedAt` (null = показать обучение) |
 | `auth/custom-signout` | POST | 🌐 | — | выход (снимает cookie) |
 | `auth/register` | POST | 🌐 | 3/ч/IP | регистрация + welcome-письмо; проверяет `registrationEnabled`; email канонизируется (trim+lowercase); вступление в поездку — только через `trips/join` по коду |
 | `auth/forgot-password` | POST | 🌐 | 5/ч/IP (+3/ч/email) | одноразовый токен (sha256 в БД, TTL 60 мин) + письмо; анти-перечисление |
 | `auth/reset-password` | POST | 🌐 | 20/ч/IP | сброс по токену, инвалидирует сессии |
-| `auth/[...nextauth]` | * | 🌐 | 5/15 мин/IP (POST) | NextAuth-совместимость; клиент ходит в custom-*; credentials-вход под тем же лимитом, что и custom-login |
 | `user` | GET, PATCH | U | — | свой профиль (имя, emoji, цвет, аватар, ИИ-ключ); PATCH принимает также `onboardingCompleted`: true — обучение пройдено/пропущено, false — сброс («Пройти заново» в профиле); `paymentDetails` (строка ≤300 / null) — «куда возвращать долги», видят участники поездок в `GET /api/trip` participants |
 | `user/password` | POST | U | userRateLimit | смена пароля → инвалидация всех сессий |
 | `user/avatar` | POST | U | userRateLimit | аватар (через `src/lib/storage`) |
 | `user/upgrade` | POST | U | — | переход на premium (ручной сценарий; известная заглушка) |
-| `user/ai-key-check` | POST | U | userRateLimit | проверка ТОЛЬКО своего BYOK-ключа у LLM (общий не трогается), наружу — только маска |
+| `user/ai-key-check` | POST | U | userRateLimit | проверка ТОЛЬКО своего BYOK-ключа у LLM (общий не трогается), наружу — только маска; юзерский `aiBaseUrl` перед запросом проверяется на SSRF (`net-guard`) |
 | `limits` | GET, POST, PATCH | U / M | — | лимиты плана юзера (maxTrips/maxMembers: free из `AppSettings`, premium = ∞) |
 
 ## Поездки и участники
@@ -56,7 +55,7 @@
 | `p/[token]/heart` | POST | публичный | 10/ч/IP | гостевое сердечко-переключатель: `{}` → `shareHearts += 1`, `{undo:true}` → −1 (не ниже 0, ответ `{hearts, undo:false}` если забирать нечего). Анонимно; состояние «моё сердечко» — localStorage на устройстве |
 | `trip/dates` | PATCH | O | — | сдвиг дат/дней поездки |
 | `trip/budget` | PATCH | M | — | общий бюджет/валюта поездки |
-| `trip/import` | POST | U | userRateLimit | импорт JSON-бэкапа → новая поездка |
+| `trip/import` | POST | U | userRateLimit | импорт JSON-бэкапа → новая поездка; тело ≤ 20 MB (413), битый бэкап → 400, транзакция до 60 с |
 | `import` | POST | O | userRateLimit 10/ч + кап 5MB | импорт в существующую поездку (owner); tripId — только в query, тело парсится после гарда и лимита |
 | `export` | GET | O | — | экспорт поездки в JSON (`src/lib/trip-export.ts`); полный дамп — функция владельца, участникам 403 |
 | `export/pdf` | GET | M | — | маршрут поездки одним PDF-файлом (офлайн, `src/lib/pdf/route-pdf.ts`); tripId — в query; любой участник поездки; 400, если нет мест |
@@ -127,7 +126,7 @@
 | Роут | Методы | Доступ | Лимит | Что делает |
 |---|---|---|---|---|
 | `notifications` | GET, POST | U | — | свои уведомления + счётчик непрочитанных / отметить прочитанным |
-| `push/subscribe` | POST, DELETE | U | rateLimitMiddleware | подписка/отписка web-push |
+| `push/subscribe` | POST, DELETE | U | rateLimitMiddleware | подписка/отписка web-push; endpoint — только https и публичный хост (`net-guard`, с DNS-резолвом) |
 | `push` | POST, PUT, GET | U | — | отправка/тест пуша, статус VAPID |
 | `push/vapid-public-key` | GET | 🌐 | — | публичный VAPID-ключ |
 | `feedback` | POST | U | userRateLimit | баг-репорт/идея (скриншот через storage, UA заполняет сервер) |
@@ -153,7 +152,7 @@
 X-Forwarded-For, ему доверяем только за Caddy) и `userRateLimit` (по user).
 In-memory, сбрасываются рестартом контейнера (ADR-0005).
 
-- login — 5 / 15 мин / IP (включая `auth/[...nextauth]` POST)
+- login — 20 / 15 мин / IP (все попытки) и 8 неудач / 15 мин / email (успешный вход сбрасывает)
 - register — 3 / ч / IP
 - forgot-password — 5 / ч / IP и 3 / ч / email
 - reset-password — 20 / ч / IP

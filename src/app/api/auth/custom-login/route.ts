@@ -3,13 +3,31 @@ import { db } from "@/lib/db";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { getJwtSecret } from "@/lib/api-auth";
-import { rateLimitMiddleware } from "@/lib/rate-limit";
+import { rateLimitMiddleware, rateLimitBlocked, rateLimitRecord, rateLimitReset } from "@/lib/rate-limit";
+
+// Хеш-пустышка: для несуществующего email всё равно гоняем bcrypt, иначе быстрый
+// 401 выдаёт по времени ответа, что аккаунта нет (forgot-password этим же озабочен).
+// Считаем один раз лениво — и async, чтобы не блокировать event loop: в этом процессе
+// живут и HTTP, и WebSocket всех поездок.
+let dummyHash: Promise<string> | null = null;
+function getDummyHash(): Promise<string> {
+  dummyHash ??= bcrypt.hash("triptrek-dummy-password", 10);
+  return dummyHash;
+}
+
+// Два лимита. По IP — грубый потолок на ВСЕ попытки, включая успешные: 20 за 15 минут,
+// чтобы друзья за общим Wi-Fi отеля или мобильным CGNAT входили без блокировок. По email —
+// реальная защита от подбора: 8 НЕУДАЧ за 15 минут (успех сбрасывает счётчик). Цена
+// за это: чужой человек, нарочно ошибаясь 8 раз, закроет вход жертве на 15 минут.
+const LOGIN_WINDOW_MS = 15 * 60_000;
+const LOGIN_MAX_PER_IP = 20;
+const LOGIN_MAX_FAILS_PER_EMAIL = 8;
 
 // POST /api/auth/custom-login — кастомный логин (обходит NextAuth v4 + Turbopack баг)
 export async function POST(req: NextRequest) {
   try {
-    // P0: rate limiting — 5 login attempts per 15 min per IP
-    const rateLimit = rateLimitMiddleware(req, "login", 5, 15 * 60_000);
+    // P0: rate limiting по IP (см. константы выше); лимит по email — после разбора тела
+    const rateLimit = rateLimitMiddleware(req, "login", LOGIN_MAX_PER_IP, LOGIN_WINDOW_MS);
     if (rateLimit) return rateLimit;
 
     // login-CSRF: браузер всегда сопровождает POST заголовком Origin — разрешаем
@@ -33,26 +51,39 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Ожидался application/json" }, { status: 415 });
     }
 
-    const body = await req.json();
-    const { email, password } = body;
+    const body = await req.json().catch(() => null);
+    const { email, password } = body ?? {};
 
     if (!email || !password) {
       return NextResponse.json({ error: "email и пароль обязательны" }, { status: 400 });
     }
+    // bcrypt берёт только первые 72 байта, но не-строка или мегабайтный «пароль» — мусор
+    if (typeof email !== "string" || typeof password !== "string" || password.length > 1024) {
+      return NextResponse.json({ error: "Неверный email или пароль" }, { status: 401 });
+    }
 
     // Канонизация email: хранится и ищется в едином виде (аудит 2026-09-12 —
     // регистровая копия адреса не должна становиться вторым аккаунтом)
-    const emailNorm = typeof email === "string" ? email.trim().toLowerCase() : "";
+    const emailNorm = email.trim().toLowerCase();
+
+    // Счётчик неудач ведём и по несуществующим адресам — иначе 429 выдавал бы, что аккаунт есть
+    const failKey = `login-fail:${emailNorm}`;
+    const locked = rateLimitBlocked(failKey, LOGIN_MAX_FAILS_PER_EMAIL, LOGIN_WINDOW_MS);
+    if (locked) return locked;
 
     const user = await db.user.findUnique({ where: { email: emailNorm } });
     if (!user || !user.password) {
+      await bcrypt.compare(password, await getDummyHash());
+      rateLimitRecord(failKey, LOGIN_WINDOW_MS);
       return NextResponse.json({ error: "Неверный email или пароль" }, { status: 401 });
     }
 
-    const isValid = bcrypt.compareSync(password, user.password);
+    const isValid = await bcrypt.compare(password, user.password);
     if (!isValid) {
+      rateLimitRecord(failKey, LOGIN_WINDOW_MS);
       return NextResponse.json({ error: "Неверный email или пароль" }, { status: 401 });
     }
+    rateLimitReset(failKey);
 
     // Генерируем JWT токен (совместимый с NextAuth)
     const secret = getJwtSecret();

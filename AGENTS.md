@@ -10,13 +10,13 @@ realtime). Один пользователь-владелец кода, прод
 ## Стек
 
 - **Next.js 16** (App Router, SPA на `/`) + React 19 + TypeScript, Tailwind 4 + shadcn/ui,
-  TanStack Query 5, Zustand, leaflet (карты), next-intl (обёртка, UI по-русски).
+  TanStack Query 5, Zustand, leaflet (карты); UI по-русски, i18n-библиотеки нет.
 - **Кастомный сервер `server.ts` под Bun**: в ОДНОМ процессе живут Next.js HTTP,
   socket.io (WS) и раздача `/uploads`. API-роуты Next и WS-шина — один процесс,
   поэтому realtime-события публикуются прямым вызовом `publish()`, без HTTP-моста.
 - **Prisma 6 + PostgreSQL** (схема: `prisma/schema.prisma`).
-- Аутентификация — свой JWT в cookie `next-auth.session-token` (NextAuth v4
-  Credentials; см. «Авторизация» ниже). Почта — nodemailer, пуш — web-push (VAPID).
+- Аутентификация — свой JWT в cookie `next-auth.session-token` (имя осталось от
+  удалённого NextAuth; см. «Авторизация» ниже). Почта — nodemailer, пуш — web-push (VAPID).
 - Рантайм — **Bun** (не Node): `bun server.ts`. Turbopack отключён
   (`webpack: true` в `next({ dev, webpack: true })` — воркараунд резолва @prisma/client).
 
@@ -24,7 +24,7 @@ realtime). Один пользователь-владелец кода, прод
 
 ```bash
 bun server.ts            # dev-сервер целиком (Next + WS + uploads) на :3000
-bun run lint             # ESLint
+bun run lint             # ESLint (ошибки = 0; предупреждения set-state-in-effect — известный долг)
 bun run test / :watch    # vitest — юнит-тесты чистых функций (src/**/*.test.ts, node-env)
 bun run db:up / db:down  # Postgres в docker (docker-compose.dev.yml)
 bun run db:migrate       # prisma migrate dev
@@ -48,7 +48,7 @@ bun run build            # production-сборка standalone
 | `src/components/trip/` | фичи главного экрана: itinerary, budget/, map/, gallery, board (чат), journal, food/, phrases/, timeline, dashboard/, rest-chill/, profile/, quick-add/, onboarding/… |
 | `src/components/admin/`, `auth/`, `ui/` | админка, логин/регистрация, shadcn-кит |
 | `src/hooks/trip/` | `use-*.ts` — слой данных клиента (TanStack Query) над API |
-| `src/lib/` | серверная логика: `api-auth.ts`, `rate-limit.ts`, `ws-bus.ts`, `ai.ts` (оркестратор ИИ: runAi, учёт AiUsage, алерты трат, aiFailResponse), `ai-usage.ts` (реестр ИИ-фич AI_FEATURES + чистая математика учёта), `ai-key.ts` (BYOK-резолв: pickAiConfig, маски, https-гвард), `planner.ts` (контракты/валидация планера + sanitizeUserText/extractJsonLoose), `poi.ts` (OSM POI через Overpass: парсер, матчинг выбора ИИ), `geocode-place.ts` (Nominatim для черновиков, троттлинг + бюджет времени), `premium.ts`, `notify.ts`, `push-retry.ts` (чистое правило ретрая web-push) и `push-send.ts` (доставка web-push: ретрай, TTL, логи fanout), `logger.ts` (логи), `admin-log.ts` (журнал админ-действий AdminLog), `trip-join.ts` (вступление по инвайт-коду), `mail/`, `storage/`, `budget/` (split/balances/settle + money/personal/planned), `outbound.ts`, `db.ts` (Prisma-клиент), `trip-days.ts`, `trip-export.ts`, `pdf/route-pdf.ts` (генерация PDF маршрута: DejaVu-шрифты, переносы, колонтитулы), `photo-exif.ts` (EXIF фото на клиенте: GPS + дата съёмки одним проходом exifr, до загрузки — сервер EXIF выпиливает), `trip-templates.ts`, `app-config.ts`, `zip.ts` (потоковый ZIP STORE без зависимостей + crc32, тесты рядом — архив фото публичной страницы `/p/<token>/photos.zip`); доменные модули маршрута: `time-of-day.ts`, `place-fields.ts` (контракт записи Place), `lodging.ts` (жильё: календарные даты-ключи, «сегодня ночуем здесь», ночи без жилья, нормализатор входа `/api/lodgings`), `place-draft.ts`, `route.ts`, `route-threads.ts`, `map-filters.ts`, `map-bus.ts`, `map-layers.ts`, `query-keys.ts`, `place-links.ts`, `onboarding.ts` (шаги welcome-тура и обучалок вкладок + отметки обучения), `photo-pins.ts` (кластеризация фото-меток карты по экранной сетке: чистые функции, тесты рядом), `net.ts` (слабая связь / экономия трафика — для предзагрузки в лайтбоксе), `back-stack.ts` (кнопка «назад» на телефоне закрывает оверлей, а не сворачивает PWA: история-стек, поверх Next-роутера) |
+| `src/lib/` | серверная логика: `api-auth.ts`, `rate-limit.ts`, `ws-bus.ts`, `ai.ts` (оркестратор ИИ: runAi, учёт AiUsage, алерты трат, aiFailResponse), `ai-usage.ts` (реестр ИИ-фич AI_FEATURES + чистая математика учёта), `ai-key.ts` (BYOK-резолв: pickAiConfig, маски, https-гвард), `planner.ts` (контракты/валидация планера + sanitizeUserText/extractJsonLoose), `poi.ts` (OSM POI через Overpass: парсер, матчинг выбора ИИ), `geocode-place.ts` (Nominatim для черновиков, троттлинг + бюджет времени), `premium.ts`, `notify.ts`, `push-retry.ts` (чистое правило ретрая web-push) и `push-send.ts` (доставка web-push: ретрай, TTL, логи fanout), `logger.ts` (логи), `admin-log.ts` (журнал админ-действий AdminLog), `trip-join.ts` (вступление по инвайт-коду), `mail/`, `storage/`, `budget/` (split/balances/settle + money/personal/planned), `outbound.ts`, `db.ts` (Prisma-клиент), `trip-days.ts`, `trip-export.ts`, `pdf/route-pdf.ts` (генерация PDF маршрута: DejaVu-шрифты, переносы, колонтитулы), `photo-exif.ts` (EXIF фото на клиенте: GPS + дата съёмки одним проходом exifr, до загрузки — сервер EXIF выпиливает), `trip-templates.ts`, `app-config.ts`, `zip.ts` (потоковый ZIP STORE без зависимостей + crc32, тесты рядом — архив фото публичной страницы `/p/<token>/photos.zip`); доменные модули маршрута: `time-of-day.ts`, `place-fields.ts` (контракт записи Place), `lodging.ts` (жильё: календарные даты-ключи, «сегодня ночуем здесь», ночи без жилья, нормализатор входа `/api/lodgings`), `place-draft.ts`, `route.ts`, `route-threads.ts`, `map-filters.ts`, `map-bus.ts`, `map-layers.ts`, `query-keys.ts`, `place-links.ts`, `onboarding.ts` (шаги welcome-тура и обучалок вкладок + отметки обучения), `photo-pins.ts` (кластеризация фото-меток карты по экранной сетке: чистые функции, тесты рядом), `net.ts` (слабая связь / экономия трафика — для предзагрузки в лайтбоксе), `back-stack.ts` (кнопка «назад» на телефоне закрывает оверлей, а не сворачивает PWA: история-стек, поверх Next-роутера), `net-guard.ts` (SSRF-гард для адресов от юзера: `checkPublicHostname` без DNS, `checkResolvesToPublic` с резолвом — закрытые сети, IPv6, внутренние зоны; тесты рядом) |
 | `prisma/` | `schema.prisma`, миграции, seed, скрипты переноса |
 | `docker-deploy/` | прод: Dockerfile, compose, Caddy, `DEPLOY.md` (runbook), бэкапы |
 | `docs/` | `architecture.md`, `api.md`, `glossary.md`, `adr/0001–0008`, `PRODUCTION_PLAN.md`, `audit-*.md` (исторические брифы до релиза: фичи давно реализованы, актуальное описание — в `glossary.md`) |
@@ -86,7 +86,8 @@ WS-handshake требует валидный JWT (`server/ws-auth.ts`), анон
 
 ## Лимиты, премиум, ИИ
 
-- **Rate limit** — in-memory (`src/lib/rate-limit.ts`, ADR-0005): login 5/15мин/IP,
+- **Rate limit** — in-memory (`src/lib/rate-limit.ts`, ADR-0005): login 20/15мин/IP
+  + 8 НЕУДАЧ/15мин на email (`rateLimitBlocked/Record/Reset` — лимит «только неудач»),
   register 3/ч/IP, forgot-password 5/ч/IP, ИИ 10/ч на user+trip. Сбрасывается при
   рестарте контейнера. Шов под Redis оставлен (`limit()`).
 - **Премиум**: `isPremiumUser()` (`src/lib/premium.ts`) = `plan === "premium"` и
@@ -100,6 +101,10 @@ WS-handshake требует валидный JWT (`server/ws-auth.ts`), анон
   Ключ резолвится по цепочке юзер (свой ключ, опц. свой Base URL/модель) →
   админский из `AppSettings` → `env OPENAI_API_KEY` (`src/lib/ai-key.ts`);
   наружу API отдаёт только маску. OpenAI-совместимый `aiBaseUrl` + `aiModel`.
+  Юзерский `aiBaseUrl` — SSRF-поверхность: при сохранении `validateAiBaseUrl` режет
+  закрытые хосты, перед вызовом (`runAi`, `ai-key-check`) `checkProviderHost` резолвит
+  DNS (`cfg.userBaseUrl`); админский/env адрес доверенный. Любой новый адрес от юзера,
+  по которому ходит сервер, — через `net-guard.ts`.
   Задел на будущее: поле `access` в `AI_FEATURES` (премиум-гейт) и сериализация
   сообщений в одном месте (vision). Не через `outbound.ts` — ретраи платных
   вызовов не нужны, нужны HTTP-статус и `redirect:"error"`.

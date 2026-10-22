@@ -7,6 +7,10 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 const eslintConfig = [...nextCoreWebVitals, ...nextTypescript, {
+  // Старые eslint-disable на уже выключенные ниже правила (exhaustive-deps, no-img-element) не удаляем:
+  // линтер React Compiler читает их как «компонент пропустить», и снятие вскрывает новые диагностики
+  // (например react-hooks/refs в achievements.tsx). Поэтому «неиспользуемые директивы» не шумят.
+  linterOptions: { reportUnusedDisableDirectives: "off" },
   rules: {
     // TypeScript rules
     "@typescript-eslint/no-explicit-any": "off",
@@ -23,6 +27,9 @@ const eslintConfig = [...nextCoreWebVitals, ...nextTypescript, {
     "react/display-name": "off",
     "react/prop-types": "off",
     "react-compiler/react-compiler": "off",
+    // Правило React Compiler из react-hooks 6+: ~13 мест с setState в эффекте (формы, журнал,
+    // конвертер). Правится по одному с проверкой в UI — до тех пор предупреждение, иначе lint в CI красный
+    "react-hooks/set-state-in-effect": "warn",
     
     // Next.js rules
     "@next/next/no-img-element": "off",

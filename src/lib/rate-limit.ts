@@ -83,6 +83,34 @@ export function rateLimitMiddleware(
   return ok ? null : tooMany(retryAfterSec, windowMs);
 }
 
+/**
+ * Лимит «только неудач» (логин по email): rateLimitBlocked проверяет, не набрал ли ключ
+ * max записей, и счётчик НЕ двигает; неудачу записывает rateLimitRecord, успех сбрасывает
+ * rateLimitReset. Обычный limit() для этого не годится — он считает и удачные попытки.
+ */
+export function rateLimitBlocked(key: string, maxRequests: number, windowMs: number): NextResponse | null {
+  cleanup();
+  const now = Date.now();
+  const entry = store.get(key);
+  if (!entry || now > entry.resetAt || entry.count < maxRequests) return null;
+  return tooMany(Math.max(Math.ceil((entry.resetAt - now) / 1000), 1), windowMs);
+}
+
+/** Записать одну попытку в окно ключа (окно стартует с первой записи). */
+export function rateLimitRecord(key: string, windowMs: number): void {
+  const now = Date.now();
+  const entry = store.get(key);
+  if (!entry || now > entry.resetAt) {
+    store.set(key, { count: 1, resetAt: now + windowMs });
+  } else {
+    entry.count++;
+  }
+}
+
+export function rateLimitReset(key: string): void {
+  store.delete(key);
+}
+
 /** Лимит по пользователю (мутации: фото, аватары, импорт, LLM…). */
 export function userRateLimit(
   req: NextRequest,

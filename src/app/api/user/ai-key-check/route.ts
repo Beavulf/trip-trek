@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireUser } from "@/lib/api-auth";
-import { resolveAiConfig, openaiChatUrl, maskKey, DEFAULT_AI_MODEL } from "@/lib/ai-key";
+import { resolveAiConfig, openaiChatUrl, checkProviderHost, maskKey, DEFAULT_AI_MODEL } from "@/lib/ai-key";
 import { userRateLimit } from "@/lib/rate-limit";
 
 // POST /api/user/ai-key-check — проверка ИИ-ключа (BYOK).
@@ -35,6 +35,18 @@ export async function POST(req: NextRequest) {
 
   const base = openaiChatUrl(cfg.baseUrl);
   const model = cfg.model ?? DEFAULT_AI_MODEL;
+
+  // Этот роут отдаёт юзеру начало ответа провайдера — без проверки хоста он стал бы
+  // читалкой внутренних https-сервисов (SSRF), поэтому закрытые адреса отсекаем до fetch
+  if (cfg.userBaseUrl) {
+    const host = await checkProviderHost(base);
+    if (!host.ok) {
+      return NextResponse.json({
+        ok: false,
+        error: `Адрес провайдера не подходит: ${host.error}. Нужен публичный https-адрес.`,
+      });
+    }
+  }
 
   try {
     const controller = new AbortController();

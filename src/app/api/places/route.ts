@@ -44,6 +44,9 @@ export async function POST(req: NextRequest) {
       status: "planned",
     },
   });
-  publish(tripId, "place:created", { placeName: place.name, userName: body.userName || "Кто-то" }, user!.id);
+  // Имя автора — с сервера, а не из тела запроса: иначе участник подписывал бы тосты и пуши чужим именем.
+  // Из БД, а не из JWT: после переименования в токене остаётся старое имя до перелогина
+  const author = await db.user.findUnique({ where: { id: user!.id }, select: { name: true } });
+  publish(tripId, "place:created", { placeName: place.name, userName: author?.name || "Кто-то" }, user!.id);
   return NextResponse.json(place);
 }
