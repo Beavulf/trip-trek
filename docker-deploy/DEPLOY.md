@@ -88,6 +88,18 @@ docker compose -f docker-deploy/docker-compose.yml up -d --build
 Миграции применяются entrypoint'ом автоматически. Данные и фото на именованных
 томах — `down/up` их не трогает (проверено критерием Phase 3/5).
 
+**Один раз после релиза, добавившего размеры фото** (`Photo.width/height`): у уже
+загруженных снимков их нет, и галерея с публичной страницей строят плитки без
+`aspect-ratio` (колонки прыгают, лишние картинки тянутся заранее). Скрипт дописывает
+размеры и недостающие миниатюры у старых снимков; ничего не удаляет, оригиналы не
+трогает, повторный запуск безопасен:
+
+```bash
+docker exec triptrek-app bun prisma/backfill-photos.ts          # сухой прогон: только отчёт
+docker exec triptrek-app bun prisma/backfill-photos.ts --apply  # записать
+# порциями, если снимков тысячи: --apply --limit=200
+```
+
 TLS и 80/443 обслуживает ОБЩИЙ Caddy guild-ledger (`/root/guild-ledger/Caddyfile`,
 upstream `triptrek-app:3000` по имени). Поэтому app обязан быть прикреплён к сети
 `supabase-network` — это закреплено в compose (`networks: caddy-shared` для app).

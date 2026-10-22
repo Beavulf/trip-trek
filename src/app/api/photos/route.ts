@@ -131,7 +131,7 @@ export async function POST(req: NextRequest) {
 
   // Единая политика хранилища: magic bytes, лимит 20MB, sharp-обработка
   // (EXIF/GPS выпиливаются), никакого raw-fallback
-  let urls: { url: string; thumbUrl?: string };
+  let urls: { url: string; thumbUrl?: string; width?: number; height?: number };
   try {
     urls = await storagePut({ data: Buffer.from(await file.arrayBuffer()), kind: "photo" });
   } catch (e) {
@@ -146,6 +146,10 @@ export async function POST(req: NextRequest) {
     data: {
       url: urls.url,
       thumbUrl: urls.thumbUrl ?? urls.url,
+      // Размеры файла → aspect-ratio плитки галереи: без них masonry считает каждую
+      // плитку заглушкой и подтягивает лишние картинки, а колонки прыгают на загрузке
+      width: urls.width ?? null,
+      height: urls.height ?? null,
       caption,
       dayId,
       tripId,

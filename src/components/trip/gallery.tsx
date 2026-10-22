@@ -6,7 +6,7 @@ import { useTripStore } from "@/lib/trip-store";
 import { focusOnMap } from "@/lib/map-bus";
 import { useAuth } from "@/hooks/use-auth";
 import { motion, useReducedMotion } from "framer-motion";
-import { Camera, Columns3, LayoutGrid, MapPin, Star } from "lucide-react";
+import { Camera, Columns3, LayoutGrid, Star } from "lucide-react";
 import dynamic from "next/dynamic";
 import { useState, useMemo } from "react";
 import { toast } from "sonner";
@@ -19,9 +19,15 @@ const PhotoLightbox = dynamic(() => import("./photo-lightbox").then((m) => m.Pho
   ssr: false,
 });
 import { MobileBottomSheet } from "./mobile-bottom-sheet";
+import { CompactTile, MasonryTile } from "./gallery-tile";
 
 // PhotoForm тянет exifr (~100 KB) — грузим только при открытии формы (аудит 2026-09-13)
 const PhotoForm = dynamic(() => import("./quick-add/PhotoForm").then((m) => m.PhotoForm), { ssr: false });
+
+// Сколько плиток рендерим за раз (+ «Показать ещё»)
+const PAGE_SIZE = 60;
+// Ступенчатый вход (framer-motion) — только у первых кадров
+const ANIMATED_TILES = 10;
 
 type Dimension = "day" | "city" | "person";
 type LayoutMode = "masonry" | "compact";
@@ -67,7 +73,12 @@ export function Gallery() {
   const [addOpen, setAddOpen] = useState(false);
   // Порционный рендер (аудит 2026-09-13): сотни motion-плиток на мобильном
   // блокировали поток на секунды; индексы slice сохраняются — лайтбокс не ломается
-  const [visibleCount, setVisibleCount] = useState(60);
+  // Лимит привязан к ключу фильтра: смена чипа/режима сама возвращает первую порцию, иначе
+  // после нескольких «Показать ещё» новый чип тащил бы в DOM сотни плиток разом. Без эффекта
+  // с setState — лишнего рендера с прежним лимитом нет.
+  const filterKey = `${dimension}|${chipValue}|${favOnly}`;
+  const [limit, setLimit] = useState({ key: filterKey, count: PAGE_SIZE });
+  const visibleCount = limit.key === filterKey ? limit.count : PAGE_SIZE;
 
   const all = useMemo(() => (Array.isArray(photos) ? photos : []), [photos]);
   const total = all.length;
@@ -245,18 +256,6 @@ export function Gallery() {
     setLightbox(null);
   };
 
-  // Плитка: фолбэк на оригинал, затем заглушка (thumb может отсутствовать/биться)
-  const imgFallback = (e: React.SyntheticEvent<HTMLImageElement>, photo: Photo) => {
-    const el = e.currentTarget;
-    if (photo.url && el.src !== photo.url && !el.src.endsWith(photo.url)) {
-      el.src = photo.url;
-      return;
-    }
-    el.style.visibility = "hidden";
-    const fallback = el.nextElementSibling as HTMLElement | null;
-    if (fallback) fallback.hidden = false;
-  };
-
   const heroTitle =
     total === 0
       ? "Плёнка пока пуста"
@@ -271,12 +270,6 @@ export function Gallery() {
   ]
     .filter(Boolean)
     .join(" · ");
-
-  const imgFallbackHidden = (p: Photo, aspect: string) => (
-    <div hidden className={cn("w-full place-items-center text-muted-foreground text-xs p-2", aspect)}>
-      Не удалось показать фото
-    </div>
-  );
 
   return (
     <div className="space-y-3 animate-fade-up pb-20">
@@ -332,7 +325,7 @@ export function Gallery() {
                       className="relative h-14 w-20 shrink-0 rounded-md overflow-hidden ring-1 ring-white/25 active:scale-95 transition-transform focus-visible:ring-2 focus-visible:ring-white/70"
                       aria-label={p.caption || `Фото ${i + 1}`}
                     >
-                      <img src={p.thumbUrl || p.url} alt="" className="w-full h-full object-cover" loading="lazy" />
+                      <img src={p.thumbUrl || p.url} alt="" className="w-full h-full object-cover" loading="lazy" decoding="async" />
                       {p.isFavorite && (
                         <Star className="absolute top-0.5 left-0.5 size-3 fill-yellow-300 text-yellow-300 drop-shadow" aria-hidden="true" />
                       )}
@@ -502,81 +495,20 @@ export function Gallery() {
       ) : layout === "masonry" ? (
         <div className="masonry-grid">
           {shown.map((photo, i) => (
-            <motion.button
+            <MasonryTile
               key={photo.id}
-              type="button"
-              onClick={() => setLightbox(i)}
-              // Ступенчатый вход сетки: первые ~10 кадров проявляются волной,
-              // остальные сразу — длинные галереи не ждут свою очередь
-              initial={reduceMotion || i > 9 ? false : { opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.28, delay: Math.min(i * 0.03, 0.28), ease: [0.22, 1, 0.36, 1] }}
-              className="masonry-item relative rounded-xl overflow-hidden bg-muted block w-full cursor-pointer active:scale-[0.98] transition-transform"
-            >
-              <img
-                src={photo.thumbUrl || photo.url}
-                alt={photo.caption || "Фото"}
-                className="w-full block bg-muted min-h-[120px] object-cover pointer-events-none"
-                loading="lazy"
-                decoding="async"
-                // Аспект из метаданных: без него колонки masonry пересобираются
-                // после декодирования каждой картинки — контент прыгает
-                style={
-                  photo.width && photo.height
-                    ? { aspectRatio: `${photo.width} / ${photo.height}` }
-                    : undefined
-                }
-                onError={(e) => imgFallback(e, photo)}
-              />
-              {imgFallbackHidden(photo, "min-h-[120px] grid")}
-              {photo.isFavorite && (
-                <span className="absolute top-1.5 left-1.5 size-6 rounded-full bg-black/50 grid place-items-center">
-                  <Star className="size-3.5 fill-yellow-300 text-yellow-300" aria-hidden="true" />
-                </span>
-              )}
-              {photo.user && (
-                <span
-                  className="absolute top-1.5 right-1.5 size-6 rounded-full grid place-items-center text-[10px] border border-white/50"
-                  style={{ background: photo.user.color }}
-                  title={photo.user.name}
-                >
-                  {photo.user.emoji}
-                </span>
-              )}
-              <span className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent p-2 flex flex-col gap-0.5 pointer-events-none text-left">
-                <span className="text-white/85 text-[10px] flex items-center gap-1 font-mono tracking-wide">
-                  <MapPin className="size-2.5" aria-hidden="true" />
-                  День {photo.day?.dayNumber}
-                  {photo.day?.city ? ` · ${photo.day.city}` : ""}
-                </span>
-                {photo.caption && <span className="text-white text-xs line-clamp-1">{photo.caption}</span>}
-              </span>
-            </motion.button>
+              photo={photo}
+              index={i}
+              animate={!reduceMotion && i < ANIMATED_TILES}
+              onOpen={setLightbox}
+            />
           ))}
         </div>
       ) : (
         /* Компактный режим: контактный лист 3×N — быстро просмотреть много кадров */
         <div className="grid grid-cols-3 gap-0.5">
           {shown.map((photo, i) => (
-            <button
-              key={photo.id}
-              type="button"
-              onClick={() => setLightbox(i)}
-              className="relative aspect-square overflow-hidden bg-muted active:scale-[0.97] transition-transform"
-              aria-label={photo.caption || "Фото"}
-            >
-              <img
-                src={photo.thumbUrl || photo.url}
-                alt={photo.caption || "Фото"}
-                className="w-full h-full object-cover pointer-events-none"
-                loading="lazy"
-                onError={(e) => imgFallback(e, photo)}
-              />
-              {imgFallbackHidden(photo, "absolute inset-0 grid")}
-              {photo.isFavorite && (
-                <Star className="absolute top-1 left-1 size-3.5 fill-yellow-300 text-yellow-300 drop-shadow" aria-hidden="true" />
-              )}
-            </button>
+            <CompactTile key={photo.id} photo={photo} index={i} onOpen={setLightbox} />
           ))}
         </div>
       )}
@@ -585,7 +517,7 @@ export function Gallery() {
         <div className="flex justify-center pt-2 pb-4">
           <button
             type="button"
-            onClick={() => setVisibleCount((n) => n + 60)}
+            onClick={() => setLimit({ key: filterKey, count: visibleCount + PAGE_SIZE })}
             className="inline-flex min-h-11 items-center gap-1.5 rounded-xl bg-secondary border border-border px-5 text-xs font-medium active:scale-95 transition-transform"
           >
             Показать ещё · осталось {filtered.length - shown.length} фото

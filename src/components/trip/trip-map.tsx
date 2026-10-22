@@ -6,7 +6,7 @@ import { useRoute, useCurrentTripId } from "@/hooks/use-trip";
 import { usePhotosGeo } from "@/hooks/trip/use-photos";
 import { useTripStore } from "@/lib/trip-store";
 import { CATEGORY_META, type Place, type Day, type Photo } from "@/lib/types";
-import { Marker, Popup, CircleMarker } from "react-leaflet";
+import { Marker, CircleMarker } from "react-leaflet";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   CheckCircle2,
@@ -41,7 +41,8 @@ import { resolveCityCoords, decodeCustomKey } from "@/lib/city-coords";
 import { peekMapFocus, ackMapFocus, subscribeMapFocus } from "@/lib/map-bus";
 import { RouteThreads } from "./map/route-threads";
 import { MapCanvas, type MapCanvasHandle } from "./map/canvas";
-import { makeIcon, makePhotoIcon, makeLocateIcon } from "./map/icons";
+import { makeIcon, makeLocateIcon } from "./map/icons";
+import { PhotoPins } from "./map/photo-pins";
 import { EmptyHero } from "./empty-hero";
 
 export default function TripMap({ active = true }: { active?: boolean }) {
@@ -373,10 +374,9 @@ export default function TripMap({ active = true }: { active?: boolean }) {
   };
 
   const visiblePlaces = filters.onlyPhotos ? [] : filtered;
-  const visiblePhotos =
-    filters.showPhotos && photosReady
-      ? (geoPhotos ?? []).filter((p) => p.lat != null && p.lng != null)
-      : [];
+  // Метки фото рисует PhotoPins: кластеры по экранной сетке и только то, что в кадре
+  // (раньше — по <Marker> на каждое из до 1000 геофото, все сразу)
+  const showPhotoPins = filters.showPhotos && photosReady && !!geoPhotos?.length;
 
   return (
     // Без animate-fade-up на корне: его animation-fill:both оставляет
@@ -432,17 +432,7 @@ export default function TripMap({ active = true }: { active?: boolean }) {
           )}
 
           {/* Фото-метки */}
-          {visiblePhotos.map((photo) => (
-            <Marker
-              key={`photo-${photo.id}`}
-              position={[photo.lat!, photo.lng!]}
-              icon={makePhotoIcon(photo.thumbUrl || photo.url)}
-            >
-              <Popup>
-                <PhotoPopupContent photo={photo} onOpenFullscreen={() => setFullscreenPhoto(photo)} />
-              </Popup>
-            </Marker>
-          ))}
+          {showPhotoPins && <PhotoPins photos={geoPhotos!} onOpenFullscreen={setFullscreenPhoto} />}
         </MapCanvas>
 
         {/* Верхняя плавающая строка: города + фильтры */}
@@ -781,31 +771,5 @@ function CityChip({
     >
       {children}
     </button>
-  );
-}
-
-/** Фото в попапе фото-метки */
-function PhotoPopupContent({ photo, onOpenFullscreen }: { photo: Photo; onOpenFullscreen: () => void }) {
-  return (
-    <div className="p-1 w-48">
-      {/* thumbnail, не оригинал: попап маленький, декодить full-size ради 192px — трата декодера и памяти */}
-      <img src={photo.thumbUrl || photo.url} alt={photo.caption || ""} className="w-full h-32 object-cover rounded-lg mb-1.5" />
-      {photo.caption && <div className="text-xs font-medium">{photo.caption}</div>}
-      {photo.address && (
-        <div className="text-[10px] text-muted-foreground flex items-center gap-0.5 mt-0.5">
-          <MapPin className="size-2.5" /> {photo.address.slice(0, 50)}
-        </div>
-      )}
-      <div className="text-[10px] text-muted-foreground mt-0.5">
-        {photo.user?.emoji} {photo.user?.name} · День {photo.day?.dayNumber}
-      </div>
-      <button
-        type="button"
-        onClick={onOpenFullscreen}
-        className="mt-1.5 w-full text-[10px] font-medium bg-primary/10 text-primary rounded-lg py-1.5 hover:bg-primary/20 transition-colors"
-      >
-        📷 На весь экран
-      </button>
-    </div>
   );
 }

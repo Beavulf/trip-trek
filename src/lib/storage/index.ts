@@ -26,6 +26,10 @@ export interface PutResult {
   url: string;
   /** Миниатюра (только kind=photo) */
   thumbUrl?: string;
+  /** Размеры сохранённого файла (после EXIF-поворота и ресайза, только kind=photo):
+   *  из них клиент строит aspect-ratio плитки, не дожидаясь загрузки картинки */
+  width?: number;
+  height?: number;
 }
 
 /** Ошибка политики хранения: httpStatus мапится маршрутом как есть. */
@@ -46,6 +50,11 @@ const MAX_BYTES: Record<StorageKind, number> = {
   feedback: 5 * 1024 * 1024,
 };
 
+// Кап декодируемых пикселей: байтовый лимит не ловит «распаковочную бомбу» (небольшой
+// JPEG с астрономическими размерами); 100 Mpx с запасом покрывает камеры телефонов
+// (48 MP), но не 268 Mpx дефолта sharp
+const MAX_INPUT_PIXELS = 100_000_000;
+
 type SniffedType = "jpeg" | "png" | "webp" | "gif" | "heic" | "heif";
 
 /** Определение формата по магическим байтам. */
@@ -65,13 +74,39 @@ function sniff(buf: Buffer): SniffedType | null {
   return null;
 }
 
-async function toJpeg(data: Buffer, kind: StorageKind): Promise<{ full: Buffer; thumb?: Buffer }> {
+/**
+ * Миниатюра плитки галереи: 480px по длинной стороне. Единая политика для загрузки и
+ * backfill-скрипта (prisma/backfill-photos.ts). rotate() для вторично обработанного
+ * файла — no-op (EXIF уже выпилен), для старого оригинала — обязательный поворот.
+ */
+export async function makeThumb(source: Buffer | string): Promise<Buffer> {
+  return sharp(source, { failOn: "none", limitInputPixels: MAX_INPUT_PIXELS })
+    .rotate()
+    .resize(480, 480, { fit: "inside", withoutEnlargement: true })
+    .jpeg({ quality: 70 })
+    .toBuffer();
+}
+
+/**
+ * Размеры картинки «как её видит человек». У sharp.metadata() width/height — до
+ * EXIF-поворота: у кадров с ориентацией 5–8 (телефон в руке боком) стороны надо
+ * поменять местами, иначе aspect-ratio плитки будет перевёрнутым.
+ */
+export async function imageDisplaySize(
+  source: Buffer | string
+): Promise<{ width: number; height: number } | null> {
+  const m = await sharp(source, { failOn: "none", limitInputPixels: MAX_INPUT_PIXELS }).metadata();
+  if (!m.width || !m.height) return null;
+  return (m.orientation ?? 1) >= 5 ? { width: m.height, height: m.width } : { width: m.width, height: m.height };
+}
+
+async function toJpeg(
+  data: Buffer,
+  kind: StorageKind
+): Promise<{ full: Buffer; thumb?: Buffer; width?: number; height?: number }> {
   let base;
   try {
-    // limitInputPixels — кап декодированных пикселей: байтовый лимит выше не ловит
-    // «распаковочную бомбу» (небольшой JPEG с астрономическими размерами);
-    // 100 Mpx с запасом покрывает камеры телефонов (48 MP), но не 268 Mpx дефолта
-    base = sharp(data, { failOn: "none", limitInputPixels: 100_000_000 }).rotate(); // ориентация из EXIF
+    base = sharp(data, { failOn: "none", limitInputPixels: MAX_INPUT_PIXELS }).rotate(); // ориентация из EXIF
   } catch {
     throw new StorageError("Не удалось декодировать изображение", 415);
   }
@@ -99,17 +134,15 @@ async function toJpeg(data: Buffer, kind: StorageKind): Promise<{ full: Buffer; 
         .toBuffer();
       return { full };
     }
-    // photo: полноразмерная версия + миниатюра
-    const full = await base
+    // photo: полноразмерная версия + миниатюра. info — размеры уже после поворота и
+    // ресайза, отдельный decode ради metadata() не нужен
+    const { data: full, info } = await base
       .clone()
       .resize(1600, 1600, { fit: "inside", withoutEnlargement: true })
       .jpeg({ quality: 80, mozjpeg: true })
-      .toBuffer();
-    const thumb = await sharp(full)
-      .resize(480, 480, { fit: "inside", withoutEnlargement: true })
-      .jpeg({ quality: 70 })
-      .toBuffer();
-    return { full, thumb };
+      .toBuffer({ resolveWithObject: true });
+    const thumb = await makeThumb(full);
+    return { full, thumb, width: info.width, height: info.height };
   } catch (e) {
     // Чаще всего — HEIC, который не собирается с libheif в текущем sharp
     console.error(`[storage] sharp convert failed (kind=${kind}):`, e);
@@ -134,7 +167,7 @@ export async function put(input: PutInput): Promise<PutResult> {
     throw new StorageError(`Файл слишком большой (макс ${MAX_BYTES[kind] / 1024 / 1024}MB)`, 413);
   }
 
-  const { full, thumb } = await toJpeg(data, kind);
+  const { full, thumb, width, height } = await toJpeg(data, kind);
 
   const root = UPLOADS_ROOT();
   const relDir = kind === "avatar" ? "avatars" : kind === "feedback" ? "feedback" : ".";
@@ -163,22 +196,34 @@ export async function put(input: PutInput): Promise<PutResult> {
   const urlPrefix = kind === "avatar" ? "/uploads/avatars" : kind === "feedback" ? "/uploads/feedback" : "/uploads";
   const result: PutResult = { url: `${urlPrefix}/${fileName}` };
   if (thumb && thumbName) result.thumbUrl = `${urlPrefix}/${thumbName}`;
+  if (width && height) {
+    result.width = width;
+    result.height = height;
+  }
   return result;
 }
 
 /**
- * Удалить файл по его публичному URL. Принимаются только /uploads/-пути
- * (защита от path traversal); отсутствующий файл — не ошибка.
+ * Абсолютный путь файла по его публичному URL. Принимаются только /uploads/-пути;
+ * единственное место защиты от path traversal — remove() и backfill ходят через него.
  */
-export async function remove(url: string): Promise<void> {
+export function uploadPath(url: string): string {
   if (typeof url !== "string" || !url.startsWith("/uploads/")) {
-    throw new StorageError("Можно удалять только файлы из /uploads/", 400);
+    throw new StorageError("Допустимы только файлы из /uploads/", 400);
   }
   const root = path.resolve(UPLOADS_ROOT());
   const target = path.resolve(root, url.slice("/uploads/".length));
   if (target !== root && !target.startsWith(root + path.sep)) {
     throw new StorageError("Путь вне хранилища", 400);
   }
+  return target;
+}
+
+/**
+ * Удалить файл по его публичному URL (см. uploadPath); отсутствующий файл — не ошибка.
+ */
+export async function remove(url: string): Promise<void> {
+  const target = uploadPath(url);
   try {
     await unlink(target);
   } catch (e) {
