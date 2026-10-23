@@ -61,8 +61,11 @@ interface SettingsData {
   aiKeyTail: string | null;
   aiBaseUrl: string;
   aiModel: string;
+  demoTripToken: string;
+  contactTelegram: string;
   appConfig: {
     registrationEnabled: boolean;
+    inviteRequired: boolean;
     freeTripLimit: number;
     freeMemberLimit: number;
     aiAlertCallsPerDay: number;
@@ -138,6 +141,9 @@ export function SettingsTab() {
 
   // === Приложение ===
   const [registrationEnabled, setRegistrationEnabled] = useState(true);
+  const [inviteRequired, setInviteRequired] = useState(false);
+  const [demoToken, setDemoToken] = useState("");
+  const [contactTg, setContactTg] = useState("");
   const [freeTripLimit, setFreeTripLimit] = useState("1");
   const [freeMemberLimit, setFreeMemberLimit] = useState("5");
   const [aiAlertCalls, setAiAlertCalls] = useState("0");
@@ -154,10 +160,13 @@ export function SettingsTab() {
         settings.aiBaseUrl,
         settings.aiModel,
         settings.appConfig.registrationEnabled,
+        settings.appConfig.inviteRequired,
         settings.appConfig.freeTripLimit,
         settings.appConfig.freeMemberLimit,
         settings.appConfig.aiAlertCallsPerDay,
         settings.appConfig.aiAlertTokensPerDay,
+        settings.demoTripToken,
+        settings.contactTelegram,
       ].join("|")
     : "";
   if (settings && settingsKey !== syncKey) {
@@ -166,6 +175,9 @@ export function SettingsTab() {
     setBaseUrl(settings.aiBaseUrl ?? "");
     setModel(settings.aiModel ?? "");
     setRegistrationEnabled(settings.appConfig.registrationEnabled);
+    setInviteRequired(settings.appConfig.inviteRequired);
+    setDemoToken(settings.demoTripToken ?? "");
+    setContactTg(settings.contactTelegram ?? "");
     setFreeTripLimit(String(settings.appConfig.freeTripLimit));
     setFreeMemberLimit(String(settings.appConfig.freeMemberLimit));
     setAiAlertCalls(String(settings.appConfig.aiAlertCallsPerDay));
@@ -203,11 +215,14 @@ export function SettingsTab() {
         body: JSON.stringify({
           appConfig: {
             registrationEnabled,
+            inviteRequired,
             freeTripLimit: Number(freeTripLimit) || 0,
             freeMemberLimit: Number(freeMemberLimit) || 1,
             aiAlertCallsPerDay: Number(aiAlertCalls) || 0,
             aiAlertTokensPerDay: Number(aiAlertTokens) || 0,
           },
+          demoTripToken: demoToken,
+          contactTelegram: contactTg,
         }),
       });
       const b = await r.json().catch(() => ({}));
@@ -272,6 +287,9 @@ export function SettingsTab() {
 
   const appDirty =
     registrationEnabled !== settings.appConfig.registrationEnabled ||
+    inviteRequired !== settings.appConfig.inviteRequired ||
+    demoToken !== (settings.demoTripToken ?? "") ||
+    contactTg !== (settings.contactTelegram ?? "") ||
     freeTripLimit !== String(settings.appConfig.freeTripLimit) ||
     freeMemberLimit !== String(settings.appConfig.freeMemberLimit) ||
     aiAlertCalls !== String(settings.appConfig.aiAlertCallsPerDay) ||
@@ -410,6 +428,16 @@ export function SettingsTab() {
           <Switch checked={registrationEnabled} onCheckedChange={setRegistrationEnabled} aria-label="Регистрация открыта" />
         </div>
 
+        <div className="flex items-center justify-between gap-4 rounded-xl border border-border p-3">
+          <div className="min-w-0">
+            <div className="text-sm font-medium">Регистрация по инвайт-кодам</div>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Новым аккаунтам нужен код со вкладки «Инвайты». Коды поездок это не затрагивает.
+            </p>
+          </div>
+          <Switch checked={inviteRequired} onCheckedChange={setInviteRequired} aria-label="Регистрация по инвайт-кодам" />
+        </div>
+
         <div className="grid grid-cols-2 gap-2">
           <label className="space-y-1">
             <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Поездок у Free</span>
@@ -459,6 +487,15 @@ export function SettingsTab() {
         <p className="text-[10px] text-muted-foreground -mt-1">
           0 = алерт выключен. При превышении порога юзером придёт уведомление в колокольчик (не чаще раза в сутки).
         </p>
+
+        <label className="space-y-1 block">
+          <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Демо-поездка для лендинга (токен /p/…)</span>
+          <input value={demoToken} onChange={(e) => setDemoToken(e.target.value)} placeholder="cxxxxxxxxxxxxxxxxx" className={inputCls} />
+        </label>
+        <label className="space-y-1 block">
+          <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Телеграм для связи (лендинг и вход)</span>
+          <input value={contactTg} onChange={(e) => setContactTg(e.target.value)} placeholder="@username" className={inputCls} />
+        </label>
 
         <button
           type="button"

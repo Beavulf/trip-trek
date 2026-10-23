@@ -14,7 +14,7 @@ export async function GET(req: NextRequest) {
   const [settings, appConfig] = await Promise.all([
     db.appSettings.findUnique({
       where: { id: "app" },
-      select: { aiApiKey: true, aiBaseUrl: true, aiModel: true, selfUpgradeEnabled: true },
+      select: { aiApiKey: true, aiBaseUrl: true, aiModel: true, selfUpgradeEnabled: true, demoTripToken: true, contactTelegram: true },
     }),
     getAppConfig(),
   ]);
@@ -24,13 +24,16 @@ export async function GET(req: NextRequest) {
     aiBaseUrl: settings?.aiBaseUrl ?? "",
     aiModel: settings?.aiModel ?? "",
     selfUpgradeEnabled: settings?.selfUpgradeEnabled ?? false,
+    demoTripToken: settings?.demoTripToken ?? "",
+    contactTelegram: settings?.contactTelegram ?? "",
     appConfig,
   });
 }
 
 // PUT /api/admin/settings — два независимых блока:
 //   ИИ:      { aiApiKey: "sk-..." | null, aiBaseUrl, aiModel }
-//   Прилож.: { appConfig: { registrationEnabled?, freeTripLimit?, freeMemberLimit? } }
+//   Прилож.: { appConfig: { registrationEnabled?, inviteRequired?, freeTripLimit?,
+//              freeMemberLimit? }, demoTripToken?, contactTelegram? }
 export async function PUT(req: NextRequest) {
   const { user: admin, response } = await requireAdmin(req);
   if (response) return response;
@@ -43,6 +46,7 @@ export async function PUT(req: NextRequest) {
     selfUpgradeEnabled?: boolean;
     appConfig?: {
       registrationEnabled?: boolean;
+      inviteRequired?: boolean;
       freeTripLimit?: number;
       freeMemberLimit?: number;
       aiAlertCallsPerDay?: number;
@@ -56,10 +60,13 @@ export async function PUT(req: NextRequest) {
     aiModel?: string | null;
     selfUpgradeEnabled?: boolean;
     registrationEnabled?: boolean;
+    inviteRequired?: boolean;
     freeTripLimit?: number;
     freeMemberLimit?: number;
     aiAlertCallsPerDay?: number;
     aiAlertTokensPerDay?: number;
+    demoTripToken?: string | null;
+    contactTelegram?: string | null;
   } = {};
 
   let aiTouched = false;
@@ -107,6 +114,13 @@ export async function PUT(req: NextRequest) {
       data.registrationEnabled = appConfig.registrationEnabled;
       appTouched = true;
     }
+    if (appConfig.inviteRequired !== undefined) {
+      if (typeof appConfig.inviteRequired !== "boolean") {
+        return NextResponse.json({ error: "inviteRequired: boolean" }, { status: 400 });
+      }
+      data.inviteRequired = appConfig.inviteRequired;
+      appTouched = true;
+    }
     for (const key of ["freeTripLimit", "freeMemberLimit", "aiAlertCallsPerDay", "aiAlertTokensPerDay"] as const) {
       const v = appConfig[key];
       if (v !== undefined) {
@@ -119,6 +133,19 @@ export async function PUT(req: NextRequest) {
         data[key] = v;
         appTouched = true;
       }
+    }
+  }
+
+  // Витрина лендинга: не «правила приложения», поэтому не в appConfig, но лог тот же
+  for (const field of ["demoTripToken", "contactTelegram"] as const) {
+    const v = (body as Record<string, unknown>)[field];
+    if (v !== undefined) {
+      if (v !== null && typeof v !== "string") {
+        return NextResponse.json({ error: `${field}: строка или null` }, { status: 400 });
+      }
+      const trimmed = typeof v === "string" ? v.trim().slice(0, 200) : "";
+      data[field] = trimmed || null;
+      appTouched = true;
     }
   }
 
@@ -143,6 +170,7 @@ export async function PUT(req: NextRequest) {
   if (appTouched) {
     await logAdmin(admin!.id, "settings.app", { type: "settings", label: "Приложение" }, {
       registrationEnabled: settings.registrationEnabled,
+      inviteRequired: settings.inviteRequired,
       freeTripLimit: settings.freeTripLimit,
       freeMemberLimit: settings.freeMemberLimit,
       aiAlertCallsPerDay: settings.aiAlertCallsPerDay,
