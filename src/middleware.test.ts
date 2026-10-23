@@ -6,11 +6,12 @@ const req = (path: string, cookie?: string) =>
   new NextRequest(`http://localhost${path}`, { headers: cookie ? { cookie } : {} });
 
 describe("middleware: гость", () => {
-  it("корень показывает лендинг: rewrite на /landing, URL и статус не меняются", () => {
+  it("корень уводит на /login без callbackUrl: лендинг — отдельная страница /landing, корень не подменяет", () => {
     const res = middleware(req("/"));
-    expect(res.status).toBe(200);
-    expect(res.headers.get("location")).toBeNull(); // rewrite, а не redirect — ссылка из био остаётся чистой
-    expect(res.headers.get("x-middleware-rewrite")).toContain("/landing");
+    expect(res.status).toBe(307);
+    expect(new URL(res.headers.get("location")!).pathname).toBe("/login");
+    expect(new URL(res.headers.get("location")!).searchParams.has("callbackUrl")).toBe(false);
+    expect(res.headers.get("x-middleware-rewrite")).toBeNull();
   });
 
   it("/split/* уводит на /login и запоминает адрес (с query) для возврата после входа", () => {
@@ -69,7 +70,7 @@ describe("middleware: «Сочтёмся» открывается в после�
 });
 
 describe("middleware: скоуп", () => {
-  it("matcher покрывает корень и «Сочтёмся»", () => {
+  it("matcher покрывает корень и «Сочтёмся»; /landing в него не входит, поэтому открыта гостю", () => {
     expect(config.matcher).toEqual(["/", "/split", "/split/:path*"]);
   });
 });

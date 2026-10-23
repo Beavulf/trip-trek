@@ -215,7 +215,7 @@ User ──< SplitMember >── SplitGroup ──< SplitExpense ──< SplitSh
   действуют дефолты кода (`src/lib/app-config.ts`): registrationEnabled,
   freeTripLimit=1, freeMemberLimit=5, общий ключ ИИ. Бета-гейты и витрина лендинга:
   `inviteRequired` (регистрация только по коду), `demoTripToken` («Живой пример»
-  на лендинге — токен публичной поездки), `contactTelegram` (футер лендинга и /login).
+  на лендинге — токен публичной поездки), `contactTelegram` (примечание в конце лендинга и /login).
 - **InviteCode** — инвайт-код приложения (бета-доступ на регистрацию аккаунта;
   не путать с `Trip.inviteCode` — он приглашает в конкретную поездку). `usedCount` —
   авторитетный счётчик использований; слот занимается атомарным условным

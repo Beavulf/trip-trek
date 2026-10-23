@@ -2,9 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Контролируемый публичный доступ в бету: инвайт-коды на регистрацию, лендинг на `/` для гостя, метрика и контакт для связи.
+**Goal:** Контролируемый публичный доступ в бету: инвайт-коды на регистрацию, страница-презентация `/landing`, метрика и контакт для связи.
 
-**Architecture:** Новая модель `InviteCode` + флаг `inviteRequired` в `AppSettings`; слот кода занимается атомарным условным `updateMany` в существующем `POST /api/auth/register`. Лендинг — server component `/landing`, которую middleware показывает гостю на `/` через `rewrite` (SPA и `page.tsx` не трогаем). Витринные данные (демо-поездка, телеграм) редактируются в админке через `AppSettings`.
+**Architecture:** Новая модель `InviteCode` + флаг `inviteRequired` в `AppSettings`; слот кода занимается атомарным условным `updateMany` в существующем `POST /api/auth/register`. Лендинг — отдельная публичная server-страница `/landing` (презентация для ссылки из TikTok); корень и middleware не трогаем — гость на `/` по-прежнему уходит на `/login`. Витринные данные (демо-поездка, телеграм) редактируются в админке через `AppSettings`.
 
 **Tech Stack:** Next.js 16 App Router (custom `server.ts` под Bun), Prisma 6 + PostgreSQL, TanStack Query 5, Tailwind 4, vitest.
 
@@ -1109,43 +1109,22 @@ git commit -m "feat(beta): поле инвайт-кода и контакт по
 
 ---
 
-### Task 10: Лендинг + rewrite в middleware
+### Task 10: Лендинг `/landing`
+
+> **Как сделано (факт):** лендинг не по наброску ниже. Разметка — `src/app/landing/landing-view.tsx` (чистая, без хуков), стили — `landing.css`, картинки — webp-скриншоты и фото в `public/landing/`, SVG-плейсхолдеры не создавались. `page.tsx` читает `getPublicShowcase()` и монтирует `<YandexMetrika />`; разбор полей витрины в ссылки — `showcase.ts` (+ тест). Шаги 2–3 ниже — исходный набросок, для справки.
 
 **Files:**
-- Modify: `src/middleware.ts`
 - Create: `src/app/landing/page.tsx`
 - Create: `src/components/analytics/yandex-metrika.tsx` (лендинг его импортирует — создаём здесь)
 - Create: `public/landing/route.svg`, `public/landing/planner.svg`, `public/landing/budget.svg`, `public/landing/gallery.svg`, `public/landing/together.svg`, `public/landing/trip.svg` (плейсхолдеры — владелец заменит скриншотами)
 
 **Interfaces:**
 - Consumes: `getPublicShowcase()` (Task 3).
-- Produces: гость на `/` видит лендинг (URL остаётся `/`), вошедшие — SPA; `/landing` доступна напрямую; `<YandexMetrika />` (Task 11 монтирует его ещё и на `/login`).
+- Produces: публичная страница `/landing` (доступна всем, вошедшим тоже); `/` и `/login` ведут себя как раньше; `<YandexMetrika />` (Task 11 монтирует его ещё и на `/login`).
 
-- [ ] **Step 1: middleware.ts — rewrite вместо redirect**
+- [ ] **Step 1: middleware.ts не меняем**
 
-Заменить тело файла целиком:
-
-```ts
-import { NextResponse, type NextRequest } from "next/server";
-
-// Гость на корне видит лендинг: rewrite, а не redirect — URL остаётся "/"
-// (ссылка из био TikTok выглядит чисто), а SPA-бандл гостю не уходит.
-// Вошедшие попадают в приложение как раньше; клиентский useEffect в
-// src/app/page.tsx остаётся запасным путём на случай протухшей cookie.
-export function middleware(req: NextRequest) {
-  const hasSession =
-    req.cookies.has("next-auth.session-token") ||
-    req.cookies.has("__Secure-next-auth.session-token");
-  if (!hasSession) {
-    return NextResponse.rewrite(new URL("/landing", req.url));
-  }
-  return NextResponse.next();
-}
-
-export const config = {
-  matcher: ["/"],
-};
-```
+Текущий matcher (`/`, `/split`, `/split/:path*`) не включает `/landing`, значит страница открыта без сессии. Гость на `/` по-прежнему получает редирект на `/login` — на лендинг его не переписываем. Ничего править не нужно; проверка — в Step 5.
 
 - [ ] **Step 2: Плейсхолдеры скриншотов**
 
@@ -1379,13 +1358,13 @@ export function YandexMetrika() {
 
 - [ ] **Step 5: Проверка**
 
-Run: `bun server.ts`; в инкогнито открыть `http://localhost:3000/` — лендинг по адресу `/`, войти → SPA; открыть `/landing` напрямую — работает; при заданном `demoTripToken` в админке виден блок «Живой пример»; с `NEXT_PUBLIC_YANDEX_METRIKA_ID=11111111 bun server.ts` в Network есть запрос к `mc.yandex.ru`, без переменной — нет.
+Run: `bun server.ts`; в инкогнито открыть `http://localhost:3000/` — редирект на `/login` (как раньше), а `/landing` открывается без входа; вошедшим `/landing` тоже доступна; при заданном `demoTripToken` в админке виден блок «Живой пример»; с `NEXT_PUBLIC_YANDEX_METRIKA_ID=11111111 bun server.ts` в Network есть запрос к `mc.yandex.ru`, без переменной — нет.
 
 - [ ] **Step 6: Commit — вместе с Task 11**
 
 ```bash
-git add src/middleware.ts src/app/landing public/landing src/components/analytics/yandex-metrika.tsx
-git commit -m "feat(beta): лендинг для гостей на / — rewrite в middleware"
+git add src/app/landing public/landing src/components/analytics/yandex-metrika.tsx
+git commit -m "feat(beta): страница-презентация /landing"
 ```
 
 ---
@@ -1432,7 +1411,7 @@ git commit -m "feat(beta): Яндекс.Метрика на входе и env в
 
 - [ ] **Step 2: docs/glossary.md**
 
-Термин «Инвайт-код приложения» — «код бета-доступа на регистрацию аккаунта; не путать с инвайт-кодом поездки (Trip.inviteCode), который даёт вход в конкретную поездку». В «Фичи главного экрана»/структуру — пункт «Лендинг» (`/landing`, гость видит его на `/` через rewrite в middleware).
+Термин «Инвайт-код приложения» — «код бета-доступа на регистрацию аккаунта; не путать с инвайт-кодом поездки (Trip.inviteCode), который даёт вход в конкретную поездку». В «Фичи главного экрана»/структуру — пункт «Лендинг» (`/landing`, открытая презентация для ссылки из TikTok; корень для гостя по-прежнему ведёт на `/login`).
 
 - [ ] **Step 3: AGENTS.md**
 
@@ -1446,7 +1425,7 @@ Expected: lint 0 ошибок; тесты зелёные; production-сборк�
 - [ ] **Step 5: Полный смоук на dev-сервере (`bun server.ts`)**
 
 1. Админка: создать код `maxUses=1`; включить `inviteRequired`.
-2. Инкогнито: `/` → лендинг; «Начать планирование» → регистрация без кода → 400-тост; с кодом → вход, юзер создан, `usedCount=1`.
+2. Инкогнито: `/` → `/login`, `/landing` открывается без входа; «У меня есть код» → регистрация без кода → 400-тост; с кодом → вход, юзер создан, `usedCount=1`.
 3. Повторная регистрация с тем же кодом → «Код недействителен или все места по нему заняты».
 4. Выключить `inviteRequired` → поле кода исчезло, регистрация проходит без кода.
 5. `/login` показывает телеграм-контакт из настроек; ссылка `t.me` корректна.
@@ -1464,7 +1443,7 @@ git commit -m "docs(beta): инвайт-коды и лендинг в архит
 
 1. Сгенерировать коды кампании (например, один код `maxUses=100`).
 2. Выложить 1–2 поездки публичными, токен демо — в настройки.
-3. Прод-проверки: регистрация с кодом/без, сброс пароля письмом, OG-превью ссылки из био.
+3. Прод-проверки: регистрация с кодом/без, сброс пароля письмом, OG-превью ссылки `/landing` из био; `/` гостем уходит на `/login`.
 4. Включить `inviteRequired`, задать `contactTelegram`.
 5. Метрика: завести счётчик, задать `NEXT_PUBLIC_YANDEX_METRIKA_ID`, пересобрать контейнер, поднять `CACHE_VERSION` в `public/sw.js`.
-6. Заменить SVG-плейсхолдеры в `public/landing/` на реальные скриншоты (пути в `FEATURES` — на `.png`).
+6. Скриншоты `public/landing/shot-*.webp` сняты со шрифтом Inter вместо системного; перед широкой рекламой переснять и обновлять после заметных правок интерфейса.
