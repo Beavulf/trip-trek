@@ -32,6 +32,7 @@
 | `auth/custom-session` | GET | 🌐 | — | текущая сессия (учитывает `passwordChangedAt`); в `user` входит `onboardingCompletedAt` (null = показать обучение) |
 | `auth/custom-signout` | POST | 🌐 | — | выход (снимает cookie) |
 | `auth/register` | POST | 🌐 | 3/ч/IP | регистрация + welcome-письмо; проверяет `registrationEnabled`; email канонизируется (trim+lowercase); при `inviteRequired` требует инвайт-код приложения (`InviteCode`, слот атомарный); вступление в поездку — только через `trips/join` по коду |
+| `auth/register-options` | GET | 🌐 | 60/мин/IP | публично; режим регистрации + контакт для связи (`registrationEnabled`, `inviteRequired`, `contactTelegram`) — для формы /login |
 | `auth/forgot-password` | POST | 🌐 | 5/ч/IP (+3/ч/email) | одноразовый токен (sha256 в БД, TTL 60 мин) + письмо; анти-перечисление |
 | `auth/reset-password` | POST | 🌐 | 20/ч/IP | сброс по токену, инвалидирует сессии |
 | `user` | GET, PATCH | U | — | свой профиль (имя, emoji, цвет, аватар, ИИ-ключ); PATCH принимает также `onboardingCompleted`: true — обучение пройдено/пропущено, false — сброс («Пройти заново» в профиле); `paymentDetails` (строка ≤300 / null) — «куда возвращать долги», видят участники поездок в `GET /api/trip` participants |
@@ -179,6 +180,7 @@ In-memory, сбрасываются рестартом контейнера (ADR
 
 - login — 20 / 15 мин / IP (все попытки) и 8 неудач / 15 мин / email (успешный вход сбрасывает)
 - register — 3 / ч / IP
+- register-options — 60 / мин / IP (страница логина дёргает его на каждом заходе)
 - forgot-password — 5 / ч / IP и 3 / ч / email
 - reset-password — 20 / ч / IP
 - join (GET-превью и POST) — 30 / мин / IP, POST ещё и 30 / мин / user
