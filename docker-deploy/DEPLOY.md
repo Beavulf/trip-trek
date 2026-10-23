@@ -31,7 +31,9 @@ cd docker-deploy
 cp .env.example .env
 # заполнить: NEXTAUTH_SECRET (openssl rand -hex 32), POSTGRES_PASSWORD (openssl rand -hex 16),
 #            DOMAIN, ACME_EMAIL, NEXTAUTH_URL=https://<домен>, WS_ALLOWED_ORIGINS=https://<домен>,
-#            (опц.) VAPID_* (npx web-push generate-vapid-keys), OPENAI_API_KEY
+#            (опц.) VAPID_* (npx web-push generate-vapid-keys), OPENAI_API_KEY,
+#            NEXT_PUBLIC_YANDEX_METRIKA_ID (номер счётчика Метрики; без переменной
+#            метрика не подключается)
 docker compose up -d --build
 ```
 
@@ -48,7 +50,9 @@ docker compose logs app --tail=50           # нет ошибок, есть "mig
 ```
 
 Затем в браузере: регистрация → создание поездки → загрузка фото → (с второго
-устройства) вход по инвайт-коду и живое обновление галереи.
+устройства) вход по инвайт-коду и живое обновление галереи. Проверить сброс
+пароля письмом (SMTP). При обновлении раздачи поднимать `CACHE_VERSION` в
+`public/sw.js` — иначе клиенты останутся на старой версии PWA.
 
 ## 2. Перенос данных владельца (SQLite → Postgres, один раз)
 

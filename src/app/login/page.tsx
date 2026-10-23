@@ -7,6 +7,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Loader2, UserPlus, LogIn, Globe } from "lucide-react";
 import { toast } from "sonner";
 import { PasswordField } from "@/components/auth/password-field";
+import { YandexMetrika } from "@/components/analytics/yandex-metrika";
 
 const EMOJIS = ["🦊", "🐻", "🐼", "🦁", "🐯", "🐨", "🐸", "🐵", "🦉", "🐧", "🦄", "🐲"];
 const COLORS = ["#f97316", "#06b6d4", "#8b5cf6", "#ec4899", "#10b981", "#f59e0b", "#ef4444", "#3b82f6"];
@@ -101,6 +102,8 @@ function LoginPageContent() {
 
   return (
     <main className="min-h-screen flex items-center justify-center p-4 bg-gradient-to-br from-orange-500 via-rose-500 to-violet-600 relative overflow-hidden">
+      <YandexMetrika />
+
       {/* Декоративные круги */}
       <div className="absolute top-10 left-10 size-32 rounded-full bg-white/5 blur-2xl" />
       <div className="absolute bottom-20 right-10 size-40 rounded-full bg-white/5 blur-3xl" />
