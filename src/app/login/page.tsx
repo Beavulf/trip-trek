@@ -3,7 +3,8 @@
 import { Suspense, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
-import { Loader2, UserPlus, LogIn, Globe } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import { Loader2, UserPlus, LogIn, Globe, Ticket } from "lucide-react";
 import { toast } from "sonner";
 import { PasswordField } from "@/components/auth/password-field";
 
@@ -23,10 +24,22 @@ function LoginPageContent() {
   const [mode, setMode] = useState<"login" | "register">(
     searchParams.get("mode") === "register" ? "register" : "login"
   );
+  // Режим регистрации с сервера: закрыта ли регистрация и нужен ли инвайт-код
+  const { data: regOptions } = useQuery({
+    queryKey: ["register-options"],
+    queryFn: async (): Promise<{ registrationEnabled: boolean; inviteRequired: boolean; contactTelegram: string | null }> => {
+      const r = await fetch("/api/auth/register-options");
+      if (!r.ok) throw new Error("fetch failed");
+      return r.json();
+    },
+    staleTime: 60_000,
+  });
+  const inviteRequired = mode === "register" && regOptions?.inviteRequired === true;
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [passwordConfirm, setPasswordConfirm] = useState("");
   const [name, setName] = useState("");
+  const [invite, setInvite] = useState("");
   const [emoji, setEmoji] = useState("🦊");
   const [color, setColor] = useState("#f97316");
   const [loading, setLoading] = useState(false);
@@ -37,6 +50,10 @@ function LoginPageContent() {
       return;
     }
     if (mode === "register") {
+      if (inviteRequired && !invite.trim()) {
+        toast.error("Введите инвайт-код");
+        return;
+      }
       // Та же политика, что на сервере (register API): не даём юзеру
       // заполнить форму и получить ошибку на кнопке
       if (password.length < 8 || !/[a-z]/i.test(password) || !/\d/.test(password)) {
@@ -55,7 +72,7 @@ function LoginPageContent() {
         const res = await fetch("/api/auth/register", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email, password, name, emoji, color }),
+          body: JSON.stringify({ email, password, name, emoji, color, inviteCode: invite || undefined }),
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error);
@@ -184,6 +201,24 @@ function LoginPageContent() {
                 />
               </div>
             )}
+            {mode === "register" && inviteRequired && (
+              <div>
+                <label className="text-xs text-muted-foreground mb-1 block">Инвайт-код</label>
+                <input
+                  type="text"
+                  value={invite}
+                  onChange={(e) => setInvite(e.target.value)}
+                  placeholder="Из описания видео или от друга"
+                  autoCapitalize="characters"
+                  className="w-full rounded-xl border border-input bg-background px-3 py-2.5 text-sm uppercase"
+                />
+              </div>
+            )}
+            {mode === "register" && regOptions && regOptions.registrationEnabled === false && (
+              <p className="text-[11px] text-amber-600 dark:text-amber-400">
+                Регистрация новых аккаунтов сейчас закрыта.
+              </p>
+            )}
             <div>
               <label className="text-xs text-muted-foreground mb-1 block">Email</label>
               <input
@@ -253,6 +288,22 @@ function LoginPageContent() {
               ? "Нет аккаунта? Нажми «Регистрация»"
               : "Уже есть аккаунт? Нажми «Вход»"}
           </p>
+
+          {regOptions?.contactTelegram && (
+            <p className="text-[11px] text-muted-foreground text-center mt-3">
+              Застряли? Напишите нам:{" "}
+              <a
+                href={regOptions.contactTelegram.startsWith("@")
+                  ? `https://t.me/${regOptions.contactTelegram.slice(1)}`
+                  : regOptions.contactTelegram}
+                target="_blank"
+                rel="noreferrer"
+                className="text-primary hover:underline"
+              >
+                {regOptions.contactTelegram}
+              </a>
+            </p>
+          )}
 
           {/* Демо-аккаунты — только в dev: в проде известных логинов быть не должно */}
           {process.env.NODE_ENV !== "production" && (
