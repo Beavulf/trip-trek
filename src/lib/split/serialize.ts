@@ -68,6 +68,7 @@ export function paymentDTO(p: SplitPayment): SplitPaymentDTO {
     amountCents: p.amountCents,
     paidOn: dateToKey(p.paidOn),
     note: p.note,
+    expenseId: p.expenseId,
     createdById: p.createdById,
     createdAt: p.createdAt.toISOString(),
   };

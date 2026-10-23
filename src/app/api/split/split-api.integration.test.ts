@@ -321,6 +321,56 @@ describe.skipIf(!URL_ENV)("API «Сочтёмся» (Postgres)", () => {
     expect((await bad("USD")).status).toBe(400);
   });
 
+  it("перевод за конкретную трату: привязка сохраняется, чужую трату привязать нельзя, удаление траты оставляет перевод", async () => {
+    const mkExpense = async (gid: string, payer: string, members: string[], description: string) => {
+      const res = await expensesRoute.POST(
+        req(`/groups/${gid}/expenses`, "alice", {
+          method: "POST",
+          body: { amountCents: 6000, description, category: "internet", paidById: payer, spentOn: today, splitMode: "equal", split: members.map((memberId) => ({ memberId })) },
+        }),
+        ctx({ groupId: gid })
+      );
+      expect(res.status).toBe(201);
+      return json(res);
+    };
+    const internet = await mkExpense(groupId, aliceM, [aliceM, borisM], "Интернет");
+
+    // Трата из ДРУГОЙ группы: привязать к ней перевод нельзя
+    const otherRes = await groupsRoute.POST(req("/groups", "alice", { method: "POST", body: { name: "Чужая", currency: "BYN" } }));
+    const other = await json(otherRes);
+    const foreign = await mkExpense(other.id, other.myMemberId, [other.myMemberId], "Чужая трата");
+    const pay = (body: Json) => paymentsRoute.POST(req(`/groups/${groupId}/payments`, "boris", { method: "POST", body }), ctx({ groupId }));
+    const base = { fromId: borisM, toId: aliceM, amountCents: 3000, paidOn: today };
+    expect((await pay({ ...base, expenseId: foreign.id, clientKey: "k-exp-bad" })).status).toBe(400);
+    expect((await pay({ ...base, expenseId: "нет-такой", clientKey: "k-exp-bad2" })).status).toBe(400);
+
+    // Нормальный перевод «за интернет»: ответ и журнал знают, за что
+    const ok = await pay({ ...base, expenseId: internet.id, note: "За «Интернет»", clientKey: "k-exp-ok" });
+    expect(ok.status).toBe(201);
+    const payment = await json(ok);
+    expect(payment.expenseId).toBe(internet.id);
+    const ledger = await json(await ledgerRoute.GET(req(`/groups/${groupId}/ledger`, "alice"), ctx({ groupId })));
+    expect(ledger.payments.find((p: Json) => p.id === payment.id)?.expenseId).toBe(internet.id);
+    const act = await json(await activityRoute.GET(req(`/groups/${groupId}/activity`, "alice"), ctx({ groupId })));
+    expect(act.items.find((a: Json) => a.type === "payment.created" && a.data.expenseId === internet.id)?.data.description).toBe("Интернет");
+
+    // На балансе пары это обычный перевод: долг Бориса за интернет (30 Br) закрыт
+    const { pairNet } = await import("@/lib/split/balances");
+    expect(pairNet(ledger.expenses.filter((e: Json) => e.id === internet.id), ledger.payments.filter((p: Json) => p.id === payment.id), borisM, aliceM)).toBe(0);
+
+    // Трату удалили — перевод остаётся (деньги отданы), но связь снята
+    expect((await expenseRoute.DELETE(req(`/groups/${groupId}/expenses/${internet.id}`, "alice", { method: "DELETE" }), ctx({ groupId, expenseId: internet.id }))).status).toBe(200);
+    const after = await json(await ledgerRoute.GET(req(`/groups/${groupId}/ledger`, "alice"), ctx({ groupId })));
+    const kept = after.payments.find((p: Json) => p.id === payment.id);
+    expect(kept).toBeTruthy();
+    expect(kept.expenseId).toBeNull();
+
+    // Уборка: тест не должен менять балансы остальных сценариев
+    await db.splitPayment.delete({ where: { id: payment.id } });
+    const { deleteSplitGroup } = await import("@/lib/split/server");
+    await deleteSplitGroup(other.id);
+  });
+
   it("аренда в долларах: каждый период пересчитывается по курсу на момент создания; без курсов — не создаётся", async () => {
     const d = new Date();
     d.setUTCMonth(d.getUTCMonth() - 1);

@@ -1,7 +1,8 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Loader2, MoreHorizontal, Pause, Pencil, Play, Plus, Repeat, Settings, Trash2, UserPlus, UserRoundPlus } from "lucide-react";
+import Link from "next/link";
+import { KeyRound, Layers, Loader2, MoreHorizontal, Pause, Pencil, Play, Plus, Repeat, Settings, Trash2, UserPlus, UserRoundPlus } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { describeActivity } from "@/lib/split/activity-text";
@@ -22,6 +23,8 @@ interface Props {
   onNewRecurring: () => void;
   onEditRecurring: (r: SplitRecurringDTO) => void;
   onSettings: () => void;
+  onNewGroup: () => void;
+  onJoinByCode: () => void;
 }
 
 function Section({ title, action, children }: { title: string; action?: React.ReactNode; children: React.ReactNode }) {
@@ -36,7 +39,7 @@ function Section({ title, action, children }: { title: string; action?: React.Re
   );
 }
 
-export function MoreTab({ model, onInvite, onAddMember, onEditMember, onNewRecurring, onEditRecurring, onSettings }: Props) {
+export function MoreTab({ model, onInvite, onAddMember, onEditMember, onNewRecurring, onEditRecurring, onSettings, onNewGroup, onJoinByCode }: Props) {
   const group = model.group!;
   const today = useMemo(() => localDateKey(), []);
   const toggle = useToggleRecurring(group.id);
@@ -173,6 +176,23 @@ export function MoreTab({ model, onInvite, onAddMember, onEditMember, onNewRecur
             })}
           </ul>
         )}
+      </Section>
+
+      {/* Выход к другим группам: «Сочтёмся» открывается сразу в последней, хаб не на виду */}
+      <Section title="Другие группы">
+        <div className="grid grid-cols-1 gap-2">
+          <Link href="/split?all=1" className="inline-flex items-center justify-center gap-1.5 min-h-11 px-4 rounded-xl bg-secondary text-foreground border border-border text-sm font-medium hover:bg-accent active:scale-[0.98] transition-[transform,background-color]">
+            <Layers className="size-4" /> Все группы
+          </Link>
+          <div className="grid grid-cols-2 gap-2">
+            <SecondaryButton onClick={onNewGroup}>
+              <Plus className="size-4" /> Новая группа
+            </SecondaryButton>
+            <SecondaryButton onClick={onJoinByCode}>
+              <KeyRound className="size-4" /> По коду
+            </SecondaryButton>
+          </div>
+        </div>
       </Section>
 
       <Section title="Журнал">

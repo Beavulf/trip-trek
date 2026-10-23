@@ -73,6 +73,15 @@ describe("filterExpenses", () => {
   it("«касаются меня» — платил я или есть доля", () => expect(ids({ scope: "involved" })).toEqual(["1", "2"]));
   it("«платил я»", () => expect(ids({ scope: "paid" })).toEqual(["2"]));
   it("категория", () => expect(ids({ category: "internet" })).toEqual(["3"]));
+  it("«Должен я»: платил другой и моя доля ещё не закрыта переводом за эту трату", () => {
+    const owe = (linked?: Map<string, { expenseId: string | null; fromId: string; toId: string; amountCents: number }[]>) =>
+      filterExpenses(list, { ...NO_FILTER, scope: "owe" }, "a", linked).map((e) => e.id);
+    expect(owe()).toEqual(["1"]); // такси: платил b, доля a = 3000
+    // перевод за эту трату закрыл долю — из «должен» уходит
+    expect(owe(new Map([["1", [{ expenseId: "1", fromId: "a", toId: "b", amountCents: 3000 }]]]))).toEqual([]);
+    // частичный перевод — остаётся
+    expect(owe(new Map([["1", [{ expenseId: "1", fromId: "a", toId: "b", amountCents: 1000 }]]]))).toEqual(["1"]);
+  });
   it("isFiltering", () => {
     expect(isFiltering(NO_FILTER)).toBe(false);
     expect(isFiltering({ ...NO_FILTER, query: " " })).toBe(false);

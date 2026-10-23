@@ -71,7 +71,10 @@ export function describeActivity(a: SplitActivityDTO, nameOf: (id: string) => st
     case "expense.deleted":
       return { emoji: "🗑️", text: `${who} удалил(а) ${title(d.description)} · ${money(d.amountCents)}` };
     case "payment.created":
-      return { emoji: "✅", text: `${who} записал(а) перевод: ${nameOf(s(d.fromId))} → ${nameOf(s(d.toId))} · ${money(d.amountCents)}` };
+      return {
+        emoji: "✅",
+        text: `${who} записал(а) перевод: ${nameOf(s(d.fromId))} → ${nameOf(s(d.toId))} · ${money(d.amountCents)}${d.description ? ` за ${title(d.description)}` : ""}`,
+      };
     case "payment.deleted":
       return { emoji: "↩️", text: `${who} отменил(а) перевод: ${nameOf(s(d.fromId))} → ${nameOf(s(d.toId))} · ${money(d.amountCents)}` };
     case "member.added":

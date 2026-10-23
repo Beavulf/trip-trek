@@ -144,6 +144,8 @@ export interface NormalizedPayment {
   amountCents: number;
   paidOn: string;
   note: string | null;
+  /** За какую трату перевод (существование в группе проверяет роут) */
+  expenseId: string | null;
   clientKey: string | null;
 }
 
@@ -167,6 +169,7 @@ export function normalizePaymentInput(
     amountCents,
     paidOn: date.value,
     note: cleanText(body.note, MAX_NOTE),
+    expenseId: str(body.expenseId) || null,
     clientKey: key ? key.slice(0, 100) : null,
   });
 }

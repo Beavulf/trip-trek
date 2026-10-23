@@ -13,12 +13,14 @@ import { forgetLastGroup, rememberLastGroup } from "@/lib/split/last-group";
 import { useGroupModel } from "@/hooks/split/use-group-model";
 import { useSplitSocket } from "@/hooks/split/use-split-socket";
 import { BalanceTab } from "./balance-tab";
+import { CreateGroupSheet } from "./create-group-sheet";
 import { ExpenseDetailSheet } from "./expense-detail-sheet";
 import { ExpenseSheet } from "./expense-sheet";
 import { ExpensesTab } from "./expenses-tab";
 import { GroupSettingsSheet } from "./group-settings-sheet";
 import { InsightsTab } from "./insights-tab";
 import { InviteSheet } from "./invite-sheet";
+import { JoinByCodeSheet } from "./join-by-code-sheet";
 import { MemberSheet } from "./member-sheet";
 import { MoreTab } from "./more-tab";
 import { SettleSheet, type SettleTarget } from "./settle-sheet";
@@ -72,6 +74,8 @@ export function GroupScreen({
   const [memberOpen, setMemberOpen] = useState(false);
   const [memberEdit, setMemberEdit] = useState<SplitMemberDTO | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [newGroupOpen, setNewGroupOpen] = useState(false);
+  const [joinCodeOpen, setJoinCodeOpen] = useState(false);
 
   // Сразу после создания группы (?invite=1) показываем приглашение — группа без людей бесполезна
   const wantsInvite = params.get("invite") === "1";
@@ -219,6 +223,8 @@ export function GroupScreen({
             onNewRecurring={openNewRecurring}
             onEditRecurring={openEditRecurring}
             onSettings={() => setSettingsOpen(true)}
+            onNewGroup={() => setNewGroupOpen(true)}
+            onJoinByCode={() => setJoinCodeOpen(true)}
           />
         )}
       </motion.div>
@@ -236,10 +242,22 @@ export function GroupScreen({
       </motion.button>
 
       <ExpenseSheet open={expenseOpen} onOpenChange={setExpenseOpen} model={model} editing={editing} recurring={editingRecurring} presetRepeat={presetRepeat} />
-      <ExpenseDetailSheet expense={detail} onClose={() => setDetail(null)} onEdit={openEdit} model={model} />
+      <ExpenseDetailSheet
+        expense={detail}
+        onClose={() => setDetail(null)}
+        onEdit={openEdit}
+        onSettle={(t) => {
+          // Карточка траты закрывается, поверх списка открывается запись перевода «за эту трату»
+          setDetail(null);
+          openSettle(t);
+        }}
+        model={model}
+      />
       <SettleSheet open={settleOpen} onOpenChange={setSettleOpen} model={model} target={settleTarget} />
       <InviteSheet open={inviteOpen} onOpenChange={setInviteOpen} group={group} />
       <MemberSheet open={memberOpen} onOpenChange={setMemberOpen} model={model} member={memberEdit} onLeft={() => { forgetLastGroup(groupId); router.replace("/split?all=1"); }} />
+      <CreateGroupSheet open={newGroupOpen} onOpenChange={setNewGroupOpen} />
+      <JoinByCodeSheet open={joinCodeOpen} onOpenChange={setJoinCodeOpen} />
       <GroupSettingsSheet open={settingsOpen} onOpenChange={setSettingsOpen} model={model} onDeleted={() => { forgetLastGroup(groupId); router.replace("/split?all=1"); }} />
     </SplitShell>
   );

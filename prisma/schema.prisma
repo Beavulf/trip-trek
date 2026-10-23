@@ -637,6 +637,7 @@ model SplitExpense {
   createdBy SplitMember     @relation("SplitExpenseAuthor", fields: [createdById], references: [id], onDelete: NoAction)
   recurring SplitRecurring? @relation(fields: [recurringId], references: [id], onDelete: SetNull)
   shares    SplitShare[]
+  payments  SplitPayment[]
 
   @@unique([recurringId, recurringPeriod])
   @@index([groupId, spentOn])
@@ -669,6 +670,9 @@ model SplitPayment {
   paidOn      DateTime @db.Date
   note        String?
   createdById String // кто записал: любая сторона пары
+  // Перевод «за конкретную трату»: помечает долю в ней оплаченной (на балансе пары это обычный перевод).
+  // Трату удалили — перевод остаётся (деньги были отданы), связь обнуляется
+  expenseId   String?
   // Ключ идемпотентности от клиента: двойной тап / повтор запроса не создаёт второй перевод
   clientKey   String?
   createdAt   DateTime @default(now())
@@ -677,9 +681,11 @@ model SplitPayment {
   from      SplitMember @relation("SplitPaymentFrom", fields: [fromId], references: [id], onDelete: NoAction)
   to        SplitMember @relation("SplitPaymentTo", fields: [toId], references: [id], onDelete: NoAction)
   createdBy SplitMember @relation("SplitPaymentAuthor", fields: [createdById], references: [id], onDelete: NoAction)
+  expense   SplitExpense? @relation(fields: [expenseId], references: [id], onDelete: SetNull)
 
   @@unique([groupId, clientKey])
   @@index([groupId, paidOn])
+  @@index([expenseId])
 }
 
 // === Повторяющаяся трата (аренда, интернет, подписка): создаётся лениво при чтении группы ===

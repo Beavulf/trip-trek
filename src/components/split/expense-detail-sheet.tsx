@@ -1,10 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import { Loader2, Pencil, Repeat, Trash2 } from "lucide-react";
+import { Check, HandCoins, Loader2, Pencil, Repeat, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { SPLIT_CATEGORIES, categoryOf } from "@/lib/split/categories";
 import { dayLabel, localDateKey } from "@/lib/split/dates";
+import { expenseSettlement } from "@/lib/split/expense-settle";
 import { itemsFromExpense } from "@/lib/split/expense-form";
 import { myStake } from "@/lib/split/expense-view";
 import { formatRate } from "@/lib/split/fx";
@@ -13,6 +14,7 @@ import type { SplitExpenseDTO } from "@/lib/split/types";
 import { useDeleteExpense, useSaveExpense } from "@/hooks/split/use-split";
 import type { GroupModel } from "@/hooks/split/use-group-model";
 import { MobileBottomSheet } from "@/components/trip/mobile-bottom-sheet";
+import type { SettleTarget } from "./settle-sheet";
 import { MemberAvatar, Money, SecondaryButton, balanceTone } from "./ui";
 import { cn } from "@/lib/utils";
 
@@ -20,12 +22,14 @@ interface Props {
   expense: SplitExpenseDTO | null;
   onClose: () => void;
   onEdit: (e: SplitExpenseDTO) => void;
+  /** «Перевёл(а)» / «Получил(а)» по доле в этой трате: открывает запись перевода, привязанного к трате */
+  onSettle: (target: SettleTarget) => void;
   model: GroupModel;
 }
 
 const MODE_LABEL = { equal: "поровну", exact: "точные суммы", shares: "по долям", percent: "в процентах" } as const;
 
-export function ExpenseDetailSheet({ expense, onClose, onEdit, model }: Props) {
+export function ExpenseDetailSheet({ expense, onClose, onEdit, onSettle, model }: Props) {
   // Последняя открытая трата держится, пока шит уезжает вниз: иначе содержимое схлопывается раньше анимации
   const [shown, setShown] = useState<SplitExpenseDTO | null>(expense);
   if (expense && expense !== shown) setShown(expense);
@@ -71,6 +75,12 @@ export function ExpenseDetailSheet({ expense, onClose, onEdit, model }: Props) {
       toast.error("Не удалось удалить", { description: err instanceof Error ? err.message : "Попробуй ещё раз" });
     }
   };
+
+  // Кто уже вернул свою долю: только переводы, привязанные именно к этой трате
+  const settlement = e
+    ? expenseSettlement(e, model.payments.filter((p) => p.expenseId === e.id))
+    : [];
+  const linkedCount = e ? model.payments.filter((p) => p.expenseId === e.id).length : 0;
 
   const cat = e ? SPLIT_CATEGORIES[categoryOf(e.category)] : null;
   const stake = e ? myStake(e, group.myMemberId) : null;
@@ -147,15 +157,54 @@ export function ExpenseDetailSheet({ expense, onClose, onEdit, model }: Props) {
             <ul className="rounded-xl border border-border divide-y divide-border">
               {e.shares.map((s) => {
                 const m = model.membersById.get(s.memberId);
+                const st = settlement.find((x) => x.memberId === s.memberId);
+                const iAmDebtor = s.memberId === group.myMemberId;
+                const iAmPayer = e.paidById === group.myMemberId;
+                const canMark = !!st && st.remainingCents > 0 && (iAmDebtor || iAmPayer);
                 return (
-                  <li key={s.memberId} className="flex items-center gap-2.5 px-3 min-h-11 text-sm">
-                    {m && <MemberAvatar member={m} className="size-6" />}
-                    <span className="flex-1 truncate">
-                      {s.memberId === group.myMemberId ? "Я" : (m?.name ?? "Бывший участник")}
-                      {e.splitMode === "shares" && s.weight ? <span className="ml-1.5 text-xs text-muted-foreground">{s.weight} дол.</span> : null}
-                      {e.splitMode === "percent" && s.weight ? <span className="ml-1.5 text-xs text-muted-foreground">{s.weight / 100}%</span> : null}
-                    </span>
-                    <Money cents={s.cents} currency={group.currency} className="font-medium" />
+                  <li key={s.memberId} className="px-3 py-2 text-sm">
+                    <div className="flex items-center gap-2.5 min-h-8">
+                      {m && <MemberAvatar member={m} className="size-6" />}
+                      <span className="flex-1 truncate">
+                        {s.memberId === group.myMemberId ? "Я" : (m?.name ?? "Бывший участник")}
+                        {e.splitMode === "shares" && s.weight ? <span className="ml-1.5 text-xs text-muted-foreground">{s.weight} дол.</span> : null}
+                        {e.splitMode === "percent" && s.weight ? <span className="ml-1.5 text-xs text-muted-foreground">{s.weight / 100}%</span> : null}
+                      </span>
+                      <Money cents={s.cents} currency={group.currency} className="font-medium" />
+                    </div>
+                    {/* Доля того, кто платил не он: оплачена ли, сколько осталось, кнопка отметки перевода */}
+                    {st && (
+                      <div className="mt-1 flex items-center gap-2 pl-8.5 text-xs">
+                        {st.remainingCents === 0 ? (
+                          <span className={cn("inline-flex items-center gap-1 font-medium", balanceTone(1))}>
+                            <Check className="size-3.5" aria-hidden /> оплачено
+                          </span>
+                        ) : (
+                          <span className="text-muted-foreground tabular-nums">
+                            {st.paidCents > 0 ? `оплачено ${formatCents(st.paidCents, group.currency)}, ` : ""}осталось{" "}
+                            <b className="text-foreground">{formatCents(st.remainingCents, group.currency)}</b>
+                          </span>
+                        )}
+                        {canMark && (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              onSettle({
+                                fromId: s.memberId,
+                                toId: e.paidById,
+                                cents: st.remainingCents,
+                                expenseId: e.id,
+                                forLabel: e.description,
+                              })
+                            }
+                            className="ml-auto inline-flex items-center gap-1.5 min-h-9 px-3 rounded-lg bg-primary text-primary-foreground font-semibold active:scale-95 transition-transform"
+                          >
+                            <HandCoins className="size-3.5" aria-hidden />
+                            {iAmDebtor ? "Перевёл(а)" : "Получил(а)"}
+                          </button>
+                        )}
+                      </div>
+                    )}
                   </li>
                 );
               })}
@@ -186,6 +235,11 @@ export function ExpenseDetailSheet({ expense, onClose, onEdit, model }: Props) {
               </SecondaryButton>
             )}
           </div>
+          {confirming && linkedCount > 0 && (
+            <p className="text-[11px] text-amber-600 dark:text-amber-400 text-center">
+              К этой трате привязано переводов: {linkedCount}. Они останутся в расчётах (деньги уже отданы), но перестанут относиться к трате.
+            </p>
+          )}
           <p className="text-[11px] text-muted-foreground text-center">Любой участник может править траты — все изменения видны в журнале группы.</p>
         </div>
       )}

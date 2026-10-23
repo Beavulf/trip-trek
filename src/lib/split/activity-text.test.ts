@@ -63,4 +63,10 @@ describe("describeActivity", () => {
     );
     expect(l.text).toBe("Аня изменил(а) «Аренда»: исходная сумма 500\u00a0$ → в валюте группы");
   });
+
+  it("перевод за трату называет её", () => {
+    expect(describeActivity(act("payment.created", { fromId: "b", toId: "a", amountCents: 2000, description: "Интернет" }), nameOf, "USD").text).toBe(
+      "Аня записал(а) перевод: Борис → Аня · 20\u00a0$ за «Интернет»"
+    );
+  });
 });

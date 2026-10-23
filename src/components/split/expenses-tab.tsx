@@ -14,6 +14,7 @@ import {
   type ExpenseFilter,
   type ExpenseScope,
 } from "@/lib/split/expense-view";
+import { myExpenseState, paymentsByExpense, type PaymentLink } from "@/lib/split/expense-settle";
 import { formatCents } from "@/lib/split/money";
 import type { SplitExpenseDTO } from "@/lib/split/types";
 import { isTmpId } from "@/hooks/split/use-split";
@@ -25,15 +26,18 @@ const PAGE = 40;
 
 const SCOPES: { value: ExpenseScope; label: string }[] = [
   { value: "all", label: "Все" },
+  { value: "owe", label: "Должен(на) я" },
   { value: "involved", label: "Меня касаются" },
   { value: "paid", label: "Платил(а) я" },
 ];
 
-function ExpenseRow({ e, model, onOpen }: { e: SplitExpenseDTO; model: GroupModel; onOpen: (e: SplitExpenseDTO) => void }) {
+function ExpenseRow({ e, model, linked, onOpen }: { e: SplitExpenseDTO; model: GroupModel; linked: Map<string, PaymentLink[]>; onOpen: (e: SplitExpenseDTO) => void }) {
   const group = model.group!;
   const cat = SPLIT_CATEGORIES[categoryOf(e.category)];
   const payer = model.membersById.get(e.paidById);
   const stake = myStake(e, group.myMemberId);
+  // Сколько из моей доли / из чужих долей ещё не вернули переводами «за эту трату» (перевод без привязки долю не закрывает)
+  const settle = myExpenseState(e, linked.get(e.id), group.myMemberId);
   const saving = isTmpId(e.id);
   const sharers = e.shares.length;
 
@@ -64,17 +68,29 @@ function ExpenseRow({ e, model, onOpen }: { e: SplitExpenseDTO; model: GroupMode
       </span>
       <span className="shrink-0 text-right">
         <span className="block text-sm font-semibold tabular-nums">{formatCents(e.amountCents, group.currency)}</span>
-        <span className={cn("block text-[11px] tabular-nums", saving ? "text-muted-foreground" : stake.kind === "lent" ? balanceTone(1) : stake.kind === "borrowed" ? balanceTone(-1) : "text-muted-foreground")}>
-          {saving
-            ? "Сохраняется…"
-            : stake.kind === "lent"
-              ? `тебе ${formatCents(stake.cents, group.currency, { sign: true })}`
-              : stake.kind === "borrowed"
-                ? `ты ${formatCents(-stake.cents, group.currency)}`
-                : stake.kind === "self"
-                  ? "за себя"
-                  : "тебя нет"}
-        </span>
+        {(() => {
+          // Подпись под суммой: что это значит лично для меня и закрыто ли переводом за эту трату
+          let text = "тебя нет";
+          let tone = "text-muted-foreground";
+          if (saving) text = "Сохраняется…";
+          else if (stake.kind === "lent" && settle.kind === "lent") {
+            if (settle.remainingCents > 0) {
+              text = `тебе ${formatCents(settle.remainingCents, group.currency, { sign: true })}`;
+              tone = balanceTone(1);
+            } else {
+              text = "вернули ✓";
+            }
+          } else if (stake.kind === "borrowed" && settle.kind === "owe") {
+            if (settle.remainingCents > 0) {
+              text = `ты ${formatCents(-settle.remainingCents, group.currency)}`;
+              tone = balanceTone(-1);
+            } else {
+              text = "оплачено ✓";
+              tone = balanceTone(1);
+            }
+          } else if (stake.kind === "self") text = "за себя";
+          return <span className={cn("block text-[11px] tabular-nums", tone)}>{text}</span>;
+        })()}
       </span>
     </button>
   );
@@ -97,7 +113,8 @@ export function ExpensesTab({
   const [categoryOpen, setCategoryOpen] = useState(false);
   const today = useMemo(() => localDateKey(), []);
 
-  const filtered = useMemo(() => filterExpenses(model.expenses, filter, group.myMemberId), [model.expenses, filter, group.myMemberId]);
+  const linked = useMemo(() => paymentsByExpense(model.payments), [model.payments]);
+  const filtered = useMemo(() => filterExpenses(model.expenses, filter, group.myMemberId, linked), [model.expenses, filter, group.myMemberId, linked]);
   const shown = filtered.slice(0, limit);
   const days = useMemo(() => groupExpensesByDay(shown, today), [shown, today]);
   const usedCategories = useMemo(() => [...new Set(model.expenses.map((e) => categoryOf(e.category)))], [model.expenses]);
@@ -186,7 +203,7 @@ export function ExpensesTab({
               </div>
               <div className="rounded-2xl bg-card border border-border p-1">
                 {d.items.map((e) => (
-                  <ExpenseRow key={e.id} e={e} model={model} onOpen={onOpen} />
+                  <ExpenseRow key={e.id} e={e} model={model} linked={linked} onOpen={onOpen} />
                 ))}
               </div>
             </section>

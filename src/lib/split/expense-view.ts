@@ -1,5 +1,6 @@
 import { dayLabel } from "./dates";
 import { categoryOf } from "./categories";
+import { myExpenseState, type PaymentLink } from "./expense-settle";
 import type { SplitExpenseDTO } from "./types";
 
 // Представление списка трат: «моя часть» в каждой строке, группы по дням, поиск и фильтры.
@@ -43,7 +44,7 @@ export function groupExpensesByDay(expenses: SplitExpenseDTO[], todayKey: string
   return [...groups.values()];
 }
 
-export type ExpenseScope = "all" | "involved" | "paid";
+export type ExpenseScope = "all" | "involved" | "paid" | "owe";
 
 export interface ExpenseFilter {
   query: string;
@@ -55,11 +56,21 @@ export const NO_FILTER: ExpenseFilter = { query: "", scope: "all", category: nul
 
 export const isFiltering = (f: ExpenseFilter) => f.query.trim() !== "" || f.scope !== "all" || f.category !== null;
 
-export function filterExpenses(expenses: SplitExpenseDTO[], f: ExpenseFilter, myId: string): SplitExpenseDTO[] {
+/** `linked` — переводы за траты (paymentsByExpense): «Должен я» = доля в трате ещё не закрыта переводом за неё. */
+export function filterExpenses(
+  expenses: SplitExpenseDTO[],
+  f: ExpenseFilter,
+  myId: string,
+  linked?: Map<string, PaymentLink[]>
+): SplitExpenseDTO[] {
   const q = f.query.trim().toLowerCase();
   return expenses.filter((e) => {
     if (f.category && categoryOf(e.category) !== f.category) return false;
     if (f.scope === "paid" && e.paidById !== myId) return false;
+    if (f.scope === "owe") {
+      const st = myExpenseState(e, linked?.get(e.id), myId);
+      if (st.kind !== "owe" || st.remainingCents <= 0) return false;
+    }
     if (f.scope === "involved" && e.paidById !== myId && !e.shares.some((s) => s.memberId === myId)) return false;
     if (q && !`${e.description} ${e.note ?? ""}`.toLowerCase().includes(q)) return false;
     return true;

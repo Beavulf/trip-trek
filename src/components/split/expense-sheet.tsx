@@ -2,7 +2,7 @@
 
 import { useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Check, Loader2, Minus, Plus, Repeat, StickyNote } from "lucide-react";
+import { Check, ChevronDown, Loader2, Minus, Plus, Repeat, StickyNote } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { SPLIT_CATEGORIES, suggestCategory } from "@/lib/split/categories";
@@ -100,6 +100,7 @@ function ExpenseFormBody({
   const [description, setDescription] = useState(seed?.description ?? "");
   const [category, setCategory] = useState(seed?.category ?? "groceries");
   const categoryTouched = useRef(!!seed);
+  const [categoryOpen, setCategoryOpen] = useState(false);
   const [paidById, setPaidById] = useState(seed?.paidById ?? group.myMemberId);
   const [dayOfMonth, setDayOfMonth] = useState(recurring?.dayOfMonth ?? Number(today.slice(8, 10)));
   const [spentOn, setSpentOn] = useState(editing?.spentOn ?? today);
@@ -311,31 +312,30 @@ function ExpenseFormBody({
         )}
       </div>
 
-      {/* Категория */}
+      {/* Категория — одна кнопка и список: прокручивать ряд чипов влево-вправо неудобно */}
       <div>
         <div className="text-xs text-muted-foreground mb-1">Категория</div>
-        <div className="flex gap-1.5 overflow-x-auto no-scrollbar -mx-1 px-1 pb-0.5">
-          {Object.entries(SPLIT_CATEGORIES).map(([key, c]) => (
-            <button
-              key={key}
-              type="button"
-              aria-pressed={category === key}
-              onClick={() => {
-                categoryTouched.current = true;
-                setCategory(key);
-              }}
-              className={cn(
-                "shrink-0 inline-flex items-center gap-1.5 min-h-9 px-3 rounded-full border text-sm font-medium transition-colors active:scale-95",
-                category === key
-                  ? "bg-primary/10 border-primary/40 text-foreground"
-                  : "border-border text-muted-foreground hover:text-foreground hover:border-primary/30"
-              )}
-            >
-              <span aria-hidden>{c.emoji}</span>
-              {c.label}
-            </button>
-          ))}
-        </div>
+        <button
+          type="button"
+          aria-haspopup="dialog"
+          onClick={() => setCategoryOpen(true)}
+          className="w-full flex items-center gap-3 rounded-xl border border-input bg-background px-3 min-h-12 text-left active:scale-[0.99] transition-transform"
+        >
+          <span className="size-8 rounded-lg grid place-items-center text-lg shrink-0" style={{ background: `${SPLIT_CATEGORIES[category]?.color ?? "#64748b"}22` }} aria-hidden>
+            {SPLIT_CATEGORIES[category]?.emoji ?? "💸"}
+          </span>
+          <span className="flex-1 font-medium">{SPLIT_CATEGORIES[category]?.label ?? "Прочее"}</span>
+          <ChevronDown className="size-4 text-muted-foreground shrink-0" aria-hidden />
+        </button>
+        <CategorySheet
+          open={categoryOpen}
+          onOpenChange={setCategoryOpen}
+          value={category}
+          onPick={(key) => {
+            categoryTouched.current = true;
+            setCategory(key);
+          }}
+        />
       </div>
 
       {/* Кто заплатил */}
@@ -643,5 +643,50 @@ function GroupPicker({ currentId }: { currentId: string }) {
         ▾
       </span>
     </label>
+  );
+}
+
+/** Список категорий: два столбца, крупные цели нажатия; поверх шита траты (выше по z-index). */
+function CategorySheet({
+  open,
+  onOpenChange,
+  value,
+  onPick,
+}: {
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  value: string;
+  onPick: (key: string) => void;
+}) {
+  return (
+    <MobileBottomSheet open={open} onOpenChange={onOpenChange} title="Категория" zIndexClass="z-[110]" maxWidthClass="sm:max-w-sm">
+      <ul className="grid grid-cols-2 gap-2">
+        {Object.entries(SPLIT_CATEGORIES).map(([key, c]) => {
+          const active = key === value;
+          return (
+            <li key={key}>
+              <button
+                type="button"
+                aria-pressed={active}
+                onClick={() => {
+                  onPick(key);
+                  onOpenChange(false);
+                }}
+                className={cn(
+                  "w-full flex items-center gap-2.5 rounded-xl border px-3 min-h-14 text-left text-sm font-medium transition-colors active:scale-[0.97]",
+                  active ? "border-primary/50 bg-primary/10" : "border-border hover:bg-accent/60"
+                )}
+              >
+                <span className="size-9 rounded-lg grid place-items-center text-lg shrink-0" style={{ background: `${c.color}22` }} aria-hidden>
+                  {c.emoji}
+                </span>
+                <span className="flex-1 leading-tight">{c.label}</span>
+                {active && <Check className="size-4 text-primary shrink-0" aria-hidden />}
+              </button>
+            </li>
+          );
+        })}
+      </ul>
+    </MobileBottomSheet>
   );
 }

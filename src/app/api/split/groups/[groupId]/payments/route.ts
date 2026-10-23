@@ -33,6 +33,13 @@ export async function POST(req: NextRequest, { params }: Ctx) {
     return jsonError("Записать перевод может только тот, кто отдал, или тот, кто получил", 403);
   }
 
+  // «За такую-то трату»: трата должна быть из этой группы (чужой id — не повод привязать перевод к чужим данным)
+  let forExpense: { id: string; description: string } | null = null;
+  if (input.expenseId) {
+    forExpense = await db.splitExpense.findFirst({ where: { id: input.expenseId, groupId }, select: { id: true, description: true } });
+    if (!forExpense) return jsonError("Трата не найдена в этой группе", 400);
+  }
+
   if (input.clientKey) {
     const existing = await db.splitPayment.findUnique({
       where: { groupId_clientKey: { groupId, clientKey: input.clientKey } },
@@ -51,6 +58,7 @@ export async function POST(req: NextRequest, { params }: Ctx) {
           amountCents: input.amountCents,
           paidOn: keyToDate(input.paidOn),
           note: input.note,
+          expenseId: forExpense?.id ?? null,
           createdById: member.id,
           clientKey: input.clientKey,
         },
@@ -60,6 +68,7 @@ export async function POST(req: NextRequest, { params }: Ctx) {
         fromId: created.fromId,
         toId: created.toId,
         amountCents: created.amountCents,
+        ...(forExpense ? { expenseId: forExpense.id, description: forExpense.description } : {}),
       });
       return created;
     });
@@ -92,6 +101,7 @@ export async function POST(req: NextRequest, { params }: Ctx) {
       fromId: payment.fromId,
       toId: payment.toId,
       amountCents: payment.amountCents,
+      forDescription: forExpense?.description,
     });
   }
   return NextResponse.json(paymentDTO(payment), { status: 201 });

@@ -20,6 +20,10 @@ export interface SettleTarget {
   /** Кому должен */
   toId: string;
   cents: number;
+  /** Перевод «за конкретную трату»: помечает долю в ней оплаченной */
+  expenseId?: string;
+  /** Название этой траты — в подписи и заметке перевода */
+  forLabel?: string;
 }
 
 interface Props {
@@ -56,7 +60,7 @@ function SettleBody({ model, target, onDone }: { model: GroupModel; target: Sett
   const [otherId, setOtherId] = useState(initialOther);
   const [amountStr, setAmountStr] = useState(target ? centsToInput(target.cents) : "");
   const [paidOn, setPaidOn] = useState(today);
-  const [note, setNote] = useState("");
+  const [note, setNote] = useState(target?.forLabel ? `За «${target.forLabel}»` : "");
 
   const others = model.activeMembers.filter((m) => m.id !== me);
   // Закрыть долг перед вышедшим тоже нужно: добавляем его в выбор, если он в расчёте
@@ -85,6 +89,7 @@ function SettleBody({ model, target, onDone }: { model: GroupModel; target: Sett
         amountCents,
         paidOn,
         note: note.trim() || null,
+        expenseId: target?.expenseId ?? null,
         // Ключ идемпотентности: двойной тап и ретрай сети не создают второй перевод
         clientKey: `pay-${me}-${fromId}-${toId}-${amountCents}-${Date.now()}`,
       });
@@ -111,10 +116,13 @@ function SettleBody({ model, target, onDone }: { model: GroupModel; target: Sett
       )}
 
       {target ? (
-        <div className="flex items-center justify-center gap-3 rounded-2xl bg-muted/50 py-3">
-          <Person model={model} id={fromId} />
-          <ArrowRight className="size-4 text-muted-foreground" />
-          <Person model={model} id={toId} />
+        <div className="rounded-2xl bg-muted/50 py-3">
+          <div className="flex items-center justify-center gap-3">
+            <Person model={model} id={fromId} />
+            <ArrowRight className="size-4 text-muted-foreground" />
+            <Person model={model} id={toId} />
+          </div>
+          {target.forLabel && <p className="mt-2 text-center text-xs text-muted-foreground px-3 truncate">за «{target.forLabel}»</p>}
         </div>
       ) : (
         <div>

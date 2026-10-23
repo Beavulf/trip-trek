@@ -100,16 +100,19 @@ export async function notifyPaymentRecorded(args: {
   fromId: string;
   toId: string;
   amountCents: number;
+  /** Перевод за конкретную трату — называем её в уведомлении */
+  forDescription?: string;
 }): Promise<void> {
   try {
     const otherId = args.actorMemberId === args.fromId ? args.toId : args.fromId;
     const other = await db.splitMember.findUnique({ where: { id: otherId }, select: { userId: true, status: true } });
     if (!other?.userId || other.status !== "active") return;
     const sum = formatCents(args.amountCents, args.currency);
+    const forWhat = args.forDescription ? ` за «${args.forDescription}»` : "";
     const title =
       args.actorMemberId === args.fromId
-        ? `${args.actorName} отметил(а), что отдал(а) тебе ${sum}`
-        : `${args.actorName} отметил(а), что получил(а) от тебя ${sum}`;
+        ? `${args.actorName} отметил(а), что отдал(а) тебе ${sum}${forWhat}`
+        : `${args.actorName} отметил(а), что получил(а) от тебя ${sum}${forWhat}`;
     await notifyUser(other.userId, {
       type: "split_payment",
       title,

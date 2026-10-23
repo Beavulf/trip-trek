@@ -179,3 +179,17 @@ describe("normalizeGroupInput / normalizeMemberProfile", () => {
     expect(normalizeMemberProfile({ displayName: " " }).ok).toBe(false);
   });
 });
+
+describe("normalizePaymentInput: перевод за трату", () => {
+  const pctx = { knownMemberIds: members, todayKey: TODAY };
+  const pay = { fromId: "b", toId: "a", amountCents: 1500, paidOn: TODAY };
+
+  it("expenseId проходит как есть, пустое — null", () => {
+    const r = normalizePaymentInput({ ...pay, expenseId: "exp1" }, pctx);
+    expect(r.ok && r.value.expenseId).toBe("exp1");
+    const none = normalizePaymentInput({ ...pay, expenseId: "  " }, pctx);
+    expect(none.ok && none.value.expenseId).toBeNull();
+    const absent = normalizePaymentInput(pay, pctx);
+    expect(absent.ok && absent.value.expenseId).toBeNull();
+  });
+});

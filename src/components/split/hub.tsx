@@ -1,21 +1,18 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { KeyRound, Plus, Scale, Users } from "lucide-react";
 import { cn, plural } from "@/lib/utils";
 import { formatCents } from "@/lib/split/money";
-import { normalizeInviteCode } from "@/lib/split/invite";
 import type { SplitGroupSummaryDTO } from "@/lib/split/types";
 import { useAuth } from "@/hooks/use-auth";
 import { useSplitGroups } from "@/hooks/split/use-split";
 import { useSplitSocket } from "@/hooks/split/use-split-socket";
-import { MobileBottomSheet } from "@/components/trip/mobile-bottom-sheet";
-import { StickySubmit } from "@/components/trip/quick-add/StickySubmit";
 import { CreateGroupSheet } from "./create-group-sheet";
+import { JoinByCodeSheet } from "./join-by-code-sheet";
 import { SplitShell } from "./split-shell";
-import { AvatarStack, EmptyState, PrimaryButton, SecondaryButton, balanceTone, inputClass } from "./ui";
+import { AvatarStack, EmptyState, PrimaryButton, SecondaryButton, balanceTone } from "./ui";
 
 function GroupCard({ g }: { g: SplitGroupSummaryDTO }) {
   const b = g.myBalanceCents;
@@ -89,62 +86,17 @@ function Totals({ groups }: { groups: SplitGroupSummaryDTO[] }) {
   );
 }
 
-function JoinByCodeSheet({ open, onOpenChange }: { open: boolean; onOpenChange: (v: boolean) => void }) {
-  const router = useRouter();
-  const [code, setCode] = useState("");
-  const go = () => {
-    const c = normalizeInviteCode(code);
-    if (c.length < 4) return;
-    onOpenChange(false);
-    router.push(`/split/join?code=${encodeURIComponent(c)}`);
-  };
-  return (
-    <MobileBottomSheet open={open} onOpenChange={onOpenChange} title="Вступить по коду" maxWidthClass="sm:max-w-sm">
-      <div className="space-y-4 pt-1">
-        <p className="text-sm text-muted-foreground">Попроси у друга код приглашения (8 символов) или открой его ссылку.</p>
-        <input
-          autoFocus
-          value={code}
-          onChange={(e) => setCode(e.target.value.toUpperCase())}
-          onKeyDown={(e) => e.key === "Enter" && go()}
-          placeholder="ABCD2345"
-          maxLength={16}
-          autoCapitalize="characters"
-          autoComplete="off"
-          spellCheck={false}
-          aria-label="Код приглашения"
-          className={cn(inputClass, "text-center text-xl font-bold tracking-[0.2em] uppercase")}
-        />
-        <StickySubmit>
-          <PrimaryButton className="w-full min-h-12" onClick={go} disabled={normalizeInviteCode(code).length < 4}>
-            Найти группу
-          </PrimaryButton>
-        </StickySubmit>
-      </div>
-    </MobileBottomSheet>
-  );
-}
-
 export function SplitHub() {
   const { data: session } = useAuth();
   const { data: groups, isLoading, isError, refetch } = useSplitGroups();
-  const router = useRouter();
   const [createOpen, setCreateOpen] = useState(false);
   const [joinOpen, setJoinOpen] = useState(false);
   const ids = useMemo(() => (groups ?? []).map((g) => g.id), [groups]);
   useSplitSocket(ids, session?.user?.id);
 
-  // Одна группа — хаб лишний шаг: открываем её сразу. Явный заход в хаб (`?all=1`, «назад» из группы) не трогаем.
-  // Когда группа уже открывалась, это делает middleware по cookie; здесь — самый первый вход
-  const [explicitHub] = useState(() => typeof window !== "undefined" && new URLSearchParams(window.location.search).has("all"));
-  const onlyGroup = !explicitHub && groups?.length === 1 ? groups[0].id : null;
-  useEffect(() => {
-    if (onlyGroup) router.replace(`/split/${onlyGroup}`);
-  }, [onlyGroup, router]);
-
   return (
     <SplitShell title="Сочтёмся" subtitle="общие траты с друзьями">
-      {isLoading || onlyGroup ? (
+      {isLoading ? (
         <div className="space-y-3" aria-busy="true" aria-label="Загрузка">
           <div className="h-32 rounded-3xl bg-muted animate-pulse" />
           {[0, 1].map((i) => (

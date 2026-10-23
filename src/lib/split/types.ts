@@ -86,6 +86,8 @@ export interface SplitPaymentDTO {
   amountCents: number;
   paidOn: string;
   note: string | null;
+  /** Перевод «за конкретную трату» — помечает долю в ней оплаченной; null — перевод вообще */
+  expenseId: string | null;
   createdById: string;
   createdAt: string;
 }

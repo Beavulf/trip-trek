@@ -204,6 +204,8 @@ export interface PaymentForm {
   amountCents: number;
   paidOn: string;
   note?: string | null;
+  /** Перевод «за конкретную трату»: помечает долю в ней оплаченной */
+  expenseId?: string | null;
   clientKey: string;
 }
 
@@ -225,6 +227,7 @@ export function useSavePayment(groupId: string, myMemberId: string) {
           amountCents: form.amountCents,
           paidOn: form.paidOn,
           note: form.note ?? null,
+          expenseId: form.expenseId ?? null,
           createdById: myMemberId,
           createdAt: new Date().toISOString(),
         };
