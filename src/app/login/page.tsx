@@ -4,7 +4,7 @@ import { Suspense, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
 import { useQuery } from "@tanstack/react-query";
-import { Loader2, UserPlus, LogIn, Globe, Ticket } from "lucide-react";
+import { Loader2, UserPlus, LogIn, Globe } from "lucide-react";
 import { toast } from "sonner";
 import { PasswordField } from "@/components/auth/password-field";
 
