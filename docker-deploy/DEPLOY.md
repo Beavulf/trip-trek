@@ -33,7 +33,12 @@ cp .env.example .env
 #            DOMAIN, ACME_EMAIL, NEXTAUTH_URL=https://<домен>, WS_ALLOWED_ORIGINS=https://<домен>,
 #            (опц.) VAPID_* (npx web-push generate-vapid-keys), OPENAI_API_KEY,
 #            NEXT_PUBLIC_YANDEX_METRIKA_ID (номер счётчика Метрики; без переменной
-#            метрика не подключается)
+#            метрика не подключается). ВАЖНО: NEXT_PUBLIC_* инлайнится в клиентский
+#            бандл при сборке образа — на /login метрика включится, только если
+#            переменная была в окружении УЖЕ на этапе сборки; .env же попадает
+#            в контейнер только в рантайме (env_file), поэтому из него метрика
+#            включится на лендинге (серверный компонент читает env в рантайме),
+#            а на /login — нет
 docker compose up -d --build
 ```
 
