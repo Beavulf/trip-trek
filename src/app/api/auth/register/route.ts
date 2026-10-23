@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { rateLimitMiddleware } from "@/lib/rate-limit";
 import { getAppConfig } from "@/lib/app-config";
+import { normalizeInviteCode } from "@/lib/invite-code";
 import { validatePasswordPolicy, hashPassword } from "@/lib/password";
 import { sendMail } from "@/lib/mail/mailer";
 import { welcomeEmail } from "@/lib/mail/templates";
@@ -14,7 +15,7 @@ export async function POST(req: NextRequest) {
     if (rateLimit) return rateLimit;
 
     // Админ может закрыть регистрацию новых аккаунтов из панели
-    const { registrationEnabled } = await getAppConfig();
+    const { registrationEnabled, inviteRequired } = await getAppConfig();
     if (!registrationEnabled) {
       return NextResponse.json(
         { error: "Регистрация новых аккаунтов временно закрыта. Вход для существующих — как обычно." },
@@ -22,7 +23,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const { email, password, name } = (await req.json().catch(() => null)) ?? {};
+    const { email, password, name, inviteCode } = (await req.json().catch(() => null)) ?? {};
 
     if (!email || !password || !name) {
       return NextResponse.json({ error: "email, password, name обязательны" }, { status: 400 });
@@ -56,9 +57,51 @@ export async function POST(req: NextRequest) {
 
     const hashedPassword = await hashPassword(password);
     const displayName = name.trim();
-    const user = await db.user.create({
-      data: { name: displayName, email: emailNorm, password: hashedPassword },
-    });
+
+    // Слот инвайт-кода занимается атомарным условным updateMany: условие
+    // перепроверяется в SQL, поэтому две регистрации на последнем слоте не
+    // пройдут обе (count-then-create чужую незакоммиченную вставку не видит).
+    // Транзакция нужна, чтобы провал create (например, дубликат email) не
+    // оставил занятый слот без юзера.
+    const INVITE_GONE = new Error("invite-gone");
+    let user;
+    if (inviteRequired) {
+      const code = typeof inviteCode === "string" ? normalizeInviteCode(inviteCode) : "";
+      if (!code) {
+        return NextResponse.json({ error: "Введите инвайт-код" }, { status: 400 });
+      }
+      const codeRow = await db.inviteCode.findUnique({ where: { code } });
+      if (!codeRow) {
+        return NextResponse.json({ error: "Код недействителен или все места по нему заняты" }, { status: 400 });
+      }
+      try {
+        user = await db.$transaction(async (tx) => {
+          const taken = await tx.inviteCode.updateMany({
+            where: {
+              id: codeRow.id,
+              deactivatedAt: null,
+              OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }],
+              usedCount: { lt: codeRow.maxUses },
+            },
+            data: { usedCount: { increment: 1 } },
+          });
+          if (taken.count === 0) throw INVITE_GONE;
+          return tx.user.create({
+            data: { name: displayName, email: emailNorm, password: hashedPassword, inviteCodeId: codeRow.id },
+          });
+        });
+      } catch (e) {
+        if (e === INVITE_GONE) {
+          return NextResponse.json({ error: "Код недействителен или все места по нему заняты" }, { status: 400 });
+        }
+        throw e;
+      }
+    } else {
+      // Код не обязателен: переданное поле игнорируем, инвайт-привязку не пишем
+      user = await db.user.create({
+        data: { name: displayName, email: emailNorm, password: hashedPassword },
+      });
+    }
 
     // Приветственное письмо — fire-and-forget: SMTP не ждём, регистрацию не роняем.
     // Без SMTP_HOST mailer молча (с предупреждением в лог) пропустит отправку.
