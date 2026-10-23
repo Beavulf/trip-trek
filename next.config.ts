@@ -17,7 +17,7 @@ const nextConfig: NextConfig = {
   // Работает при webpack-сборке (Dockerfile собирает через `next build --webpack`).
   // Без мутаций входного конфига: bun server.ts (dev) получает его замороженным —
   // присваивание падает с «Attempted to assign to readonly property».
-  webpack(config) {
+  webpack(config, { dev }) {
     const base =
       config.optimization?.splitChunks && typeof config.optimization.splitChunks === "object"
         ? (config.optimization.splitChunks as Record<string, unknown>)
@@ -37,6 +37,10 @@ const nextConfig: NextConfig = {
     };
     return {
       ...config,
+      // Прод-сборка без персистентного кэша webpack: в Docker каждая сборка начинается с нуля
+      // (кэша между RUN нет), так что пак на ~570 MB только жрёт диск и время — на VPS именно он
+      // упирался в ENOSPC. В dev (bun server.ts) кэш остаётся: там он ускоряет пересборки
+      cache: dev ? config.cache : false,
       optimization: { ...config.optimization, splitChunks },
     };
   },

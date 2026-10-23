@@ -28,7 +28,9 @@ ENV DATABASE_URL=postgresql://build:build@localhost:5432/build
 RUN bunx prisma generate
 # --webpack: turbopack-билд падает под Linux (resolve 'tw-animate-css', Next 16),
 # а server.ts всё равно запускает runtime на webpack (webpack: true) — собираем тем же
-RUN bunx next build --webpack
+# Сразу чистим то, что рантайму не нужно, но раздувало образ на ~700 MB на каждую версию:
+# .next/cache (кэш webpack) и .next/standalone (раскладка не используется — запуск через server.ts)
+RUN bunx next build --webpack && rm -rf .next/cache .next/standalone
 
 FROM oven/bun:1.3.14-debian AS runner
 WORKDIR /app
