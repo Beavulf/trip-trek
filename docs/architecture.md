@@ -141,6 +141,7 @@ User ──< TripMember >── Trip ──< Day ──< Place ──< Photo
               │            │  └──< BudgetPlan (уникален по tripId+category)
               │            └──< TripBan (бан юзера в конкретной поездке)
    глобальное: AppSettings (singleton id="app"), AdminLog,
+               InviteCode (бета-коды регистрации приложения),
                PushSubscription, UserNotification, PasswordResetToken, Feedback,
                AiUsage (учёт вызовов ИИ: feature/keySource/токены, без промптов)
 ```
@@ -212,7 +213,16 @@ User ──< SplitMember >── SplitGroup ──< SplitExpense ──< SplitSh
   (PATCH /api/trip).
 - **AppSettings** — singleton-строка `id="app"`; до первой записи её нет, тогда
   действуют дефолты кода (`src/lib/app-config.ts`): registrationEnabled,
-  freeTripLimit=1, freeMemberLimit=5, общий ключ ИИ.
+  freeTripLimit=1, freeMemberLimit=5, общий ключ ИИ. Бета-гейты и витрина лендинга:
+  `inviteRequired` (регистрация только по коду), `demoTripToken` («Живой пример»
+  на лендинге — токен публичной поездки), `contactTelegram` (футер лендинга и /login).
+- **InviteCode** — инвайт-код приложения (бета-доступ на регистрацию аккаунта;
+  не путать с `Trip.inviteCode` — он приглашает в конкретную поездку). `usedCount` —
+  авторитетный счётчик использований; слот занимается атомарным условным
+  `updateMany` (`usedCount < maxUses`, не истёк, не деактивирован) в
+  `api/auth/register` — двойная регистрация по одному коду невозможна без гонок.
+  Генерация/нормализация/статус — `src/lib/invite-code.ts`, выдаёт и гасит коды
+  админка (`/api/admin/invites`, AdminLog `invite.create`/`invite.deactivate`).
 - Текущий день поездки — только `calculateCurrentDayNumber` из
   `src/lib/trip-days.ts` (формула уже расходилась между роутами — не дублируй).
   Номер дня зажат в `[0..totalDays]`, поэтому после финиша «текущим» остаётся последний
