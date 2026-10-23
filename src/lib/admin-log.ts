@@ -19,6 +19,8 @@ export type AdminAction =
   | "trip.ban"
   | "trip.unban"
   | "trip.transfer"
+  | "invite.create"
+  | "invite.deactivate"
   | "feedback.status"
   | "feedback.note"
   | "feedback.reply"
@@ -28,7 +30,7 @@ export type AdminAction =
   | "storage.purge";
 
 export interface AdminLogTarget {
-  type: "user" | "trip" | "feedback" | "settings" | "storage";
+  type: "user" | "trip" | "feedback" | "settings" | "storage" | "invite";
   id?: string;
   label?: string;
 }

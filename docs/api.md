@@ -166,6 +166,9 @@
 | `admin/trips` | GET, PATCH, DELETE | все поездки |
 | `admin/trips/members` | GET, POST, DELETE | участники любой поездки |
 | `admin/settings` | GET, PUT | `AppSettings`: ключ/база/модель ИИ, регистрация, лимиты free, пороги алертов трат ИИ |
+| `admin/invites` | GET | инвайт-коды беты: список, новые сверху (до 500) |
+| `admin/invites` | POST | генерация пачки `{ count ≤ 100, maxUses ≤ 1000, expiresAt?, note? }` → `{ codes }` (AdminLog: invite.create) |
+| `admin/invites/[id]` | PATCH | вкл/выкл кода `{ deactivatedAt: boolean }` → `{ code }` (AdminLog: invite.deactivate) |
 | `admin/ai` | GET | телеметрия ИИ: сутки/неделя, ряды 14д по фичам, юзеры с порогами/блоком, последние вызовы |
 | `admin/storage` | GET, POST | статистика и очистка хранилища |
 | `admin/stats` | GET | сводка дашборда |
