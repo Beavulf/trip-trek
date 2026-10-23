@@ -8,7 +8,10 @@
   "theme_color": "#f97316",
   "orientation": "portrait",
   "lang": "ru",
-  "categories": ["travel", "lifestyle"],
+  "categories": [
+    "travel",
+    "lifestyle"
+  ],
   "icons": [
     {
       "src": "/icon-192.png",
@@ -33,6 +36,19 @@
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Сочтёмся — общие траты",
+      "short_name": "Сочтёмся",
+      "url": "/split",
+      "icons": [
+        {
+          "src": "/icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
     }
   ]
 }

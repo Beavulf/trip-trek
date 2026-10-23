@@ -112,6 +112,10 @@ return NextResponse.json(result);
 `NOTIFICATION_MAP` `ws-bus.ts` попутно издаёт в комнату мета-событие
 `notification` (тост) и web-push (§9); остальные события — тихая инвалидация.
 
+«Сочтёмся» (ADR-0009) использует тот же socket.io, но другие комнаты — `group:<id>` (`publishRoom`/`evictUserFromRoom` в
+`ws-bus.ts`, обработчики `split:join|leave` в `server/socket-handlers.ts`) и одно событие `split:changed` на любую правку группы;
+клиентский хук — `src/hooks/split/use-split-socket.ts` (свой сокет: страницы `/` и `/split` не смонтированы одновременно).
+
 Правила: WS-канал отдаёт только «что-то изменилось» (payload минимален или пуст),
 истину клиент добирает через API. Новое событие = добавить publish в роут +
 инвалидацию в хук + строку в `server/notification-map.ts` (если нужен колокольчик).
@@ -141,6 +145,15 @@ User ──< TripMember >── Trip ──< Day ──< Place ──< Photo
                AiUsage (учёт вызовов ИИ: feature/keySource/токены, без промптов)
 ```
 
+«Сочтёмся» — отдельный контур данных, не связанный с Trip (ADR-0009):
+
+```
+User ──< SplitMember >── SplitGroup ──< SplitExpense ──< SplitShare
+              (userId = null — участник без аккаунта)  ├──< SplitPayment
+                                                       ├──< SplitRecurring
+                                                       └──< SplitActivity (журнал)
+```
+
 Соглашения, которые легко сломать:
 
 - **Expense**: `amount` — всегда в **USD** (единая валюта хранения, `BASE_CURRENCY` в
@@ -157,6 +170,17 @@ User ──< TripMember >── Trip ──< Day ──< Place ──< Photo
   Логика дележа/долгов — `src/lib/budget/` (split, balances,
   settle; money — целые центы и округления, personal — «модель реальных денег»
   для «Моё», planned — план бюджета по местам маршрута), не дублируй её в роутах.
+- **Split\*** («Сочтёмся»): деньги — целые центы (`amountCents`, `SplitShare.cents`), валюта группы одна (`SplitGroup.currency`,
+  без пересчёта), Σ долей = сумме траты (инвариант держит `computeShares`, `src/lib/split/split.ts`; режимы equal/exact/shares/percent,
+  режим и веса хранятся для правки). Все ссылки — на `SplitMember.id`, не на `User.id`: выход/исключение мягкие (`status`), строка
+  с историей не удаляется (FK без каскада), безаккаунтного (`userId = null`) занимает друг через «Это я» (`POST /api/split/join`).
+  Дата траты — `@db.Date` (ключ `ГГГГ-ММ-ДД`, `src/lib/split/dates.ts`). Перевод — отдельная `SplitPayment` с `clientKey`.
+  Валюта: `amountCents` всегда в валюте группы; введённое в другой валюте — `originalAmountCents`/`originalCurrency` (парой, CHECK в БД), пересчёт — `src/lib/split/fx.ts` (курсы `/api/currency`, «единиц за 1 USD»; нет курса → null, не «курс 1»). Шаблон в иностранной валюте пересчитывается сервером по живому курсу (`fx-server.ts`).
+  Баланс и попарные долги считает клиент (`src/lib/split/balances.ts`, чистые функции с тестами), хаб — SQL-агрегатами.
+  Повторяющиеся траты создаются лениво при чтении (`recurring-run.ts`, уникальный `(recurringId, recurringPeriod)`; удалённый
+  период — в `skippedPeriods`). Группа удаляется ТОЛЬКО через `deleteSplitGroup` (`src/lib/split/server.ts`): каскад Postgres
+  ломается об FK на участников. Права — любой активный участник правит траты (всё в `SplitActivity`); владелец — валюта,
+  исключение, удаление.
 - **Lodging** — жильё как отдельная сущность, а не `Place` категории hotel: маршрут
   описывает «что делаем», жильё — «где ночуем». `checkIn`/`checkOut` — КАЛЕНДАРНЫЕ дни
   без пояса: в БД полдень UTC выбранного дня (так день не прыгает между поясами

@@ -1,7 +1,8 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Plus, UserCircle, Pencil, Wallet, ChevronDown } from "lucide-react";
+import Link from "next/link";
+import { Plus, UserCircle, Pencil, Wallet, ChevronDown, ChevronRight } from "lucide-react";
 import { useExpenses, useTrip, useCurrentTripId } from "@/hooks/use-trip";
 import { useAuth } from "@/hooks/use-auth";
 import { useTripStore } from "@/lib/trip-store";
@@ -403,6 +404,21 @@ export function Budget() {
       >
         <AddExpenseForm onDone={() => setShowAdd(false)} />
       </MobileBottomSheet>
+
+      {/* Повседневные траты друзей живут отдельно от бюджета поездки — подсказываем, где их вести */}
+      <Link
+        href="/split"
+        className="flex items-center gap-3 rounded-2xl bg-card border border-border p-4 hover:border-emerald-500/40 active:scale-[0.99] transition-[transform,border-color]"
+      >
+        <span className="size-10 rounded-xl bg-emerald-500/15 grid place-items-center text-lg shrink-0" aria-hidden>
+          🧾
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block text-sm font-semibold">Траты на каждый день — в «Сочтёмся»</span>
+          <span className="block text-xs text-muted-foreground">Квартира, продукты, интернет: делите с друзьями, долги считаются сами</span>
+        </span>
+        <ChevronRight className="size-4 text-muted-foreground shrink-0" aria-hidden />
+      </Link>
 
       <CurrencyConverter />
     </div>

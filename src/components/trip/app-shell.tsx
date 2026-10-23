@@ -38,6 +38,7 @@ import {
 } from "lucide-react";
 import { Fragment, useState, useEffect, useRef, type ReactNode } from "react";
 import dynamic from "next/dynamic";
+import Link from "next/link";
 import { createPortal } from "react-dom";
 import { useTheme } from "next-themes";
 import { useAuth as useSession } from "@/hooks/use-auth";
@@ -259,6 +260,13 @@ export function AppShell({ children }: { children: ReactNode }) {
 
           {/* Desktop: full actions */}
           <div className="hidden sm:flex items-center gap-2">
+            {/* «Сочтёмся» — отдельный раздел повседневных трат друзей, не вкладка поездки (ADR-0009) */}
+            <Link
+              href="/split"
+              className="inline-flex items-center gap-1.5 h-8 px-3 rounded-full border border-border bg-secondary text-xs font-medium hover:bg-accent transition-colors shrink-0"
+            >
+              <Wallet className="size-3.5 text-emerald-500" aria-hidden /> Сочтёмся
+            </Link>
             <HeaderIconBtn
               onClick={() => setPremiumOpen(true)}
               label="Premium"
@@ -329,6 +337,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                     onReportBug={() => setBugOpen(true)}
                     onAdmin={() => router.push("/admin")}
                     onTripInfo={() => setInfoOpen(true)}
+                    onSplit={() => router.push("/split")}
                   />
                 )}
               </AnimatePresence>
@@ -512,6 +521,7 @@ function MobileMoreSheet({
   onReportBug,
   onAdmin,
   onTripInfo,
+  onSplit,
 }: {
   isPremium: boolean;
   isAdmin: boolean;
@@ -524,6 +534,7 @@ function MobileMoreSheet({
   onReportBug: () => void;
   onAdmin: () => void;
   onTripInfo: () => void;
+  onSplit: () => void;
 }) {
   const { theme, setTheme } = useTheme();
   if (typeof document === "undefined") return null;
@@ -579,6 +590,14 @@ function MobileMoreSheet({
           </div>
 
           <div className="p-2">
+            <MoreItem
+              icon={<Wallet className="size-4 text-emerald-500" />}
+              label="Сочтёмся — общие траты"
+              onClick={() => {
+                onClose();
+                onSplit();
+              }}
+            />
             <MoreItem
               icon={<Info className="size-4" />}
               label="О поездке"

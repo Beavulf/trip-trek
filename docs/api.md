@@ -16,6 +16,7 @@
 | M | `requireTripMember` | участник поездки (TripMember: owner или member) |
 | O | `requireTripOwner` | владелец поездки |
 | A | `requireAdmin` | `User.role === "admin"` (роль всегда из БД) |
+| G | `requireGroupMember` (`src/lib/split/access.ts`) | активный участник группы «Сочтёмся» (вышедший/исключённый и посторонний — одинаковый 403) |
 
 Ответы гардов: 401 `Unauthorized`, 403 `Forbidden` / `Not a member of this trip` /
 `Only trip owner can do this`.
@@ -123,6 +124,28 @@
 `redirect:"error"`). Заблокированным админом (`User.aiBlocked`) ИИ недоступен при
 любом источнике ключа (403).
 
+## «Сочтёмся» — общие траты друзей (`src/app/api/split/**`, ADR-0009)
+
+Отдельно от поездок: свои группы (`SplitGroup`), участники (`SplitMember`), траты, переводы. Суммы — целые центы
+в валюте группы, даты — `ГГГГ-ММ-ДД` (тип DATE), ссылки — на `SplitMember.id`. Клиент добавляет `?today=ГГГГ-ММ-ДД`
+(его локальная дата; сервер верит не дальше суток от своей UTC-даты). Контракт ответов — `src/lib/split/types.ts`.
+
+| Роут | Методы | Доступ | Лимит | Что делает |
+|---|---|---|---|---|
+| `split/groups` | GET, POST | U | POST 20 / ч / user | мои группы + мой баланс (5 агрегатов, не выкачивание трат) / создать (создатель — владелец; ≤30 групп на человека) |
+| `split/groups/[groupId]` | GET, PATCH, DELETE | G (DELETE — владелец) | — | группа и ВСЕ участники (в т.ч. вышедшие) / название-значок-цвет любой участник, валюта (только пока нет трат) и `allowMemberInvites` — владелец / удалить со всем содержимым (в теле точное название; порядок удаления — `deleteSplitGroup`) |
+| `split/groups/[groupId]/ledger` | GET | G | — | траты + переводы + шаблоны одним ответом; перед чтением лениво создаёт недостающие повторяющиеся траты (`recurring-run.ts`). Баланс считает клиент |
+| `split/groups/[groupId]/expenses` | POST | G | 120 / мин / user | трата: сервер сам считает доли (`computeShares`), Σ долей = сумме; режимы equal / exact / shares / percent. `amountCents` — в валюте группы; ввод в другой валюте — `original: {amountCents, currency}` (сервер пересчёт НЕ проверяет: сумму вправе поправить человек) |
+| `split/groups/[groupId]/expenses/[expenseId]` | PATCH, DELETE | G (любой участник) | 120 / мин / user | правка (дифф в журнал; без изменений — тишина) / удаление (периодическая трата запоминает пропущенный период) |
+| `split/groups/[groupId]/payments` | POST | G (сторона пары) | 60 / мин / user | «отдал деньги»; идемпотентно по `clientKey`; больше долга — можно (встречный долг) |
+| `split/groups/[groupId]/payments/[paymentId]` | DELETE | G | 60 / мин / user | отменить перевод |
+| `split/groups/[groupId]/recurring` | POST | G | 30 / мин / user | шаблон повторяющейся траты (аренда, подписка); с `original` — каждый период пересчитывается сервером по живому курсу (нет курсов — не создаётся) |
+| `split/groups/[groupId]/recurring/[recurringId]` | PATCH, DELETE | G | 30 / мин / user | пауза/возобновление или правка шаблона / удаление (созданные траты остаются) |
+| `split/groups/[groupId]/activity` | GET | G | — | журнал, новые сверху, постранично (`?before=<ISO>`) |
+| `split/groups/[groupId]/members` | POST | G | 30 / ч / user | добавить участника без аккаунта |
+| `split/groups/[groupId]/members/[memberId]` | PATCH, DELETE | G | — | профиль / передача владения (`{role:"owner"}`) · выйти или убрать (мягко, строка остаётся; безаккаунтного без истории — удаляет) |
+| `split/join` | GET, POST | 🌐 превью / U | 30 / мин / IP (POST ещё и / user) | превью группы по коду + «свободные» безаккаунтные строки / вступить (`claimMemberId` — «Это я»; удалённый (`removed`) не возвращается) |
+
 ## Уведомления и пуш
 
 | Роут | Методы | Доступ | Лимит | Что делает |
@@ -159,6 +182,7 @@ In-memory, сбрасываются рестартом контейнера (ADR
 - forgot-password — 5 / ч / IP и 3 / ч / email
 - reset-password — 20 / ч / IP
 - join (GET-превью и POST) — 30 / мин / IP, POST ещё и 30 / мин / user
+- «Сочтёмся»: split/join — как join поездок; создание группы 20 / ч / user; траты 120 / мин, переводы 60 / мин, шаблоны 30 / мин, безаккаунтные участники 30 / ч (все — / user)
 - health — 60 / мин / IP (БД-пинг кэшируется на 5 с)
 - weather — 30 / мин / IP
 - geocode — 60 / ч / user
@@ -176,6 +200,12 @@ handshake требует JWT. Актуальный список: `trip:updated`,
 `board:added/pinned/updated/deleted`, `journal:added/updated/deleted`,
 `checklist:updated`, `info:updated`, `food:updated`, `phrase:updated`,
 `lodging:added/updated`, `member:joined` (вступление по инвайт-коду).
+
+«Сочтёмся» живёт в своих комнатах `group:<groupId>`: клиент шлёт `split:join` / `split:leave` (массив id; членство проверяется
+на сервере каждый раз, без кэша), сервер публикует `split:changed` (`publishRoom` из `ws-bus.ts`, `kind`: `expense.created|updated|deleted`,
+`payment.created|deleted`, `member.changed`, `group.updated`, `recurring.changed`; в payload — автор и данные для тоста). Пуши
+персональные и только затронутым (`src/lib/split/notify.ts`): новая трата — плательщику и тем, на кого делится; перевод — второй
+стороне, ещё и записью в колокольчик (`split_payment`). Исключение/выход обязаны звать `evictFromGroupRoom`.
 
 Поверх них `ws-bus.ts` издаёт в комнату мета-событие `notification` (тост) для
 событий из `NOTIFICATION_MAP` (`place:created`, `photo:added`, `expense:added`,

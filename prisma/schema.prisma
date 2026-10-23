@@ -60,6 +60,7 @@ model User {
   notifications UserNotification[]
   resetTokens   PasswordResetToken[]
   aiUsage       AiUsage[]
+  splitMemberships SplitMember[]
 }
 
 // === Токены сброса пароля: одноразовые, TTL 60 минут. В БД — только sha256-хеш,
@@ -545,4 +546,183 @@ model Feedback {
 
   @@index([status, createdAt])
   @@index([userId])
+}
+
+// ============================================================================
+// «Сочтёмся» — повседневные общие траты друзей (ADR-0009).
+// Отдельно от поездок: свои группы, участники, траты. Деньги — целые центы
+// в валюте группы; расчёт ссылается на SplitMember.id, а не на User.id.
+// ============================================================================
+
+// === Группа: квартира, компания, пара ===
+model SplitGroup {
+  id                 String   @id @default(cuid())
+  name               String
+  emoji              String   @default("🏠")
+  color              String   @default("#10b981")
+  // Валюта группы (ISO-код): все суммы группы хранятся в ней, в центах; пересчёта по курсу нет.
+  // Меняется только пока в группе нет трат/переводов
+  currency           String   @default("BYN")
+  // Короткий код для ссылки и ручного ввода; генерирует приложение (src/lib/split/invite.ts)
+  inviteCode         String   @unique
+  // Кто может звать новых: true — все участники, false — только владелец
+  allowMemberInvites Boolean  @default(true)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  members    SplitMember[]
+  expenses   SplitExpense[]
+  payments   SplitPayment[]
+  recurrings SplitRecurring[]
+  activity   SplitActivity[]
+}
+
+// === Участник группы. userId = null — участник без аккаунта: друг потом заходит
+// по коду группы и выбирает «Это я». Строка не удаляется при выходе (status) —
+// история и долги остаются на месте ===
+model SplitMember {
+  id          String    @id @default(cuid())
+  groupId     String
+  userId      String?
+  role        String    @default("member") // owner / member
+  status      String    @default("active") // active / left / removed (removed не может вернуться по коду)
+  displayName String
+  emoji       String    @default("👤")
+  color       String    @default("#94a3b8")
+  joinedAt    DateTime  @default(now())
+  leftAt      DateTime?
+
+  group SplitGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  user  User?      @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  paidExpenses    SplitExpense[] @relation("SplitExpensePayer")
+  createdExpenses SplitExpense[] @relation("SplitExpenseAuthor")
+  shares          SplitShare[]
+  paymentsSent    SplitPayment[] @relation("SplitPaymentFrom")
+  paymentsGot     SplitPayment[] @relation("SplitPaymentTo")
+  paymentsMade    SplitPayment[] @relation("SplitPaymentAuthor")
+
+  // NULL в userId уникальность не нарушают: безаккаунтных в группе может быть несколько
+  @@unique([groupId, userId])
+  @@index([userId])
+  @@index([groupId, status])
+}
+
+// === Трата. Доли каждого — в SplitShare, Σ долей = amountCents ===
+model SplitExpense {
+  id              String   @id @default(cuid())
+  groupId         String
+  // Сумма в валюте ГРУППЫ (в ней считаются долги и итоги). Если трату ввели в другой валюте — это пересчитанная
+  // сумма (курс на момент ввода или вручную поправленная), а то, что ввели, — в originalAmountCents/originalCurrency
+  amountCents     Int
+  originalAmountCents Int?
+  originalCurrency    String?
+  description     String
+  category        String
+  paidById        String // SplitMember.id
+  // Календарная дата траты (без часового пояса): «вчерашний чек» вносится задним числом
+  spentOn         DateTime @db.Date
+  note            String?
+  // Как делили: equal / exact / shares / percent — чтобы открыть форму на правку в том же виде
+  splitMode       String   @default("equal")
+  createdById     String // SplitMember.id
+  // Трата создана шаблоном; (recurringId, recurringPeriod) уникален — ленивая материализация идемпотентна
+  recurringId     String?
+  recurringPeriod String? // "2026-10"
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  group     SplitGroup      @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  paidBy    SplitMember     @relation("SplitExpensePayer", fields: [paidById], references: [id], onDelete: NoAction)
+  createdBy SplitMember     @relation("SplitExpenseAuthor", fields: [createdById], references: [id], onDelete: NoAction)
+  recurring SplitRecurring? @relation(fields: [recurringId], references: [id], onDelete: SetNull)
+  shares    SplitShare[]
+
+  @@unique([recurringId, recurringPeriod])
+  @@index([groupId, spentOn])
+  @@index([paidById])
+}
+
+// === Доля участника в трате (в центах). weight — вес/процент для режимов shares/percent
+// (проценты в сотых долях: 33,33% = 3333), чтобы форма правки восстанавливалась точно ===
+model SplitShare {
+  id        String @id @default(cuid())
+  expenseId String
+  memberId  String
+  cents     Int
+  weight    Int?
+
+  expense SplitExpense @relation(fields: [expenseId], references: [id], onDelete: Cascade)
+  member  SplitMember  @relation(fields: [memberId], references: [id], onDelete: NoAction)
+
+  @@unique([expenseId, memberId])
+  @@index([memberId])
+}
+
+// === Перевод «отдал деньги»: гасит долг пары. Отдельная сущность, не трата ===
+model SplitPayment {
+  id          String   @id @default(cuid())
+  groupId     String
+  fromId      String // кто отдал (SplitMember.id)
+  toId        String // кому
+  amountCents Int
+  paidOn      DateTime @db.Date
+  note        String?
+  createdById String // кто записал: любая сторона пары
+  // Ключ идемпотентности от клиента: двойной тап / повтор запроса не создаёт второй перевод
+  clientKey   String?
+  createdAt   DateTime @default(now())
+
+  group     SplitGroup  @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  from      SplitMember @relation("SplitPaymentFrom", fields: [fromId], references: [id], onDelete: NoAction)
+  to        SplitMember @relation("SplitPaymentTo", fields: [toId], references: [id], onDelete: NoAction)
+  createdBy SplitMember @relation("SplitPaymentAuthor", fields: [createdById], references: [id], onDelete: NoAction)
+
+  @@unique([groupId, clientKey])
+  @@index([groupId, paidOn])
+}
+
+// === Повторяющаяся трата (аренда, интернет, подписка): создаётся лениво при чтении группы ===
+model SplitRecurring {
+  id          String    @id @default(cuid())
+  groupId     String
+  description String
+  category    String
+  // Сумма в валюте группы (последний пересчёт — для подписи). Если задана originalCurrency, каждый период пересчитывается
+  // из originalAmountCents по курсу на момент создания траты (аренда в долларах — в разные месяцы разная сумма в местной валюте)
+  amountCents Int
+  originalAmountCents Int?
+  originalCurrency    String?
+  paidById    String // SplitMember.id
+  splitMode   String    @default("equal")
+  // Деление: [{ memberId, value }], value — вес/процент (в сотых)/центы по режиму, null для equal
+  template    Json
+  dayOfMonth  Int // 1..31; в коротком месяце — последний день
+  startsOn    DateTime  @db.Date
+  endsOn      DateTime? @db.Date
+  active      Boolean   @default(true)
+  // Периоды ("2026-10"), которые пользователь удалил вручную: ленивая материализация их не воскрешает
+  skippedPeriods String[] @default([])
+  createdById String // SplitMember.id
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  group    SplitGroup     @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  expenses SplitExpense[]
+
+  @@index([groupId, active])
+}
+
+// === Журнал группы: кто что сделал и что изменил (структурированно, текст строит клиент) ===
+model SplitActivity {
+  id        String   @id @default(cuid())
+  groupId   String
+  actorId   String? // SplitMember.id; null — система (повторяющаяся трата)
+  type      String // expense.created / expense.updated / expense.deleted / payment.created / ...
+  data      Json
+  createdAt DateTime @default(now())
+
+  group SplitGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  @@index([groupId, createdAt])
 }

@@ -51,6 +51,29 @@ export function setupSocketHandlers(io: Server, rooms: TripRooms): void {
       rooms.leave(tripId, socket.id);
     });
 
+    // «Сочтёмся»: комнаты групп `group:<id>`. Хаб подписывается на все свои группы разом, экран группы — на одну.
+    // Членство (только активный участник) проверяется КАЖДЫЙ раз и не кэшируется: исключённый не должен
+    // вернуться в комнату повторным split:join по устаревшему положительному ответу.
+    const isActiveSplitMember = (groupId: string): Promise<boolean> =>
+      db.splitMember
+        .findUnique({ where: { groupId_userId: { groupId, userId } }, select: { status: true } })
+        .then((m) => m?.status === "active")
+        .catch(() => false);
+
+    socket.on("split:join", async (groupIds: unknown) => {
+      const ids = (Array.isArray(groupIds) ? groupIds : [groupIds])
+        .filter((id): id is string => typeof id === "string" && id.length > 0 && id.length < 64)
+        .slice(0, 50);
+      for (const id of ids) {
+        if (await isActiveSplitMember(id)) socket.join(`group:${id}`);
+      }
+    });
+
+    socket.on("split:leave", (groupIds: unknown) => {
+      const ids = Array.isArray(groupIds) ? groupIds : [groupIds];
+      for (const id of ids) if (typeof id === "string") socket.leave(`group:${id}`);
+    });
+
     // «Печатает…» в чате: ретрансляция в комнату БЕЗ отправителя (socket.to),
     // только участникам той же поездки. userName приходит от клиента —
     // обрезаем: это лишь подпись в тосте, а не поле данных.

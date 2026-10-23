@@ -82,3 +82,6 @@ brag-output/work/
 /upload/
 /brag-output/brag.mp4
 /TripTrek_presentation.pptx
+
+# Бэкапы поездок из «Данные → Экспорт»: настоящие люди и деньги, в репозиторий не попадают
+triptrek-backup-*.json

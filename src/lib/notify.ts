@@ -18,7 +18,8 @@ export type NotificationType =
   | "ownership"
   | "ai_blocked"
   | "ai_unblocked"
-  | "ai_spend_alert";
+  | "ai_spend_alert"
+  | "split_payment";
 
 export interface NotifyPayload {
   type: NotificationType;

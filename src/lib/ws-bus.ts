@@ -91,3 +91,26 @@ export async function evictUserFromTrip(tripId: string, userId: string): Promise
     // realtime — вспомогательный канал; неудача eviction не роняет HTTP-запрос
   }
 }
+
+/**
+ * Рассылка в произвольную комнату (не только `trip:<id>`): «Сочтёмся» живёт в комнатах `group:<id>`.
+ * Без тостов и пушей из NOTIFICATION_MAP — группы шлют свои персональные уведомления сами
+ * (src/lib/split/notify.ts): текст зависит от получателя («твоя доля 15 Br»).
+ */
+export function publishRoom(room: string, event: string, payload: Record<string, unknown> = {}): void {
+  holder.__tripIo?.to(room).emit(event, payload);
+}
+
+/** Убрать пользователя из комнаты сразу после выхода/исключения (см. evictUserFromTrip). */
+export async function evictUserFromRoom(room: string, userId: string): Promise<void> {
+  const io = holder.__tripIo;
+  if (!io) return;
+  try {
+    const sockets = await io.in(room).fetchSockets();
+    for (const s of sockets) {
+      if (s.data.userId === userId) s.leave(room);
+    }
+  } catch {
+    // realtime — вспомогательный канал; неудача eviction не роняет HTTP-запрос
+  }
+}

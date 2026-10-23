@@ -1,0 +1,20 @@
+{
+  "id": "/split",
+  "name": "Сочтёмся — общие траты с друзьями",
+  "short_name": "Сочтёмся",
+  "description": "Делите повседневные траты: кто за что заплатил, кто кому должен, итоги месяца",
+  "start_url": "/split",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#0f1f1a",
+  "theme_color": "#10b981",
+  "orientation": "portrait",
+  "lang": "ru",
+  "categories": ["finance", "lifestyle"],
+  "icons": [
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-maskable-192.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable" },
+    { "src": "/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
