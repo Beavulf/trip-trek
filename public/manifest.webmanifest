@@ -40,9 +40,21 @@
   ],
   "shortcuts": [
     {
-      "name": "Сочтёмся — общие траты",
+      "name": "Новая трата — Сочтёмся",
+      "short_name": "Новая трата",
+      "description": "Добавить общую трату в последней группе",
+      "url": "/split/add",
+      "icons": [
+        {
+          "src": "/icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
+    },
+    {
+      "name": "Сочтёмся — мои группы",
       "short_name": "Сочтёмся",
-      "url": "/split",
+      "url": "/split?all=1",
       "icons": [
         {
           "src": "/icon-192.png",

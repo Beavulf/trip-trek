@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { ChevronLeft, ChevronRight, TrendingDown, TrendingUp } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn, plural } from "@/lib/utils";
 import { SPLIT_CATEGORIES } from "@/lib/split/categories";
 import { addMonths, localDateKey, monthLabel, monthOf } from "@/lib/split/dates";
 import { formatCents } from "@/lib/split/money";
@@ -129,7 +129,7 @@ export function InsightsTab({ model }: { model: GroupModel }) {
                 </>
               )}
             </div>
-            {!mine && <div className="mt-1 text-[11px] text-muted-foreground">{cur.count} трат · в среднем {formatCents(Math.round(total / cur.count), group.currency)}</div>}
+            {!mine && <div className="mt-1 text-[11px] text-muted-foreground">{cur.count} {plural(cur.count, "трата", "траты", "трат")} · в среднем {formatCents(Math.round(total / cur.count), group.currency)}</div>}
           </section>
 
           <section className="rounded-2xl bg-card border border-border p-4">

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
@@ -9,6 +9,7 @@ import { cn, plural } from "@/lib/utils";
 import { formatCents } from "@/lib/split/money";
 import type { SplitExpenseDTO, SplitMemberDTO, SplitRecurringDTO } from "@/lib/split/types";
 import { useAuth } from "@/hooks/use-auth";
+import { forgetLastGroup, rememberLastGroup } from "@/lib/split/last-group";
 import { useGroupModel } from "@/hooks/split/use-group-model";
 import { useSplitSocket } from "@/hooks/split/use-split-socket";
 import { BalanceTab } from "./balance-tab";
@@ -33,7 +34,17 @@ const TABS: { value: Tab; label: string }[] = [
 ];
 const isTab = (v: string | null): v is Tab => TABS.some((t) => t.value === v);
 
-export function GroupScreen({ groupId }: { groupId: string }) {
+export function GroupScreen({
+  groupId,
+  quickAdd = false,
+  onNoAccess,
+}: {
+  groupId: string;
+  /** Страница быстрой траты: форма открывается сразу после загрузки (адрес остаётся /split/add) */
+  quickAdd?: boolean;
+  /** Группы нет или нет доступа (удалили, вышли): вызывающий решает, куда вести */
+  onNoAccess?: () => void;
+}) {
   const router = useRouter();
   const params = useSearchParams();
   const { data: session } = useAuth();
@@ -64,7 +75,35 @@ export function GroupScreen({ groupId }: { groupId: string }) {
 
   // Сразу после создания группы (?invite=1) показываем приглашение — группа без людей бесполезна
   const wantsInvite = params.get("invite") === "1";
+  // ?add=1 / страница /split/add — открыть форму траты сразу: добавить трату — самое частое действие
+  const wantsAdd = quickAdd || params.get("add") === "1";
   const ready = model.status === "ready";
+
+  // Группа открылась — она «последняя»: следующий вход в «Сочтёмся» приведёт сюда. Нет доступа — забываем
+  useEffect(() => {
+    if (ready) rememberLastGroup(groupId);
+  }, [ready, groupId]);
+  const noAccess = model.status === "error" && (model.errorStatus === 403 || model.errorStatus === 404);
+  useEffect(() => {
+    if (!noAccess) return;
+    forgetLastGroup(groupId);
+    onNoAccess?.();
+  }, [noAccess, groupId, onNoAccess]);
+
+  const addOpened = useRef(false);
+  useEffect(() => {
+    if (!wantsAdd || !ready || addOpened.current) return;
+    addOpened.current = true;
+    setEditing(null);
+    setEditingRecurring(null);
+    setPresetRepeat(false);
+    setExpenseOpen(true);
+    if (!quickAdd) {
+      const url = new URL(window.location.href);
+      url.searchParams.delete("add");
+      window.history.replaceState(null, "", url);
+    }
+  }, [wantsAdd, ready, quickAdd]);
   useEffect(() => {
     if (wantsInvite && ready) {
       setInviteOpen(true);
@@ -109,13 +148,13 @@ export function GroupScreen({ groupId }: { groupId: string }) {
   // --- Состояния без данных ---
   if (model.status !== "ready" || !group) {
     return (
-      <SplitShell title="Группа" backHref="/split">
+      <SplitShell title="Группа" backHref="/split?all=1">
         {model.status === "error" ? (
           <EmptyState emoji="🤔" title="Не удалось открыть группу" text="Возможно, группу удалили или тебя убрали из неё.">
             <SecondaryButton onClick={model.refetch}>
               <RefreshCw className="size-4" /> Повторить
             </SecondaryButton>
-            <Link href="/split" className="inline-flex items-center justify-center min-h-11 px-4 rounded-xl bg-primary text-primary-foreground text-sm font-semibold">
+            <Link href="/split?all=1" className="inline-flex items-center justify-center min-h-11 px-4 rounded-xl bg-primary text-primary-foreground text-sm font-semibold">
               К моим группам
             </Link>
           </EmptyState>
@@ -139,7 +178,7 @@ export function GroupScreen({ groupId }: { groupId: string }) {
       title={group.name}
       subtitle={`${activeCount} ${plural(activeCount, "участник", "участника", "участников")}`}
       lead={group.emoji}
-      backHref="/split"
+      backHref="/split?all=1"
       tabs={<Segmented value={tab} onChange={setTab} options={TABS} size="sm" />}
     >
       {/* Моя позиция в группе: главный вопрос — «сколько я должен / мне должны» */}
@@ -200,8 +239,8 @@ export function GroupScreen({ groupId }: { groupId: string }) {
       <ExpenseDetailSheet expense={detail} onClose={() => setDetail(null)} onEdit={openEdit} model={model} />
       <SettleSheet open={settleOpen} onOpenChange={setSettleOpen} model={model} target={settleTarget} />
       <InviteSheet open={inviteOpen} onOpenChange={setInviteOpen} group={group} />
-      <MemberSheet open={memberOpen} onOpenChange={setMemberOpen} model={model} member={memberEdit} onLeft={() => router.replace("/split")} />
-      <GroupSettingsSheet open={settingsOpen} onOpenChange={setSettingsOpen} model={model} onDeleted={() => router.replace("/split")} />
+      <MemberSheet open={memberOpen} onOpenChange={setMemberOpen} model={model} member={memberEdit} onLeft={() => { forgetLastGroup(groupId); router.replace("/split?all=1"); }} />
+      <GroupSettingsSheet open={settingsOpen} onOpenChange={setSettingsOpen} model={model} onDeleted={() => { forgetLastGroup(groupId); router.replace("/split?all=1"); }} />
     </SplitShell>
   );
 }

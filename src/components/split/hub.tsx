@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { KeyRound, Plus, Scale, Users } from "lucide-react";
@@ -128,14 +128,23 @@ function JoinByCodeSheet({ open, onOpenChange }: { open: boolean; onOpenChange: 
 export function SplitHub() {
   const { data: session } = useAuth();
   const { data: groups, isLoading, isError, refetch } = useSplitGroups();
+  const router = useRouter();
   const [createOpen, setCreateOpen] = useState(false);
   const [joinOpen, setJoinOpen] = useState(false);
   const ids = useMemo(() => (groups ?? []).map((g) => g.id), [groups]);
   useSplitSocket(ids, session?.user?.id);
 
+  // Одна группа — хаб лишний шаг: открываем её сразу. Явный заход в хаб (`?all=1`, «назад» из группы) не трогаем.
+  // Когда группа уже открывалась, это делает middleware по cookie; здесь — самый первый вход
+  const [explicitHub] = useState(() => typeof window !== "undefined" && new URLSearchParams(window.location.search).has("all"));
+  const onlyGroup = !explicitHub && groups?.length === 1 ? groups[0].id : null;
+  useEffect(() => {
+    if (onlyGroup) router.replace(`/split/${onlyGroup}`);
+  }, [onlyGroup, router]);
+
   return (
     <SplitShell title="Сочтёмся" subtitle="общие траты с друзьями">
-      {isLoading ? (
+      {isLoading || onlyGroup ? (
         <div className="space-y-3" aria-busy="true" aria-label="Загрузка">
           <div className="h-32 rounded-3xl bg-muted animate-pulse" />
           {[0, 1].map((i) => (

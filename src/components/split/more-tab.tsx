@@ -120,7 +120,7 @@ export function MoreTab({ model, onInvite, onAddMember, onEditMember, onNewRecur
                     </span>
                     <span className="flex-1 min-w-0">
                       <span className="block text-sm font-medium truncate">{r.description}</span>
-                      <span className="block text-[11px] text-muted-foreground truncate">
+                      <span className="block text-[11px] leading-snug text-muted-foreground">
                         {recurringLine(r, today)} · платит {r.paidById === group.myMemberId ? "я" : (payer?.name ?? "—")}
                       </span>
                     </span>

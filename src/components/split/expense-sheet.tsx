@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { Check, Loader2, Minus, Plus, Repeat, StickyNote } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -19,7 +20,7 @@ import { bpToInput, formatCents } from "@/lib/split/money";
 import { evenPercents, type SplitMode } from "@/lib/split/split";
 import { recurrenceHint } from "@/lib/split/recurrence-text";
 import type { SplitExpenseDTO, SplitRecurringDTO } from "@/lib/split/types";
-import { useDeleteExpense, useSaveExpense, useSaveRecurring, type ExpenseForm } from "@/hooks/split/use-split";
+import { useDeleteExpense, useSaveExpense, useSaveRecurring, useSplitGroups, type ExpenseForm } from "@/hooks/split/use-split";
 import type { GroupModel } from "@/hooks/split/use-group-model";
 import { MobileBottomSheet } from "@/components/trip/mobile-bottom-sheet";
 import { StickySubmit } from "@/components/trip/quick-add/StickySubmit";
@@ -278,6 +279,9 @@ function ExpenseFormBody({
 
   return (
     <div className="space-y-4 pt-1">
+      {/* Вносить можно в любую свою группу, не выходя из формы (только для новой траты) */}
+      {!editing && !recurring && <GroupPicker currentId={group.id} />}
+
       {/* Сумма — сразу в фокусе и крупно; валюту можно сменить: пересчёт в валюту группы появится под полем */}
       <AmountFieldView field={amount} groupCurrency={group.currency} autoFocus={!editing && !recurring} />
 
@@ -612,5 +616,32 @@ function SplitSummary({
     <p className={cn("mt-1.5 text-xs px-1", bad ? "text-amber-600 dark:text-amber-400" : "text-muted-foreground")} role="status">
       {text}
     </p>
+  );
+}
+
+/** Чип «куда вносим»: при двух и более группах — переключатель. Смена группы пересобирает экран (там своя форма, свои участники). */
+function GroupPicker({ currentId }: { currentId: string }) {
+  const router = useRouter();
+  const { data: groups } = useSplitGroups();
+  if (!groups || groups.length < 2) return null;
+  return (
+    <label className="relative flex items-center gap-2 rounded-xl bg-muted/50 px-3 min-h-11 text-sm">
+      <span className="text-xs text-muted-foreground shrink-0">Группа</span>
+      <select
+        value={currentId}
+        onChange={(e) => e.target.value !== currentId && router.replace(`/split/${e.target.value}?add=1`)}
+        aria-label="В какую группу вносим трату"
+        className="flex-1 min-w-0 appearance-none bg-transparent font-semibold focus:outline-none py-2 truncate input-mobile"
+      >
+        {groups.map((g) => (
+          <option key={g.id} value={g.id}>
+            {g.emoji} {g.name}
+          </option>
+        ))}
+      </select>
+      <span className="text-muted-foreground text-xs" aria-hidden>
+        ▾
+      </span>
+    </label>
   );
 }

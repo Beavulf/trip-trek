@@ -77,7 +77,7 @@ function JoinContent() {
             <div className="text-center space-y-3 py-4">
               <p className="font-semibold">Нет кода приглашения</p>
               <p className="text-sm text-muted-foreground">Открой ссылку, которую прислал друг, или введи код на странице «Сочтёмся».</p>
-              <Link href="/split" className="inline-flex min-h-11 items-center px-4 rounded-xl bg-primary text-primary-foreground text-sm font-semibold">
+              <Link href="/split?all=1" className="inline-flex min-h-11 items-center px-4 rounded-xl bg-primary text-primary-foreground text-sm font-semibold">
                 К моим группам
               </Link>
             </div>
@@ -92,7 +92,7 @@ function JoinContent() {
               </div>
               <p className="font-semibold">Группа не найдена</p>
               <p className="text-sm text-muted-foreground">{preview.error instanceof Error ? preview.error.message : "Проверь код или попроси новую ссылку."}</p>
-              <Link href="/split" className="inline-flex min-h-11 items-center px-4 rounded-xl bg-primary text-primary-foreground text-sm font-semibold">
+              <Link href="/split?all=1" className="inline-flex min-h-11 items-center px-4 rounded-xl bg-primary text-primary-foreground text-sm font-semibold">
                 К моим группам
               </Link>
             </div>

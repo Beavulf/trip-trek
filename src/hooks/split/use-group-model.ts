@@ -3,6 +3,7 @@
 import { useMemo } from "react";
 import { memberBalances, myTotals, pairDebts, type Debt } from "@/lib/split/balances";
 import type { SplitExpenseDTO, SplitGroupDTO, SplitMemberDTO, SplitPaymentDTO, SplitRecurringDTO } from "@/lib/split/types";
+import { SplitApiError } from "./api";
 import { useSplitGroup, useSplitLedger } from "./use-split";
 
 // Вся производная модель экрана группы в одном месте: состав + траты → балансы и долги.
@@ -11,6 +12,8 @@ import { useSplitGroup, useSplitLedger } from "./use-split";
 
 export interface GroupModel {
   status: "loading" | "error" | "ready";
+  /** HTTP-статус ошибки: 403/404 — группы нет или нет доступа (в отличие от сбоя сети) */
+  errorStatus: number | null;
   refetch: () => void;
   group: SplitGroupDTO | null;
   expenses: SplitExpenseDTO[];
@@ -40,6 +43,8 @@ export function useGroupModel(groupId: string): GroupModel {
 
   return useMemo<GroupModel>(() => {
     const status = groupQ.isError || ledgerQ.isError ? "error" : group && ledger ? "ready" : "loading";
+    const failure = groupQ.error ?? ledgerQ.error;
+    const errorStatus = failure instanceof SplitApiError ? failure.status : null;
     const refetch = () => {
       void groupQ.refetch();
       void ledgerQ.refetch();
@@ -47,6 +52,7 @@ export function useGroupModel(groupId: string): GroupModel {
     if (!group || !ledger) {
       return {
         status,
+        errorStatus,
         refetch,
         group,
         expenses: [],
@@ -68,6 +74,7 @@ export function useGroupModel(groupId: string): GroupModel {
     const totals = myTotals(debts, group.myMemberId);
     return {
       status,
+      errorStatus,
       refetch,
       group,
       expenses: ledger.expenses,
