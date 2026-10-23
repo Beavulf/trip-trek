@@ -220,7 +220,8 @@ User ──< SplitMember >── SplitGroup ──< SplitExpense ──< SplitSh
   не путать с `Trip.inviteCode` — он приглашает в конкретную поездку). `usedCount` —
   авторитетный счётчик использований; слот занимается атомарным условным
   `updateMany` (`usedCount < maxUses`, не истёк, не деактивирован) в
-  `api/auth/register` — двойная регистрация по одному коду невозможна без гонок.
+  `api/auth/register` — двойная регистрация по одному коду невозможна: гонки
+  исключены атомарным updateMany.
   Генерация/нормализация/статус — `src/lib/invite-code.ts`, выдаёт и гасит коды
   админка (`/api/admin/invites`, AdminLog `invite.create`/`invite.deactivate`).
 - Текущий день поездки — только `calculateCurrentDayNumber` из

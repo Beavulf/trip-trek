@@ -15,6 +15,7 @@ import {
   SlidersHorizontal,
   Sparkles,
   StickyNote,
+  Ticket,
   Trash2,
   UserMinus,
 } from "lucide-react";
@@ -171,6 +172,8 @@ export const ACTION_META: Record<string, { label: string; icon: typeof Pencil; d
   "trip.ban": { label: "Участник заблокирован", icon: ShieldOff, danger: true },
   "trip.unban": { label: "Блокировка снята", icon: ShieldCheck },
   "trip.transfer": { label: "Владение передано", icon: Crown },
+  "invite.create": { label: "Инвайт-коды созданы", icon: Ticket },
+  "invite.deactivate": { label: "Инвайт-код вкл/выкл", icon: Ticket },
   "feedback.status": { label: "Статус отзыва изменён", icon: MessageSquare },
   "feedback.note": { label: "Заметка по отзыву", icon: StickyNote },
   "feedback.reply": { label: "Ответ пользователю", icon: Reply },
@@ -183,6 +186,7 @@ export const ACTION_META: Record<string, { label: string; icon: typeof Pencil; d
 export const TARGET_META: Record<string, { label: string; color: string }> = {
   user: { label: "Юзеры", color: SECTION_COLOR.users },
   trip: { label: "Поездки", color: SECTION_COLOR.trips },
+  invite: { label: "Инвайты", color: SECTION_COLOR.invites },
   feedback: { label: "Отзывы", color: SECTION_COLOR.feedback },
   settings: { label: "Настройки", color: SECTION_COLOR.settings },
   storage: { label: "Хранилище", color: SECTION_COLOR.journal },
