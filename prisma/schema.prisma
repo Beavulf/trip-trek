@@ -46,6 +46,9 @@ model User {
   // Обучение (welcome-tour): момент завершения/пропуска. null = не показывали
   // (или сброшено кнопкой «Пройти заново» в профиле) — тур откроется при входе на /
   onboardingCompletedAt DateTime?
+  // Какой инвайт-код приложения привёл юзера в бету. SetNull: коды только
+  // деактивируются, но если код однажды удалят — юзер не должен сломаться
+  inviteCodeId String?
   createdAt  DateTime  @default(now())
 
   memberships   TripMember[]
@@ -60,6 +63,7 @@ model User {
   notifications UserNotification[]
   resetTokens   PasswordResetToken[]
   aiUsage       AiUsage[]
+  inviteCode    InviteCode?  @relation("inviteCode", fields: [inviteCodeId], references: [id], onDelete: SetNull)
   splitMemberships SplitMember[]
 }
 
@@ -75,6 +79,25 @@ model PasswordResetToken {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
+}
+
+// === Инвайт-коды приложения (бета-доступ). Отдельны от инвайт-кодов поездок
+// (Trip.inviteCode): этот код проверяется на регистрации АККАУНТА, а не входа в
+// поездку. usedCount — авторитетный счётчик: слот занимает атомарный условный
+// updateMany в api/auth/register; связь users — только справка «кто пришёл»
+model InviteCode {
+  id            String    @id @default(cuid())
+  code          String    @unique
+  note          String? // «тикток-видео», «для Лехи» — только для админа
+  maxUses       Int       @default(1)
+  usedCount     Int       @default(0)
+  expiresAt     DateTime?
+  deactivatedAt DateTime?
+  createdAt     DateTime  @default(now())
+  // userId админа, создавшего код, без FK: юзера могут удалить, код остаётся
+  createdBy     String
+
+  users User[] @relation("inviteCode")
 }
 
 // === Глобальные настройки приложения (singleton-строка id="app") ===
@@ -96,6 +119,11 @@ model AppSettings {
   // по этому измерению выключен. Считается по записям AiUsage за текущие сутки.
   aiAlertCallsPerDay  Int     @default(0)
   aiAlertTokensPerDay Int     @default(0)
+  // Бета-гейты и витрина лендинга. inviteRequired: при включённой регистрации
+  // требовать инвайт-код приложения (api/auth/register)
+  inviteRequired  Boolean @default(false)
+  demoTripToken   String? // токен публичной поездки для «Живого примера» на лендинге
+  contactTelegram String? // «@name» или https-ссылка — футер лендинга и /login
 }
 
 // === Учёт вызовов ИИ: только метаданные, НИКОГДА содержимое промптов/ответов ===
