@@ -50,6 +50,7 @@ export const SECTION_COLOR = {
   overview: "#f97316",
   users: "#0ea5e9",
   trips: "#f59e0b",
+  invites: "#14b8a6",
   ai: "#d946ef",
   feedback: "#f43f5e",
   journal: "#10b981",

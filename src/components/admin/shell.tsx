@@ -16,6 +16,7 @@ import {
   ScrollText,
   Settings,
   Sun,
+  Ticket,
   Users,
 } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
@@ -32,6 +33,7 @@ export const ADMIN_SECTIONS = [
   { href: "/admin", label: "Обзор", icon: LayoutDashboard, key: "overview" },
   { href: "/admin/users", label: "Юзеры", icon: Users, key: "users" },
   { href: "/admin/trips", label: "Поездки", icon: Map, key: "trips" },
+  { href: "/admin/invites", label: "Инвайты", icon: Ticket, key: "invites" },
   { href: "/admin/ai", label: "ИИ", icon: Bot, key: "ai" },
   { href: "/admin/feedback", label: "Отзывы", icon: MessagesSquare, key: "feedback" },
   { href: "/admin/journal", label: "Журнал", icon: ScrollText, key: "journal" },
