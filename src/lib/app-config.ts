@@ -12,6 +12,8 @@ export interface PlanLimits {
 
 export interface AppConfig {
   registrationEnabled: boolean;
+  /** Регистрация по инвайт-кодам приложения (бета-гейт). */
+  inviteRequired: boolean;
   freeTripLimit: number;
   freeMemberLimit: number;
   /** Порог алерта трат ИИ на юзера в сутки (UTC). 0 = выключен. */
@@ -21,6 +23,7 @@ export interface AppConfig {
 
 const DEFAULTS: AppConfig = {
   registrationEnabled: true,
+  inviteRequired: false,
   freeTripLimit: 1,
   freeMemberLimit: 5,
   aiAlertCallsPerDay: 0,
@@ -33,6 +36,7 @@ export async function getAppConfig(): Promise<AppConfig> {
     where: { id: "app" },
     select: {
       registrationEnabled: true,
+      inviteRequired: true,
       freeTripLimit: true,
       freeMemberLimit: true,
       aiAlertCallsPerDay: true,
@@ -42,6 +46,7 @@ export async function getAppConfig(): Promise<AppConfig> {
   if (!row) return { ...DEFAULTS };
   return {
     registrationEnabled: row.registrationEnabled ?? DEFAULTS.registrationEnabled,
+    inviteRequired: row.inviteRequired ?? DEFAULTS.inviteRequired,
     freeTripLimit: Math.max(0, row.freeTripLimit ?? DEFAULTS.freeTripLimit),
     freeMemberLimit: Math.max(1, row.freeMemberLimit ?? DEFAULTS.freeMemberLimit),
     aiAlertCallsPerDay: Math.max(0, row.aiAlertCallsPerDay ?? DEFAULTS.aiAlertCallsPerDay),
@@ -74,4 +79,28 @@ export async function tripCreateGate(
     if (count >= maxTrips) return { ok: false, current: count, maxTrips };
   }
   return { ok: true };
+}
+
+/** Публичная витрина (лендинг, /login): что гостю можно знать о режиме приложения. */
+export interface PublicShowcase {
+  registrationEnabled: boolean;
+  inviteRequired: boolean;
+  demoTripToken: string | null;
+  contactTelegram: string | null;
+}
+
+export async function getPublicShowcase(): Promise<PublicShowcase> {
+  const cfg = await getAppConfig();
+  // Витринные поля лежат рядом в AppSettings, но в AppConfig не нужны:
+  // они про «что показать гостю», а не про правила приложения
+  const row = await db.appSettings.findUnique({
+    where: { id: "app" },
+    select: { demoTripToken: true, contactTelegram: true },
+  });
+  return {
+    registrationEnabled: cfg.registrationEnabled,
+    inviteRequired: cfg.inviteRequired,
+    demoTripToken: row?.demoTripToken?.trim() || null,
+    contactTelegram: row?.contactTelegram?.trim() || null,
+  };
 }
