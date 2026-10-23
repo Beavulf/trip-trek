@@ -6,7 +6,7 @@ import { useTripStore } from "@/lib/trip-store";
 import { focusOnMap } from "@/lib/map-bus";
 import { useAuth } from "@/hooks/use-auth";
 import { motion, useReducedMotion } from "framer-motion";
-import { Camera, Columns3, LayoutGrid, Star } from "lucide-react";
+import { Camera, Columns3, LayoutGrid, Share2, Star } from "lucide-react";
 import dynamic from "next/dynamic";
 import { useState, useMemo } from "react";
 import { toast } from "sonner";
@@ -21,6 +21,7 @@ const PhotoLightbox = dynamic(() => import("./photo-lightbox").then((m) => m.Pho
 import { MobileBottomSheet } from "./mobile-bottom-sheet";
 import { CompactTile, MasonryTile } from "./gallery-tile";
 import { GalleryUploads } from "./upload/GalleryUploads";
+import { ShareTripSheet } from "./share-trip-sheet";
 
 // PhotoForm тянет exifr (~100 KB) — грузим только при открытии формы (аудит 2026-09-13)
 const PhotoForm = dynamic(() => import("./quick-add/PhotoForm").then((m) => m.PhotoForm), { ssr: false });
@@ -72,6 +73,7 @@ export function Gallery() {
   const [favOnly, setFavOnly] = useState(false);
   const [layout, setLayout] = useState<LayoutMode>("masonry");
   const [addOpen, setAddOpen] = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);
   // Порционный рендер (аудит 2026-09-13): сотни motion-плиток на мобильном
   // блокировали поток на секунды; индексы slice сохраняются — лайтбокс не ломается
   // Лимит привязан к ключу фильтра: смена чипа/режима сама возвращает первую порцию, иначе
@@ -300,13 +302,25 @@ export function Gallery() {
           <h1 className="text-2xl font-bold leading-tight">{heroTitle}</h1>
           {statLine && total > 0 && <p className="text-xs text-white/70 mt-1">{statLine}</p>}
 
-          <button
-            type="button"
-            onClick={() => setAddOpen(true)}
-            className="mt-3 inline-flex items-center gap-1.5 rounded-xl bg-white text-stone-900 px-4 min-h-11 text-sm font-semibold active:scale-95 transition-transform shadow focus-visible:ring-2 focus-visible:ring-white/60"
-          >
-            <Camera className="size-4" /> Добавить фото
-          </button>
+          <div className="mt-3 flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setAddOpen(true)}
+              className="inline-flex items-center gap-1.5 rounded-xl bg-white text-stone-900 px-4 min-h-11 text-sm font-semibold active:scale-95 transition-transform shadow focus-visible:ring-2 focus-visible:ring-white/60"
+            >
+              <Camera className="size-4" /> Добавить фото
+            </button>
+            {/* Публичная ссылка — решение владельца (как в hero «Маршрута») */}
+            {isOwner && (
+              <button
+                type="button"
+                onClick={() => setShareOpen(true)}
+                className="inline-flex items-center gap-1.5 rounded-xl bg-white/15 hover:bg-white/25 px-4 min-h-11 text-sm font-medium active:scale-95 transition-transform"
+              >
+                <Share2 className="size-4" /> Поделиться
+              </button>
+            )}
+          </div>
 
           {/* Киноплёнка: перфорация + недавние кадры; тап — лайтбокс */}
           {strip.length > 0 && (
@@ -533,6 +547,9 @@ export function Gallery() {
       <MobileBottomSheet open={addOpen} onOpenChange={setAddOpen} title="Добавить фото" titleIcon={<Camera className="size-4" />}>
         <PhotoForm onDone={() => setAddOpen(false)} />
       </MobileBottomSheet>
+
+      {/* Тот же шит публичной ссылки, что в «Маршруте» */}
+      <ShareTripSheet open={shareOpen} onOpenChange={setShareOpen} tripId={tripId} tripTitle={trip?.trip?.title || ""} />
 
       <PhotoLightbox
         open={lightbox !== null}
