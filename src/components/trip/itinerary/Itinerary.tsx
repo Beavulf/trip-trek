@@ -8,9 +8,11 @@ import { currencySymbol } from "@/lib/currencies";
 import { isTripOver } from "@/lib/trip-days";
 import { type Day, type Place } from "@/lib/types";
 import { resolveCityCoords, decodeCustomKey } from "@/lib/city-coords";
-import { CalendarPlus, Compass, FileDown, Loader2, Map as MapIcon, PartyPopper, Plane, Plus, Sparkles } from "lucide-react";
+import { CalendarPlus, Compass, FileDown, Loader2, Map as MapIcon, PartyPopper, Plane, Plus, Share2, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import { cn, plural } from "@/lib/utils";
+import { useAuth } from "@/hooks/use-auth";
+import { ShareTripSheet } from "../share-trip-sheet";
 import { AddPlaceSheet, type AddPlaceData } from "../add-place-sheet";
 import { EmptyHero } from "../empty-hero";
 import { DayCard } from "./DayCard";
@@ -39,6 +41,7 @@ export function Itinerary() {
   const { data: days, isLoading: daysLoading, isError: daysError, refetch: refetchDays } = useRouteDays();
   const { data: trip, isLoading: tripLoading, isError: tripError, refetch: refetchTrip } = useTrip();
   const { selectedDay, setSelectedDay, setActiveTab } = useTripStore();
+  const { data: session } = useAuth();
   const [openPlace, setOpenPlace] = useState<Place | null>(null);
   const [addOpen, setAddOpen] = useState(false);
   const [addData, setAddData] = useState<AddPlaceData | null>(null);
@@ -46,6 +49,7 @@ export function Itinerary() {
   const [editDay, setEditDay] = useState<Day | null>(null);
   const [plannerOpen, setPlannerOpen] = useState(false);
   const [pdfLoading, setPdfLoading] = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);
   // Дата-статус считаем на клиенте (SSR показывает скелетон) и обновляем раз в минуту,
   // чтобы «Старт через N дней» не зависал
   const [now, setNow] = useState(() => Date.now());
@@ -212,6 +216,10 @@ export function Itinerary() {
       : "Город не указан";
   }
   const accent = currentDay?.accentColor ?? dayList[0]?.accentColor ?? "#f97316";
+  // Кнопкой «Поделиться» управляет публичной страницей — она только у владельца
+  // (как в trip-info-sheet: роль берём из участников поездки, не из токена)
+  const me = session?.user as { id?: string } | undefined;
+  const isOwner = trip.participants.find((p) => p.id === me?.id)?.role === "owner";
 
   return (
     <div className="space-y-3 animate-fade-up pb-4 mx-auto w-full max-w-3xl">
@@ -249,13 +257,23 @@ export function Itinerary() {
             >
               <CalendarPlus className="size-4" /> Добавить день
             </button>
-            <button
-              type="button"
-              onClick={() => setActiveTab("map")}
-              className="flex-1 min-h-11 rounded-xl bg-white/15 hover:bg-white/25 backdrop-blur px-3 flex items-center justify-center gap-1.5 text-xs font-medium transition-colors active:scale-[0.98]"
-            >
-              <MapIcon className="size-4" /> На карте
-            </button>
+            {isOwner ? (
+              <button
+                type="button"
+                onClick={() => setShareOpen(true)}
+                className="flex-1 min-h-11 rounded-xl bg-white/15 hover:bg-white/25 backdrop-blur px-3 flex items-center justify-center gap-1.5 text-xs font-medium transition-colors active:scale-[0.98]"
+              >
+                <Share2 className="size-4" /> Поделиться
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setActiveTab("map")}
+                className="flex-1 min-h-11 rounded-xl bg-white/15 hover:bg-white/25 backdrop-blur px-3 flex items-center justify-center gap-1.5 text-xs font-medium transition-colors active:scale-[0.98]"
+              >
+                <MapIcon className="size-4" /> На карте
+              </button>
+            )}
             <button
               type="button"
               onClick={downloadPdf}
@@ -394,6 +412,7 @@ export function Itinerary() {
       <PlaceDialog place={openPlace} currency={curSym} onClose={() => setOpenPlace(null)} />
       <AddPlaceSheet open={addOpen} onOpenChange={setAddOpen} initial={addData} />
       <DaySheet day={editDay} open={daySheetOpen || !!editDay} onOpenChange={(v) => { setDaySheetOpen(v); if (!v) setEditDay(null); }} />
+      <ShareTripSheet open={shareOpen} onOpenChange={setShareOpen} tripId={tripId} tripTitle={trip.settings.title} />
       {/* Планер смонтирован всегда: состояние черновика он сбрасывает сам при открытии */}
       <PlannerWizard open={plannerOpen} onOpenChange={setPlannerOpen} />
     </div>

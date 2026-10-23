@@ -1,66 +1,30 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import { Copy, Globe, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { usePublicShare, type PublicSharePatch } from "@/hooks/trip/use-public-share";
 
 // Управление публичной страницей поездки (/p/<token> — журнал «только
-// смотреть» для гостей). Живёт в «О поездке» рядом с кодом приглашения:
-// это настройка доступности поездки наружу, а не действие шаринга.
-// Доступно только владельцу (гарды и в API).
-
-interface PublicShareState {
-  enabled: boolean;
-  token: string | null;
-  allowDownload: boolean;
-}
+// смотреть» для гостей). Живёт в «О поездке» и в шите «Поделиться» из
+// «Маршрута»: настройка доступности поездки наружу. Данные — общий хук
+// usePublicShare; доступно только владельцу (гарды и в API).
 
 export function PublicShareSettings({ tripId }: { tripId: string }) {
-  const [state, setState] = useState<PublicShareState | null>(null);
-  const [busy, setBusy] = useState(false);
+  const { state, url, update, updating } = usePublicShare(tripId);
+  const busy = updating;
 
-  useEffect(() => {
-    if (!tripId) return;
-    let alive = true;
-    fetch(`/api/trip/share?tripId=${encodeURIComponent(tripId)}`)
-      .then((r) => (r.ok ? r.json() : null))
-      .then((d: PublicShareState | null) => {
-        if (alive && d)
-          setState({ enabled: !!d.enabled, token: d.token ?? null, allowDownload: d.allowDownload !== false });
-      })
-      .catch(() => {
-        // состояние ссылки не критично для экрана — тихо пропускаем
-      });
-    return () => {
-      alive = false;
-    };
-  }, [tripId]);
-
-  const update = async (patch: { enabled?: boolean; rotate?: boolean; allowDownload?: boolean }) => {
+  const updateWithToast = (patch: PublicSharePatch) => {
     if (busy) return;
-    setBusy(true);
-    try {
-      const r = await fetch("/api/trip/share", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ tripId, ...patch }),
-      });
-      if (!r.ok) throw new Error("failed");
-      const d = (await r.json()) as PublicShareState;
-      setState({ enabled: d.enabled, token: d.token, allowDownload: d.allowDownload });
-      if (patch.enabled) toast.success(patch.rotate ? "Свежая ссылка готова — старая закрыта" : "Публичная страница готова 🌍");
-      else if (patch.enabled === false) toast.info("Публичная страница выключена");
-      else toast.success(patch.allowDownload ? "Гости смогут скачать фото" : "Скачивание для гостей запрещено");
-    } catch {
-      toast.error("Не удалось обновить ссылку");
-    } finally {
-      setBusy(false);
-    }
+    update(patch, {
+      onSuccess: () => {
+        if (patch.enabled) toast.success(patch.rotate ? "Свежая ссылка готова — старая закрыта" : "Публичная страница готова 🌍");
+        else if (patch.enabled === false) toast.info("Публичная страница выключена");
+        else toast.success(patch.allowDownload ? "Гости смогут скачать фото" : "Скачивание для гостей запрещено");
+      },
+      onError: () => toast.error("Не удалось обновить ссылку"),
+    });
   };
-
-  const url =
-    state?.token && typeof window !== "undefined" ? `${window.location.origin}/p/${state.token}` : "";
 
   const toggleCls = (on: boolean) =>
     cn(
@@ -83,7 +47,7 @@ export function PublicShareSettings({ tripId }: { tripId: string }) {
         </div>
         <button
           type="button"
-          onClick={() => void update({ enabled: !state?.enabled })}
+          onClick={() => updateWithToast({ enabled: !state?.enabled })}
           disabled={busy}
           aria-pressed={!!state?.enabled}
           className={toggleCls(!!state?.enabled)}
@@ -127,7 +91,7 @@ export function PublicShareSettings({ tripId }: { tripId: string }) {
               type="button"
               role="switch"
               aria-checked={state.allowDownload}
-              onClick={() => void update({ allowDownload: !state.allowDownload })}
+              onClick={() => updateWithToast({ allowDownload: !state.allowDownload })}
               disabled={busy}
               className={toggleCls(state.allowDownload)}
               aria-label={
@@ -140,7 +104,7 @@ export function PublicShareSettings({ tripId }: { tripId: string }) {
 
           <button
             type="button"
-            onClick={() => void update({ enabled: true, rotate: true })}
+            onClick={() => updateWithToast({ enabled: true, rotate: true })}
             disabled={busy}
             className="flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground underline underline-offset-2"
           >
