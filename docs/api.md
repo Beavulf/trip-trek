@@ -33,6 +33,7 @@
 | `auth/custom-signout` | POST | 🌐 | — | выход (снимает cookie) |
 | `auth/register` | POST | 🌐 | 20/ч/IP | регистрация + welcome-письмо; проверяет `registrationEnabled`; значок профиля `emoji`/`color` принимает только из списков `avatar-presets.ts`, иначе дефолт схемы; email канонизируется (trim+lowercase); при `inviteRequired` требует инвайт-код приложения (`InviteCode`, слот атомарный); вступление в поездку — только через `trips/join` по коду |
 | `auth/register-options` | GET | 🌐 | 60/мин/IP | публично; режим регистрации + контакт для связи (`registrationEnabled`, `inviteRequired`, `contactTelegram`). Форма /login его больше не дёргает: те же данные серверная `login/page.tsx` берёт из `getPublicShowcase()`; роут оставлен для внешних клиентов |
+| `support` | GET | 🌐 | 60/мин/IP | публично; реквизиты блока «Поддержать» внизу профиля: `{ donationAlertsUrl, webmoneyPurse }` (оба nullable, валидируются при чтении; задаются в админке → Настройки → Поддержка) |
 | `auth/forgot-password` | POST | 🌐 | 5/ч/IP (+3/ч/email) | одноразовый токен (sha256 в БД, TTL 60 мин) + письмо; анти-перечисление |
 | `auth/reset-password` | POST | 🌐 | 20/ч/IP | сброс по токену, инвалидирует сессии |
 | `user` | GET, PATCH | U | — | свой профиль (имя, emoji, цвет, аватар, ИИ-ключ); PATCH принимает также `onboardingCompleted`: true — обучение пройдено/пропущено, false — сброс («Пройти заново» в профиле); `paymentDetails` (строка ≤300 / null) — «куда возвращать долги», видят участники поездок в `GET /api/trip` participants |
@@ -166,7 +167,7 @@
 | `admin/users` | GET, PATCH, DELETE | юзеры: premium, роль, блок ИИ (`aiBlocked`), пароль, удаление (AdminLog + уведомление) |
 | `admin/trips` | GET, PATCH, DELETE | все поездки |
 | `admin/trips/members` | GET, POST, DELETE | участники любой поездки |
-| `admin/settings` | GET, PUT | `AppSettings`: ключ/база/модель ИИ, регистрация и бета-гейт `inviteRequired`, лимиты free, пороги алертов трат ИИ, витрина лендинга (`demoTripToken`, `contactTelegram`) |
+| `admin/settings` | GET, PUT | `AppSettings`: ключ/база/модель ИИ, регистрация и бета-гейт `inviteRequired`, лимиты free, пороги алертов трат ИИ, витрина лендинга (`demoTripToken`, `contactTelegram`), реквизиты поддержки (`donationAlertsUrl`, `webmoneyPurse`) |
 | `admin/invites` | GET | инвайт-коды беты: список, новые сверху (до 500) |
 | `admin/invites` | POST | генерация пачки `{ count ≤ 100, maxUses ≤ 1000, expiresAt?, note? }` → `{ codes }` (AdminLog: invite.create) |
 | `admin/invites/[id]` | PATCH | вкл/выкл кода `{ deactivatedAt: boolean }` → `{ code }` (AdminLog: invite.deactivate) |

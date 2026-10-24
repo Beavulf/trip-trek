@@ -26,6 +26,7 @@ import { ProfileStats } from "./ProfileStats";
 import { AchievementsGrid } from "./AchievementsGrid";
 import { TripsList } from "./TripsList";
 import { ProfileSettings } from "./ProfileSettings";
+import { SupportCard } from "./SupportCard";
 import { EditProfileSheet } from "./EditProfileSheet";
 import { BugReportSheet } from "@/components/trip/bug-report-sheet";
 import { useAdminStats } from "@/hooks/use-admin-stats";
@@ -191,6 +192,9 @@ export function ProfilePage() {
               isAdmin={isAdmin}
               feedbackNew={adminStats?.feedback.new ?? 0}
             />
+
+            {/* «Поддержать TripTrek»: появляется, только если админ задал реквизиты */}
+            <SupportCard onReportBug={() => setBugOpen(true)} />
 
             <motion.button
               type="button"

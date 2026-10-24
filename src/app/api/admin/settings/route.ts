@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { requireAdmin } from "@/lib/api-auth";
 import { logAdmin } from "@/lib/admin-log";
+import { normalizeDonationUrl, normalizeWmzPurse } from "@/lib/support";
 import { maskKey, validateAiBaseUrl } from "@/lib/ai-key";
 import { getAppConfig } from "@/lib/app-config";
 
@@ -14,7 +15,7 @@ export async function GET(req: NextRequest) {
   const [settings, appConfig] = await Promise.all([
     db.appSettings.findUnique({
       where: { id: "app" },
-      select: { aiApiKey: true, aiBaseUrl: true, aiModel: true, selfUpgradeEnabled: true, demoTripToken: true, contactTelegram: true },
+      select: { aiApiKey: true, aiBaseUrl: true, aiModel: true, selfUpgradeEnabled: true, demoTripToken: true, contactTelegram: true, donationAlertsUrl: true, webmoneyPurse: true },
     }),
     getAppConfig(),
   ]);
@@ -26,6 +27,8 @@ export async function GET(req: NextRequest) {
     selfUpgradeEnabled: settings?.selfUpgradeEnabled ?? false,
     demoTripToken: settings?.demoTripToken ?? "",
     contactTelegram: settings?.contactTelegram ?? "",
+    donationAlertsUrl: settings?.donationAlertsUrl ?? "",
+    webmoneyPurse: settings?.webmoneyPurse ?? "",
     appConfig,
   });
 }
@@ -33,7 +36,7 @@ export async function GET(req: NextRequest) {
 // PUT /api/admin/settings — два независимых блока:
 //   ИИ:      { aiApiKey: "sk-..." | null, aiBaseUrl, aiModel }
 //   Прилож.: { appConfig: { registrationEnabled?, inviteRequired?, freeTripLimit?,
-//              freeMemberLimit? }, demoTripToken?, contactTelegram? }
+//              freeMemberLimit? }, demoTripToken?, contactTelegram?, donationAlertsUrl?, webmoneyPurse? }
 export async function PUT(req: NextRequest) {
   const { user: admin, response } = await requireAdmin(req);
   if (response) return response;
@@ -67,6 +70,8 @@ export async function PUT(req: NextRequest) {
     aiAlertTokensPerDay?: number;
     demoTripToken?: string | null;
     contactTelegram?: string | null;
+    donationAlertsUrl?: string | null;
+    webmoneyPurse?: string | null;
   } = {};
 
   let aiTouched = false;
@@ -145,6 +150,35 @@ export async function PUT(req: NextRequest) {
       }
       const trimmed = typeof v === "string" ? v.trim().slice(0, 200) : "";
       data[field] = trimmed || null;
+      appTouched = true;
+    }
+  }
+
+  // Поддержка проекта: реквизиты проверяем строго — они показываются всем пользователям внизу профиля
+  {
+    const body_ = body as Record<string, unknown>;
+    const url = body_.donationAlertsUrl;
+    if (url !== undefined) {
+      if (url !== null && typeof url !== "string") {
+        return NextResponse.json({ error: "donationAlertsUrl: строка или null" }, { status: 400 });
+      }
+      const trimmed = typeof url === "string" ? url.trim() : "";
+      if (trimmed && !normalizeDonationUrl(trimmed)) {
+        return NextResponse.json({ error: "donationAlertsUrl: нужна ссылка вида https://…" }, { status: 400 });
+      }
+      data.donationAlertsUrl = trimmed ? normalizeDonationUrl(trimmed) : null;
+      appTouched = true;
+    }
+    const purse = body_.webmoneyPurse;
+    if (purse !== undefined) {
+      if (purse !== null && typeof purse !== "string") {
+        return NextResponse.json({ error: "webmoneyPurse: строка или null" }, { status: 400 });
+      }
+      const trimmed = typeof purse === "string" ? purse.trim() : "";
+      if (trimmed && !normalizeWmzPurse(trimmed)) {
+        return NextResponse.json({ error: "webmoneyPurse: кошелёк WMZ — буква Z и 12 цифр" }, { status: 400 });
+      }
+      data.webmoneyPurse = trimmed ? normalizeWmzPurse(trimmed) : null;
       appTouched = true;
     }
   }

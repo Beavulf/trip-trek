@@ -124,6 +124,9 @@ model AppSettings {
   inviteRequired  Boolean @default(false)
   demoTripToken   String? // токен публичной поездки для «Живого примера» на лендинге
   contactTelegram String? // «@name» или https-ссылка — футер лендинга и /login
+  // Поддержка проекта (блок «Поддержать» внизу профиля): оба поля необязательны, нет ни одного — блока нет
+  donationAlertsUrl String? // https-страница DonationAlerts
+  webmoneyPurse     String? // WMZ-кошелёк для перевода (Z + 12 цифр)
 }
 
 // === Учёт вызовов ИИ: только метаданные, НИКОГДА содержимое промптов/ответов ===

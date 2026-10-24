@@ -1,5 +1,6 @@
 import { db } from "@/lib/db";
 import { isPremiumUser } from "@/lib/premium";
+import { normalizeDonationUrl, normalizeWmzPurse, type SupportOptions } from "@/lib/support";
 
 // Конфиг приложения, которым управляет админ из /admin → Настройки.
 // Хранится в singleton-строке AppSettings(id="app"); до первой записи
@@ -87,6 +88,18 @@ export interface PublicShowcase {
   inviteRequired: boolean;
   demoTripToken: string | null;
   contactTelegram: string | null;
+}
+
+/** Реквизиты для блока «Поддержать» в профиле; значения проходят валидацию и при чтении (в БД мог лежать мусор). */
+export async function getSupportOptions(): Promise<SupportOptions> {
+  const row = await db.appSettings.findUnique({
+    where: { id: "app" },
+    select: { donationAlertsUrl: true, webmoneyPurse: true },
+  });
+  return {
+    donationAlertsUrl: normalizeDonationUrl(row?.donationAlertsUrl),
+    webmoneyPurse: normalizeWmzPurse(row?.webmoneyPurse),
+  };
 }
 
 export async function getPublicShowcase(): Promise<PublicShowcase> {

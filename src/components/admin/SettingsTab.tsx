@@ -63,6 +63,8 @@ interface SettingsData {
   aiModel: string;
   demoTripToken: string;
   contactTelegram: string;
+  donationAlertsUrl: string;
+  webmoneyPurse: string;
   appConfig: {
     registrationEnabled: boolean;
     inviteRequired: boolean;
@@ -144,6 +146,8 @@ export function SettingsTab() {
   const [inviteRequired, setInviteRequired] = useState(false);
   const [demoToken, setDemoToken] = useState("");
   const [contactTg, setContactTg] = useState("");
+  const [donationUrl, setDonationUrl] = useState("");
+  const [wmzPurse, setWmzPurse] = useState("");
   const [freeTripLimit, setFreeTripLimit] = useState("1");
   const [freeMemberLimit, setFreeMemberLimit] = useState("5");
   const [aiAlertCalls, setAiAlertCalls] = useState("0");
@@ -167,6 +171,8 @@ export function SettingsTab() {
         settings.appConfig.aiAlertTokensPerDay,
         settings.demoTripToken,
         settings.contactTelegram,
+        settings.donationAlertsUrl,
+        settings.webmoneyPurse,
       ].join("|")
     : "";
   if (settings && settingsKey !== syncKey) {
@@ -178,6 +184,8 @@ export function SettingsTab() {
     setInviteRequired(settings.appConfig.inviteRequired);
     setDemoToken(settings.demoTripToken ?? "");
     setContactTg(settings.contactTelegram ?? "");
+    setDonationUrl(settings.donationAlertsUrl ?? "");
+    setWmzPurse(settings.webmoneyPurse ?? "");
     setFreeTripLimit(String(settings.appConfig.freeTripLimit));
     setFreeMemberLimit(String(settings.appConfig.freeMemberLimit));
     setAiAlertCalls(String(settings.appConfig.aiAlertCallsPerDay));
@@ -223,6 +231,8 @@ export function SettingsTab() {
           },
           demoTripToken: demoToken,
           contactTelegram: contactTg,
+          donationAlertsUrl: donationUrl,
+          webmoneyPurse: wmzPurse,
         }),
       });
       const b = await r.json().catch(() => ({}));
@@ -290,6 +300,8 @@ export function SettingsTab() {
     inviteRequired !== settings.appConfig.inviteRequired ||
     demoToken !== (settings.demoTripToken ?? "") ||
     contactTg !== (settings.contactTelegram ?? "") ||
+    donationUrl !== (settings.donationAlertsUrl ?? "") ||
+    wmzPurse !== (settings.webmoneyPurse ?? "") ||
     freeTripLimit !== String(settings.appConfig.freeTripLimit) ||
     freeMemberLimit !== String(settings.appConfig.freeMemberLimit) ||
     aiAlertCalls !== String(settings.appConfig.aiAlertCallsPerDay) ||
@@ -495,6 +507,15 @@ export function SettingsTab() {
         <label className="space-y-1 block">
           <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Телеграм для связи (лендинг и вход)</span>
           <input value={contactTg} onChange={(e) => setContactTg(e.target.value)} placeholder="@username" className={inputCls} />
+        </label>
+        <label className="space-y-1 block">
+          <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Поддержка: ссылка DonationAlerts</span>
+          <input value={donationUrl} onChange={(e) => setDonationUrl(e.target.value)} placeholder="https://www.donationalerts.com/r/…" className={inputCls} />
+        </label>
+        <label className="space-y-1 block">
+          <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Поддержка: кошелёк WebMoney (WMZ)</span>
+          <input value={wmzPurse} onChange={(e) => setWmzPurse(e.target.value)} placeholder="Z123456789012" className={inputCls} />
+          <p className="text-[10px] text-muted-foreground">Оба поля необязательны. Пока не заполнено ни одно, блок «Поддержать» в профиле не показывается.</p>
         </label>
 
         <button
