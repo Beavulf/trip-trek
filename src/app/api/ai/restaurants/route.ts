@@ -5,6 +5,7 @@ import { runAi, aiFailResponse } from "@/lib/ai";
 import { fetchOsmPois, matchPicksToPois } from "@/lib/poi";
 import { sanitizeUserText, extractJsonLoose } from "@/lib/planner";
 import { resolveCityCoords, decodeCustomKey } from "@/lib/city-coords";
+import { AI_NO_KEY_MESSAGE } from "@/lib/ai-no-key";
 
 // POST /api/ai/restaurants — реальные заведения из OpenStreetMap рядом с городом
 // дня, ИИ только отбирает лучшее и пишет «почему стоит зайти». Названия и
@@ -75,7 +76,7 @@ export async function POST(req: NextRequest) {
     if (!ai.ok) {
       return aiFailResponse(ai, {
         blocked: "ИИ недоступен для твоего аккаунта — обратись к админу",
-        unavailable: "ИИ недоступен — попробуй позже или добавь свой ключ в профиле",
+        unavailable: AI_NO_KEY_MESSAGE,
       });
     }
 

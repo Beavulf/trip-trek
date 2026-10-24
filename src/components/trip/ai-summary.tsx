@@ -20,6 +20,8 @@ import { toast } from "sonner";
 import { cn, plural } from "@/lib/utils";
 import { currencySymbol } from "@/lib/currencies";
 import { MobileBottomSheet } from "./mobile-bottom-sheet";
+import { AiKeyCard } from "./ai-key-help";
+import { useAiStatus } from "@/hooks/trip/use-ai-status";
 
 // ─── Форматы рассказа ───────────────────────────────────────────────────────
 
@@ -151,6 +153,7 @@ function AISummaryInner({ tripId }: { tripId: string }) {
   const { data: trip, error: tripError, isLoading, refetch } = useTrip();
   const { setTripSwitcherOpen } = useTripStore();
   const ai = useAISummary();
+  const aiStatus = useAiStatus();
   const reduced = useReducedMotion();
 
   const [format, setFormat] = useState<AISummaryType | null>(null);
@@ -273,7 +276,7 @@ function AISummaryInner({ tripId }: { tripId: string }) {
       addHistory(item);
       if (res.generated === false) {
         toast.info("Пока без нейросети — это черновик по данным поездки", {
-          description: "Добавь свой ключ ИИ в профиле (Настройки → Свой ключ ИИ) или попроси админа подключить общий",
+          description: "Живые истории работают на вашем ключе ИИ: Профиль → Ключ ИИ",
         });
       }
     } catch (e) {
@@ -401,6 +404,10 @@ function AISummaryInner({ tripId }: { tripId: string }) {
           journals: trip.totalJournals,
         }}
       />
+
+      {/* Ключа нет — объясняем, что это и где взять, до того как человек нажмёт «написать» и получит черновик.
+          Блок показываем только когда статус загрузился: при ошибке запроса ничего не утверждаем */}
+      {aiStatus.data && !aiStatus.data.available && !aiStatus.data.blocked && <AiKeyCard />}
 
       {/* ── Студия рассказа ── */}
       <div className="rounded-3xl bg-card border border-border p-4 space-y-4">

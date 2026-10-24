@@ -192,7 +192,7 @@ export function AddExpenseForm({ onDone }: AddExpenseFormProps) {
               setCurrencyCode(e.target.value);
               setCurrencyTouched(true);
             }}
-            className="rounded-xl border border-input bg-background px-2 py-3.5 text-base input-mobile max-w-[5.5rem]"
+            className="rounded-xl border border-input bg-background px-2 py-3.5 text-base input-mobile min-w-[6.5rem]"
           >
             {currencySelectOptions(tripCurrency).map((c) => (
               <option key={c.code} value={c.code}>{c.flag} {c.code}</option>

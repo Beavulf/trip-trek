@@ -3,6 +3,8 @@ import {
   calculateCurrentDayNumber,
   dayDateFor,
   dayEndFor,
+  buildInitialDays,
+  MAX_INITIAL_DAYS,
   dayIdForDate,
   isTripFinished,
   isTripOver,
@@ -155,5 +157,30 @@ describe("isBeforeTripStart", () => {
   });
   it("после старта — нет", () => {
     expect(isBeforeTripStart(new Date(2026, 2, 5, 12, 0), start)).toBe(false);
+  });
+});
+
+describe("buildInitialDays", () => {
+  const start = new Date(2026, 9, 24); // 24 октября 2026, локальная полночь
+
+  it("создаёт N дней подряд: номера, названия, даты от старта", () => {
+    const days = buildInitialDays(start, 3, "Токио");
+    expect(days.map((d) => d.dayNumber)).toEqual([1, 2, 3]);
+    expect(days.map((d) => d.title)).toEqual(["День 1", "День 2", "День 3"]);
+    expect(days[0].date.getTime()).toBe(dayDateFor(start, 1).getTime());
+    expect(days[2].date.getTime()).toBe(dayDateFor(start, 3).getTime());
+    expect(days.every((d) => d.city === "Токио" && d.cityKey === "custom")).toBe(true);
+  });
+
+  it("число дней зажато в [1, MAX_INITIAL_DAYS]; мусор даёт один день", () => {
+    expect(buildInitialDays(start, 0, "X")).toHaveLength(1);
+    expect(buildInitialDays(start, -5, "X")).toHaveLength(1);
+    expect(buildInitialDays(start, Number.NaN, "X")).toHaveLength(1);
+    expect(buildInitialDays(start, 9999, "X")).toHaveLength(MAX_INITIAL_DAYS);
+    expect(buildInitialDays(start, 12.9, "X")).toHaveLength(12);
+  });
+
+  it("пустое направление не даёт пустой город", () => {
+    expect(buildInitialDays(start, 1, "  ")[0].city).toBe("Направление");
   });
 });

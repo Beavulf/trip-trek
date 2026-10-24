@@ -87,7 +87,13 @@ function p(text: string): string {
 }
 
 /** Приветствие после регистрации. */
-export function welcomeEmail(name: string): EmailContent {
+/** Контакт поддержки для письма: ссылка уже проверена (contactLink), подпись — «@имя» или адрес. */
+export interface EmailContact {
+  href: string;
+  label: string;
+}
+
+export function welcomeEmail(name: string, contact?: EmailContact | null): EmailContent {
   return {
     subject: "Добро пожаловать в TripTrek! 🎉",
     html: renderEmail({
@@ -96,6 +102,12 @@ export function welcomeEmail(name: string): EmailContent {
       bodyHtml:
         p(`${escapeHtml(name)}, привет! Ваш аккаунт готов — теперь всё о поездке в одном месте: маршрут, бюджет, разговорник, фото и дневник.`) +
         p("Создайте первую поездку или присоединитесь к поездке друга по коду приглашения.") +
+        // Приложение в бете: человеку, у которого что-то не вышло, нужен живой адрес помощи
+        (contact
+          ? p(
+              `Что-то не получается или есть идея? Напишите в Telegram: <a href="${escapeHtml(contact.href)}" style="color:${BTN_BG}; font-weight:bold;">${escapeHtml(contact.label)}</a>. Внутри приложения тоже есть кнопка «Сообщить о проблеме».`
+            )
+          : p("Что-то не получается или есть идея? В приложении есть кнопка «Сообщить о проблеме» — мы читаем всё.")) +
         p("Хорошего пути! 🧳"),
       cta: { label: "Открыть TripTrek", url: mailLink("/") },
     }),

@@ -31,6 +31,22 @@ describe("pickAiConfig — приоритет конфига", () => {
     });
   });
 
+  it("общего ключа нет: ключ юзера не наследует адрес и модель из настроек, идёт на провайдера по умолчанию", () => {
+    const adminBaseOnly: AiSettingsConfig = { aiApiKey: null, aiBaseUrl: "https://admin.example.com/v1", aiModel: "admin-model" };
+    const envBaseOnly: AiEnvConfig = { key: null, baseUrl: "https://env.example.com/v1", model: "env-model" };
+    const r = pickAiConfig(envBaseOnly, adminBaseOnly, { aiApiKey: "user-key", aiBaseUrl: null, aiModel: null });
+    expect(r).toMatchObject({ key: "user-key", source: "user", baseUrl: null, userBaseUrl: false });
+    expect(r.model).not.toBe("admin-model");
+    expect(r.model).not.toBe("env-model");
+    // своя модель сохраняется
+    expect(pickAiConfig(envBaseOnly, adminBaseOnly, { aiApiKey: "user-key", aiBaseUrl: null, aiModel: "my-model" }).model).toBe("my-model");
+  });
+
+  it("общий ключ из env тоже считается общим: адрес и модель наследуются", () => {
+    const r = pickAiConfig(ENV, null, { aiApiKey: "user-key", aiBaseUrl: null, aiModel: null });
+    expect(r).toMatchObject({ baseUrl: "https://env.example.com/v1", model: "env-model" });
+  });
+
   it("полный BYOK: свой ключ + свой адрес + своя модель", () => {
     const r = pickAiConfig(ENV, ADMIN, USER_FULL);
     expect(r).toMatchObject({

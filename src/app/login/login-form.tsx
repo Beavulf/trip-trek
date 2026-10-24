@@ -59,6 +59,12 @@ export function LoginForm({ registrationEnabled, inviteRequired, contactTelegram
   const passwordProblem = password ? validatePasswordPolicy(password) : null;
   const contact = contactLink(contactTelegram);
 
+  // Висящая ошибка («Введите имя») гаснет, как только человек начал её исправлять
+  const edit = (set: (v: string) => void) => (v: string) => {
+    set(v);
+    setError(null);
+  };
+
   const switchMode = (next: "login" | "register") => {
     setMode(next);
     setError(null);
@@ -273,7 +279,7 @@ export function LoginForm({ registrationEnabled, inviteRequired, contactTelegram
                     name="name"
                     type="text"
                     value={name}
-                    onChange={(e) => setName(e.target.value)}
+                    onChange={(e) => edit(setName)(e.target.value)}
                     placeholder="Как вас зовут?"
                     autoComplete="name"
                     autoCapitalize="words"
@@ -292,7 +298,7 @@ export function LoginForm({ registrationEnabled, inviteRequired, contactTelegram
                     name="invite"
                     type="text"
                     value={invite}
-                    onChange={(e) => setInvite(e.target.value)}
+                    onChange={(e) => edit(setInvite)(e.target.value)}
                     placeholder="Из описания видео или от друга"
                     autoComplete="off"
                     autoCapitalize="characters"
@@ -312,7 +318,7 @@ export function LoginForm({ registrationEnabled, inviteRequired, contactTelegram
                   name="email"
                   type="email"
                   value={email}
-                  onChange={(e) => setEmail(e.target.value)}
+                  onChange={(e) => edit(setEmail)(e.target.value)}
                   placeholder="email@example.com"
                   autoComplete="username"
                   inputMode="email"
@@ -331,7 +337,7 @@ export function LoginForm({ registrationEnabled, inviteRequired, contactTelegram
                   id="auth-password"
                   name="password"
                   value={password}
-                  onChange={setPassword}
+                  onChange={edit(setPassword)}
                   autoComplete={registering ? "new-password" : "current-password"}
                   status={registering && password ? !passwordProblem : undefined}
                   describedBy={registering ? "auth-password-hint" : undefined}

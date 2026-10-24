@@ -4,6 +4,7 @@ import { requireTripEditor } from "@/lib/api-auth";
 import { runAi, aiFailResponse } from "@/lib/ai";
 import { fetchOsmPois, matchPicksToPois, haversineMeters } from "@/lib/poi";
 import { sanitizeUserText, extractJsonLoose } from "@/lib/planner";
+import { AI_NO_KEY_MESSAGE } from "@/lib/ai-no-key";
 
 // POST /api/ai/walk — прогулка на ближайшие часы: реальные POI из OpenStreetMap
 // в радиусе (минус уже имеющиеся в поездке), ИИ собирает из них таймлайн.
@@ -90,7 +91,7 @@ export async function POST(req: NextRequest) {
     if (!ai.ok) {
       return aiFailResponse(ai, {
         blocked: "ИИ недоступен для твоего аккаунта — обратись к админу",
-        unavailable: "ИИ недоступен — попробуй позже или добавь свой ключ в профиле",
+        unavailable: AI_NO_KEY_MESSAGE,
       });
     }
 

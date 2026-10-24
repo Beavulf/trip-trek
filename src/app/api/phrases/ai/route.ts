@@ -5,6 +5,7 @@ import { requireTripEditor } from "@/lib/api-auth";
 import { runAi } from "@/lib/ai";
 import { sanitizeUserText } from "@/lib/planner";
 import { AI_FEATURES } from "@/lib/ai-usage";
+import { AI_NO_KEY_MESSAGE } from "@/lib/ai-no-key";
 
 // ИИ-фразы: перевод своей фразы, «ещё фразы» раздела, пак для любого языка.
 // Лимит, BYOK и учёт — в едином оркестраторе lib/ai.ts (старый личный Map-лимитер
@@ -211,7 +212,7 @@ function phrasesAiError(ai: Awaited<ReturnType<typeof runAi>>): NextResponse {
       return NextResponse.json({ error: "ИИ недоступен для твоего аккаунта — обратись к админу" }, { status: 403 });
     }
     return NextResponse.json(
-      { error: "ИИ недоступен — добавь свой ключ ИИ в настройках профиля или попроси админа" },
+      { error: AI_NO_KEY_MESSAGE },
       { status: 503 }
     );
   }

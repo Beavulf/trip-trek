@@ -5,6 +5,7 @@ import { currencySymbol } from "@/lib/currencies";
 import { runAi, aiFailResponse } from "@/lib/ai";
 import { sanitizeUserText, extractJsonLoose } from "@/lib/planner";
 import { findCity } from "@/lib/geocode-place";
+import { AI_NO_KEY_MESSAGE } from "@/lib/ai-no-key";
 
 // «Советы шефа»: LLM предлагает знаковые блюда города, которых ещё нет в гиде.
 // Пишет только клиент (пользователь выбирает, что добавить) — БД здесь не трогаем.
@@ -95,7 +96,7 @@ export async function POST(req: NextRequest) {
     if (!ai.ok) {
       return aiFailResponse(ai, {
         blocked: "ИИ недоступен для твоего аккаунта — обратись к админу",
-        unavailable: "ИИ недоступен — добавь свой ключ ИИ в настройках профиля или попроси админа",
+        unavailable: AI_NO_KEY_MESSAGE,
         format: "Шеф ответил не по формату — попробуй ещё раз",
       });
     }

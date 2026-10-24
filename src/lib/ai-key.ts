@@ -58,6 +58,8 @@ export function pickAiConfig(
   let model = settings?.aiModel ?? env.model;
   let source: AiKeySource = settings?.aiApiKey ? "admin" : env.key ? "env" : "none";
   let userBaseUrl = false;
+  // Есть ли общий ключ (админский или из env): от этого зависит, наследует ли ключ юзера общий адрес
+  const hasSharedKey = Boolean(settings?.aiApiKey || env.key);
 
   if (user?.aiApiKey) {
     key = user.aiApiKey;
@@ -68,9 +70,15 @@ export function pickAiConfig(
       baseUrl = user.aiBaseUrl;
       userBaseUrl = true;
       model = user.aiModel ?? DEFAULT_AI_MODEL;
-    } else {
-      // Только ключ, адрес общий — прежнее поведение.
+    } else if (hasSharedKey) {
+      // Только ключ, адрес общий — прежнее поведение: у юзера тот же провайдер, что у общего ключа.
       model = user.aiModel ?? model;
+    } else {
+      // Общего ключа нет (режим «только свои ключи»): «общий провайдер» не существует, а остатки
+      // его адреса в настройках — чужой выбор. Ключ юзера не должен уйти туда молча: идём на
+      // провайдера по умолчанию (OpenAI), модель — своя или нейтральная
+      baseUrl = null;
+      model = user.aiModel ?? DEFAULT_AI_MODEL;
     }
   }
 

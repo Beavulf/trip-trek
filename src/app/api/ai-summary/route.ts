@@ -6,6 +6,7 @@ import { EXPENSE_CATEGORIES, CATEGORY_META } from "@/lib/types";
 import { currencySymbol } from "@/lib/currencies";
 import { runAi, aiFailResponse } from "@/lib/ai";
 import { sanitizeUserText } from "@/lib/planner";
+import { AI_NO_KEY_MESSAGE } from "@/lib/ai-no-key";
 
 // ─── Промпты: автор историй + 6 стилей рассказа ────────────────────────────
 
@@ -249,7 +250,7 @@ export async function POST(req: NextRequest) {
     if (ai.reason !== "no_key") {
       return aiFailResponse(ai, {
         blocked: "ИИ недоступен для твоего аккаунта — обратись к админу",
-        unavailable: "ИИ ещё не настроен — добавь ключ в профиле или обратись к админу",
+        unavailable: AI_NO_KEY_MESSAGE,
         format: "ИИ не успел написать историю — попробуй ещё раз",
       });
     }
@@ -318,7 +319,7 @@ function buildLocalSummary(input: {
       input.visitedNames.length ? `- Уже были: ${input.visitedNames.join(", ")}` : `- Пока нет отмеченных посещений — отметь места в маршруте`,
       input.journalTexts.length ? `- Из дневника: ${input.journalTexts[0]}` : "",
       ``,
-      `_Черновик без нейросети: ключ ИИ не настроен. Добавь свой ключ в профиле (Настройки → Свой ключ ИИ) или попроси админа подключить общий._`,
+      `_Черновик без нейросети: у вас не подключён ключ ИИ. Добавьте его в Профиль → Ключ ИИ — живые истории работают на вашем ключе._`,
     ]
       .filter(Boolean)
       .join("\n");
@@ -333,7 +334,7 @@ function buildLocalSummary(input: {
       `4. Короткая запись в дневнике вечером сохранит атмосферу дня.`,
       `5. Сверьте долги в бюджете между: ${who}.`,
       ``,
-      `_Черновик без нейросети: ключ ИИ не настроен. Добавь свой ключ в профиле (Настройки → Свой ключ ИИ) или попроси админа подключить общий._`,
+      `_Черновик без нейросети: у вас не подключён ключ ИИ. Добавьте его в Профиль → Ключ ИИ — живые истории работают на вашем ключе._`,
     ].join("\n");
   }
   return [
@@ -350,7 +351,7 @@ function buildLocalSummary(input: {
     input.photoCaptions.length ? `- Подписи к фото: ${input.photoCaptions.slice(0, 5).join("; ")}` : "",
     input.journalTexts.length ? `- Дневник: ${input.journalTexts.slice(0, 2).join(" | ")}` : "",
     ``,
-    `_Это структурированный черновик по данным поездки. Для живых историй добавь ключ ИИ в профиле (Настройки → Свой ключ ИИ) или попроси админа подключить общий._`,
+    `_Это структурированный черновик по данным поездки. Для живых историй добавьте свой ключ ИИ: Профиль → Ключ ИИ._`,
   ]
     .filter(Boolean)
     .join("\n");

@@ -5,6 +5,9 @@ import { requireTripMember, requireUser, requireTripEditor } from "@/lib/api-aut
 import { put as storagePut, remove as storageRemove, StorageError } from "@/lib/storage";
 import { limit } from "@/lib/rate-limit";
 import { withKeyLock } from "@/lib/key-lock";
+import { diskLevel, readDiskSpaceCached } from "@/lib/disk-space";
+import { photoQuotaError } from "@/lib/photo-limits";
+import { UPLOADS_ROOT } from "@/lib/storage/root";
 
 // GET /api/photos?tripId=...&dayId=...&placeId=...
 export async function GET(req: NextRequest) {
@@ -82,6 +85,20 @@ export async function POST(req: NextRequest) {
   const day = await db.day.findFirst({ where: { id: dayId, tripId }, select: { id: true } });
   if (!day) {
     return NextResponse.json({ error: "day не принадлежит этой поездке" }, { status: 400 });
+  }
+
+  // Защита общего диска (на нём же база): лимит числа фото в поездке и «кончается место».
+  // Лимит — 4xx (очередь покажет текст и не будет повторять), нехватка места — 507: это временно,
+  // очередь подождёт и повторит, фото не пропадут
+  const quotaError = photoQuotaError(await db.photo.count({ where: { tripId } }));
+  if (quotaError) {
+    return NextResponse.json({ error: quotaError }, { status: 413 });
+  }
+  if (diskLevel(await readDiskSpaceCached(UPLOADS_ROOT())) === "critical") {
+    return NextResponse.json(
+      { error: "На сервере почти закончилось место. Мы уже знаем об этом — фото загрузится позже само." },
+      { status: 507 }
+    );
   }
 
   const placeId = (formData.get("placeId") as string) || null;

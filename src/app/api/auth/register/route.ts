@@ -1,12 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { rateLimitMiddleware } from "@/lib/rate-limit";
-import { getAppConfig } from "@/lib/app-config";
+import { getAppConfig, getPublicShowcase } from "@/lib/app-config";
 import { normalizeInviteCode } from "@/lib/invite-code";
 import { isAvatarColor, isAvatarEmoji } from "@/lib/avatar-presets";
 import { validatePasswordPolicy, hashPassword } from "@/lib/password";
 import { sendMail } from "@/lib/mail/mailer";
 import { welcomeEmail } from "@/lib/mail/templates";
+import { contactLink } from "@/app/landing/showcase";
 
 // POST /api/auth/register — регистрация
 export async function POST(req: NextRequest) {
@@ -114,7 +115,11 @@ export async function POST(req: NextRequest) {
 
     // Приветственное письмо — fire-and-forget: SMTP не ждём, регистрацию не роняем.
     // Без SMTP_HOST mailer молча (с предупреждением в лог) пропустит отправку.
-    void sendMail({ to: user.email, ...welcomeEmail(displayName) });
+    // Контакт поддержки (Telegram из админки) — в письмо; не прочитался — письмо уходит без него
+    void (async () => {
+      const showcase = await getPublicShowcase().catch(() => null);
+      await sendMail({ to: user.email, ...welcomeEmail(displayName, contactLink(showcase?.contactTelegram)) });
+    })();
 
     // Вступление в поездку — ТОЛЬКО через POST /api/trips/join по invite-коду
     // (join page делает это после логина). Автоджойн здесь по tripId/inviteCode

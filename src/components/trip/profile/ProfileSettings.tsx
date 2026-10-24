@@ -11,6 +11,7 @@ import { useOnboarding } from "@/hooks/use-onboarding";
 import type { UserProfile } from "./types";
 import { PushToggle } from "./PushToggle";
 import { PasswordField } from "@/components/auth/password-field";
+import { AiKeyHelp } from "../ai-key-help";
 
 interface ProfileSettingsProps {
   profile: UserProfile;
@@ -51,7 +52,17 @@ export function ProfileSettings({ profile, setPremiumOpen, onReportBug, isAdmin,
   };
 
   // === Свой ключ ИИ (BYOK): ключ + опционально свой адрес провайдера и модель ===
-  const [aiOpen, setAiOpen] = useState(false);
+  // ?ai=1 — переход с вкладки AI («Ввести ключ в профиле»): блок ключа открыт и в поле зрения.
+  // Компонент рисуется после загрузки профиля на клиенте, поэтому чтение адреса не расходится с серверной разметкой
+  const [aiOpen, setAiOpen] = useState(
+    () => typeof window !== "undefined" && new URLSearchParams(window.location.search).get("ai") === "1"
+  );
+  // Пришли по ?ai=1 — подводим блок ключа под глаза (он ниже первого экрана)
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get("ai") === "1") {
+      document.getElementById("ai-key")?.scrollIntoView({ block: "start" });
+    }
+  }, []);
   const [aiKey, setAiKey] = useState("");
   const [aiTail, setAiTail] = useState(profile.aiKeyTail ?? null);
   const [aiBase, setAiBase] = useState(profile.aiBaseUrl ?? "");
@@ -249,7 +260,7 @@ export function ProfileSettings({ profile, setPremiumOpen, onReportBug, isAdmin,
         </div>
 
         {/* Свой ключ ИИ — BYOK: переводчик фраз, советы шефа, ИИ-рассказ */}
-        <div>
+        <div id="ai-key" className="scroll-mt-20">
           <button
             type="button"
             onClick={() => setAiOpen((v) => !v)}
@@ -293,9 +304,9 @@ export function ProfileSettings({ profile, setPremiumOpen, onReportBug, isAdmin,
                   className="w-full rounded-xl border border-input bg-background px-3 py-2.5 text-sm font-mono"
                 />
               </div>
+              <AiKeyHelp />
               <p className="text-[10px] text-muted-foreground leading-snug">
-                Ключ нужен для ИИ-фраз, переводов, советов шефа и рассказа о поездке. Хранится в базе, наружу не отдаётся.
-                Если ключ не от того провайдера, что общий, — укажи его Base URL и модель. Без своего ключа работает общий (если задал админ).
+                Ключ хранится в базе и наружу не отдаётся: его видите только вы (последние символы — для проверки).
               </p>
               <div className="flex flex-wrap gap-2">
                 <button

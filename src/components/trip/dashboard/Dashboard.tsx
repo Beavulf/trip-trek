@@ -41,16 +41,16 @@ export function Dashboard() {
     return (
       <div className="py-16 text-center space-y-3 animate-fade-up">
         <div className="text-4xl">🧭</div>
-        <p className="text-sm font-medium">Нет активной поездки</p>
+        <p className="text-sm font-medium">Начнём с первой поездки</p>
         <p className="text-xs text-muted-foreground max-w-xs mx-auto">
-          Создай поездку или выбери существующую
+          Создайте поездку с нуля или по шаблону. Если друзья уже зовут вас — введите их код приглашения.
         </p>
         <button
           type="button"
           onClick={() => setTripSwitcherOpen(true)}
           className="mt-2 inline-flex min-h-11 items-center justify-center rounded-xl bg-primary px-4 text-sm font-medium text-primary-foreground"
         >
-          Мои поездки →
+          Создать или присоединиться
         </button>
       </div>
     );

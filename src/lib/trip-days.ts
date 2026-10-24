@@ -105,3 +105,25 @@ export function isTripFinished(
   if (status === "completed") return false;
   return isTripOver(endDate);
 }
+
+/** Предел числа дней при создании поездки «с нуля»: форма даёт десятки, но не тысячи. */
+export const MAX_INITIAL_DAYS = 60;
+
+/**
+ * Дни новой поездки «с нуля». Раньше создавалась поездка без дней: «Дней: 12» из формы нигде не
+ * хранилось, кнопка «+» отвечала «Нет дней в маршруте», а первый «Добавить день» ставил totalDays=1.
+ * Теперь дни есть сразу: город — направление, даты — от старта (каноническая формула dayDateFor).
+ */
+export function buildInitialDays(startDate: Date, totalDays: number, destination: string) {
+  const n = Math.min(MAX_INITIAL_DAYS, Math.max(1, Math.floor(Number(totalDays)) || 1));
+  const city = destination.trim() ? destination.trim().slice(0, 100) : "Направление";
+  return Array.from({ length: n }, (_, i) => ({
+    dayNumber: i + 1,
+    date: dayDateFor(startDate, i + 1),
+    city,
+    cityKey: "custom",
+    title: `День ${i + 1}`,
+    summary: "",
+    accentColor: "#f97316",
+  }));
+}

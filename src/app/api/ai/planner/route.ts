@@ -13,6 +13,7 @@ import {
 import { geocodeDrafts } from "@/lib/geocode-place";
 import { CATEGORY_META } from "@/lib/types";
 import { TIME_SLOTS } from "@/lib/time-of-day";
+import { AI_NO_KEY_MESSAGE } from "@/lib/ai-no-key";
 
 // POST /api/ai/planner — черновик маршрута от ИИ.
 // modes:
@@ -167,7 +168,7 @@ export async function POST(req: NextRequest) {
     if (!ai.ok) {
       return aiFailResponse(ai, {
         blocked: "ИИ недоступен для твоего аккаунта — обратись к админу",
-        unavailable: "ИИ недоступен — добавь свой ключ ИИ в настройках профиля или попроси админа",
+        unavailable: AI_NO_KEY_MESSAGE,
         format: "ИИ не смог составить план — попробуй ещё раз",
       });
     }

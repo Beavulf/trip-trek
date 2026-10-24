@@ -3,6 +3,8 @@ import { db } from "@/lib/db";
 import { requireAdmin } from "@/lib/api-auth";
 import { resolveAiConfig } from "@/lib/ai-key";
 import { getStorageUsage } from "@/lib/storage/stats";
+import { diskLevel, readDiskSpace } from "@/lib/disk-space";
+import { UPLOADS_ROOT } from "@/lib/storage/root";
 import pkg from "../../../../../package.json";
 
 function dayKey(d: Date): string {
@@ -107,8 +109,11 @@ export async function GET(req: NextRequest) {
   }
 
   // Здоровье системы: БД, ИИ-конфиг (без ключа!), push, рантайм
-  const [storage, ai] = await Promise.all([
+  const [storage, disk, ai] = await Promise.all([
     getStorageUsage(),
+    // Свободное место диска, на котором лежат фото (и база): без него «Диск» в админке показывал
+    // только размер фото и не предупреждал, что место кончается
+    readDiskSpace(UPLOADS_ROOT()),
     resolveAiConfig(null).then((c) => ({ source: c.source, baseUrl: c.baseUrl, model: c.model })),
   ]);
 
@@ -132,6 +137,7 @@ export async function GET(req: NextRequest) {
     health: {
       dbLatencyMs,
       ai,
+      disk: disk ? { freeBytes: disk.freeBytes, totalBytes: disk.totalBytes, level: diskLevel(disk) } : null,
       vapid: Boolean(process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY),
       nodeEnv: process.env.NODE_ENV || "development",
       nodeVersion: process.version,

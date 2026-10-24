@@ -16,6 +16,7 @@ import {
 } from "recharts";
 import {
   Bug,
+  HardDrive,
   Image as ImageIcon,
   MapPin,
   MessagesSquare,
@@ -26,6 +27,7 @@ import {
   Users,
 } from "lucide-react";
 import { plural } from "@/lib/utils";
+import { fmtDiskBytes } from "@/lib/disk-space-format";
 import { UserAvatar } from "@/components/trip/user-avatar";
 import type { AdminStats } from "@/hooks/use-admin-stats";
 import { FlipNumber, TripStatusStamp, fmtBytes, relTime } from "./shared";
@@ -103,6 +105,18 @@ export function OverviewTab({ stats }: { stats: AdminStats }) {
       tone: "amber",
     });
   }
+  const disk = stats.health.disk;
+  if (disk && disk.level !== "ok") {
+    attention.push({
+      icon: HardDrive,
+      text:
+        disk.level === "critical"
+          ? `Диск почти полон: свободно ${fmtDiskBytes(disk.freeBytes)}, загрузка фото остановлена`
+          : `Мало места на диске: свободно ${fmtDiskBytes(disk.freeBytes)} из ${fmtDiskBytes(disk.totalBytes)}`,
+      href: "/admin/settings",
+      tone: "amber",
+    });
+  }
   if (stats.health.ai.source === "none") {
     attention.push({
       icon: Sparkles,
@@ -118,9 +132,9 @@ export function OverviewTab({ stats }: { stats: AdminStats }) {
     { icon: NotebookPen, label: "Дневники", value: String(stats.journals) },
     { icon: MessagesSquare, label: "Сообщения", value: String(stats.messages) },
     { icon: ShieldCheck, label: "Админы", value: String(stats.admins) },
-    { icon: ImageIcon, label: "Диск", value: fmtBytes(stats.storage.total) },
+    { icon: ImageIcon, label: "Фото", value: fmtBytes(stats.storage.total) },
+    { icon: HardDrive, label: "Свободно", value: disk ? fmtDiskBytes(disk.freeBytes) : "—" },
     { icon: Users, label: "Premium", value: String(stats.premium) },
-    { icon: ReceiptText, label: "БД", value: `${stats.health.dbLatencyMs} мс` },
   ];
 
   const maxReg = Math.max(1, ...stats.registrations14d.map((d) => d.count));

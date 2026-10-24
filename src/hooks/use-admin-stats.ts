@@ -26,6 +26,8 @@ export interface AdminStats {
   health: {
     dbLatencyMs: number;
     ai: { source: "user" | "admin" | "env" | "none"; baseUrl: string | null; model: string | null };
+    /** Диск с фото и базой; null — прочитать не удалось */
+    disk: { freeBytes: number; totalBytes: number; level: "ok" | "low" | "critical" } | null;
     vapid: boolean;
     nodeEnv: string;
     nodeVersion: string;
