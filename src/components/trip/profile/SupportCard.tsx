@@ -198,7 +198,7 @@ export function SupportCard({ onReportBug }: { onReportBug: () => void }) {
             className="w-full min-h-11 inline-flex items-center justify-center gap-2 rounded-xl text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
           >
             <MessageSquare className="size-4" />
-            Или просто напишите, что понравилось или чего не хватает
+            Или просто напишите отзыв
           </button>
         </div>
       </MobileBottomSheet>
