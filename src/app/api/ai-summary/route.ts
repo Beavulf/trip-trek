@@ -65,7 +65,11 @@ export async function POST(req: NextRequest) {
       style?: string;
       dayNumber?: number;
     };
+    // Неизвестный тип раньше молча превращался в «советы» (последняя ветка) и тратил вызов впустую
     const type = body.type || "summary";
+    if (!["summary", "day", "tips"].includes(type)) {
+      return NextResponse.json({ error: "type: summary | day | tips" }, { status: 400 });
+    }
     const style = STYLE_PROMPTS[body.style || ""] ? (body.style as string) : DEFAULT_STYLE;
     const requestedDayNum =
       typeof body.dayNumber === "number" && Number.isFinite(body.dayNumber)
@@ -82,7 +86,8 @@ export async function POST(req: NextRequest) {
       }),
       db.day.findMany({ where: { tripId }, orderBy: { dayNumber: "asc" } }),
       db.place.findMany({ where: { tripId }, orderBy: { order: "asc" } }),
-      db.expense.findMany({ where: { tripId }, orderBy: { createdAt: "desc" } }),
+      // Нужны только сумма, категория и день: целые строки трат (описания, доли) для промпта не нужны
+      db.expense.findMany({ where: { tripId }, select: { amount: true, category: true, dayId: true } }),
       db.journalEntry.findMany({
         where: { tripId },
         orderBy: { createdAt: "desc" },
@@ -202,7 +207,9 @@ export async function POST(req: NextRequest) {
         STORY_BASE +
         "\n\n" +
         STYLE_PROMPTS[style] +
-        "\n\nЗадача: 5 практичных советов на оставшуюся часть поездки. Привязывай советы к реальным данным: каким городам ещё впереди, сколько осталось бюджета, какие места не посещены. Каждый совет — конкретное действие, а не банальность. Нумерованный список.";
+        (dayOffset > trip.totalDays
+          ? "\n\nЗадача: поездка уже закончилась. Дай 5 практичных советов на СЛЕДУЮЩУЮ поездку этой компании по итогам этой: что стоило бы сделать иначе в бюджете, маршруте, темпе. Опирайся на реальные данные: на что ушёл бюджет, какие места остались непосещёнными. Каждый совет — конкретное действие, а не банальность. Нумерованный список."
+          : "\n\nЗадача: 5 практичных советов на оставшуюся часть поездки. Привязывай советы к реальным данным: каким городам ещё впереди, сколько осталось бюджета, какие места не посещены. Каждый совет — конкретное действие, а не банальность. Нумерованный список.");
       // Фаза в человекочитаемом виде: «день 0/-3 из N» модель только путает
       const phaseLine = dayOffset >= 1 && dayOffset <= trip.totalDays ? ` (день ${dayOffset} из ${trip.totalDays})` : "";
       const finished = dayOffset > trip.totalDays;
@@ -232,6 +239,9 @@ export async function POST(req: NextRequest) {
       feature: "ai-summary",
       system: systemPrompt,
       prompt: userPrompt,
+      // Рассказ — творческий текст (0.9 из реестра), советы — практичные и привязанные к данным:
+      // им нужна меньшая «фантазия», иначе в совет просочатся выдуманные места
+      temperature: type === "tips" ? 0.5 : undefined,
     });
     if (ai.ok) {
       return NextResponse.json({ content: ai.text, type, style, generated: true, source: "openai" });

@@ -3,13 +3,14 @@
 import { useMemo, useState } from "react";
 import dynamic from "next/dynamic";
 import { useTrip, useCurrentTripId } from "@/hooks/use-trip";
-import { BookOpen, Camera, Plus as PlusIcon, Wallet } from "lucide-react";
+import { BookOpen, Camera, Loader2, Plus as PlusIcon, Wallet } from "lucide-react";
 import { useAuth as useSession } from "@/hooks/use-auth";
 import { useDialogA11y } from "@/hooks/use-dialog-a11y";
 import { useStagedCount } from "@/hooks/use-upload-queue";
 import { draftKey, hasDraft } from "@/lib/form-draft";
 import { cn } from "@/lib/utils";
 import { MobileBottomSheet } from "../mobile-bottom-sheet";
+import { NESTED_SHEET_ATTR } from "../budget/CategoryField";
 import { ExpenseForm } from "./ExpenseForm";
 import { JournalForm } from "./JournalForm";
 import { useTripStore, type QuickAddMode } from "@/lib/trip-store";
@@ -30,7 +31,11 @@ export function QuickAddSheet({ open, onOpenChange }: { open: boolean; onOpenCha
   const close = () => onOpenChange(false);
   // Диалог-семантика + Esc + фокус-трап: раньше шит был «безымянным» div-ом
   // без роли, скринридеры не воспринимали его как модалку (аудит 2026-10-06)
-  const panelRef = useDialogA11y<HTMLDivElement>(open, close);
+  // Escape при открытом вложенном списке (категория траты) закрывает только список — он слушает сам
+  const panelRef = useDialogA11y<HTMLDivElement>(open, () => {
+    if (document.querySelector(`[${NESTED_SHEET_ATTR}]`)) return;
+    close();
+  });
 
   return (
     <MobileBottomSheet
@@ -53,7 +58,7 @@ function QuickAddBody({ onClose }: { onClose: () => void }) {
   const [mode, setMode] = useState<QuickAddMode>(() => useTripStore.getState().quickAddMode ?? "photo");
   const tripId = useCurrentTripId();
   const { data: trip } = useTrip();
-  const { data: session } = useSession();
+  const { data: session, status } = useSession();
   const setTripSwitcherOpen = useTripStore((s) => s.setTripSwitcherOpen);
   const userId = (session?.user as { id?: string } | undefined)?.id || "";
   const staged = useStagedCount(tripId);
@@ -151,7 +156,14 @@ function QuickAddBody({ onClose }: { onClose: () => void }) {
 
       <div className="mt-3">
         {!userId ? (
-          <div className="py-4 text-center text-sm text-muted-foreground">Войдите, чтобы добавлять</div>
+          // Пока сессия грузится, «Войдите» — ложь: показываем ожидание, а не требование входа
+          status === "loading" ? (
+            <div className="py-6 grid place-items-center text-muted-foreground">
+              <Loader2 className="size-5 animate-spin" aria-label="Загрузка" />
+            </div>
+          ) : (
+            <div className="py-4 text-center text-sm text-muted-foreground">Войдите, чтобы добавлять</div>
+          )
         ) : (
           <>
             {mode === "photo" && <PhotoForm onDone={onClose} />}

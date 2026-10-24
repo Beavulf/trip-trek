@@ -32,6 +32,8 @@ export function TripFinishedBanner() {
   const settlements = calculateSettlements(expenses ?? [], people);
   const debtTotal = settlements.reduce((s, x) => s + x.amount, 0);
   const hasDebts = debtTotal > 0.005;
+  // «Все долги закрыты» имеет смысл, только если было что закрывать: в поездке без трат это пустая фраза
+  const hadSpending = (expenses ?? []).some((e) => e.category !== "settlement");
   const currentUserId = (session?.user as { id?: string } | undefined)?.id || "";
   const isOwner = trip.participants.some(
     (p) => p.id === currentUserId && p.role === "owner"
@@ -81,7 +83,7 @@ export function TripFinishedBanner() {
             </>
           ) : (
             <p className="text-xs text-muted-foreground">
-              Все долги закрыты — поездка удалась ✨
+              {hadSpending ? "Все долги закрыты — поездка удалась ✨" : "Поездка позади. Долгов нет — осталось собрать воспоминания ✨"}
             </p>
           )}
 

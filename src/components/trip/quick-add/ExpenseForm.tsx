@@ -11,6 +11,7 @@ import { BASE_CURRENCY, currencySelectOptions, currencySymbol } from "@/lib/curr
 import { expenseSelectableParticipants } from "@/lib/budget";
 import { toBaseCurrency } from "@/lib/budget/convert";
 import { FxHint } from "../fx-hint";
+import { CategoryField } from "../budget/CategoryField";
 import { getSavedCurrency, saveCurrency } from "@/lib/currency-pref";
 import { Check, Loader2, Users } from "lucide-react";
 import { toast } from "sonner";
@@ -29,7 +30,7 @@ interface ExpenseDraft {
   amount: string;
   category: string;
   description: string;
-  /** null — «на всех» (юзер выбор не трогал) */
+  /** null — выбор не трогали: личная трата, только плательщик */
   split: string[] | null;
   dayId: string;
   currency: string;
@@ -57,8 +58,9 @@ export function ExpenseForm({ userId, onDone }: ExpenseFormProps) {
   const [category, setCategory] = useState(draft?.category ?? "food");
   const [description, setDescription] = useState(draft?.description ?? "");
   const [dayId, setDayId] = useState(draft?.dayId ?? "");
-  // null = юзер ещё не трогал выбор → дефолт «на всех» выводим на рендере,
-  // без эффекта с setState (частый кейс — общая трата, аудит 2026-10-06)
+  // null = юзер ещё не трогал выбор → дефолт «только я» (личная трата) выводим на рендере,
+  // без эффекта с setState. Раньше дефолтом были «все», и личную трату — самый частый случай —
+  // приходилось отдельно «снимать» с остальных; делить её на других теперь осознанное действие
   const [splitOverride, setSplitOverride] = useState<Set<string> | null>(
     () => (draft?.split ? new Set(draft.split) : null)
   );
@@ -80,13 +82,15 @@ export function ExpenseForm({ userId, onDone }: ExpenseFormProps) {
     setCurrencyCode(tripCurrency);
   }, [tripCurrency, tripId, currencyTouched]);
 
-  // «За кого» до первого ручного выбора — все участники поездки
+  // «За кого» до первого ручного выбора — только плательщик (я).
   // Зрители вне денег (см. lib/budget/people.ts)
   const participants = expenseSelectableParticipants(trip?.participants ?? []);
   // Выбор из черновика мог устареть (участник вышел из поездки) — берём только живых
   const splitUsers = splitOverride
     ? new Set([...splitOverride].filter((id) => participants.some((p) => p.id === id)))
-    : new Set(participants.map((p) => p.id));
+    : new Set(userId ? [userId] : []);
+  // В поездке в одиночку делить не с кем: блок «За кого?» только мешает
+  const canSplit = participants.length > 1;
 
   // Конвертация в USD (единая валюта хранения). Нет курса — отправка заблокирована, а не «курс 1»
   const fx = useRateFor(currencyCode);
@@ -267,33 +271,9 @@ export function ExpenseForm({ userId, onDone }: ExpenseFormProps) {
         className="w-full rounded-xl border border-input bg-background px-3 py-2.5 text-base input-mobile"
       />
 
-      <div>
-        <label className="text-xs text-muted-foreground mb-1 block">Категория</label>
-        {/* Чипы вместо системного select: один тап против «select → шит → пункт» */}
-        <div className="flex gap-1.5 overflow-x-auto no-scrollbar -mx-1 px-1 pb-0.5">
-          {Object.entries(EXPENSE_CATEGORIES).map(([k, v]) => {
-            const active = category === k;
-            return (
-              <button
-                key={k}
-                type="button"
-                onClick={() => setCategory(k)}
-                aria-pressed={active}
-                className={cn(
-                  "shrink-0 inline-flex items-center gap-1.5 min-h-9 px-3 rounded-full border text-sm font-medium transition-colors",
-                  active
-                    ? "bg-primary/10 border-primary/40 text-foreground"
-                    : "border-border text-muted-foreground hover:border-primary/30 hover:text-foreground"
-                )}
-              >
-                <span aria-hidden>{v.emoji}</span>
-                {v.label}
-              </button>
-            );
-          })}
-        </div>
-      </div>
+      <CategoryField value={category} onChange={setCategory} />
 
+      {canSplit && (
       <div>
         <div className="flex items-center justify-between mb-1">
           <label className="text-xs text-muted-foreground flex items-center gap-1">
@@ -358,7 +338,7 @@ export function ExpenseForm({ userId, onDone }: ExpenseFormProps) {
             <div className="text-[11px] text-primary bg-primary/5 rounded-lg px-2 py-1.5 mt-1 border border-primary/20">
               {splitUsers.has(userId)
                 ? splitUsers.size === 1
-                  ? <>💡 Личная трата (без долгов)</>
+                  ? <>💡 Личная трата, без долгов. Отметь остальных, чтобы поделить</>
                   : (
                       <>
                         💡 Доля каждого: <b>{sym}{perPerson}</b> ({splitCount} чел.)
@@ -378,6 +358,7 @@ export function ExpenseForm({ userId, onDone }: ExpenseFormProps) {
           )}
         </div>
       </div>
+      )}
 
       <div>
         <label className="text-xs text-muted-foreground mb-1 block">День</label>
