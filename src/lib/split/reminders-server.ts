@@ -5,6 +5,7 @@ import { groupUrl } from "./notify";
 import {
   dueAutoReminders,
   inAutoRemindWindow,
+  manualCooldownLeft,
   MIN_REMIND_CENTS,
   reminderNotification,
   type PastReminder,
@@ -14,7 +15,18 @@ import {
 
 // Серверная часть напоминаний о долгах (ADR-0010): отправка и часовой обход групп с включённым автонапоминанием.
 
-/** Записать напоминание и уведомить должника (колокольчик + пуш). Вернёт false, если уведомить некому. */
+export type SendReminderResult =
+  | { status: "sent" }
+  | { status: "no-recipient" }
+  /** Ручное напоминание этой паре уже было: когда и сколько ждать */
+  | { status: "cooldown"; last: Date; leftMs: number };
+
+/**
+ * Записать напоминание и уведомить должника (колокольчик + пуш).
+ * Для ручного проверка кулдауна и запись идут под одной транзакционной блокировкой пары: иначе два
+ * одновременных запроса (двойной тап, повтор сети) оба прошли бы проверку и отправили дубль.
+ * Уведомление уходит только после успешной записи.
+ */
 export async function sendDebtReminder(args: {
   groupId: string;
   groupName: string;
@@ -23,16 +35,32 @@ export async function sendDebtReminder(args: {
   creditorMemberId: string;
   cents: number;
   kind: "manual" | "auto";
-}): Promise<boolean> {
+}): Promise<SendReminderResult> {
   const [debtor, creditor] = await Promise.all([
     db.splitMember.findUnique({ where: { id: args.debtorMemberId }, select: { userId: true, status: true } }),
     db.splitMember.findUnique({ where: { id: args.creditorMemberId }, select: { displayName: true } }),
   ]);
-  if (!debtor?.userId || debtor.status !== "active" || !creditor) return false;
+  if (!debtor?.userId || debtor.status !== "active" || !creditor) return { status: "no-recipient" };
 
-  await db.splitReminder.create({
-    data: { groupId: args.groupId, fromId: args.debtorMemberId, toId: args.creditorMemberId, amountCents: args.cents, kind: args.kind },
+  const blocked = await db.$transaction(async (tx) => {
+    if (args.kind === "manual") {
+      // Блокировка живёт до конца транзакции; второй запрос по той же паре ждёт здесь и увидит запись первого
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`split-remind:${args.groupId}:${args.debtorMemberId}:${args.creditorMemberId}`}))`;
+      const recent = await tx.splitReminder.findFirst({
+        where: { groupId: args.groupId, fromId: args.debtorMemberId, toId: args.creditorMemberId },
+        orderBy: { createdAt: "desc" },
+        select: { createdAt: true },
+      });
+      const leftMs = manualCooldownLeft(recent?.createdAt ?? null, new Date());
+      if (recent && leftMs > 0) return { last: recent.createdAt, leftMs };
+    }
+    await tx.splitReminder.create({
+      data: { groupId: args.groupId, fromId: args.debtorMemberId, toId: args.creditorMemberId, amountCents: args.cents, kind: args.kind },
+    });
+    return null;
   });
+  if (blocked) return { status: "cooldown", ...blocked };
+
   const text = reminderNotification({
     kind: args.kind,
     creditorName: creditor.displayName,
@@ -41,7 +69,7 @@ export async function sendDebtReminder(args: {
     currency: args.currency,
   });
   await notifyUser(debtor.userId, { type: "split_reminder", title: text.title, body: text.body, url: groupUrl(args.groupId, "balance") });
-  return true;
+  return { status: "sent" };
 }
 
 /** Все траты и переводы группы с датой СОЗДАНИЯ записи — для правила «долг существует N дней». */
@@ -90,7 +118,7 @@ async function remindGroup(group: { id: string; name: string; currency: string; 
       cents: d.cents,
       kind: "auto",
     });
-    if (ok) sent += 1;
+    if (ok.status === "sent") sent += 1;
   }
   return sent;
 }

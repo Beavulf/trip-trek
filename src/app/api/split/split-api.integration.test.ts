@@ -511,6 +511,14 @@ describe.skipIf(!URL_ENV)("API «Сочтёмся» (Postgres)", () => {
     expect(again.status).toBe(429);
     expect((await json(again)).error).toMatch(/через \d+ ч/);
 
+    // Гонка: двойной тап — два одновременных запроса к свободной паре дают ровно одно напоминание
+    await db.splitReminder.deleteMany({ where: { groupId: gid } });
+    const notesBefore = await db.userNotification.count({ where: { userId: users.boris.id, type: "split_reminder" } });
+    const [r1, r2] = await Promise.all([remind("alice", boris), remind("alice", boris)]);
+    expect([r1.status, r2.status].sort()).toEqual([200, 429]);
+    expect(await db.splitReminder.count({ where: { groupId: gid, fromId: boris } })).toBe(1);
+    expect(await db.userNotification.count({ where: { userId: users.boris.id, type: "split_reminder" } })).toBe(notesBefore + 1);
+
     // Безаккаунтному уведомить некому: delivered=false и кулдаун не тратится
     const noAcc = await remind("alice", lesha);
     expect(await json(noAcc)).toMatchObject({ delivered: false, cents: 1000 });

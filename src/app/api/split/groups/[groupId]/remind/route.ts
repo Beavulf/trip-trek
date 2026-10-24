@@ -3,7 +3,7 @@ import { db } from "@/lib/db";
 import { userRateLimit } from "@/lib/rate-limit";
 import { requireGroupMember } from "@/lib/split/access";
 import { pairNet } from "@/lib/split/balances";
-import { agoLabel, lastReminderAt, manualCooldownLeft, MIN_REMIND_CENTS } from "@/lib/split/reminders";
+import { agoLabel, MIN_REMIND_CENTS } from "@/lib/split/reminders";
 import { loadStampedLedger, sendDebtReminder } from "@/lib/split/reminders-server";
 import { jsonError, readJson } from "@/lib/split/server";
 
@@ -34,23 +34,11 @@ export async function POST(req: NextRequest, { params }: Ctx) {
   const owed = pairNet(expenses, payments, debtorId, member.id);
   if (owed < MIN_REMIND_CENTS) return jsonError("Этот человек сейчас вам ничего не должен", 409);
 
-  const now = new Date();
-  const recent = await db.splitReminder.findMany({
-    where: { groupId, fromId: debtorId, toId: member.id },
-    orderBy: { createdAt: "desc" },
-    take: 1,
-    select: { fromId: true, toId: true, createdAt: true },
-  });
-  const left = manualCooldownLeft(lastReminderAt(recent, debtorId, member.id), now);
-  if (left > 0) {
-    const hours = Math.ceil(left / 3_600_000);
-    return jsonError(`Уже напоминали ${agoLabel(recent[0].createdAt, now)}. Можно снова через ${hours} ч`, 429);
-  }
-
   // Без аккаунта (или вышел) уведомить некому — записи не создаём, кулдаун не тратим
   if (!debtor.userId || debtor.status !== "active") return NextResponse.json({ ok: true, delivered: false, cents: owed });
 
-  const delivered = await sendDebtReminder({
+  // Кулдаун проверяется и фиксируется внутри sendDebtReminder атомарно (двойной тап не пошлёт дубль)
+  const result = await sendDebtReminder({
     groupId,
     groupName: group.name,
     currency: group.currency,
@@ -59,5 +47,10 @@ export async function POST(req: NextRequest, { params }: Ctx) {
     cents: owed,
     kind: "manual",
   });
+  if (result.status === "cooldown") {
+    const hours = Math.ceil(result.leftMs / 3_600_000);
+    return jsonError(`Уже напоминали ${agoLabel(result.last, new Date())}. Можно снова через ${hours} ч`, 429);
+  }
+  const delivered = result.status === "sent";
   return NextResponse.json({ ok: true, delivered, cents: owed });
 }
