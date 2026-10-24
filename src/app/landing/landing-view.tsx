@@ -1,13 +1,12 @@
 /* eslint-disable @next/next/no-img-element -- картинки лендинга уже сжаты в webp и лежат в public/landing: оптимизатор next/image им не нужен */
 import type { ReactNode } from "react";
-import { DEFAULT_SHOWCASE, contactLink, demoHref, type LandingShowcase } from "./showcase";
+import { DEFAULT_SHOWCASE, contactLink, demoHref, registerHrefFor, type LandingShowcase } from "./showcase";
 
 // Страница-презентация TripTrek (/landing). Чистая разметка без хуков и next/*:
 // рендерится сервером и так же — в статический HTML для предпросмотра.
 // Тексты намеренно без привязки к стране; скриншоты — из демо-поездки.
 // Витрина (режим регистрации, живой пример, контакт) приходит пропсом из page.tsx.
 
-const REGISTER_HREF = "/login?mode=register";
 const LOGIN_HREF = "/login";
 
 type IconProps = { className?: string };
@@ -167,19 +166,38 @@ function Day({ n, title, sub, tone, children }: { n: number; title: string; sub:
   );
 }
 
-export function LandingView({ showcase = DEFAULT_SHOWCASE }: { showcase?: LandingShowcase }) {
+export function LandingView({
+  showcase = DEFAULT_SHOWCASE,
+  inviteCode = null,
+  inAppBrowser = false,
+}: {
+  showcase?: LandingShowcase;
+  /** Код из ссылки `?code=`: подставляется в регистрацию */
+  inviteCode?: string | null;
+  /** Страница открыта во встроенном браузере соцсети (TikTok и т.п.) */
+  inAppBrowser?: boolean;
+}) {
   const { registrationEnabled, inviteRequired } = showcase;
   const demo = demoHref(showcase.demoTripToken);
   const contact = contactLink(showcase.contactTelegram);
   // Главная кнопка ведёт туда, где у гостя что-то получится: при закрытой регистрации — на вход
   const entry = registrationEnabled
-    ? { href: REGISTER_HREF, label: inviteRequired ? "У меня есть код" : "Начать планировать" }
+    ? {
+        href: registerHrefFor(inviteCode),
+        label: inviteCode ? "Создать аккаунт" : inviteRequired ? "У меня есть код" : "Начать планировать",
+      }
     : { href: LOGIN_HREF, label: "Войти" };
   const entryNote = !registrationEnabled
     ? "Регистрация новых аккаунтов сейчас закрыта. "
-    : inviteRequired
-      ? "Сейчас вход по приглашениям: код ищите в описании видео или спросите у друга. "
-      : "";
+    : inviteRequired && inviteCode
+      ? "Код приглашения уже подставлен в регистрацию. "
+      : inviteRequired
+        ? "Сейчас вход по приглашениям: код ищите в описании видео или спросите у друга. "
+        : "";
+  // Во встроенном браузере «поставить на экран» недоступно: честно говорим, как открыть нормально
+  const installNote = inAppBrowser
+    ? "Чтобы поставить приложение на экран телефона, откройте страницу в Chrome или Safari (меню ⋯ → «Открыть в браузере»)."
+    : "Открывается в браузере и ставится на экран телефона как обычное приложение.";
 
   return (
     <div className="lp">
@@ -254,7 +272,7 @@ export function LandingView({ showcase = DEFAULT_SHOWCASE }: { showcase?: Landin
                 </a>
               </div>
               <p className="lp-note">
-                {entryNote}Открывается в браузере и ставится на экран телефона как обычное приложение.
+                {entryNote}{installNote}
               </p>
             </div>
 

@@ -1,8 +1,10 @@
 import type { Metadata } from "next";
+import { headers } from "next/headers";
 import { Onest, Unbounded } from "next/font/google";
 import { YandexMetrika } from "@/components/analytics/yandex-metrika";
 import { getPublicShowcase } from "@/lib/app-config";
 import { LandingView } from "./landing-view";
+import { isInAppBrowser, sanitizeInviteParam } from "./showcase";
 import "./landing.css";
 
 // Лендинг шрифтами не делится с приложением (там Geist без кириллицы): два семейства
@@ -34,12 +36,17 @@ export const metadata: Metadata = {
 // без пересборки, поэтому страница не кэшируется
 export const dynamic = "force-dynamic";
 
-export default async function LandingPage() {
-  const showcase = await getPublicShowcase();
+export default async function LandingPage({ searchParams }: { searchParams: Promise<{ code?: string | string[] }> }) {
+  const [showcase, params, h] = await Promise.all([getPublicShowcase(), searchParams, headers()]);
   return (
     <div className={`${display.variable} ${text.variable}`}>
       <YandexMetrika />
-      <LandingView showcase={showcase} />
+      {/* ?code=… из ссылки в профиле TikTok едет в регистрацию; во встроенном браузере соцсети подсказываем, как открыть нормально */}
+      <LandingView
+        showcase={showcase}
+        inviteCode={sanitizeInviteParam(params.code)}
+        inAppBrowser={isInAppBrowser(h.get("user-agent"))}
+      />
     </div>
   );
 }

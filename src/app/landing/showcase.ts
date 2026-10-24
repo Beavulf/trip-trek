@@ -42,3 +42,27 @@ export function demoHref(token: string | null | undefined): string | null {
   const t = token?.trim();
   return t ? `/p/${encodeURIComponent(t)}` : null;
 }
+
+/**
+ * Код приглашения из ссылки (`/landing?code=…`): в профиле TikTok кликабельна одна ссылка, и код
+ * едет в ней, чтобы человек не вводил его руками. Из параметра берём только буквы и цифры
+ * (код приложения — 8 знаков), всё остальное — не код и в ссылки дальше не попадает.
+ */
+export function sanitizeInviteParam(raw: string | string[] | null | undefined): string | null {
+  const v = (Array.isArray(raw) ? raw[0] : raw)?.trim();
+  return v && /^[A-Za-z0-9]{4,32}$/.test(v) ? v : null;
+}
+
+/** Адрес регистрации; с кодом он подставится в поле формы (`/login?code=` уже умеет это). */
+export function registerHrefFor(code: string | null): string {
+  return code ? `/login?mode=register&code=${encodeURIComponent(code)}` : "/login?mode=register";
+}
+
+/**
+ * Встроенный браузер соцсети (TikTok, Instagram, Facebook): сайт работает, но «поставить на экран»
+ * там нет, а ссылка из ленты открывается именно в нём. Определяем по User-Agent.
+ */
+export function isInAppBrowser(ua: string | null | undefined): boolean {
+  return !!ua && /musical_ly|bytedance|tiktok|instagram|FBAN|FBAV/i.test(ua);
+}
+
