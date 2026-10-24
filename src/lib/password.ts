@@ -9,16 +9,9 @@ import { passwordChangedEmail } from "@/lib/mail/templates";
 // сжигание ссылок сброса + уведомления. Проверка старого пароля и авторизация —
 // забота вызывающего роута.
 
-/** Русский текст ошибки или null, если пароль проходит политику (как в register). */
-export function validatePasswordPolicy(password: unknown): string | null {
-  if (typeof password !== "string" || password.length < 8) {
-    return "Пароль минимум 8 символов";
-  }
-  if (!/[a-z]/i.test(password) || !/\d/.test(password)) {
-    return "Пароль должен содержать буквы и цифры";
-  }
-  return null;
-}
+// Политика живёт в password-policy.ts (без bcrypt/БД — её читают и формы в браузере);
+// здесь реэкспорт, чтобы серверные роуты импортировали всё из одного места
+export { validatePasswordPolicy } from "@/lib/password-policy";
 
 export function hashPassword(password: string): Promise<string> {
   return bcrypt.hash(password, 10);

@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { rateLimitMiddleware } from "@/lib/rate-limit";
 import { getAppConfig } from "@/lib/app-config";
 import { normalizeInviteCode } from "@/lib/invite-code";
+import { isAvatarColor, isAvatarEmoji } from "@/lib/avatar-presets";
 import { validatePasswordPolicy, hashPassword } from "@/lib/password";
 import { sendMail } from "@/lib/mail/mailer";
 import { welcomeEmail } from "@/lib/mail/templates";
@@ -25,7 +26,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const { email, password, name, inviteCode } = (await req.json().catch(() => null)) ?? {};
+    const { email, password, name, inviteCode, emoji, color } = (await req.json().catch(() => null)) ?? {};
 
     if (!email || !password || !name) {
       return NextResponse.json({ error: "email, password, name обязательны" }, { status: 400 });
@@ -59,6 +60,12 @@ export async function POST(req: NextRequest) {
 
     const hashedPassword = await hashPassword(password);
     const displayName = name.trim();
+    // Значок из формы регистрации: раньше терялся (сервер его не читал). Берём только значения из
+    // фиксированных списков; всё остальное — дефолт схемы
+    const avatar = {
+      ...(isAvatarEmoji(emoji) ? { emoji } : {}),
+      ...(isAvatarColor(color) ? { color } : {}),
+    };
 
     // Слот инвайт-кода занимается атомарным условным updateMany: условие
     // перепроверяется в SQL, поэтому две регистрации на последнем слоте не
@@ -89,7 +96,7 @@ export async function POST(req: NextRequest) {
           });
           if (taken.count === 0) throw INVITE_GONE;
           return tx.user.create({
-            data: { name: displayName, email: emailNorm, password: hashedPassword, inviteCodeId: codeRow.id },
+            data: { name: displayName, email: emailNorm, password: hashedPassword, inviteCodeId: codeRow.id, ...avatar },
           });
         });
       } catch (e) {
@@ -101,7 +108,7 @@ export async function POST(req: NextRequest) {
     } else {
       // Код не обязателен: переданное поле игнорируем, инвайт-привязку не пишем
       user = await db.user.create({
-        data: { name: displayName, email: emailNorm, password: hashedPassword },
+        data: { name: displayName, email: emailNorm, password: hashedPassword, ...avatar },
       });
     }
 
