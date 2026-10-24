@@ -156,7 +156,7 @@ export async function DELETE(req: NextRequest) {
   await notifyUser(member.userId, {
     type: "member_removed",
     title: `Вас исключили из поездки «${member.trip.title}»`,
-    body: "Если это ошибка — напиши админу через «Сообщить о проблеме».",
+    body: "Если это ошибка — напиши админу через «Обратная связь».",
   });
 
   return NextResponse.json({ ok: true });

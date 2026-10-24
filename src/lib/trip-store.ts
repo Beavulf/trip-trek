@@ -40,6 +40,12 @@ interface TripState {
   openQuickAdd: (mode?: QuickAddMode) => void;
   uploadManagerOpen: boolean;
   setUploadManagerOpen: (v: boolean) => void;
+  // Окно «Обратная связь»: его открывают меню, профиль и ссылка из уведомления об ответе
+  // (транзиентное, не в persist). feedbackId — сразу открыть переписку этого обращения
+  feedbackOpen: boolean;
+  feedbackId: string | null;
+  openFeedback: (id?: string | null) => void;
+  setFeedbackOpen: (v: boolean) => void;
   currentUserId: string | null;
   setCurrentUserId: (id: string | null) => void;
   selectedDay: number | null;
@@ -80,6 +86,10 @@ export const useTripStore = create<TripState>()(
       openQuickAdd: (mode) => set({ quickAddOpen: true, quickAddMode: mode ?? null }),
       uploadManagerOpen: false,
       setUploadManagerOpen: (v) => set((st) => (st.uploadManagerOpen === v ? st : { uploadManagerOpen: v })),
+      feedbackOpen: false,
+      feedbackId: null,
+      openFeedback: (id) => set({ feedbackOpen: true, feedbackId: id ?? null }),
+      setFeedbackOpen: (v) => set((st) => (st.feedbackOpen === v ? st : { feedbackOpen: v, feedbackId: v ? st.feedbackId : null })),
       setActiveTab: (t) =>
         set((s) => ({ activeTab: t, mapEverOpened: s.mapEverOpened || t === "map" })),
       currentUserId: null,

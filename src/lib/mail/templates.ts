@@ -105,9 +105,9 @@ export function welcomeEmail(name: string, contact?: EmailContact | null): Email
         // Приложение в бете: человеку, у которого что-то не вышло, нужен живой адрес помощи
         (contact
           ? p(
-              `Что-то не получается или есть идея? Напишите в Telegram: <a href="${escapeHtml(contact.href)}" style="color:${BTN_BG}; font-weight:bold;">${escapeHtml(contact.label)}</a>. Внутри приложения тоже есть кнопка «Сообщить о проблеме».`
+              `Что-то не получается или есть идея? Напишите в Telegram: <a href="${escapeHtml(contact.href)}" style="color:${BTN_BG}; font-weight:bold;">${escapeHtml(contact.label)}</a>. Внутри приложения тоже есть раздел «Обратная связь».`
             )
-          : p("Что-то не получается или есть идея? В приложении есть кнопка «Сообщить о проблеме» — мы читаем всё.")) +
+          : p("Что-то не получается или есть идея? В приложении есть раздел «Обратная связь» — мы читаем всё и отвечаем.")) +
         p("Хорошего пути! 🧳"),
       cta: { label: "Открыть TripTrek", url: mailLink("/") },
     }),
@@ -141,11 +141,27 @@ export function passwordChangedEmail(name: string): EmailContent {
         p(`${escapeHtml(name)}, пароль вашего аккаунта TripTrek только что был изменён. Все другие устройства автоматически вышли из аккаунта.`) +
         p("Если это были вы — всё в порядке, войдите с новым паролем."),
       cta: { label: "Войти в TripTrek", url: mailLink("/login") },
-      footer: "Если вы не меняли пароль — аккаунт могли взломать: срочно сообщите админу через «Сообщить о проблеме» на странице входа.",
+      footer: "Если вы не меняли пароль — аккаунт могли взломать: срочно напишите нам через ссылку «Нужна помощь?» на странице входа.",
     }),
   };
 }
 
 function escapeHtml(s: string): string {
   return s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c] as string));
+}
+
+/** Ответ команды на обращение гостя (у аккаунта ответ идёт в колокольчик — письмо только тем, у кого его нет). */
+export function feedbackReplyEmail(replyText: string, originalText: string): EmailContent {
+  const quote = originalText.length > 300 ? `${originalText.slice(0, 300)}…` : originalText;
+  return {
+    subject: "Ответ от TripTrek",
+    html: renderEmail({
+      title: "Ответ на ваше обращение",
+      subtitle: "Поддержка TripTrek",
+      bodyHtml:
+        p(escapeHtml(replyText).replace(/\n/g, "<br>")) +
+        `<p style="margin:18px 0 0; padding:10px 14px; border-left:3px solid ${MUTED}; font-family:${FONT}; font-size:13px; line-height:1.5; color:${MUTED};">Ваше сообщение: ${escapeHtml(quote).replace(/\n/g, "<br>")}</p>`,
+      footer: "Хотите продолжить? Напишите нам снова через ссылку «Нужна помощь?» на странице входа или из приложения.",
+    }),
+  };
 }

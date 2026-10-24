@@ -10,7 +10,11 @@ import type { FeedbackStatus } from "@/components/admin/shared";
 export default function AdminFeedbackPage() {
   const { data: session, status } = useAuth();
   const isAdmin = session?.user?.isAdmin === true;
-  const [statusFilter, setStatusFilter] = useState<FeedbackStatus | "all">("new");
+  // «?open=<id>» из уведомления о новом обращении: открыть его, а не очередь «Новые»
+  const [openId] = useState<string | null>(() =>
+    typeof window === "undefined" ? null : new URLSearchParams(window.location.search).get("open")
+  );
+  const [statusFilter, setStatusFilter] = useState<FeedbackStatus | "all">(openId ? "all" : "new");
   const { data: stats } = useAdminStats(status === "authenticated" && isAdmin);
 
   return (
@@ -24,6 +28,7 @@ export default function AdminFeedbackPage() {
         statusFilter={statusFilter}
         onFilterChange={setStatusFilter}
         counts={stats?.feedback || { new: 0, inProgress: 0, resolved: 0 }}
+        initialOpenId={openId}
       />
     </>
   );

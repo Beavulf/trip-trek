@@ -1,9 +1,10 @@
 "use client";
 
+import { useFeedbackUnread } from "@/hooks/use-feedback";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
-import { ArrowRight, Bell, Bug, Check, ChevronDown, Crown, GraduationCap, KeyRound, Loader2, Monitor, Moon, Settings, Shield, Sparkles, Sun, Trash2 } from "lucide-react";
+import { ArrowRight, Bell, Check, ChevronDown, Crown, GraduationCap, KeyRound, Loader2, MessageSquarePlus, Monitor, Moon, Settings, Shield, Sparkles, Sun, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { useTheme } from "next-themes";
 import { cn } from "@/lib/utils";
@@ -28,6 +29,7 @@ const THEME_OPTIONS = [
 ] as const;
 
 export function ProfileSettings({ profile, setPremiumOpen, onReportBug, isAdmin, feedbackNew }: ProfileSettingsProps) {
+  const { data: feedbackUnread = 0 } = useFeedbackUnread(true);
   const { theme, setTheme } = useTheme();
   const router = useRouter();
   const [mounted, setMounted] = useState(false);
@@ -441,19 +443,24 @@ export function ProfileSettings({ profile, setPremiumOpen, onReportBug, isAdmin,
           {tourReplaying ? <Loader2 className="size-4 text-muted-foreground shrink-0 animate-spin" /> : <ArrowRight className="size-4 text-muted-foreground shrink-0" />}
         </button>
 
-        {/* Сообщить о проблеме */}
+        {/* Обратная связь */}
         <button
           type="button"
           onClick={onReportBug}
           className="w-full flex items-center gap-3 p-3.5 text-left hover:bg-accent/50 transition-colors"
         >
           <div className="size-9 rounded-xl bg-secondary grid place-items-center shrink-0">
-            <Bug className="size-4.5 text-muted-foreground" />
+            <MessageSquarePlus className="size-4.5 text-muted-foreground" />
           </div>
           <div className="flex-1 min-w-0">
-            <div className="text-sm font-medium">Сообщить о проблеме</div>
-            <div className="text-xs text-muted-foreground">Баг, идея или вопрос</div>
+            <div className="text-sm font-medium">Обратная связь</div>
+            <div className="text-xs text-muted-foreground">Баг, идея, вопрос, жалоба или отзыв</div>
           </div>
+          {feedbackUnread > 0 && (
+            <span className="rounded-full bg-primary px-2 py-0.5 text-[10px] font-bold text-primary-foreground shrink-0">
+              новый ответ
+            </span>
+          )}
           <ArrowRight className="size-4 text-muted-foreground shrink-0" />
         </button>
 

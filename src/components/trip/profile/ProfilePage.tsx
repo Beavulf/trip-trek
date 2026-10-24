@@ -28,7 +28,7 @@ import { TripsList } from "./TripsList";
 import { ProfileSettings } from "./ProfileSettings";
 import { SupportCard } from "./SupportCard";
 import { EditProfileSheet } from "./EditProfileSheet";
-import { BugReportSheet } from "@/components/trip/bug-report-sheet";
+import { FeedbackSheet } from "@/components/trip/feedback/feedback-sheet";
 import { useAdminStats } from "@/hooks/use-admin-stats";
 
 export function ProfilePage() {
@@ -227,8 +227,8 @@ export function ProfilePage() {
         />
       )}
 
-      {/* Сообщить о проблеме */}
-      <BugReportSheet open={bugOpen} onOpenChange={setBugOpen} />
+      {/* Обратная связь: монтируем по клику, чтобы окно каждый раз открывалось с чистого состояния */}
+      {bugOpen && <FeedbackSheet open onOpenChange={setBugOpen} />}
 
       {/* Подтверждение выхода */}
       <AlertDialog open={signOutOpen} onOpenChange={setSignOutOpen}>

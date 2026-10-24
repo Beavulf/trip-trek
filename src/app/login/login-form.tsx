@@ -6,6 +6,7 @@ import { motion } from "framer-motion";
 import { Loader2, UserPlus, LogIn } from "lucide-react";
 import { toast } from "sonner";
 import { PasswordField } from "@/components/auth/password-field";
+import { GuestContactSheet } from "@/components/auth/guest-contact-sheet";
 import { contactLink } from "@/app/landing/showcase";
 import { AVATAR_COLORS, AVATAR_EMOJIS, pickRandom } from "@/lib/avatar-presets";
 import { isInviteError, serverErrorText, validateAuthForm } from "@/lib/auth-form";
@@ -51,6 +52,7 @@ export function LoginForm({ registrationEnabled, inviteRequired, contactTelegram
   const [serverWantsInvite, setServerWantsInvite] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [helpOpen, setHelpOpen] = useState(false);
 
   const registering = mode === "register";
   const closed = registering && !registrationEnabled;
@@ -400,14 +402,23 @@ export function LoginForm({ registrationEnabled, inviteRequired, contactTelegram
             {registering ? "Уже есть аккаунт? Нажмите «Вход»" : "Нет аккаунта? Нажмите «Регистрация»"}
           </p>
 
-          {contact && (
-            <p className="text-[11px] text-muted-foreground text-center mt-3">
-              Застряли? Напишите нам:{" "}
-              <a href={contact.href} target="_blank" rel="noreferrer" className="text-primary hover:underline">
-                {contact.label}
-              </a>
-            </p>
-          )}
+          <p className="text-[11px] text-muted-foreground text-center mt-3">
+            Застряли?{" "}
+            <button type="button" onClick={() => setHelpOpen(true)} className="text-primary hover:underline">
+              Напишите нам
+            </button>
+            {contact && (
+              <>
+                {" "}
+                или в Telegram:{" "}
+                <a href={contact.href} target="_blank" rel="noreferrer" className="text-primary hover:underline">
+                  {contact.label}
+                </a>
+              </>
+            )}
+          </p>
+          {/* Ссылка «Нужна помощь?» из писем и условий ведёт сюда же */}
+          {helpOpen && <GuestContactSheet open onOpenChange={setHelpOpen} initialEmail={email} />}
 
           {/* Демо-аккаунты — только в dev: в проде известных логинов быть не должно */}
           {process.env.NODE_ENV !== "production" && (

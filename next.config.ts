@@ -1,4 +1,5 @@
 import type { NextConfig } from "next";
+import pkg from "./package.json";
 
 const nextConfig: NextConfig = {
   output: "standalone",
@@ -12,6 +13,8 @@ const nextConfig: NextConfig = {
   reactStrictMode: false,
   // Не палим стек (X-Powered-By: Next.js)
   poweredByHeader: false,
+  // Версия сборки в клиенте: уходит в обращения обратной связи (устаревший PWA-кэш — частая причина багов)
+  env: { NEXT_PUBLIC_APP_VERSION: pkg.version },
   // recharts (+d3) дублировался в чанках `/` и `/admin` — по копии ~390KB raw
   // (аудит перфоманса 2026-09-13). Общая cache-group: оба маршрута делят один чанк.
   // Работает при webpack-сборке (Dockerfile собирает через `next build --webpack`).

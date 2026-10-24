@@ -12,6 +12,7 @@ import {
   KeyRound,
   Mail,
   MessageSquareReply,
+  MessageSquareWarning,
   ShieldBan,
   ShieldCheck,
   Sparkles,
@@ -21,6 +22,7 @@ import {
   X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useTripStore } from "@/lib/trip-store";
 import { useBackDismiss } from "@/hooks/use-back-dismiss";
 import { useBodyScrollLock } from "@/hooks/use-body-scroll-lock";
 import { useNotifications, useMarkNotificationsRead, type UserNotificationItem } from "@/hooks/use-notifications";
@@ -50,6 +52,7 @@ const TYPE_ICON: Record<string, React.ReactNode> = {
   member_left: <UserMinus className="size-4 text-sky-500" />,
   trip_deleted: <Trash2 className="size-4 text-rose-500" />,
   feedback_reply: <MessageSquareReply className="size-4 text-emerald-500" />,
+  feedback_new: <MessageSquareWarning className="size-4 text-amber-500" />,
   admin_message: <Mail className="size-4 text-sky-500" />,
   ownership: <Crown className="size-4 text-amber-500" />,
   ai_blocked: <ShieldBan className="size-4 text-rose-500" />,
@@ -182,7 +185,21 @@ function NotificationsSheet({ items, onClose }: { items: UserNotificationItem[];
                       {!n.readAt && <span className="size-2 rounded-full bg-primary mt-1.5 shrink-0" aria-hidden />}
                     </div>
                   );
-                  return n.url ? (
+                  // Ответ на обращение открываем окном поверх текущего экрана, не перезагружая страницу
+                  const feedbackId = n.url?.startsWith("/?feedback=") ? decodeURIComponent(n.url.slice("/?feedback=".length)) : null;
+                  return feedbackId ? (
+                    <button
+                      key={n.id}
+                      type="button"
+                      onClick={() => {
+                        onClose();
+                        useTripStore.getState().openFeedback(feedbackId);
+                      }}
+                      className="block w-full text-left hover:bg-accent/40 transition-colors"
+                    >
+                      {inner}
+                    </button>
+                  ) : n.url ? (
                     <Link key={n.id} href={n.url} onClick={onClose} className="block hover:bg-accent/40 transition-colors">
                       {inner}
                     </Link>

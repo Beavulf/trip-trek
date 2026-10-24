@@ -20,11 +20,11 @@ import {
   UserMinus,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { FEEDBACK_TYPE_META, type FeedbackStatus, type FeedbackType } from "@/lib/feedback";
 
 // === Общий язык админки: ведомственные штампы и «учётные» метаданные ===
 
-export type FeedbackStatus = "new" | "in_progress" | "resolved";
-export type FeedbackType = "bug" | "idea" | "question";
+export type { FeedbackStatus, FeedbackType };
 export type TripStatus = "planning" | "active" | "completed";
 
 /** Цвета как в паспорте: янтарь — необработано, небо — в работе, зелень — решено */
@@ -34,11 +34,8 @@ export const STATUS_META: Record<FeedbackStatus, { label: string; color: string 
   resolved: { label: "Решён", color: "#10b981" },
 };
 
-export const TYPE_META: Record<FeedbackType, { emoji: string; label: string }> = {
-  bug: { emoji: "🐞", label: "Баг" },
-  idea: { emoji: "💡", label: "Идея" },
-  question: { emoji: "❓", label: "Вопрос" },
-};
+/** Эмодзи и подпись типа обращения — общие с формой пользователя (lib/feedback) */
+export const TYPE_META: Record<FeedbackType, { emoji: string; label: string }> = FEEDBACK_TYPE_META;
 
 export const TRIP_STATUS_META: Record<TripStatus, { label: string; color: string }> = {
   planning: { label: "Планируется", color: "#0ea5e9" },

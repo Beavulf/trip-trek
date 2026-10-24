@@ -553,30 +553,56 @@ model UserNotification {
   @@index([userId, createdAt])
 }
 
-// === Обратная связь: баг-репорты, идеи и вопросы из приложения ===
+// === Обратная связь: баг-репорты, идеи, вопросы, жалобы и отзывы из приложения ===
+// Обращение = первое сообщение (message) + переписка в FeedbackMessage.
+// Статус отвечает на вопрос «чья очередь»: new — ждёт админа (новое или юзер дописал),
+// in_progress — админ взял в работу/ответил, resolved — закрыто (юзер может дописать — вернётся в new).
 model Feedback {
-  id            String    @id @default(cuid())
-  userId        String? // автор; переживает удаление аккаунта (SetNull)
-  type          String    @default("bug") // bug / idea / question
-  message       String
-  screenshotUrl String? // /uploads/feedback/*.jpg через единый storage-пайплайн
-  status        String    @default("new") // new / in_progress / resolved
-  adminNote     String? // внутренняя заметка админа
-  adminReply    String? // ответ админа пользователю — придёт ему в уведомления
-  repliedAt     DateTime?
-  // Автоконтекст: страница, откуда отправили, и активная поездка (без FK —
+  id             String    @id @default(cuid())
+  userId         String? // автор; null — гость (письмо с /login) или аккаунт удалён (SetNull)
+  type           String    @default("bug") // bug / idea / question / complaint / review
+  message        String
+  screenshotUrl  String? // /uploads/feedback/*.jpg через единый storage-пайплайн
+  status         String    @default("new") // new / in_progress / resolved
+  adminNote      String? // внутренняя заметка админа
+  // УСТАРЕЛО: до переписки ответ админа лежал здесь. Миграция перенесла его в FeedbackMessage;
+  // колонки оставлены, чтобы откат на прошлую сборку не падал. Код их не читает и не пишет
+  adminReply     String?
+  repliedAt      DateTime?
+  // Автоконтекст: вкладка приложения, откуда отправили, и активная поездка (без FK —
   // поездку могут удалить, репорт остаётся)
-  pageUrl       String?
-  tripId        String?
-  userAgent     String? // заполняет сервер из заголовка, клиенту не доверяем
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-  resolvedAt    DateTime?
+  pageUrl        String?
+  screen         String? // где был юзер: id вкладки SPA (trip-store.TripTab) или путь без id; путь у главного экрана всегда «/»
+  tripId         String?
+  userAgent      String? // заполняет сервер из заголовка, клиенту не доверяем
+  viewport       String? // «390x844» (+ «pwa»), для багов вёрстки
+  appVersion     String? // версия сборки, которую видел юзер (устаревший PWA-кэш — частая причина багов)
+  contactEmail   String? // только у гостей: куда писать ответ
+  lastActivityAt DateTime  @default(now()) // последнее сообщение любой стороны — сортировка очереди
+  userSeenAt     DateTime? // когда автор последний раз открыл обращение: ответ новее — «непрочитано»
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  resolvedAt     DateTime?
 
-  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+  user     User?             @relation(fields: [userId], references: [id], onDelete: SetNull)
+  messages FeedbackMessage[]
 
-  @@index([status, createdAt])
+  @@index([status, lastActivityAt])
   @@index([userId])
+}
+
+// Реплики переписки после первого сообщения обращения
+model FeedbackMessage {
+  id         String   @id @default(cuid())
+  feedbackId String
+  author     String // user / admin
+  authorId   String? // кто писал; без FK — аккаунт могут удалить, реплика остаётся
+  body       String
+  createdAt  DateTime @default(now())
+
+  feedback Feedback @relation(fields: [feedbackId], references: [id], onDelete: Cascade)
+
+  @@index([feedbackId, createdAt])
 }
 
 // ============================================================================

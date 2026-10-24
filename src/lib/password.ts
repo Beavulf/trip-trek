@@ -40,7 +40,7 @@ export async function changePassword(userId: string, newPassword: string): Promi
   await notifyUser(userId, {
     type: "password",
     title: "Пароль вашего аккаунта изменён",
-    body: "Если вы меняли пароль — всё в порядке. Если нет — срочно свяжитесь с админом через «Сообщить о проблеме».",
+    body: "Если вы меняли пароль — всё в порядке. Если нет — срочно свяжитесь с админом через «Обратная связь».",
   });
 
   // Письмо дублирует колокольчик; без SMTP_HOST sendMail тихо пропустит отправку

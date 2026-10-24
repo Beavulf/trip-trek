@@ -14,6 +14,7 @@ export type NotificationType =
   | "member_left"
   | "trip_deleted"
   | "feedback_reply"
+  | "feedback_new"
   | "admin_message"
   | "ownership"
   | "ai_blocked"

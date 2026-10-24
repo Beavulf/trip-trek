@@ -142,7 +142,8 @@ User ──< TripMember >── Trip ──< Day ──< Place ──< Photo
               │            └──< TripBan (бан юзера в конкретной поездке)
    глобальное: AppSettings (singleton id="app"), AdminLog,
                InviteCode (бета-коды регистрации приложения),
-               PushSubscription, UserNotification, PasswordResetToken, Feedback,
+               PushSubscription, UserNotification, PasswordResetToken, Feedback
+               (──< FeedbackMessage: переписка обращения),
                AiUsage (учёт вызовов ИИ: feature/keySource/токены, без промптов)
 ```
 

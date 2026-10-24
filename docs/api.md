@@ -157,8 +157,11 @@
 | `push/subscribe` | POST, DELETE | U | rateLimitMiddleware | подписка/отписка web-push; endpoint — только https и публичный хост (`net-guard`, с DNS-резолвом) |
 | `push` | POST, PUT, GET | U | — | отправка/тест пуша, статус VAPID |
 | `push/vapid-public-key` | GET | 🌐 | — | публичный VAPID-ключ |
-| `feedback` | POST | U | userRateLimit | баг-репорт/идея (скриншот через storage, UA заполняет сервер) |
-| `feedback/mine` | GET | U | — | свои обращения и ответы админа |
+| `feedback` | POST | U | userRateLimit (5/ч) | обращение: баг/идея/вопрос/жалоба/отзыв (multipart; скриншот через storage; контекст `screen`/`viewport`/`appVersion`, UA — с сервера, `noContext=1` — не прикладывать); админам уходит колокольчик+пуш `feedback_new` |
+| `feedback/guest` | POST | 🌐 | 3/ч и 10/сутки / IP | обращение без входа (`{message,email,website}`; `website` — приманка для ботов): тип `question`, `userId=null`, `contactEmail` |
+| `feedback/mine` | GET | U | — | свои обращения: статус, превью последней реплики, `unread` (ответ новее `userSeenAt`); `?summary=1` — только `{unread}` |
+| `feedback/[id]` | GET | U | — | своё обращение с перепиской; открытие ставит `userSeenAt` (чужое = 404) |
+| `feedback/[id]/messages` | POST | U | userRateLimit (20/ч) | автор дописывает `{body}`; статус → `new` (даже из закрытого), админам — уведомление |
 
 ## Админка (все — A, большинство с userRateLimit)
 
@@ -175,7 +178,9 @@
 | `admin/storage` | GET, POST | статистика и очистка хранилища |
 | `admin/stats` | GET | сводка дашборда; `health.disk` — свободное место диска с фото и базой (`ok`/`low`/`critical`), при `low`/`critical` в «Обзоре» плашка внимания |
 | `admin/journal` | GET | журнал действий админов (`AdminLog`) |
-| `admin/feedback` | GET, PATCH, DELETE | обработка фидбека, ответ юзеру (→ уведомление) |
+| `admin/feedback` | GET, PATCH, DELETE | очередь обращений (`status`/`type`/`q`, курсор `cursor`→`nextCursor`, по `lastActivityAt`); PATCH `{id,status?,adminNote?}` (закрытие уведомляет автора); DELETE с перепиской и скриншотом |
+| `admin/feedback/[id]` | GET | обращение целиком: переписка, автор, контекст устройства, поездка |
+| `admin/feedback/[id]/messages` | POST | ответ админа `{body,status?}`: автору — колокольчик/пуш `feedback_reply` со ссылкой `/?feedback=<id>`, гостю — письмо на `contactEmail` (ответ `emailed`: `false`, если почта не настроена) |
 
 ## Rate limits (сводка)
 

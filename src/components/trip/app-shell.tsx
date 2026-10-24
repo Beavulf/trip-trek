@@ -32,7 +32,7 @@ import {
   Share2,
   Crown,
   MoreHorizontal,
-  Bug,
+  MessageSquarePlus,
   Shield,
   UserRound,
 } from "lucide-react";
@@ -53,6 +53,7 @@ import { TripInfoSheet } from "./trip-info-sheet";
 import { WelcomeTour } from "./onboarding/welcome-tour";
 import { TabTour } from "./onboarding/tab-tour";
 import { useAdminStats } from "@/hooks/use-admin-stats";
+import { useFeedbackUnread } from "@/hooks/use-feedback";
 import { startUploadQueue } from "@/lib/upload-queue/browser";
 import { FabUploadRing, UploadTray } from "./upload/UploadTray";
 
@@ -63,7 +64,7 @@ const QuickAddSheet = dynamic(() => import("./quick-add").then((m) => m.QuickAdd
 const PremiumModal = dynamic(() => import("./premium-modal").then((m) => m.PremiumModal), { ssr: false });
 const InviteFriends = dynamic(() => import("./invite-friends").then((m) => m.InviteFriends), { ssr: false });
 const ShareCard = dynamic(() => import("./share-card").then((m) => m.ShareCard), { ssr: false });
-const BugReportSheet = dynamic(() => import("./bug-report-sheet").then((m) => m.BugReportSheet), { ssr: false });
+const FeedbackSheet = dynamic(() => import("./feedback/feedback-sheet").then((m) => m.FeedbackSheet), { ssr: false });
 
 // 15 вкладок в одной рейке читались как сплошная лента — группируем по смыслу,
 // между группами рисуется тонкий разделитель (порядок нигде больше не используется).
@@ -95,13 +96,16 @@ export function AppShell({ children }: { children: ReactNode }) {
   // Шит быстрого добавления в сторе: его открывают и тосты («Вернуть»), и плашка загрузки
   const quickOpen = useTripStore((s) => s.quickAddOpen);
   const setQuickOpen = useTripStore((s) => s.setQuickAddOpen);
+  const feedbackOpen = useTripStore((s) => s.feedbackOpen);
+  const feedbackId = useTripStore((s) => s.feedbackId);
+  const openFeedback = useTripStore((s) => s.openFeedback);
+  const setFeedbackOpen = useTripStore((s) => s.setFeedbackOpen);
   const qc = useQueryClient();
   const [searchOpen, setSearchOpen] = useState(false);
   const [inviteOpen, setInviteOpen] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
   const [premiumOpen, setPremiumOpen] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
-  const [bugOpen, setBugOpen] = useState(false);
   const [infoOpen, setInfoOpen] = useState(false);
   const { data: session } = useSession();
   const isPremium = (session?.user as { plan?: string } | undefined)?.plan === "premium";
@@ -109,7 +113,18 @@ export function AppShell({ children }: { children: ReactNode }) {
   // Бейдж новых отзывов для админа (неадминам эндпоинт недоступен — не опрашиваем)
   const { data: adminStats } = useAdminStats(!!isAdmin);
   const feedbackNew = isAdmin ? adminStats?.feedback.new ?? 0 : 0;
+  // Непрочитанные ответы на мои обращения: точка у «Обратной связи»
+  const { data: feedbackUnread = 0 } = useFeedbackUnread(!!session?.user);
   const { activeTab, setActiveTab } = useTripStore();
+  // Ссылка из пуша/уведомления «/?feedback=<id>»: открыть обращение и убрать параметр из адреса
+  useEffect(() => {
+    const id = new URLSearchParams(window.location.search).get("feedback");
+    if (!id) return;
+    openFeedback(id);
+    const url = new URL(window.location.href);
+    url.searchParams.delete("feedback");
+    window.history.replaceState(window.history.state, "", url.pathname + url.search + url.hash);
+  }, [openFeedback]);
   const { data: trip, isLoading: tripLoading } = useTrip();
   // Приглашать могут все участники, пока владелец не ограничил это в «О поездке»
   const myRole = trip?.participants.find(
@@ -292,6 +307,14 @@ export function AppShell({ children }: { children: ReactNode }) {
             <HeaderIconBtn onClick={() => setSearchOpen(true)} label="Поиск">
               <Search className="size-4" />
             </HeaderIconBtn>
+            <div className="relative">
+              <HeaderIconBtn onClick={() => openFeedback()} label="Обратная связь">
+                <MessageSquarePlus className="size-4" />
+              </HeaderIconBtn>
+              {feedbackUnread > 0 && (
+                <span className="absolute -top-0.5 -right-0.5 size-2.5 rounded-full bg-primary ring-2 ring-background pointer-events-none" aria-hidden />
+              )}
+            </div>
             <NotificationsBell authed={!!session?.user} />
             {isAdmin && (
               <HeaderIconBtn onClick={() => router.push("/admin")} label="Админ-панель">
@@ -317,9 +340,12 @@ export function AppShell({ children }: { children: ReactNode }) {
               >
                 <MoreHorizontal className="size-5" />
               </HeaderIconBtn>
-              {feedbackNew > 0 && (
+              {(feedbackNew > 0 || feedbackUnread > 0) && (
                 <span
-                  className="absolute -top-0.5 -right-0.5 size-2.5 rounded-full bg-amber-500 ring-2 ring-background pointer-events-none"
+                  className={cn(
+                    "absolute -top-0.5 -right-0.5 size-2.5 rounded-full ring-2 ring-background pointer-events-none",
+                    feedbackNew > 0 ? "bg-amber-500" : "bg-primary"
+                  )}
                   aria-hidden
                 />
               )}
@@ -329,12 +355,13 @@ export function AppShell({ children }: { children: ReactNode }) {
                     isPremium={!!isPremium}
                     isAdmin={isAdmin}
                     feedbackNew={feedbackNew}
+                    feedbackUnread={feedbackUnread}
                     canInvite={canInvite}
                     onClose={() => setMoreOpen(false)}
                     onPremium={() => setPremiumOpen(true)}
                     onInvite={() => setInviteOpen(true)}
                     onShare={() => setShareOpen(true)}
-                    onReportBug={() => setBugOpen(true)}
+                    onReportBug={() => openFeedback()}
                     onAdmin={() => router.push("/admin")}
                     onTripInfo={() => setInfoOpen(true)}
                     onSplit={() => router.push("/split")}
@@ -486,7 +513,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       />
       {shareOpen && <ShareCard open onOpenChange={setShareOpen} />}
       {premiumOpen && <PremiumModal open onOpenChange={setPremiumOpen} />}
-      {bugOpen && <BugReportSheet open onOpenChange={setBugOpen} />}
+      {feedbackOpen && <FeedbackSheet key={feedbackId ?? "new"} open initialId={feedbackId} onOpenChange={setFeedbackOpen} />}
       {/* Обучение: welcome-тур при первом входе + обучалки вкладок при первом визите */}
       <WelcomeTour />
       <TabTour />
@@ -513,6 +540,7 @@ function MobileMoreSheet({
   isPremium,
   isAdmin,
   feedbackNew,
+  feedbackUnread,
   canInvite,
   onClose,
   onPremium,
@@ -526,6 +554,7 @@ function MobileMoreSheet({
   isPremium: boolean;
   isAdmin: boolean;
   feedbackNew: number;
+  feedbackUnread: number;
   canInvite: boolean;
   onClose: () => void;
   onPremium: () => void;
@@ -607,8 +636,8 @@ function MobileMoreSheet({
               }}
             />
             <MoreItem
-              icon={<Bug className="size-4" />}
-              label="Сообщить о проблеме"
+              icon={<MessageSquarePlus className="size-4" />}
+              label={feedbackUnread > 0 ? "Обратная связь · новый ответ" : "Обратная связь"}
               onClick={() => {
                 onClose();
                 onReportBug();
