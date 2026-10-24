@@ -108,7 +108,7 @@
 | **uploads / UPLOADS_ROOT** | файловое хранилище на диске (фото/аватары); в проде — докер-том `triptrek-uploads`; раздаётся мимо Next (`server/static-uploads.ts`) |
 | **storage пайплайн** | `src/lib/storage/`: sharp-сжатие, превью, лимиты — единственный способ сохранять файлы |
 | **outbound.ts** | обёртка внешних HTTP (таймаут+ретрай+кэш): Nominatim, Open-Meteo, курсы, LLM |
-| **rate limits** | in-memory (`rate-limit.ts`): login 20/15мин/IP + 8 неудач/15мин/email, register 3/ч/IP, ИИ 10/ч/user+trip; обнуляются рестартом |
+| **rate limits** | in-memory (`rate-limit.ts`): login 20/15мин/IP + 8 неудач/15мин/email, register 20/ч/IP, ИИ 10/ч/user+trip; обнуляются рестартом |
 | **VAPID / web-push** | серверные пуши в браузер; ключи в env `VAPID_*` |
 | **mailer** | nodemailer через постфикс-релей; `rejectUnauthorized: false` — только для самоподписанного серта локального релея |
 | **Caddy** | обратный прокси на VPS: TLS Let's Encrypt, 80/443 → app:3000 |

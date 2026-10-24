@@ -7,7 +7,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Loader2, UserPlus, LogIn, Globe } from "lucide-react";
 import { toast } from "sonner";
 import { PasswordField } from "@/components/auth/password-field";
-import { YandexMetrika } from "@/components/analytics/yandex-metrika";
+import { reachGoal } from "@/lib/metrika";
 
 const EMOJIS = ["🦊", "🐻", "🐼", "🦁", "🐯", "🐨", "🐸", "🐵", "🦉", "🐧", "🦄", "🐲"];
 const COLORS = ["#f97316", "#06b6d4", "#8b5cf6", "#ec4899", "#10b981", "#f59e0b", "#ef4444", "#3b82f6"];
@@ -21,9 +21,11 @@ function LoginPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const callbackUrl = useMemo(() => safeCallback(searchParams.get("callbackUrl")), [searchParams]);
-  // ?mode=register — со страницы приглашения: друг без аккаунта сразу попадает в форму регистрации
+  // ?mode=register — со страницы приглашения: друг без аккаунта сразу попадает в форму регистрации.
+  // ?code=… — инвайт-код приложения из ссылки (описание видео): подставляем в поле и открываем регистрацию
+  const urlCode = (searchParams.get("code") ?? "").trim().slice(0, 32);
   const [mode, setMode] = useState<"login" | "register">(
-    searchParams.get("mode") === "register" ? "register" : "login"
+    searchParams.get("mode") === "register" || urlCode ? "register" : "login"
   );
   // Режим регистрации с сервера: закрыта ли регистрация и нужен ли инвайт-код
   const { data: regOptions } = useQuery({
@@ -40,7 +42,7 @@ function LoginPageContent() {
   const [password, setPassword] = useState("");
   const [passwordConfirm, setPasswordConfirm] = useState("");
   const [name, setName] = useState("");
-  const [invite, setInvite] = useState("");
+  const [invite, setInvite] = useState(urlCode);
   const [emoji, setEmoji] = useState("🦊");
   const [color, setColor] = useState("#f97316");
   const [loading, setLoading] = useState(false);
@@ -92,7 +94,9 @@ function LoginPageContent() {
       }
 
       toast.success(mode === "register" ? "Добро пожаловать! 🎉" : "С возвращением! 👋");
-      window.location.assign(callbackUrl);
+      // Цель регистрации уходит до перехода: иначе загрузка новой страницы обрывает запрос в Метрику
+      if (mode === "register") reachGoal("signup", () => window.location.assign(callbackUrl));
+      else window.location.assign(callbackUrl);
     } catch (e) {
       toast.error((e as Error).message);
     } finally {
@@ -102,8 +106,6 @@ function LoginPageContent() {
 
   return (
     <main className="min-h-screen flex items-center justify-center p-4 bg-gradient-to-br from-orange-500 via-rose-500 to-violet-600 relative overflow-hidden">
-      <YandexMetrika />
-
       {/* Декоративные круги */}
       <div className="absolute top-10 left-10 size-32 rounded-full bg-white/5 blur-2xl" />
       <div className="absolute bottom-20 right-10 size-40 rounded-full bg-white/5 blur-3xl" />
@@ -274,6 +276,15 @@ function LoginPageContent() {
               )}
               {loading ? "Загрузка…" : mode === "login" ? "Войти" : "Зарегистрироваться"}
             </button>
+
+            {mode === "register" && (
+              <p className="text-[11px] text-muted-foreground text-center leading-snug">
+                Регистрируясь, вы соглашаетесь с{" "}
+                <a href="/privacy" target="_blank" rel="noreferrer" className="text-primary hover:underline">
+                  условиями и политикой конфиденциальности
+                </a>
+              </p>
+            )}
 
             {mode === "login" && (
               <button

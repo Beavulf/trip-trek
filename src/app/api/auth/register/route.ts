@@ -10,8 +10,10 @@ import { welcomeEmail } from "@/lib/mail/templates";
 // POST /api/auth/register — регистрация
 export async function POST(req: NextRequest) {
   try {
-    // P0: rate limiting — 3 registrations per hour per IP
-    const rateLimit = rateLimitMiddleware(req, "register", 3, 60 * 60_000);
+    // Rate limiting — 20 регистраций в час на IP. Было 3, но трафик из TikTok идёт с мобильных
+    // сетей, где один IP делят десятки людей (CGNAT): живые пользователи упирались бы в 429.
+    // Реальный барьер беты — инвайт-код (при inviteRequired), лимит лишь режет перебор и спам
+    const rateLimit = rateLimitMiddleware(req, "register", 20, 60 * 60_000);
     if (rateLimit) return rateLimit;
 
     // Админ может закрыть регистрацию новых аккаунтов из панели

@@ -689,7 +689,10 @@ export function LandingView({ showcase = DEFAULT_SHOWCASE }: { showcase?: Landin
             <img src="/icon-192.png" alt="" width={28} height={28} />
             <span className="lp-disp">TripTrek</span>
           </a>
-          <p>Фото очищаются от геометок на сервере, а пароли хранятся только в виде хешей.</p>
+          <p>
+            Фото очищаются от геометок на сервере, а пароли хранятся только в виде хешей.{" "}
+            <a href="/privacy">Политика конфиденциальности</a>
+          </p>
           <a href={LOGIN_HREF}>Войти</a>
         </div>
       </footer>

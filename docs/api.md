@@ -31,7 +31,7 @@
 | `auth/custom-login` | POST | 🌐 | 20/15 мин/IP + 8 неудач/15 мин/email | логин (bcrypt), ставит JWT-cookie; проверяет Origin (NEXTAUTH_URL) и Content-Type: application/json (login-CSRF) |
 | `auth/custom-session` | GET | 🌐 | — | текущая сессия (учитывает `passwordChangedAt`); в `user` входит `onboardingCompletedAt` (null = показать обучение) |
 | `auth/custom-signout` | POST | 🌐 | — | выход (снимает cookie) |
-| `auth/register` | POST | 🌐 | 3/ч/IP | регистрация + welcome-письмо; проверяет `registrationEnabled`; email канонизируется (trim+lowercase); при `inviteRequired` требует инвайт-код приложения (`InviteCode`, слот атомарный); вступление в поездку — только через `trips/join` по коду |
+| `auth/register` | POST | 🌐 | 20/ч/IP | регистрация + welcome-письмо; проверяет `registrationEnabled`; email канонизируется (trim+lowercase); при `inviteRequired` требует инвайт-код приложения (`InviteCode`, слот атомарный); вступление в поездку — только через `trips/join` по коду |
 | `auth/register-options` | GET | 🌐 | 60/мин/IP | публично; режим регистрации + контакт для связи (`registrationEnabled`, `inviteRequired`, `contactTelegram`) — для формы /login |
 | `auth/forgot-password` | POST | 🌐 | 5/ч/IP (+3/ч/email) | одноразовый токен (sha256 в БД, TTL 60 мин) + письмо; анти-перечисление |
 | `auth/reset-password` | POST | 🌐 | 20/ч/IP | сброс по токену, инвалидирует сессии |
@@ -182,7 +182,7 @@ X-Forwarded-For, ему доверяем только за Caddy) и `userRateLi
 In-memory, сбрасываются рестартом контейнера (ADR-0005).
 
 - login — 20 / 15 мин / IP (все попытки) и 8 неудач / 15 мин / email (успешный вход сбрасывает)
-- register — 3 / ч / IP
+- register — 20 / ч / IP (мобильные операторы делят один IP на многих; от перебора кода защищает его длина)
 - register-options — 60 / мин / IP (страница логина дёргает его на каждом заходе)
 - forgot-password — 5 / ч / IP и 3 / ч / email
 - reset-password — 20 / ч / IP
