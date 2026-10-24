@@ -1,16 +1,18 @@
 "use client";
 
 import { useState } from "react";
-import { ArrowRight, Copy, CreditCard, Trash2, Undo2 } from "lucide-react";
+import { ArrowRight, BellRing, Copy, CreditCard, Trash2, Undo2 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { dayLabel, localDateKey } from "@/lib/split/dates";
 import { formatCents } from "@/lib/split/money";
 import type { Debt } from "@/lib/split/balances";
-import { isTmpId, useDeletePayment, useSavePayment } from "@/hooks/split/use-split";
+import { isTmpId, useDeletePayment, useRemindDebtor, useSavePayment } from "@/hooks/split/use-split";
+import { agoLabel, lastReminderAt, manualCooldownLeft, reminderMessage } from "@/lib/split/reminders";
 import type { GroupModel } from "@/hooks/split/use-group-model";
 import { EmptyState, MemberAvatar, Money, PrimaryButton, SecondaryButton, balanceTone } from "./ui";
 import type { SettleTarget } from "./settle-sheet";
+import { PaymentDetailsSheet } from "./payment-details-sheet";
 
 function Name({ model, id }: { model: GroupModel; id: string }) {
   const m = model.membersById.get(id);
@@ -32,6 +34,36 @@ function DebtRow({ debt, model, onSettle }: { debt: Debt; model: GroupModel; onS
   const owedToMe = debt.toId === me;
   // Реквизиты показываем тому, кто должен перевести: иначе номер карты улетает в общий чат
   const requisites = iOwe ? to?.paymentDetails : null;
+  const remind = useRemindDebtor(group.id);
+  const now = new Date();
+  const lastRemind = owedToMe
+    ? lastReminderAt(model.reminders.map((r) => ({ fromId: r.fromId, toId: r.toId, createdAt: new Date(r.createdAt) })), debt.fromId, debt.toId)
+    : null;
+  const coolingDown = manualCooldownLeft(lastRemind, now) > 0;
+
+  const sendRemind = () => {
+    remind.mutate(debt.fromId, {
+      onSuccess: (res) => {
+        if (res.delivered) {
+          toast.success("Напоминание отправлено", { description: from ? `${from.name} увидит его в уведомлениях` : undefined });
+          return;
+        }
+        // Без аккаунта уведомить некому — отдаём готовый текст, пусть кредитор перешлёт сам
+        const text = reminderMessage({
+          debtorName: from?.name ?? "друг",
+          groupName: group.name,
+          cents: res.cents,
+          currency: group.currency,
+          requisites: model.me?.paymentDetails,
+        });
+        void navigator.clipboard?.writeText(text).then(
+          () => toast.success("Текст скопирован", { description: `У ${from?.name ?? "участника"} нет аккаунта — отправьте ему сами` }),
+          () => toast.error("Не удалось скопировать текст")
+        );
+      },
+      onError: (e) => toast.error("Не удалось напомнить", { description: e instanceof Error ? e.message : undefined }),
+    });
+  };
 
   const copy = () => {
     void navigator.clipboard?.writeText(requisites ?? "").then(
@@ -65,8 +97,17 @@ function DebtRow({ debt, model, onSettle }: { debt: Debt; model: GroupModel; onS
           </button>
         </div>
       )}
+      {iOwe && !requisites && to?.userId && (
+        <p className="mt-2 text-[11px] text-muted-foreground">Реквизитов нет — спросите, как удобнее вернуть, или расплатитесь за человека чем-то другим.</p>
+      )}
       {(iOwe || owedToMe) && (
-        <div className="mt-2 flex justify-end">
+        <div className="mt-2 flex items-center justify-end gap-2">
+          {owedToMe && (
+            <SecondaryButton className="min-h-10 text-xs px-3" onClick={sendRemind} disabled={coolingDown || remind.isPending}>
+              <BellRing className="size-3.5" />
+              {coolingDown && lastRemind ? `Напомнили ${agoLabel(lastRemind, now)}` : "Напомнить"}
+            </SecondaryButton>
+          )}
           <PrimaryButton className="min-h-10 text-xs px-3" onClick={() => onSettle({ fromId: debt.fromId, toId: debt.toId, cents: debt.cents })}>
             {iOwe ? "Я отдал(а)" : "Мне отдали"}
           </PrimaryButton>
@@ -82,6 +123,7 @@ export function BalanceTab({ model, onSettle }: { model: GroupModel; onSettle: (
   const del = useDeletePayment(group.id);
   const redo = useSavePayment(group.id, me);
   const [showAllPayments, setShowAllPayments] = useState(false);
+  const [detailsOpen, setDetailsOpen] = useState(false);
   const today = localDateKey();
 
   const mine = model.debts.filter((d) => d.fromId === me || d.toId === me);
@@ -133,6 +175,21 @@ export function BalanceTab({ model, onSettle }: { model: GroupModel; onSettle: (
             </div>
           )}
         </div>
+      )}
+
+      {/* Мне должны, а как вернуть — не сказано: должнику придётся спрашивать номер карты */}
+      {model.myOwed > 0 && !model.me?.paymentDetails && (
+        <button
+          type="button"
+          onClick={() => setDetailsOpen(true)}
+          className="w-full flex items-center gap-3 rounded-2xl border border-dashed border-primary/40 bg-primary/5 px-3.5 py-3 text-left active:scale-[0.99] transition-transform"
+        >
+          <CreditCard className="size-5 text-primary shrink-0" />
+          <span className="flex-1 min-w-0">
+            <span className="block text-sm font-semibold">Добавьте, как вернуть вам деньги</span>
+            <span className="block text-[11px] text-muted-foreground">Карта или способ расчёта — должники увидят и скопируют в один тап</span>
+          </span>
+        </button>
       )}
 
       {/* Кто кому */}
@@ -222,6 +279,7 @@ export function BalanceTab({ model, onSettle }: { model: GroupModel; onSettle: (
           )}
         </section>
       )}
+      <PaymentDetailsSheet open={detailsOpen} onOpenChange={setDetailsOpen} groupId={group.id} current={model.me?.paymentDetails ?? null} />
     </div>
   );
 }

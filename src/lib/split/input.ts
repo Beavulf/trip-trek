@@ -2,6 +2,7 @@ import { CURRENCY_CODES } from "@/lib/currencies";
 import { categoryOf, SPLIT_CATEGORIES } from "./categories";
 import { addMonths, diffDays, isDateKey, monthOf } from "./dates";
 import { MAX_AMOUNT_CENTS } from "./money";
+import { isRemindAfterDays } from "./reminders";
 import { MAX_BACKFILL_MONTHS } from "./recurrence";
 import { computeShares, isSplitMode, type ComputedShare, type SplitItem, type SplitMode } from "./split";
 
@@ -249,6 +250,8 @@ export interface NormalizedGroup {
   color: string;
   currency: string;
   allowMemberInvites?: boolean;
+  /** Автонапоминание должникам: 3/7/14 дней; null — выключено (ADR-0010) */
+  remindAfterDays?: number | null;
 }
 
 const COLOR_RE = /^#[0-9a-fA-F]{6}$/;
@@ -278,6 +281,10 @@ export function normalizeGroupInput(body: Body, opts: { partial: boolean }): Res
   if (body.allowMemberInvites !== undefined) {
     if (typeof body.allowMemberInvites !== "boolean") return fail("Некорректная настройка приглашений");
     out.allowMemberInvites = body.allowMemberInvites;
+  }
+  if (body.remindAfterDays !== undefined) {
+    if (body.remindAfterDays !== null && !isRemindAfterDays(body.remindAfterDays)) return fail("Некорректный срок напоминания");
+    out.remindAfterDays = body.remindAfterDays;
   }
   return ok(out);
 }

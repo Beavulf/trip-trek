@@ -38,6 +38,7 @@ describe.skipIf(!URL_ENV)("API «Сочтёмся» (Postgres)", () => {
   let membersRoute: typeof import("./groups/[groupId]/members/route");
   let memberRoute: typeof import("./groups/[groupId]/members/[memberId]/route");
   let joinRoute: typeof import("./join/route");
+  let remindRoute: typeof import("./groups/[groupId]/remind/route");
 
   beforeAll(async () => {
     process.env.DATABASE_URL = URL_ENV!;
@@ -54,6 +55,7 @@ describe.skipIf(!URL_ENV)("API «Сочтёмся» (Postgres)", () => {
     membersRoute = await import("./groups/[groupId]/members/route");
     memberRoute = await import("./groups/[groupId]/members/[memberId]/route");
     joinRoute = await import("./join/route");
+    remindRoute = await import("./groups/[groupId]/remind/route");
 
     for (const key of ["alice", "boris", "clara", "dan"]) {
       const u = await db.user.create({
@@ -86,6 +88,10 @@ describe.skipIf(!URL_ENV)("API «Сочтёмся» (Postgres)", () => {
   const json = async (res: Response): Promise<Json> => res.json();
 
   const today = new Date().toISOString().slice(0, 10);
+  const deleteSplitGroupFor = async (id: string) => {
+    const { deleteSplitGroup } = await import("@/lib/split/server");
+    await deleteSplitGroup(id);
+  };
 
   // --- Сквозной сценарий: квартира из трёх человек ---
   let groupId = "";
@@ -465,6 +471,80 @@ describe.skipIf(!URL_ENV)("API «Сочтёмся» (Postgres)", () => {
     expect(asBoris.inviteCode).toBeNull(); // код спрятан от не-владельца
     const asAlice = await json(await groupRoute.GET(req(`/groups/${groupId}`, "alice"), ctx({ groupId })));
     expect(asAlice.inviteCode).toBe(code);
+  });
+
+  it("напоминания о долгах: ручное (кулдаун, чужой долг, без аккаунта) и автоматическое по настройке группы", async () => {
+    const mk = async (body: Json) => json(await groupsRoute.POST(req("/groups", "alice", { method: "POST", body })));
+    const g = await mk({ name: "Напоминания", currency: "byn" });
+    const gid = g.id as string;
+    const alice = g.myMemberId as string;
+    const joined = await json(await joinRoute.POST(req(`/join?code=${g.inviteCode}`, "boris", { method: "POST", body: {} })));
+    const boris = joined.memberId as string;
+    const lesha = (await json(await membersRoute.POST(req(`/groups/${gid}/members`, "alice", { method: "POST", body: { displayName: "Лёша" } }), ctx({ groupId: gid })))).id as string;
+    // Аня заплатила 30 за троих: Борис и Лёша должны ей по 10
+    const exp = await expensesRoute.POST(
+      req(`/groups/${gid}/expenses`, "alice", {
+        method: "POST",
+        body: { amountCents: 3000, description: "Интернет", category: "utilities", paidById: alice, spentOn: today, splitMode: "equal", split: [{ memberId: alice }, { memberId: boris }, { memberId: lesha }] },
+      }),
+      ctx({ groupId: gid })
+    );
+    expect(exp.status).toBe(201);
+    const remind = (who: string, debtorId: string) => remindRoute.POST(req(`/groups/${gid}/remind`, who, { method: "POST", body: { debtorId } }), ctx({ groupId: gid }));
+
+    // Должник не может «напомнить» кредитору о его долге; постороннему — 403; себе — 400
+    expect((await remind("boris", alice)).status).toBe(409);
+    expect((await remind("dan", boris)).status).toBe(403);
+    expect((await remind("alice", alice)).status).toBe(400);
+
+    // Кредитор напоминает: запись + уведомление должнику
+    const ok = await remind("alice", boris);
+    expect(ok.status).toBe(200);
+    expect(await json(ok)).toMatchObject({ delivered: true, cents: 1000 });
+    const note = await db.userNotification.findFirst({ where: { userId: users.boris.id, type: "split_reminder" } });
+    expect(note?.title.toLowerCase()).toContain("alice");
+    expect(note?.body).not.toMatch(/\d{4}/); // без реквизитов и чисел-карт
+    expect(note?.url).toBe(`/split/${gid}?tab=balance`);
+
+    // Повтор — кулдаун 12 ч
+    const again = await remind("alice", boris);
+    expect(again.status).toBe(429);
+    expect((await json(again)).error).toMatch(/через \d+ ч/);
+
+    // Безаккаунтному уведомить некому: delivered=false и кулдаун не тратится
+    const noAcc = await remind("alice", lesha);
+    expect(await json(noAcc)).toMatchObject({ delivered: false, cents: 1000 });
+    expect(await db.splitReminder.count({ where: { groupId: gid, fromId: lesha } })).toBe(0);
+
+    // Ledger отдаёт недавние напоминания для подписи «напомнили … назад»
+    const ledger = await json(await ledgerRoute.GET(req(`/groups/${gid}/ledger`, "alice"), ctx({ groupId: gid })));
+    expect(ledger.reminders).toEqual([expect.objectContaining({ fromId: boris, toId: alice })]);
+
+    // Настройка автонапоминания: только владелец, только 3/7/14 или null
+    const patch = (who: string, body: Json) => groupRoute.PATCH(req(`/groups/${gid}`, who, { method: "PATCH", body }), ctx({ groupId: gid }));
+    expect((await patch("boris", { remindAfterDays: 7 })).status).toBe(403);
+    expect((await patch("alice", { remindAfterDays: 5 })).status).toBe(400);
+    const set = await patch("alice", { remindAfterDays: 3 });
+    expect(set.status).toBe(200);
+    expect((await json(set)).remindAfterDays).toBe(3);
+
+    // Автоматическое: траты — 10 дней назад, ручное напоминание давно прошло; в окне 06–18 UTC
+    const longAgo = new Date(Date.now() - 10 * 86_400_000);
+    await db.splitExpense.updateMany({ where: { groupId: gid }, data: { createdAt: longAgo } });
+    await db.splitReminder.updateMany({ where: { groupId: gid }, data: { createdAt: longAgo } });
+    const { runSplitReminders } = await import("@/lib/split/reminders-server");
+    const noon = new Date(); noon.setUTCHours(12, 0, 0, 0);
+    const before = await db.userNotification.count({ where: { userId: users.boris.id, type: "split_reminder" } });
+    expect(await runSplitReminders(new Date(noon.getTime() + 0))).toBeGreaterThanOrEqual(1);
+    expect(await db.userNotification.count({ where: { userId: users.boris.id, type: "split_reminder" } })).toBe(before + 1);
+    // Сразу же повторный обход ничего не шлёт (кулдаун = срок настройки)
+    expect(await runSplitReminders(noon)).toBe(0);
+    // Ночью — тишина, даже если бы было о чём напоминать
+    const night = new Date(noon); night.setUTCHours(2);
+    expect(await runSplitReminders(night)).toBe(0);
+
+    await patch("alice", { remindAfterDays: null });
+    await deleteSplitGroupFor(gid);
   });
 
   it("удаление группы: только владелец и только с точным названием", async () => {

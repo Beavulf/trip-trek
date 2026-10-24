@@ -63,6 +63,7 @@ export async function loadGroupDTO(groupId: string, me: SplitMember): Promise<Sp
     currency: group.currency,
     inviteCode: canSeeCode ? group.inviteCode : null,
     allowMemberInvites: group.allowMemberInvites,
+    remindAfterDays: group.remindAfterDays,
     myMemberId: me.id,
     myRole: me.role === "owner" ? "owner" : "member",
     members: group.members.map(memberDTO),

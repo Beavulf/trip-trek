@@ -19,7 +19,7 @@ export async function GET(req: NextRequest, { params }: Ctx) {
 
   await materializeRecurring(groupId, requestToday(req));
 
-  const [expenses, payments, recurrings] = await Promise.all([
+  const [expenses, payments, recurrings, reminders] = await Promise.all([
     db.splitExpense.findMany({
       where: { groupId },
       include: EXPENSE_INCLUDE,
@@ -28,12 +28,18 @@ export async function GET(req: NextRequest, { params }: Ctx) {
     }),
     db.splitPayment.findMany({ where: { groupId }, orderBy: [{ paidOn: "desc" }, { createdAt: "desc" }], take: 5000 }),
     db.splitRecurring.findMany({ where: { groupId }, orderBy: { createdAt: "asc" } }),
+    db.splitReminder.findMany({
+      where: { groupId, createdAt: { gt: new Date(Date.now() - 14 * 86_400_000) } },
+      orderBy: { createdAt: "desc" },
+      select: { fromId: true, toId: true, createdAt: true },
+    }),
   ]);
 
   const body: SplitLedgerDTO = {
     expenses: expenses.map(expenseDTO),
     payments: payments.map(paymentDTO),
     recurrings: recurrings.map(recurringDTO),
+    reminders: reminders.map((r) => ({ fromId: r.fromId, toId: r.toId, createdAt: r.createdAt.toISOString() })),
   };
   return NextResponse.json(body);
 }

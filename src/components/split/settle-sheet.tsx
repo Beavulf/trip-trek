@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { ArrowRight, Check, Loader2 } from "lucide-react";
+import { ArrowRight, Check, Copy, CreditCard, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { currencySymbol } from "@/lib/currencies";
@@ -25,6 +25,9 @@ export interface SettleTarget {
   /** Название этой траты — в подписи и заметке перевода */
   forLabel?: string;
 }
+
+/** Быстрые пометки «как рассчитались» — в заметку перевода */
+const HOW_NOTES = ["Картой", "Наличными", "Оплатил(а) за тебя"] as const;
 
 interface Props {
   open: boolean;
@@ -151,6 +154,26 @@ function SettleBody({ model, target, onDone }: { model: GroupModel; target: Sett
         </div>
       )}
 
+      {/* Мне нужно отдать: показываем, куда — без похода в чат за номером карты */}
+      {direction === "gave" && other?.paymentDetails && (
+        <div className="flex items-center gap-2 rounded-xl bg-muted/50 px-3 py-2 text-xs">
+          <CreditCard className="size-4 text-muted-foreground shrink-0" />
+          <span className="flex-1 min-w-0 whitespace-pre-wrap break-words">{other.paymentDetails}</span>
+          <button
+            type="button"
+            onClick={() =>
+              void navigator.clipboard?.writeText(other.paymentDetails ?? "").then(
+                () => toast.success("Реквизиты скопированы"),
+                () => toast.error("Не удалось скопировать")
+              )
+            }
+            className="shrink-0 inline-flex items-center gap-1 min-h-9 px-2.5 rounded-lg border border-border hover:bg-muted active:scale-95 transition-transform"
+          >
+            <Copy className="size-3" /> Копировать
+          </button>
+        </div>
+      )}
+
       <div>
         <label htmlFor="settle-amount" className="text-xs text-muted-foreground mb-1 block">
           Сумма
@@ -207,7 +230,23 @@ function SettleBody({ model, target, onDone }: { model: GroupModel; target: Sett
         </div>
       </div>
 
-      <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="Заметка (необязательно): как перевели" maxLength={500} className={cn(inputClass, "text-sm")} />
+      <div className="space-y-1.5">
+        <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="Заметка (необязательно): как перевели" maxLength={500} className={cn(inputClass, "text-sm")} />
+        {/* Рассчитываются не только картой: вместо денег часто оплачивают что-то за человека */}
+        <div className="flex gap-1.5 flex-wrap">
+          {HOW_NOTES.map((h) => (
+            <button
+              key={h}
+              type="button"
+              aria-pressed={note === h}
+              onClick={() => setNote((cur) => (cur === h ? "" : h))}
+              className={cn("min-h-9 px-3 rounded-full text-xs font-medium border transition-colors active:scale-95", note === h ? "bg-primary/10 border-primary/40" : "border-border text-muted-foreground")}
+            >
+              {h}
+            </button>
+          ))}
+        </div>
+      </div>
 
       <StickySubmit>
         <button

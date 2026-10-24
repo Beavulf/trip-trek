@@ -2,7 +2,7 @@
 
 import { useMemo } from "react";
 import { memberBalances, myTotals, pairDebts, type Debt } from "@/lib/split/balances";
-import type { SplitExpenseDTO, SplitGroupDTO, SplitMemberDTO, SplitPaymentDTO, SplitRecurringDTO } from "@/lib/split/types";
+import type { SplitExpenseDTO, SplitGroupDTO, SplitMemberDTO, SplitPaymentDTO, SplitRecurringDTO, SplitReminderDTO } from "@/lib/split/types";
 import { SplitApiError } from "./api";
 import { useSplitGroup, useSplitLedger } from "./use-split";
 
@@ -19,6 +19,8 @@ export interface GroupModel {
   expenses: SplitExpenseDTO[];
   payments: SplitPaymentDTO[];
   recurrings: SplitRecurringDTO[];
+  /** Недавние напоминания о долгах (14 дней) */
+  reminders: SplitReminderDTO[];
   /** Все участники, включая вышедших */
   membersById: Map<string, SplitMemberDTO>;
   /** Активные: их можно выбрать плательщиком/участником новой траты */
@@ -58,6 +60,7 @@ export function useGroupModel(groupId: string): GroupModel {
         expenses: [],
         payments: [],
         recurrings: [],
+        reminders: [],
         membersById: EMPTY_MAP,
         activeMembers: [],
         me: null,
@@ -80,6 +83,7 @@ export function useGroupModel(groupId: string): GroupModel {
       expenses: ledger.expenses,
       payments: ledger.payments,
       recurrings: ledger.recurrings,
+      reminders: ledger.reminders ?? [],
       membersById,
       activeMembers: group.members.filter((m) => m.status === "active"),
       me: membersById.get(group.myMemberId) ?? null,

@@ -6,6 +6,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import Link from "next/link";
 import {
   Bell,
+  BellRing,
   Bot,
   CheckCheck,
   Crown,
@@ -59,6 +60,7 @@ const TYPE_ICON: Record<string, React.ReactNode> = {
   ai_unblocked: <Sparkles className="size-4 text-emerald-500" />,
   ai_spend_alert: <Bot className="size-4 text-amber-500" />,
   split_payment: <Wallet className="size-4 text-emerald-500" />,
+  split_reminder: <BellRing className="size-4 text-amber-500" />,
 };
 
 function fmtDateTime(ts: string): string {

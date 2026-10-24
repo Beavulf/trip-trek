@@ -153,7 +153,8 @@ User ──< TripMember >── Trip ──< Day ──< Place ──< Photo
 User ──< SplitMember >── SplitGroup ──< SplitExpense ──< SplitShare
               (userId = null — участник без аккаунта)  ├──< SplitPayment
                                                        ├──< SplitRecurring
-                                                       └──< SplitActivity (журнал)
+                                                       ├──< SplitActivity (журнал)
+                                                       └──< SplitReminder (напоминания о долгах)
 ```
 
 Соглашения, которые легко сломать:

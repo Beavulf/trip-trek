@@ -75,6 +75,7 @@ export interface GroupForm {
   color?: string;
   currency: string;
   allowMemberInvites?: boolean;
+  remindAfterDays?: number | null;
 }
 
 export function useCreateGroup() {
@@ -353,5 +354,38 @@ export function useJoinGroup() {
         body: claimMemberId ? { claimMemberId } : {},
       }),
     onSuccess: () => void qc.invalidateQueries({ queryKey: splitKeys.groups }),
+  });
+}
+
+// --- Напоминания и реквизиты (ADR-0010) ---
+
+/** «Напомнить» должнику. `delivered: false` — у него нет аккаунта: уведомлять некого, клиент отдаёт текст для пересылки. */
+export function useRemindDebtor(groupId: string) {
+  const refresh = useRefresh(groupId);
+  return useMutation({
+    mutationFn: (debtorId: string) =>
+      splitApi<{ ok: true; delivered: boolean; cents: number }>(`/groups/${groupId}/remind`, { method: "POST", body: { debtorId } }),
+    onSettled: refresh,
+  });
+}
+
+/** Реквизиты живут в профиле (User.paymentDetails) и едут во все группы и поездки; здесь только быстрый ввод из «Сочтёмся». */
+export function useSavePaymentDetails(groupId: string) {
+  const qc = useQueryClient();
+  const refresh = useRefresh(groupId);
+  return useMutation({
+    mutationFn: async (paymentDetails: string | null) => {
+      const r = await fetch("/api/user", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ paymentDetails }),
+      });
+      if (!r.ok) throw new Error("Не удалось сохранить реквизиты");
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["user-profile"] });
+      void qc.invalidateQueries({ queryKey: ["trip"] });
+      refresh();
+    },
   });
 }

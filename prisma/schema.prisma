@@ -624,6 +624,8 @@ model SplitGroup {
   inviteCode         String   @unique
   // Кто может звать новых: true — все участники, false — только владелец
   allowMemberInvites Boolean  @default(true)
+  // Автонапоминание должникам: через сколько дней существующего долга напомнить (и повторять). null — выключено (ADR-0010)
+  remindAfterDays    Int?
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 
@@ -632,6 +634,7 @@ model SplitGroup {
   payments   SplitPayment[]
   recurrings SplitRecurring[]
   activity   SplitActivity[]
+  reminders  SplitReminder[]
 }
 
 // === Участник группы. userId = null — участник без аккаунта: друг потом заходит
@@ -788,4 +791,21 @@ model SplitActivity {
   group SplitGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
 
   @@index([groupId, createdAt])
+}
+
+// === Напоминание должнику «верни долг» (ADR-0010): и история для подписи «напомнили 3 ч назад», и кулдаун
+// (ручное — раз в 12 ч на пару; авто — раз в remindAfterDays). Участников не ссылаем FK: запись — след события,
+// удаление группы чистит её явно (deleteSplitGroup) ===
+model SplitReminder {
+  id          String   @id @default(cuid())
+  groupId     String
+  fromId      String // должник (SplitMember.id)
+  toId        String // кредитор
+  amountCents Int // долг на момент напоминания
+  kind        String // manual / auto
+  createdAt   DateTime @default(now())
+
+  group SplitGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  @@index([groupId, fromId, toId, createdAt])
 }

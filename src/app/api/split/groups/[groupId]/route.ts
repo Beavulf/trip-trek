@@ -32,7 +32,7 @@ export async function PATCH(req: NextRequest, { params }: Ctx) {
   const patch = parsed.value;
   if (Object.keys(patch).length === 0) return jsonError("Нечего менять");
 
-  const ownerOnly = patch.currency !== undefined || patch.allowMemberInvites !== undefined;
+  const ownerOnly = patch.currency !== undefined || patch.allowMemberInvites !== undefined || patch.remindAfterDays !== undefined;
   if (ownerOnly && member.role !== "owner") return jsonError("Это может изменить только владелец группы", 403);
 
   if (patch.currency !== undefined) {

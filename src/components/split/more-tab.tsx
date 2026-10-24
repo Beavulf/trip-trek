@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { KeyRound, Layers, Loader2, MoreHorizontal, Pause, Pencil, Play, Plus, Repeat, Settings, Trash2, UserPlus, UserRoundPlus } from "lucide-react";
+import { CreditCard, KeyRound, Layers, Loader2, MoreHorizontal, Pause, Pencil, Play, Plus, Repeat, Settings, Trash2, UserPlus, UserRoundPlus } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { describeActivity } from "@/lib/split/activity-text";
@@ -14,6 +14,7 @@ import type { SplitMemberDTO, SplitRecurringDTO } from "@/lib/split/types";
 import { useDeleteRecurring, useSplitActivity, useToggleRecurring } from "@/hooks/split/use-split";
 import type { GroupModel } from "@/hooks/split/use-group-model";
 import { MemberAvatar, Money, PrimaryButton, SecondaryButton } from "./ui";
+import { PaymentDetailsSheet } from "./payment-details-sheet";
 
 interface Props {
   model: GroupModel;
@@ -46,6 +47,7 @@ export function MoreTab({ model, onInvite, onAddMember, onEditMember, onNewRecur
   const delRecurring = useDeleteRecurring(group.id);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
   const [showActivity, setShowActivity] = useState(false);
+  const [detailsOpen, setDetailsOpen] = useState(false);
   const activity = useSplitActivity(group.id, showActivity);
 
   const active = model.activeMembers;
@@ -96,6 +98,27 @@ export function MoreTab({ model, onInvite, onAddMember, onEditMember, onNewRecur
           </SecondaryButton>
         </div>
       </Section>
+
+      <Section
+        title="Как вернуть мне деньги"
+        action={
+          <button type="button" onClick={() => setDetailsOpen(true)} className="inline-flex items-center gap-1 text-xs font-medium text-primary min-h-10 px-2 -mr-1">
+            <Pencil className="size-3.5" /> {model.me?.paymentDetails ? "Изменить" : "Добавить"}
+          </button>
+        }
+      >
+        {model.me?.paymentDetails ? (
+          <div className="flex items-start gap-2 px-1 py-1.5 text-sm">
+            <CreditCard className="size-4 text-muted-foreground shrink-0 mt-0.5" />
+            <span className="whitespace-pre-wrap break-words min-w-0">{model.me.paymentDetails}</span>
+          </div>
+        ) : (
+          <p className="text-xs text-muted-foreground px-1 py-2 leading-relaxed">
+            Укажите карту или удобный способ расчёта — когда вам должны, участники увидят это в долге и скопируют в один тап.
+          </p>
+        )}
+      </Section>
+      <PaymentDetailsSheet open={detailsOpen} onOpenChange={setDetailsOpen} groupId={group.id} current={model.me?.paymentDetails ?? null} />
 
       <Section
         title="Повторяющиеся траты"

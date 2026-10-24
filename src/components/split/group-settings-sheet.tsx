@@ -9,7 +9,7 @@ import type { GroupModel } from "@/hooks/split/use-group-model";
 import { MobileBottomSheet } from "@/components/trip/mobile-bottom-sheet";
 import { StickySubmit } from "@/components/trip/quick-add/StickySubmit";
 import { ColorPicker, CurrencySelect, EmojiPicker } from "./pickers";
-import { inputClass, SecondaryButton } from "./ui";
+import { inputClass, SecondaryButton, Segmented } from "./ui";
 
 interface Props {
   open: boolean;
@@ -38,6 +38,7 @@ function SettingsBody({ model, onDone, onDeleted }: { model: GroupModel; onDone:
   const [color, setColor] = useState(group.color);
   const [currency, setCurrency] = useState(group.currency);
   const [allowInvites, setAllowInvites] = useState(group.allowMemberInvites);
+  const [remind, setRemind] = useState<string>(group.remindAfterDays ? String(group.remindAfterDays) : "off");
   const [deleting, setDeleting] = useState(false);
   const [confirmName, setConfirmName] = useState("");
 
@@ -51,7 +52,7 @@ function SettingsBody({ model, onDone, onDeleted }: { model: GroupModel; onDone:
         name,
         emoji,
         color,
-        ...(isOwner ? { allowMemberInvites: allowInvites } : {}),
+        ...(isOwner ? { allowMemberInvites: allowInvites, remindAfterDays: remind === "off" ? null : Number(remind) } : {}),
         ...(isOwner && !hasMoney && currency !== group.currency ? { currency } : {}),
       });
       toast.success("Настройки сохранены");
@@ -104,6 +105,25 @@ function SettingsBody({ model, onDone, onDeleted }: { model: GroupModel; onDone:
               <span className={cn("block size-5 rounded-full bg-white shadow transition-transform", allowInvites && "translate-x-4")} />
             </span>
           </button>
+
+          <div>
+            <div className="text-sm font-medium mb-1">Напоминать должникам</div>
+            <Segmented
+              value={remind}
+              onChange={setRemind}
+              options={[
+                { value: "off", label: "Выкл" },
+                { value: "3", label: "3 дня" },
+                { value: "7", label: "Неделя" },
+                { value: "14", label: "2 недели" },
+              ]}
+            />
+            <p className="text-[11px] text-muted-foreground mt-1.5 leading-snug">
+              {remind === "off"
+                ? "Участники по-прежнему могут напомнить вручную кнопкой в «Балансе»."
+                : "Если долг висит дольше срока, должнику придёт уведомление, и так раз в этот срок, пока долг не закроют. Только днём и только тем, у кого есть аккаунт."}
+            </p>
+          </div>
 
           <div className="pt-2 border-t border-border">
             {deleting ? (

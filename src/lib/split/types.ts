@@ -46,6 +46,8 @@ export interface SplitGroupDTO {
   /** null — владелец ограничил приглашения, а запрашивающий не владелец */
   inviteCode: string | null;
   allowMemberInvites: boolean;
+  /** Автонапоминание должникам, дней (3/7/14); null — выключено. Меняет владелец (ADR-0010) */
+  remindAfterDays: number | null;
   myMemberId: string;
   myRole: SplitRole;
   /** Все участники, включая вышедших: их долги и история остаются */
@@ -115,6 +117,16 @@ export interface SplitLedgerDTO {
   expenses: SplitExpenseDTO[];
   payments: SplitPaymentDTO[];
   recurrings: SplitRecurringDTO[];
+  /** Недавние напоминания о долгах (за 14 дней): подпись «напомнили 3 ч назад» и блок повторной кнопки */
+  reminders: SplitReminderDTO[];
+}
+
+export interface SplitReminderDTO {
+  /** Должник */
+  fromId: string;
+  /** Кредитор */
+  toId: string;
+  createdAt: string;
 }
 
 export interface SplitActivityDTO {

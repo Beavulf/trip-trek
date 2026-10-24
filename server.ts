@@ -111,6 +111,9 @@ app.prepare().then(() => {
     console.log(`> WebSocket on ws://0.0.0.0:${port}/socket.io/`);
   });
 
+  // Автонапоминания о долгах «Сочтёмся» (ADR-0010): часовой обход групп, где владелец включил настройку
+  void import("./src/lib/split/reminders-server").then((m) => m.startSplitReminderJob());
+
   // Graceful shutdown: докер шлёт SIGTERM, ждёт stop_grace_period и шлёт SIGKILL.
   // Порядок: перестать принимать WS → добить HTTP → закрыть пул Prisma.
   const shutdown = (signal: string) => {
