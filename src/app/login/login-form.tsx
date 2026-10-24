@@ -10,6 +10,7 @@ import { contactLink } from "@/app/landing/showcase";
 import { AVATAR_COLORS, AVATAR_EMOJIS, pickRandom } from "@/lib/avatar-presets";
 import { isInviteError, serverErrorText, validateAuthForm } from "@/lib/auth-form";
 import { reachGoal } from "@/lib/metrika";
+import { safeCallback } from "@/lib/safe-callback";
 import { PASSWORD_HINT, validatePasswordPolicy } from "@/lib/password-policy";
 import { cn } from "@/lib/utils";
 
@@ -21,11 +22,6 @@ import { cn } from "@/lib/utils";
 // 16px: меньший шрифт заставляет iOS приближать страницу при фокусе в поле
 const inputCls = "w-full rounded-xl border border-input bg-background px-3 py-2.5 text-base input-mobile";
 const labelCls = "text-xs text-muted-foreground mb-1 block";
-
-function safeCallback(raw: string | null): string {
-  if (!raw || !raw.startsWith("/") || raw.startsWith("//")) return "/";
-  return raw;
-}
 
 export interface LoginFormProps {
   registrationEnabled: boolean;
