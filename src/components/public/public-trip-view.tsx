@@ -1,16 +1,17 @@
 "use client";
 
 // «Живой журнал» — публичная страница поездки (гостям, без входа).
-// Порядок чтения: обложка → лучшие кадры → главы-дни (текст + фото + места)
-// → все фото (masonry) → карта. Три действия гостя: лайк-сердечко,
+// Порядок чтения: обложка → «продолжить с места» → лучшие кадры → главы-дни
+// (текст + фото + места) → все фото по дням (masonry) → карта. Фото везде идут по ходу
+// поездки: день за днём, внутри дня от раннего кадра к позднему (порядок задаёт сервер). Три действия гостя: лайк-сердечко,
 // скачивание ZIP всех фото, полноэкранный просмотр с подписями (YARL).
 // Дизайн-контракт: одна колонка max-w-2xl, акцент поездки тонирует обложку
 // и чипсы, motion — мягкие fade-up при входе в вьюпорт (уважая reduced motion).
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import { motion, type MotionProps } from "framer-motion";
-import { Camera, Download, Heart, Images, MapPin, Star } from "lucide-react";
+import { Camera, ChevronsLeft, ChevronsRight, Download, Heart, History, Images, MapPin, Star, X } from "lucide-react";
 import { toast } from "sonner";
 import { Lightbox } from "yet-another-react-lightbox";
 import Captions from "yet-another-react-lightbox/plugins/captions";
@@ -22,6 +23,13 @@ import "yet-another-react-lightbox/plugins/captions.css";
 import "yet-another-react-lightbox/plugins/counter.css";
 import { useBackDismiss } from "@/hooks/use-back-dismiss";
 import { isSlowConnection } from "@/lib/net";
+import {
+  buildDayIndex,
+  dayJumpTarget,
+  readResume,
+  writeResume,
+  type ResumePoint,
+} from "@/lib/public-viewer";
 import { cn } from "@/lib/utils";
 
 // Секция «Все фото» рендерится порциями: целиком это сотни кнопок,
@@ -64,6 +72,8 @@ export interface PublicTrip {
   hearts: number;
   /** Всего фото в поездке; в photos лежит первая партия, остальное докачивается фоном */
   photosTotal: number;
+  /** Курсор для докачки остального после SSR-партии (формат знает сервер); null/нет — всё уже загружено */
+  photosNextCursor?: string | null;
   days: {
     dayNumber: number;
     date: string;
@@ -99,6 +109,8 @@ const photoFileName = (p: PublicPhoto) => {
 interface ViewerState {
   list: PublicPhoto[];
   index: number;
+  /** Открыт весь альбом по порядку (а не рейл «Лучшие кадры»): только тогда «фото 5 из 24 за день» честное */
+  full?: boolean;
 }
 
 export function PublicTripView({ trip, token }: { trip: PublicTrip; token: string }) {
@@ -116,14 +128,13 @@ export function PublicTripView({ trip, token }: { trip: PublicTrip; token: strin
   const [photos, setPhotos] = useState(trip.photos);
 
   useEffect(() => {
-    if (trip.photos.length >= trip.photosTotal) return;
+    if (trip.photos.length >= trip.photosTotal || !trip.photosNextCursor) return;
     let stopped = false;
     (async () => {
       try {
-        // keyset-курсор от последнего фото SSR-партии; дальше сервер в nextCursor
-        // сам говорит, откуда брать следующую порцию
-        const last = trip.photos[trip.photos.length - 1];
-        let cursor: string | null = last ? `${last.takenAt}~${last.id}` : null;
+        // keyset-курсор от последнего фото SSR-партии (его считает сервер); дальше
+        // сервер в nextCursor сам говорит, откуда брать следующую порцию
+        let cursor: string | null = trip.photosNextCursor ?? null;
         while (!stopped) {
           const res = await fetch(`/p/${token}/photos${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ""}`);
           if (!res.ok) return;
@@ -141,7 +152,7 @@ export function PublicTripView({ trip, token }: { trip: PublicTrip; token: strin
     return () => {
       stopped = true;
     };
-  }, [trip.photos, trip.photosTotal, token]);
+  }, [trip.photos, trip.photosTotal, trip.photosNextCursor, token]);
 
   // Сердечко: анонимный лайк страницы, один тап с устройства (localStorage)
   const [hearts, setHearts] = useState(trip.hearts);
@@ -149,6 +160,14 @@ export function PublicTripView({ trip, token }: { trip: PublicTrip; token: strin
   const [likePending, setLikePending] = useState(false);
 
   const likeKey = `triptrek:share-like:${token}`;
+
+  // «Продолжить с места»: где гость остановился в прошлый раз. Читаем после монтирования —
+  // localStorage на сервере нет, а расхождение разметки сломало бы гидрацию
+  const [resume, setResume] = useState<ResumePoint | null>(null);
+
+  useEffect(() => {
+    setResume(readResume(token));
+  }, [token]);
 
   useEffect(() => {
     setReducedMotion(window.matchMedia("(prefers-reduced-motion: reduce)").matches);
@@ -181,6 +200,19 @@ export function PublicTripView({ trip, token }: { trip: PublicTrip; token: strin
     }
     return map;
   }, [photos]);
+  const indexById = useMemo(() => new Map(photos.map((p, i) => [p.id, i])), [photos]);
+  const photoDayIndex = useMemo(() => buildDayIndex(photos), [photos]);
+  const cityByDay = useMemo(() => new Map(trip.days.map((d) => [d.dayNumber, d.city])), [trip.days]);
+  // «Все фото» по дням: подряд идущие кадры одного дня — одна группа с заголовком
+  const allGroups = useMemo(() => {
+    const out: { dayNumber: number | null; items: { p: PublicPhoto; i: number }[] }[] = [];
+    photos.slice(0, allShown).forEach((p, i) => {
+      const last = out[out.length - 1];
+      if (last && last.dayNumber === p.dayNumber) last.items.push({ p, i });
+      else out.push({ dayNumber: p.dayNumber, items: [{ p, i }] });
+    });
+    return out;
+  }, [photos, allShown]);
   const photoPoints = useMemo(
     () => photos.filter((p) => p.lat != null && p.lng != null).map((p) => ({ lat: p.lat!, lng: p.lng! })),
     [photos]
@@ -190,26 +222,57 @@ export function PublicTripView({ trip, token }: { trip: PublicTrip; token: strin
   // страницы; viewer.list от свайпа не меняется, так что мемо держится
   const viewerList = viewer?.list;
   const viewerOpen = !!viewer;
+  const viewerFull = !!viewer?.full;
+  const viewerDayIndex = useMemo(() => buildDayIndex(viewerList ?? []), [viewerList]);
   const viewerSlides = useMemo(
     () =>
-      (viewerList ?? []).map((p) => ({
-        src: p.url,
-        width: p.width ?? undefined,
-        height: p.height ?? undefined,
-        alt: p.caption ?? "Фото поездки",
-        title: p.caption ?? undefined,
-        description: (
-          <div className="flex flex-wrap items-center gap-x-2.5 gap-y-0.5 text-xs opacity-85">
-            {p.dayNumber != null && <span>День {p.dayNumber}</span>}
-            {p.placeName && <span>📍 {p.placeName}</span>}
-            {p.takenAt && <span className="opacity-70">{fmtLong(p.takenAt)}</span>}
-          </div>
-        ),
-      })),
-    [viewerList]
+      (viewerList ?? []).map((p, i) => {
+        const city = p.dayNumber != null ? cityByDay.get(p.dayNumber) : undefined;
+        const start = p.dayNumber != null ? viewerDayIndex.startOf.get(p.dayNumber) : undefined;
+        const count = p.dayNumber != null ? viewerDayIndex.countOf.get(p.dayNumber) : undefined;
+        return {
+          src: p.url,
+          width: p.width ?? undefined,
+          height: p.height ?? undefined,
+          alt: p.caption ?? "Фото поездки",
+          title: p.caption ?? undefined,
+          description: (
+            <div className="flex flex-wrap items-center gap-x-2.5 gap-y-0.5 text-xs opacity-85">
+              {p.dayNumber != null && (
+                <span className="font-medium">
+                  День {p.dayNumber}
+                  {city ? ` · ${city}` : ""}
+                  {/* позиция внутри дня — чтобы было видно, где начало дня и сколько до конца */}
+                  {viewerFull && start != null && count != null ? ` · ${i - start + 1} из ${count}` : ""}
+                </span>
+              )}
+              {p.placeName && <span>📍 {p.placeName}</span>}
+              {p.takenAt && <span className="opacity-70">{fmtLong(p.takenAt)}</span>}
+            </div>
+          ),
+        };
+      }),
+    [viewerList, viewerFull, viewerDayIndex, cityByDay]
   );
   // На слабой связи/экономии трафика соседние фото заранее не тянем (см. lib/net.ts)
   const viewerPreload = useMemo(() => (viewerOpen && isSlowConnection() ? 0 : 1), [viewerOpen]);
+
+  // Прыжки по дням в просмотре: «к началу дня / предыдущий день» и «следующий день»
+  const prevDayTarget = viewer ? dayJumpTarget(viewer.list, viewer.index, "prev") : null;
+  const nextDayTarget = viewer ? dayJumpTarget(viewer.list, viewer.index, "next") : null;
+  const viewerPhotoId = viewer ? (viewer.list[viewer.index]?.id ?? null) : null;
+  const viewerDayStart = (() => {
+    const dn = viewer?.list[viewer.index]?.dayNumber;
+    return dn != null ? viewerDayIndex.startOf.get(dn) : undefined;
+  })();
+
+  // Запоминаем последнее открытое фото: вернуться можно с этого места, не листая заново.
+  // Открытие просмотра гасит плашку «продолжить» — гость уже смотрит
+  useEffect(() => {
+    if (!viewerPhotoId) return;
+    writeResume(token, { kind: "photo", photoId: viewerPhotoId, at: Date.now() });
+    setResume(null);
+  }, [viewerPhotoId, token]);
 
   const dateLabel =
     trip.endDate && trip.endDate !== trip.startDate
@@ -292,6 +355,20 @@ export function PublicTripView({ trip, token }: { trip: PublicTrip; token: strin
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
+  // Долистал до дня на странице (не в просмотре) — запоминаем день. Пока висит плашка
+  // «продолжить», прошлое место не затираем: гость может просто осматриваться
+  // Пишем только при СМЕНЕ дня: иначе закрытие просмотра перезаписало бы только что
+  // сохранённое фото днём. Остальное читаем через ref
+  const resumeGuard = useRef({ scrolled: false, viewerOpen: false, offered: false });
+  useEffect(() => {
+    resumeGuard.current = { scrolled: showFloatingBar, viewerOpen, offered: !!resume };
+  }, [showFloatingBar, viewerOpen, resume]);
+  useEffect(() => {
+    const g = resumeGuard.current;
+    if (activeDay == null || !g.scrolled || g.viewerOpen || g.offered) return;
+    writeResume(token, { kind: "day", dayNumber: activeDay, at: Date.now() });
+  }, [activeDay, token]);
+
   const jumpToDay = (dayNumber: number) => {
     document.getElementById(`day-${dayNumber}`)?.scrollIntoView({
       behavior: reducedMotion ? "auto" : "smooth",
@@ -311,6 +388,36 @@ export function PublicTripView({ trip, token }: { trip: PublicTrip; token: strin
         };
 
   const viewerPhoto = viewer ? viewer.list[viewer.index] : null;
+
+  // Плашка «Продолжить»: что показать гостю и куда она ведёт
+  const resumeCard = (() => {
+    if (!resume) return null;
+    if (resume.kind === "day") {
+      const d = trip.days.find((x) => x.dayNumber === resume.dayNumber);
+      return d ? { label: `День ${d.dayNumber} · ${d.city}`, ready: true } : null;
+    }
+    const idx = indexById.get(resume.photoId);
+    if (idx == null) {
+      // фото ещё едет с сервера — подождём; докачалось всё, а его нет — удалено, предлагать нечего
+      return photos.length < trip.photosTotal ? { label: "Ищем ваше место…", ready: false } : null;
+    }
+    const p = photos[idx];
+    const city = p.dayNumber != null ? cityByDay.get(p.dayNumber) : undefined;
+    return {
+      label: `Фото ${idx + 1} из ${trip.photosTotal}${p.dayNumber != null ? ` · День ${p.dayNumber}` : ""}${city ? ` · ${city}` : ""}`,
+      ready: true,
+    };
+  })();
+
+  const continueFromResume = () => {
+    if (!resume) return;
+    if (resume.kind === "day") jumpToDay(resume.dayNumber);
+    else {
+      const idx = indexById.get(resume.photoId);
+      if (idx != null) setViewer({ list: photos, index: idx, full: true });
+    }
+    setResume(null);
+  };
 
   return (
     <main className="min-h-screen bg-background text-foreground">
@@ -369,7 +476,7 @@ export function PublicTripView({ trip, token }: { trip: PublicTrip; token: strin
               {photos.length > 0 && (
                 <button
                   type="button"
-                  onClick={() => setViewer({ list: photos, index: 0 })}
+                  onClick={() => setViewer({ list: photos, index: 0, full: true })}
                   className="min-h-11 inline-flex items-center gap-2 rounded-full bg-primary text-primary-foreground px-5 text-sm font-semibold shadow-lg active:scale-95 transition-transform"
                   style={{ boxShadow: `0 8px 24px ${trip.accent}44` }}
                 >
@@ -411,6 +518,44 @@ export function PublicTripView({ trip, token }: { trip: PublicTrip; token: strin
           </div>
         </div>
       </header>
+
+      {/* ═══ Продолжить с места, где остановились ═══ */}
+      {resumeCard && (
+        <section className="pb-4">
+          <div className="max-w-2xl mx-auto px-4">
+            <div className="flex items-center gap-3 rounded-2xl border border-border bg-card p-3 shadow-sm">
+              <span
+                className="grid size-10 shrink-0 place-items-center rounded-xl"
+                style={{ background: `${trip.accent}22`, color: trip.accent }}
+                aria-hidden
+              >
+                <History className="size-5" />
+              </span>
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-semibold leading-tight">Продолжить с того места</p>
+                <p className="mt-0.5 truncate text-xs text-muted-foreground">{resumeCard.label}</p>
+              </div>
+              <button
+                type="button"
+                onClick={continueFromResume}
+                disabled={!resumeCard.ready}
+                className="min-h-10 shrink-0 rounded-full px-4 text-xs font-semibold text-white active:scale-95 transition-transform disabled:opacity-50 disabled:active:scale-100"
+                style={{ background: trip.accent }}
+              >
+                Продолжить
+              </button>
+              <button
+                type="button"
+                onClick={() => setResume(null)}
+                aria-label="Не напоминать"
+                className="grid size-10 shrink-0 place-items-center rounded-full text-muted-foreground hover:bg-accent active:scale-90 transition-transform"
+              >
+                <X className="size-4" />
+              </button>
+            </div>
+          </div>
+        </section>
+      )}
 
       {/* ═══ Лучшие кадры ═══ */}
       {favorites.length > 0 && (
@@ -509,8 +654,17 @@ export function PublicTripView({ trip, token }: { trip: PublicTrip; token: strin
                   >
                     Д{d.dayNumber}
                   </span>
-                  <span className="text-sm font-semibold">{d.city}</span>
-                  <span className="text-xs text-muted-foreground">{fmtLong(d.date)}</span>
+                  <span className="min-w-0 truncate text-sm font-semibold">{d.city}</span>
+                  <span className="shrink-0 text-xs text-muted-foreground">{fmtLong(d.date)}</span>
+                  {dayPhotos.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setViewer({ list: photos, index: indexById.get(dayPhotos[0].id) ?? 0, full: true })}
+                      className="ml-auto inline-flex min-h-8 shrink-0 items-center gap-1.5 rounded-full border border-border bg-card px-3 text-xs font-semibold hover:bg-accent active:scale-95 transition-all"
+                    >
+                      <Images className="size-3.5" /> Смотреть · {dayPhotos.length}
+                    </button>
+                  )}
                 </div>
                 {d.title && <h3 className="mt-2 text-lg font-bold leading-snug text-balance">{d.title}</h3>}
                 {d.summary && <p className="mt-1.5 text-sm text-muted-foreground leading-relaxed">{d.summary}</p>}
@@ -521,7 +675,7 @@ export function PublicTripView({ trip, token }: { trip: PublicTrip; token: strin
                       <button
                         key={p.url + i}
                         type="button"
-                        onClick={() => setViewer({ list: dayPhotos, index: i })}
+                        onClick={() => setViewer({ list: photos, index: indexById.get(p.id) ?? 0, full: true })}
                         className="relative aspect-square rounded-xl overflow-hidden bg-muted active:scale-[0.97] transition-transform"
                         aria-label={p.caption ?? `Фото, день ${d.dayNumber}`}
                       >
@@ -577,47 +731,65 @@ export function PublicTripView({ trip, token }: { trip: PublicTrip; token: strin
           <SectionTitle icon={<Camera className="size-3.5" />}>
             Все фото · {trip.photosTotal}
           </SectionTitle>
-          <div className="columns-2 sm:columns-3 gap-2 [&>*]:mb-2">
-            {photos.slice(0, allShown).map((p, i) => (
-              <Reveal
-                key={p.url + i}
-                disabled={reducedMotion || i >= REVEAL_FIRST}
-                delay={Math.min((i % 6) * 0.04, 0.2)}
-                className="break-inside-avoid"
-              >
-                <button
-                  type="button"
-                  onClick={() => setViewer({ list: photos, index: i })}
-                  className="relative w-full rounded-xl overflow-hidden bg-muted active:scale-[0.98] transition-transform block"
-                  aria-label={p.caption ?? "Фото поездки"}
-                >
-                  <img
-                    src={p.thumbUrl}
-                    alt={p.caption ?? ""}
-                    loading="lazy"
-                    decoding="async"
-                    className={cn("w-full object-cover", !(p.width && p.height) && "min-h-[120px]")}
-                    // Пропорции из метаданных: колонки не прыгают, а ленивая подгрузка не
-                    // считает каждую плитку заглушкой и не тянет вдвое больше, чем видно
-                    style={p.width && p.height ? { aspectRatio: `${p.width} / ${p.height}` } : undefined}
-                  />
-                  {p.isFavorite && (
-                    <span
-                      className="absolute top-2 right-2 grid place-items-center size-6 rounded-full bg-black/40 text-amber-300 backdrop-blur-sm"
-                      aria-hidden
+          {allGroups.map((g, gi) => (
+            <div key={`${g.dayNumber ?? "none"}-${gi}`} className={gi > 0 ? "mt-6" : undefined}>
+              {g.dayNumber != null && (
+                <h3 className="mb-2 flex items-center gap-2 text-sm font-semibold">
+                  <span
+                    className="text-[11px] font-bold tabular-nums rounded-lg px-2 py-1"
+                    style={{ background: `${trip.accent}22`, color: trip.accent }}
+                  >
+                    Д{g.dayNumber}
+                  </span>
+                  <span className="min-w-0 truncate">{cityByDay.get(g.dayNumber)}</span>
+                  <span className="ml-auto shrink-0 text-xs font-normal text-muted-foreground">
+                    {photoDayIndex.countOf.get(g.dayNumber)} {plural(photoDayIndex.countOf.get(g.dayNumber) ?? 0, ["фото", "фото", "фото"])}
+                  </span>
+                </h3>
+              )}
+              <div className="columns-2 sm:columns-3 gap-2 [&>*]:mb-2">
+                {g.items.map(({ p, i }) => (
+                  <Reveal
+                    key={p.url + i}
+                    disabled={reducedMotion || i >= REVEAL_FIRST}
+                    delay={Math.min((i % 6) * 0.04, 0.2)}
+                    className="break-inside-avoid"
+                  >
+                    <button
+                      type="button"
+                      onClick={() => setViewer({ list: photos, index: i, full: true })}
+                      className="relative w-full rounded-xl overflow-hidden bg-muted active:scale-[0.98] transition-transform block"
+                      aria-label={p.caption ?? "Фото поездки"}
                     >
-                      <Star className="size-3 fill-current" />
-                    </span>
-                  )}
-                  {p.caption && (
-                    <span className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/75 to-transparent text-white text-[11px] leading-snug text-left p-2 pt-6 line-clamp-2">
-                      {p.caption}
-                    </span>
-                  )}
-                </button>
-              </Reveal>
-            ))}
-          </div>
+                      <img
+                        src={p.thumbUrl}
+                        alt={p.caption ?? ""}
+                        loading="lazy"
+                        decoding="async"
+                        className={cn("w-full object-cover", !(p.width && p.height) && "min-h-[120px]")}
+                        // Пропорции из метаданных: колонки не прыгают, а ленивая подгрузка не
+                        // считает каждую плитку заглушкой и не тянет вдвое больше, чем видно
+                        style={p.width && p.height ? { aspectRatio: `${p.width} / ${p.height}` } : undefined}
+                      />
+                      {p.isFavorite && (
+                        <span
+                          className="absolute top-2 right-2 grid place-items-center size-6 rounded-full bg-black/40 text-amber-300 backdrop-blur-sm"
+                          aria-hidden
+                        >
+                          <Star className="size-3 fill-current" />
+                        </span>
+                      )}
+                      {p.caption && (
+                        <span className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/75 to-transparent text-white text-[11px] leading-snug text-left p-2 pt-6 line-clamp-2">
+                          {p.caption}
+                        </span>
+                      )}
+                    </button>
+                  </Reveal>
+                ))}
+              </div>
+            </div>
+          ))}
           {/* Кнопка живёт в двух состояниях: есть что раскрыть из загруженного —
               раскрываем; порции ещё едут с сервера — ждём (остаток честный, от
               photosTotal, а не от длины загруженного списка) */}
@@ -691,7 +863,7 @@ export function PublicTripView({ trip, token }: { trip: PublicTrip; token: strin
             {photos.length > 0 && (
               <button
                 type="button"
-                onClick={() => setViewer({ list: photos, index: 0 })}
+                onClick={() => setViewer({ list: photos, index: 0, full: true })}
                 tabIndex={showFloatingBar ? 0 : -1}
                 className="min-h-10 inline-flex items-center gap-1.5 rounded-full px-4 text-xs font-semibold text-white active:scale-95 transition-transform"
                 style={{ background: trip.accent }}
@@ -741,6 +913,36 @@ export function PublicTripView({ trip, token }: { trip: PublicTrip; token: strin
           zoom={{ scrollToZoom: true, pinchZoomV4: true }}
           toolbar={{
             buttons: [
+              prevDayTarget != null && (
+                <button
+                  key="prev-day"
+                  type="button"
+                  aria-label={viewerDayStart != null && viewer!.index > viewerDayStart ? "К началу дня" : "Предыдущий день"}
+                  title={viewerDayStart != null && viewer!.index > viewerDayStart ? "К началу дня" : "Предыдущий день"}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setViewer((v) => (v ? { ...v, index: prevDayTarget } : v));
+                  }}
+                  className="size-11 rounded-full grid place-items-center text-white bg-white/10 hover:bg-white/20 active:scale-90 transition-transform"
+                >
+                  <ChevronsLeft className="size-5" />
+                </button>
+              ),
+              nextDayTarget != null && (
+                <button
+                  key="next-day"
+                  type="button"
+                  aria-label="Следующий день"
+                  title="Следующий день"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setViewer((v) => (v ? { ...v, index: nextDayTarget } : v));
+                  }}
+                  className="size-11 rounded-full grid place-items-center text-white bg-white/10 hover:bg-white/20 active:scale-90 transition-transform"
+                >
+                  <ChevronsRight className="size-5" />
+                </button>
+              ),
               <button
                 key="download"
                 type="button"

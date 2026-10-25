@@ -88,3 +88,47 @@ describe("PublicTripView: «Все фото» порциями", () => {
     expect(html).toContain("Загружаем ещё");
   });
 });
+
+describe("PublicTripView: фото по ходу поездки", () => {
+  const day = (dayNumber: number, city: string) => ({
+    dayNumber,
+    date: `2026-10-0${dayNumber}T00:00:00.000Z`,
+    city,
+    title: "",
+    summary: null,
+    places: [],
+  });
+  const days = [day(1, "Минск"), day(2, "Шанхай")];
+  // порядок задаёт сервер: день ↑, время ↑ — страница его сохраняет
+  const ordered = [
+    photo(0, { dayNumber: 1 }),
+    photo(1, { dayNumber: 1 }),
+    photo(2, { dayNumber: 2 }),
+  ];
+
+  it("«Все фото» разбиты по дням: заголовок дня с городом и числом кадров", () => {
+    const html = render(ordered, { days, totalDays: 2 });
+    const all = html.slice(html.indexOf("Все фото"));
+    expect(all).toContain("Шанхай");
+    expect(all.indexOf("Минск")).toBeLessThan(all.indexOf("Шанхай"));
+    expect(all).toContain("2 фото"); // день 1
+    expect(all).toContain("1 фото"); // день 2
+  });
+
+  it("кадры идут в порядке, который пришёл с сервера (день 1 раньше дня 2)", () => {
+    const html = render(ordered, { days, totalDays: 2 });
+    const all = html.slice(html.indexOf("Все фото"));
+    expect(all.indexOf("/uploads/0-thumb.jpg")).toBeLessThan(all.indexOf("/uploads/1-thumb.jpg"));
+    expect(all.indexOf("/uploads/1-thumb.jpg")).toBeLessThan(all.indexOf("/uploads/2-thumb.jpg"));
+  });
+
+  it("в главе дня есть кнопка «Смотреть» с числом кадров дня", () => {
+    const html = render(ordered, { days, totalDays: 2 });
+    expect(html).toContain("Смотреть · 2");
+    expect(html).toContain("Смотреть · 1");
+  });
+
+  it("плашка «Продолжить» не рисуется на сервере (место читается из localStorage после монтирования)", () => {
+    expect(render(ordered, { days, totalDays: 2 })).not.toContain("Продолжить с того места");
+  });
+});

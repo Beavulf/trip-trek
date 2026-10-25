@@ -2,6 +2,7 @@ import { cache } from "react";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { db } from "@/lib/db";
+import { PUBLIC_PHOTO_ORDER, encodePhotoCursor } from "@/lib/public-photos";
 import { PublicTripView, type PublicTrip } from "@/components/public/public-trip-view";
 
 // Публичная страница поездки: /p/<shareToken>. «Живой журнал»: обложка,
@@ -48,9 +49,9 @@ const findSharedTrip = cache(async (token: string) =>
         },
       },
       photos: {
-        // Детерминированный порядок [takenAt desc, id desc] — продолжение этого
-        // списка порциями из /photos идёт keyset-курсором ровно отсюда
-        orderBy: [{ takenAt: "desc" }, { id: "desc" }],
+        // Порядок поездки (день ↑, время ↑, id ↑) — продолжение этого списка порциями
+        // из /photos идёт keyset-курсором ровно отсюда
+        orderBy: PUBLIC_PHOTO_ORDER,
         take: FIRST_BATCH,
         select: {
           id: true,
@@ -80,7 +81,9 @@ export async function generateMetadata({ params }: { params: Promise<{ token: st
   const description = trip
     ? `${trip.destination} · ${trip._count.photos} фото из путешествия — маршрут, места и кадры`
     : "Публичная страница путешествия";
-  const ogImage = trip?.photos.find((p) => p.thumbUrl)?.thumbUrl ?? undefined;
+  // Для карточки в мессенджере — лучший кадр, а не случайный первый (в начале дня 1 часто билеты)
+  const ogImage =
+    (trip?.photos.find((p) => p.isFavorite && p.thumbUrl) ?? trip?.photos.find((p) => p.thumbUrl))?.thumbUrl ?? undefined;
   return {
     title,
     description,
@@ -103,6 +106,7 @@ export default async function PublicTripPage({ params }: { params: Promise<{ tok
   const trip = await findSharedTrip(token);
   if (!trip) notFound();
 
+  const lastLoaded = trip.photos[trip.photos.length - 1];
   const view: PublicTrip = {
     title: trip.title,
     destination: trip.destination,
@@ -114,6 +118,12 @@ export default async function PublicTripPage({ params }: { params: Promise<{ tok
     allowDownload: trip.shareAllowDownload,
     hearts: trip.shareHearts,
     photosTotal: trip._count.photos,
+    // Откуда клиенту докачивать остальное: курсор считаем здесь, чтобы формат порядка
+    // знал только сервер. null — всё уже в SSR-партии
+    photosNextCursor:
+      trip.photos.length < trip._count.photos && lastLoaded?.day
+        ? encodePhotoCursor({ dayNumber: lastLoaded.day.dayNumber, takenAt: lastLoaded.takenAt, id: lastLoaded.id })
+        : null,
     days: trip.days.map((d) => ({
       dayNumber: d.dayNumber,
       date: d.date.toISOString(),
