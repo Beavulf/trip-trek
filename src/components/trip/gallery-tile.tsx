@@ -6,7 +6,7 @@
 // рефетчами (structural sharing), поэтому memo реально срабатывает.
 import { memo } from "react";
 import { motion } from "framer-motion";
-import { MapPin, Star } from "lucide-react";
+import { EyeOff, MapPin, Star } from "lucide-react";
 import type { Photo } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -66,9 +66,18 @@ export const MasonryTile = memo(function MasonryTile({
         onError={(e) => imgFallback(e, photo)}
       />
       <FallbackNote className="min-h-[120px] grid" />
-      {photo.isFavorite && (
-        <span className="absolute top-1.5 left-1.5 size-6 rounded-full bg-black/50 grid place-items-center">
-          <Star className="size-3.5 fill-yellow-300 text-yellow-300" aria-hidden="true" />
+      {(photo.isFavorite || photo.hiddenFromPublic) && (
+        <span className="absolute top-1.5 left-1.5 flex gap-1">
+          {photo.isFavorite && (
+            <span className="size-6 rounded-full bg-black/50 grid place-items-center">
+              <Star className="size-3.5 fill-yellow-300 text-yellow-300" aria-hidden="true" />
+            </span>
+          )}
+          {photo.hiddenFromPublic && (
+            <span className="size-6 rounded-full bg-black/50 grid place-items-center" title="Скрыто от гостей">
+              <EyeOff className="size-3.5 text-sky-300" aria-label="Скрыто от гостей" />
+            </span>
+          )}
         </span>
       )}
       {photo.user && (
@@ -124,8 +133,13 @@ export const CompactTile = memo(function CompactTile({ photo, index, onOpen }: T
         onError={(e) => imgFallback(e, photo)}
       />
       <FallbackNote className="absolute inset-0 grid" />
-      {photo.isFavorite && (
-        <Star className="absolute top-1 left-1 size-3.5 fill-yellow-300 text-yellow-300 drop-shadow" aria-hidden="true" />
+      {(photo.isFavorite || photo.hiddenFromPublic) && (
+        <span className="absolute top-1 left-1 flex gap-0.5">
+          {photo.isFavorite && (
+            <Star className="size-3.5 fill-yellow-300 text-yellow-300 drop-shadow" aria-hidden="true" />
+          )}
+          {photo.hiddenFromPublic && <EyeOff className="size-3.5 text-sky-300 drop-shadow" aria-label="Скрыто от гостей" />}
+        </span>
       )}
     </button>
   );

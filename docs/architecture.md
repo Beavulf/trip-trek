@@ -198,7 +198,11 @@ User ──< SplitMember >── SplitGroup ──< SplitExpense ──< SplitSh
   rotate закрывает старую ссылку, страница RSC без кэша — выключение мгновенное.
   **Trip.shareAllowDownload** — тумблер «гости могут скачать ZIP фото»
   (`/p/<token>/photos.zip`); **Trip.shareHearts** — счётчик гостевых сердечек
-  (`/p/<token>/heart`, анонимно + лимит по IP).
+  (`/p/<token>/heart`, анонимно + лимит по IP). **Trip.shareExpiresAt** — срок
+  действия ссылки (null — бессрочно): после него страница, порции фото, ZIP и
+  сердечко закрыты, токен сохраняется. **Photo.hiddenFromPublic** — владелец скрыл
+  кадр от гостей (билеты, документы): на публичной странице, в её счётчиках и в ZIP
+  его нет, в самой поездке виден как обычно (`PUBLIC_PHOTO_WHERE`).
 - **Photo**: `url`/`thumbUrl` (storage пайплайн), `width`/`height` — размеры сохранённого файла после EXIF-поворота (из них клиент строит `aspect-ratio` плитки; у фото до этой правки заполняет `prisma/backfill-photos.ts`), координаты и дата съёмки из EXIF (клиентский `src/lib/photo-exif.ts`, до загрузки — storage EXIF выпиливает; `takenAt` — по EXIF-дате, иначе время загрузки),
   `userId` — кто загрузил (SetNull при удалении аккаунта).
 - **Phrase**: колонки `ru`/`cn`/`pinyin` исторические; реальный язык — `language`

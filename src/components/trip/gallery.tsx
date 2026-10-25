@@ -6,7 +6,7 @@ import { useTripStore } from "@/lib/trip-store";
 import { focusOnMap } from "@/lib/map-bus";
 import { useAuth } from "@/hooks/use-auth";
 import { motion, useReducedMotion } from "framer-motion";
-import { Camera, Columns3, LayoutGrid, Share2, Star } from "lucide-react";
+import { Camera, Columns3, EyeOff, LayoutGrid, Share2, Star } from "lucide-react";
 import dynamic from "next/dynamic";
 import { useState, useMemo } from "react";
 import { toast } from "sonner";
@@ -71,6 +71,8 @@ export function Gallery() {
   const [dimension, setDimension] = useState<Dimension>("day");
   const [chipValue, setChipValue] = useState<string>("");
   const [favOnly, setFavOnly] = useState(false);
+  // Фильтр «скрыто от гостей»: быстро увидеть, что не попадёт на публичную страницу
+  const [hiddenOnly, setHiddenOnly] = useState(false);
   const [layout, setLayout] = useState<LayoutMode>("masonry");
   const [addOpen, setAddOpen] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
@@ -79,7 +81,7 @@ export function Gallery() {
   // Лимит привязан к ключу фильтра: смена чипа/режима сама возвращает первую порцию, иначе
   // после нескольких «Показать ещё» новый чип тащил бы в DOM сотни плиток разом. Без эффекта
   // с setState — лишнего рендера с прежним лимитом нет.
-  const filterKey = `${dimension}|${chipValue}|${favOnly}`;
+  const filterKey = `${dimension}|${chipValue}|${favOnly}|${hiddenOnly}`;
   const [limit, setLimit] = useState({ key: filterKey, count: PAGE_SIZE });
   const visibleCount = limit.key === filterKey ? limit.count : PAGE_SIZE;
 
@@ -90,6 +92,7 @@ export function Gallery() {
     () =>
       all.filter((p) => {
         if (favOnly && !p.isFavorite) return false;
+        if (hiddenOnly && !p.hiddenFromPublic) return false;
         if (chipValue) {
           if (dimension === "day" && p.day?.dayNumber !== Number(chipValue)) return false;
           if (dimension === "city" && p.day?.cityKey !== chipValue) return false;
@@ -97,7 +100,7 @@ export function Gallery() {
         }
         return true;
       }),
-    [all, favOnly, chipValue, dimension],
+    [all, favOnly, hiddenOnly, chipValue, dimension],
   );
 
   // Счётчики для чипов активного измерения
@@ -137,19 +140,21 @@ export function Gallery() {
     const todayKey = new Date().toDateString();
     let today = 0;
     let fav = 0;
+    let hidden = 0;
     all.forEach((p) => {
       if (p.day?.cityKey) cities.add(p.day.cityKey);
       if (p.dayId) days.add(p.dayId);
       if (p.userId) people.add(p.userId);
       if (new Date(p.takenAt).toDateString() === todayKey) today += 1;
       if (p.isFavorite) fav += 1;
+      if (p.hiddenFromPublic) hidden += 1;
     });
-    return { cities: cities.size, days: days.size, people: people.size, today, fav };
+    return { cities: cities.size, days: days.size, people: people.size, today, fav, hidden };
   }, [all]);
 
   const strip = useMemo(() => filtered.slice(0, 12), [filtered]);
   const shown = filtered.slice(0, visibleCount);
-  const hasActiveFilters = favOnly || !!chipValue;
+  const hasActiveFilters = favOnly || hiddenOnly || !!chipValue;
 
   const accent = useMemo(() => {
     if (!trip) return "#f97316";
@@ -223,6 +228,17 @@ export function Gallery() {
       { id: p.id, patch: { isFavorite: !p.isFavorite } },
       {
         onSuccess: () => toast.success(p.isFavorite ? "Убрано из избранного" : "В избранном ⭐"),
+        onError: (err) => toast.error(err instanceof Error ? err.message : "Не удалось обновить"),
+      },
+    );
+  };
+
+  const toggleHidden = (p: Photo) => {
+    upd.mutate(
+      { id: p.id, patch: { hiddenFromPublic: !p.hiddenFromPublic } },
+      {
+        onSuccess: () =>
+          toast.success(p.hiddenFromPublic ? "Фото снова видно гостям" : "Скрыто от гостей публичной страницы"),
         onError: (err) => toast.error(err instanceof Error ? err.message : "Не удалось обновить"),
       },
     );
@@ -397,6 +413,24 @@ export function Gallery() {
           >
             <Star className={cn("size-4", favOnly && "fill-amber-400")} />
           </button>
+          {(stats.hidden > 0 || hiddenOnly) && (
+            <button
+              type="button"
+              aria-pressed={hiddenOnly}
+              aria-label="Только скрытые от гостей"
+              title={`Скрыто от гостей: ${stats.hidden}`}
+              onClick={() => {
+                setHiddenOnly((v) => !v);
+                setLightbox(null);
+              }}
+              className={cn(
+                "size-11 shrink-0 rounded-xl border grid place-items-center active:scale-95 transition-all",
+                hiddenOnly ? "bg-sky-400/15 border-sky-400/50 text-sky-500" : "bg-card border-border text-muted-foreground",
+              )}
+            >
+              <EyeOff className="size-4" />
+            </button>
+          )}
           <button
             type="button"
             aria-pressed={layout === "compact"}
@@ -446,6 +480,7 @@ export function Gallery() {
             onClick={() => {
               setChipValue("");
               setFavOnly(false);
+              setHiddenOnly(false);
             }}
             className="text-xs text-primary font-medium px-2 py-2 active:scale-95 transition-transform"
           >
@@ -564,6 +599,7 @@ export function Gallery() {
         pendingDelete={del.isPending}
         onToggleFavorite={toggleFavorite}
         favoritePending={upd.isPending}
+        onToggleHidden={toggleHidden}
         onSaveEdit={saveEdit}
       />
     </div>

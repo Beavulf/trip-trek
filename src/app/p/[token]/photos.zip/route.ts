@@ -4,12 +4,14 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { rateLimitMiddleware } from "@/lib/rate-limit";
 import { UPLOADS_ROOT } from "@/lib/storage/root";
+import { PUBLIC_PHOTO_ORDER } from "@/lib/public-photos";
+import { PUBLIC_PHOTO_WHERE, activeShareWhere } from "@/lib/public-share";
 import { zipStream, zipEntryName, type ZipEntry } from "@/lib/zip";
 
 export const dynamic = "force-dynamic";
 
 // GET /p/<token>/photos.zip — ZIP всех фото поездки для гостей публичной страницы.
-// Работает только при shareEnabled и тумблере владельца shareAllowDownload;
+// Работает только при включённой и не истёкшей ссылке и тумблере владельца shareAllowDownload;
 // по IP — 5 архивов в час (публичный эндпоинт, жёсткий лимит от качалок).
 // Без потолка на число фото: генератор держит в памяти один файл, а zip64
 // (src/lib/zip.ts) снимает классические 4 ГБ / 65535 записей формата.
@@ -20,13 +22,15 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ token: stri
 
   const { token } = await ctx.params;
   const trip = await db.trip.findFirst({
-    where: { shareToken: token, shareEnabled: true },
+    where: activeShareWhere(token),
     select: {
       title: true,
       shareAllowDownload: true,
       photos: {
-        // Хронологический порядок — архив читается как история поездки
-        orderBy: { takenAt: "asc" },
+        // Как на странице: скрытые владельцем кадры в архив не попадают, порядок —
+        // по ходу поездки (день ↑, время ↑), архив читается как история поездки
+        where: PUBLIC_PHOTO_WHERE,
+        orderBy: PUBLIC_PHOTO_ORDER,
         select: {
           url: true,
           caption: true,

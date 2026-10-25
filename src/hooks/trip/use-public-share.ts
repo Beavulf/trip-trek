@@ -10,9 +10,19 @@ export interface PublicShareState {
   enabled: boolean;
   token: string | null;
   allowDownload: boolean;
+  /** До какого момента ссылка действует (ISO); null — бессрочно */
+  expiresAt: string | null;
+  /** Срок уже вышел: гости видят «срок действия закончился» */
+  expired: boolean;
 }
 
-export type PublicSharePatch = { enabled?: boolean; rotate?: boolean; allowDownload?: boolean };
+export type PublicSharePatch = {
+  enabled?: boolean;
+  rotate?: boolean;
+  allowDownload?: boolean;
+  /** Продлить/установить срок: суток от сейчас (1, 7, 30, 90); null — сделать бессрочной */
+  expiresInDays?: number | null;
+};
 
 export function publicShareUrl(token: string | null | undefined): string {
   if (!token || typeof window === "undefined") return "";
@@ -20,7 +30,13 @@ export function publicShareUrl(token: string | null | undefined): string {
 }
 
 function normalize(d: Partial<PublicShareState> | null): PublicShareState {
-  return { enabled: !!d?.enabled, token: d?.token ?? null, allowDownload: d?.allowDownload !== false };
+  return {
+    enabled: !!d?.enabled,
+    token: d?.token ?? null,
+    allowDownload: d?.allowDownload !== false,
+    expiresAt: d?.expiresAt ?? null,
+    expired: !!d?.expired,
+  };
 }
 
 export function usePublicShare(tripId: string) {

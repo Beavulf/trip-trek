@@ -1,6 +1,6 @@
 "use client";
 
-import { Copy, Globe, RefreshCw } from "lucide-react";
+import { CalendarClock, Copy, Globe, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { usePublicShare, type PublicSharePatch } from "@/hooks/trip/use-public-share";
@@ -9,6 +9,18 @@ import { usePublicShare, type PublicSharePatch } from "@/hooks/trip/use-public-s
 // смотреть» для гостей). Живёт в «О поездке» и в шите «Поделиться» из
 // «Маршрута»: настройка доступности поездки наружу. Данные — общий хук
 // usePublicShare; доступно только владельцу (гарды и в API).
+
+// Срок отсчитывается от момента нажатия: «ещё неделя» — удобнее, чем выбирать дату
+const EXPIRY_OPTIONS: { days: number | null; label: string }[] = [
+  { days: 1, label: "1 день" },
+  { days: 7, label: "7 дней" },
+  { days: 30, label: "30 дней" },
+  { days: 90, label: "90 дней" },
+  { days: null, label: "Бессрочно" },
+];
+
+const fmtDate = (iso: string | null) =>
+  iso ? new Date(iso).toLocaleDateString("ru-RU", { day: "numeric", month: "long" }) : "";
 
 export function PublicShareSettings({ tripId }: { tripId: string }) {
   const { state, url, update, updating } = usePublicShare(tripId);
@@ -20,7 +32,9 @@ export function PublicShareSettings({ tripId }: { tripId: string }) {
       onSuccess: () => {
         if (patch.enabled) toast.success(patch.rotate ? "Свежая ссылка готова — старая закрыта" : "Публичная страница готова 🌍");
         else if (patch.enabled === false) toast.info("Публичная страница выключена");
-        else toast.success(patch.allowDownload ? "Гости смогут скачать фото" : "Скачивание для гостей запрещено");
+        else if (patch.expiresInDays !== undefined) {
+          toast.success(patch.expiresInDays === null ? "Ссылка теперь бессрочная" : "Срок ссылки обновлён");
+        } else toast.success(patch.allowDownload ? "Гости смогут скачать фото" : "Скачивание для гостей запрещено");
       },
       onError: () => toast.error("Не удалось обновить ссылку"),
     });
@@ -101,6 +115,34 @@ export function PublicShareSettings({ tripId }: { tripId: string }) {
               <span className={knobCls(state.allowDownload)} />
             </button>
           </label>
+
+          {/* Срок действия: по умолчанию бессрочно; истёкшая ссылка у гостей закрыта, токен тот же —
+              продлил, и она снова работает */}
+          <div className="rounded-lg bg-muted/50 px-2.5 py-2 space-y-1.5">
+            <div className="flex items-center gap-1.5 text-[11px] font-medium">
+              <CalendarClock className="size-3.5" /> Срок действия ссылки
+            </div>
+            <p className={cn("text-[11px] leading-snug", state.expired ? "text-rose-500 font-medium" : "text-muted-foreground")}>
+              {state.expired
+                ? `Срок вышел ${fmtDate(state.expiresAt)} — гости видят «срок закончился». Продлите, чтобы открыть снова.`
+                : state.expiresAt
+                  ? `Действует до ${fmtDate(state.expiresAt)}`
+                  : "Бессрочно"}
+            </p>
+            <div className="flex flex-wrap gap-1.5">
+              {EXPIRY_OPTIONS.map((o) => (
+                <button
+                  key={String(o.days)}
+                  type="button"
+                  onClick={() => updateWithToast({ expiresInDays: o.days })}
+                  disabled={busy}
+                  className="min-h-8 rounded-full border border-border bg-card px-3 text-[11px] font-medium hover:bg-accent active:scale-95 transition-all disabled:opacity-50"
+                >
+                  {o.label}
+                </button>
+              ))}
+            </div>
+          </div>
 
           <button
             type="button"

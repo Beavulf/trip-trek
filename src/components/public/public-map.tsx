@@ -1,20 +1,29 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { MapContainer, TileLayer, CircleMarker, Tooltip, useMap } from "react-leaflet";
+import { MapContainer, TileLayer, CircleMarker, Polyline, Tooltip, useMap } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
 import { TILE_LAYERS } from "@/lib/map-layers";
 
-// Карта публичной страницы: без императивного API и хендлов — просто точки.
+// Карта публичной страницы: без императивного API — просто точки.
 // Места — крупные круги (посещённые ярче), фото — мелкий янтарный слой
-// «где снимали». Light-слой ArcGIS: он доступнее OSM в Китае,
-// где ссылку чаще всего и открывают из мессенджера.
+// «где снимали» (тап по точке открывает фото). Выбран день — на карте только его
+// места по порядку маршрута, соединённые линией, и его фото. Light-слой ArcGIS: он
+// доступнее OSM в Китае, где ссылку чаще всего и открывают из мессенджера.
 
 export interface PublicMapPlace {
   name: string;
   lat: number;
   lng: number;
   visited: boolean;
+  dayNumber: number;
+}
+
+export interface PublicMapPhoto {
+  id: string;
+  lat: number;
+  lng: number;
+  dayNumber: number | null;
 }
 
 /** Декларативный автозум: подгоняем охват под все точки после монтирования. */
@@ -42,11 +51,31 @@ function FitToPoints({ points }: { points: [number, number][] }) {
 export function PublicMap({
   places,
   photoPoints = [],
+  activeDay = null,
+  accent = "#f97316",
+  onPhotoClick,
 }: {
   places: PublicMapPlace[];
-  photoPoints?: { lat: number; lng: number }[];
+  photoPoints?: PublicMapPhoto[];
+  /** Номер дня, выбранного гостем; null — вся поездка */
+  activeDay?: number | null;
+  /** Цвет линии маршрута дня — акцент поездки */
+  accent?: string;
+  onPhotoClick?: (photoId: string) => void;
 }) {
-  const points = useMemo(() => places.filter((p) => p.lat && p.lng), [places]);
+  const points = useMemo(
+    () => places.filter((p) => p.lat && p.lng && (activeDay == null || p.dayNumber === activeDay)),
+    [places, activeDay]
+  );
+  const photos = useMemo(
+    () => (activeDay == null ? photoPoints : photoPoints.filter((p) => p.dayNumber === activeDay)),
+    [photoPoints, activeDay]
+  );
+  // Линия маршрута — только у выбранного дня (места приходят уже в порядке маршрута)
+  const line = useMemo<[number, number][]>(
+    () => (activeDay == null || points.length < 2 ? [] : points.map((p) => [p.lat, p.lng])),
+    [points, activeDay]
+  );
   // Подложка под тему страницы: гостям по умолчанию dark — светлая карта
   // была бы ярким пятном. Гость тему не переключает, выбора при монтировании достаточно.
   const [layer] = useState(() =>
@@ -57,9 +86,9 @@ export function PublicMap({
   const allPoints = useMemo<[number, number][]>(
     () => [
       ...points.map((p) => [p.lat, p.lng] as [number, number]),
-      ...photoPoints.map((p) => [p.lat, p.lng] as [number, number]),
+      ...photos.map((p) => [p.lat, p.lng] as [number, number]),
     ],
-    [points, photoPoints]
+    [points, photos]
   );
   const center = useMemo(() => {
     if (!allPoints.length) return { lat: 48, lng: 15 };
@@ -78,21 +107,25 @@ export function PublicMap({
     >
       <TileLayer url={layer.url} attribution={layer.attr} />
       <FitToPoints points={allPoints} />
-      {/* Фото — нижний слой: мелкие точки «здесь снимали» */}
-      {photoPoints.map((p, i) => (
+      {line.length > 1 && (
+        <Polyline positions={line} pathOptions={{ color: accent, weight: 3, opacity: 0.8, dashArray: "6 6" }} />
+      )}
+      {/* Фото — нижний слой: мелкие точки «здесь снимали»; тап открывает фото */}
+      {photos.map((p) => (
         <CircleMarker
-          key={`photo-${i}`}
+          key={`photo-${p.id}`}
           center={[p.lat, p.lng]}
-          radius={3.5}
+          radius={onPhotoClick ? 5 : 3.5}
           pathOptions={{
             color: "#ffffff",
             weight: 1,
             fillColor: "#f59e0b",
             fillOpacity: 0.8,
           }}
+          eventHandlers={onPhotoClick ? { click: () => onPhotoClick(p.id) } : undefined}
         >
           <Tooltip direction="top" offset={[0, -4]}>
-            📷 Фото
+            📷 {onPhotoClick ? "Открыть фото" : "Фото"}
           </Tooltip>
         </CircleMarker>
       ))}

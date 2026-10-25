@@ -210,6 +210,9 @@ model Trip {
   // карточке «Поделиться») и счётчик гостевых сердечек /p/<token>/heart
   shareAllowDownload Boolean @default(true)
   shareHearts        Int     @default(0)
+  // Срок действия публичной ссылки: после этого момента страница, порции фото, ZIP и
+  // сердечко закрыты, токен остаётся (продлил — тот же адрес). null — бессрочно
+  shareExpiresAt     DateTime?
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
@@ -317,6 +320,9 @@ model Photo {
   // Отпечаток содержимого (sha256 оригинального файла) — дедуп: повторная
   // загрузка того же кадра отклоняется, батч заранее помечает дубли
   contentHash String?
+  // Скрыто от гостей публичной страницы /p/<token> (билеты, документы, личное):
+  // в самой поездке фото видно как обычно, наружу — ни на странице, ни в ZIP
+  hiddenFromPublic Boolean @default(false)
   createdAt  DateTime @default(now())
 
   trip  Trip   @relation(fields: [tripId], references: [id], onDelete: Cascade)

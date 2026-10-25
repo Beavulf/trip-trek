@@ -132,3 +132,34 @@ describe("PublicTripView: фото по ходу поездки", () => {
     expect(render(ordered, { days, totalDays: 2 })).not.toContain("Продолжить с того места");
   });
 });
+
+describe("PublicTripView: слайдшоу и карта по дням", () => {
+  const place = (name: string, lat: number) => ({ name, category: "sight", lat, lng: 10, visited: false });
+  const dayWith = (dayNumber: number, city: string, places: ReturnType<typeof place>[]) => ({
+    dayNumber,
+    date: `2026-10-0${dayNumber}T00:00:00.000Z`,
+    city,
+    title: "",
+    summary: null,
+    places,
+  });
+  const days = [dayWith(1, "Минск", [place("А", 1)]), dayWith(2, "Шанхай", [place("Б", 2)])];
+
+  it("кнопка «Слайдшоу» есть при двух и более фото и нет при одном", () => {
+    expect(render([photo(0), photo(1)])).toContain("Слайдшоу");
+    expect(render([photo(0)])).not.toContain("Слайдшоу");
+  });
+
+  it("над картой — выбор дня: «Все дни» и чипы дней, у которых есть что показать", () => {
+    const html = render([photo(0, { dayNumber: 1 })], { days, totalDays: 2 });
+    const mapPart = html.slice(html.indexOf("Карта путешествия"));
+    expect(mapPart).toContain("Все дни");
+    expect(mapPart).toContain(">Д1<");
+    expect(mapPart).toContain(">Д2<");
+  });
+
+  it("если на карте только один день — переключатель не нужен", () => {
+    const html = render([photo(0)], { days: [days[0]], totalDays: 1 });
+    expect(html).not.toContain("Все дни");
+  });
+});

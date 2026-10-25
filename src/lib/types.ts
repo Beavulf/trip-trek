@@ -59,6 +59,8 @@ export interface Photo {
   contentHash?: string | null;
   caption: string | null;
   isFavorite: boolean;
+  /** Скрыто от гостей публичной страницы /p/<token> (в самой поездке видно как обычно) */
+  hiddenFromPublic?: boolean;
   placeId: string | null;
   dayId: string;
   userId: string | null;

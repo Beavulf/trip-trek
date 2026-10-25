@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { rateLimitMiddleware } from "@/lib/rate-limit";
+import { PUBLIC_PHOTO_WHERE, activeShareWhere } from "@/lib/public-share";
 import {
   PUBLIC_PHOTO_ORDER,
   decodePhotoCursor,
@@ -29,7 +30,7 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ token: stri
 
   const { token } = await ctx.params;
   const trip = await db.trip.findFirst({
-    where: { shareToken: token, shareEnabled: true },
+    where: activeShareWhere(token),
     select: { id: true },
   });
   if (!trip) return NextResponse.json({ error: "Поездка не найдена" }, { status: 404 });
@@ -42,7 +43,7 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ token: stri
   }
 
   const photos = await db.photo.findMany({
-    where: { tripId: trip.id, ...(after ? photosAfter(after) : {}) },
+    where: { tripId: trip.id, ...PUBLIC_PHOTO_WHERE, ...(after ? photosAfter(after) : {}) },
     orderBy: PUBLIC_PHOTO_ORDER,
     take: PAGE_SIZE,
     select: {

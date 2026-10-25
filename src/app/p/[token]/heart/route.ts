@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { activeShareWhere } from "@/lib/public-share";
 import { rateLimitMiddleware } from "@/lib/rate-limit";
 
 export const dynamic = "force-dynamic";
@@ -16,7 +17,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ token: str
 
   const { token } = await ctx.params;
   const trip = await db.trip.findFirst({
-    where: { shareToken: token, shareEnabled: true },
+    where: activeShareWhere(token),
     select: { id: true },
   });
   if (!trip) return NextResponse.json({ error: "Поездка не найдена" }, { status: 404 });

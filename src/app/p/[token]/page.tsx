@@ -3,6 +3,8 @@ import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { db } from "@/lib/db";
 import { PUBLIC_PHOTO_ORDER, encodePhotoCursor } from "@/lib/public-photos";
+import { PUBLIC_PHOTO_WHERE, isShareExpired } from "@/lib/public-share";
+import { ExpiredLink } from "@/components/public/expired-link";
 import { PublicTripView, type PublicTrip } from "@/components/public/public-trip-view";
 
 // Публичная страница поездки: /p/<shareToken>. «Живой журнал»: обложка,
@@ -22,8 +24,11 @@ const FIRST_BATCH = 200;
 // вызов на реквест — иначе база дважды тянет дни и первую партию фото
 const findSharedTrip = cache(async (token: string) =>
   db.trip.findFirst({
+    // Срок ссылки проверяем ниже, а не в where: истёкшей ссылке нужен свой экран,
+    // а не «недействительна» (гость должен понять, что просить продление)
     where: { shareToken: token, shareEnabled: true },
     select: {
+      shareExpiresAt: true,
       title: true,
       destination: true,
       coverEmoji: true,
@@ -33,7 +38,8 @@ const findSharedTrip = cache(async (token: string) =>
       totalDays: true,
       shareAllowDownload: true,
       shareHearts: true,
-      _count: { select: { photos: true } },
+      // Скрытые владельцем кадры не считаются: счётчики страницы не должны их выдавать
+      _count: { select: { photos: { where: PUBLIC_PHOTO_WHERE } } },
       days: {
         orderBy: { dayNumber: "asc" },
         select: {
@@ -51,6 +57,7 @@ const findSharedTrip = cache(async (token: string) =>
       photos: {
         // Порядок поездки (день ↑, время ↑, id ↑) — продолжение этого списка порциями
         // из /photos идёт keyset-курсором ровно отсюда
+        where: PUBLIC_PHOTO_WHERE,
         orderBy: PUBLIC_PHOTO_ORDER,
         take: FIRST_BATCH,
         select: {
@@ -76,7 +83,9 @@ const findSharedTrip = cache(async (token: string) =>
 // metadataBase из корневого layout резолвит /uploads в абсолютный URL.
 export async function generateMetadata({ params }: { params: Promise<{ token: string }> }): Promise<Metadata> {
   const { token } = await params;
-  const trip = await findSharedTrip(token);
+  const found = await findSharedTrip(token);
+  // Истёкшая ссылка — как неизвестная: название и фото в превью мессенджера не светим
+  const trip = found && !isShareExpired(found.shareExpiresAt) ? found : null;
   const title = trip ? `${trip.title} — TripTrek` : "Поездка в TripTrek";
   const description = trip
     ? `${trip.destination} · ${trip._count.photos} фото из путешествия — маршрут, места и кадры`
@@ -105,6 +114,7 @@ export default async function PublicTripPage({ params }: { params: Promise<{ tok
 
   const trip = await findSharedTrip(token);
   if (!trip) notFound();
+  if (isShareExpired(trip.shareExpiresAt)) return <ExpiredLink />;
 
   const lastLoaded = trip.photos[trip.photos.length - 1];
   const view: PublicTrip = {

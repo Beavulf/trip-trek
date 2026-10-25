@@ -11,11 +11,13 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import { motion, type MotionProps } from "framer-motion";
-import { Camera, ChevronsLeft, ChevronsRight, Download, Heart, History, Images, MapPin, Star, X } from "lucide-react";
+import { Camera, ChevronsLeft, ChevronsRight, Download, Heart, History, Images, MapPin, Play, Star, X } from "lucide-react";
 import { toast } from "sonner";
 import { Lightbox } from "yet-another-react-lightbox";
 import Captions from "yet-another-react-lightbox/plugins/captions";
 import Counter from "yet-another-react-lightbox/plugins/counter";
+import Fullscreen from "yet-another-react-lightbox/plugins/fullscreen";
+import Slideshow from "yet-another-react-lightbox/plugins/slideshow";
 import Zoom from "yet-another-react-lightbox/plugins/zoom";
 // Стили YARL обязательны: без styles.css лайтбокс рисуется в потоке страницы
 import "yet-another-react-lightbox/styles.css";
@@ -106,9 +108,20 @@ const photoFileName = (p: PublicPhoto) => {
   return `triptrek-${base}.${ext}`;
 };
 
+// Просмотр на весь экран (слайдшоу и кнопка «полный экран»): картинка вписывается в экран
+// целиком и при необходимости увеличивается — горизонтальные кадры занимают всю ширину монитора,
+// а не остаются «марками» натурального размера. object-fit: contain — без обрезки
+const FILL_IMAGE_STYLE = { width: "100%", height: "100%", maxWidth: "none", maxHeight: "none", objectFit: "contain" } as const;
+// Пауза между кадрами слайдшоу: достаточно, чтобы рассказать про кадр, и не засыпаешь
+const SLIDESHOW_DELAY_MS = 5000;
+
 interface ViewerState {
   list: PublicPhoto[];
   index: number;
+  /** Запущено слайдшоу: автопереключение + полный экран, по окончании альбома стоп */
+  show?: boolean;
+  /** Браузер сейчас в полноэкранном режиме (включил гость или слайдшоу) */
+  fs?: boolean;
   /** Открыт весь альбом по порядку (а не рейл «Лучшие кадры»): только тогда «фото 5 из 24 за день» честное */
   full?: boolean;
 }
@@ -187,7 +200,12 @@ export function PublicTripView({ trip, token }: { trip: PublicTrip; token: strin
     return seen;
   }, [trip.days]);
 
-  const allPlaces = useMemo(() => trip.days.flatMap((d) => d.places), [trip.days]);
+  const allPlaces = useMemo(
+    () => trip.days.flatMap((d) => d.places.map((p) => ({ ...p, dayNumber: d.dayNumber }))),
+    [trip.days]
+  );
+  // День на карте: null — вся поездка
+  const [mapDay, setMapDay] = useState<number | null>(null);
   const visitedCount = allPlaces.filter((p) => p.visited).length;
   const favorites = useMemo(() => photos.filter((p) => p.isFavorite), [photos]);
   const photosByDay = useMemo(() => {
@@ -214,15 +232,26 @@ export function PublicTripView({ trip, token }: { trip: PublicTrip; token: strin
     return out;
   }, [photos, allShown]);
   const photoPoints = useMemo(
-    () => photos.filter((p) => p.lat != null && p.lng != null).map((p) => ({ lat: p.lat!, lng: p.lng! })),
+    () =>
+      photos
+        .filter((p) => p.lat != null && p.lng != null)
+        .map((p) => ({ id: p.id, lat: p.lat!, lng: p.lng!, dayNumber: p.dayNumber })),
     [photos]
   );
+  // Дни, которым есть что показать на карте (место с координатами или фото с геометкой)
+  const mapDays = useMemo(() => {
+    const has = new Set<number>();
+    for (const p of allPlaces) if (p.lat && p.lng) has.add(p.dayNumber);
+    for (const p of photoPoints) if (p.dayNumber != null) has.add(p.dayNumber);
+    return trip.days.filter((d) => has.has(d.dayNumber));
+  }, [allPlaces, photoPoints, trip.days]);
 
   // Слайды лайтбокса: раньше собирались заново на каждый свайп вместе с перерисовкой всей
   // страницы; viewer.list от свайпа не меняется, так что мемо держится
   const viewerList = viewer?.list;
   const viewerOpen = !!viewer;
   const viewerFull = !!viewer?.full;
+  const viewerFill = !!(viewer?.show || viewer?.fs);
   const viewerDayIndex = useMemo(() => buildDayIndex(viewerList ?? []), [viewerList]);
   const viewerSlides = useMemo(
     () =>
@@ -481,6 +510,15 @@ export function PublicTripView({ trip, token }: { trip: PublicTrip; token: strin
                   style={{ boxShadow: `0 8px 24px ${trip.accent}44` }}
                 >
                   <Images className="size-4" /> Смотреть все фото
+                </button>
+              )}
+              {photos.length > 1 && (
+                <button
+                  type="button"
+                  onClick={() => setViewer({ list: photos, index: 0, full: true, show: true })}
+                  className="min-h-11 inline-flex items-center gap-2 rounded-full border border-border bg-card px-5 text-sm font-semibold hover:bg-accent active:scale-95 transition-all"
+                >
+                  <Play className="size-4 fill-current" /> Слайдшоу
                 </button>
               )}
               {canDownloadZip && (
@@ -814,7 +852,46 @@ export function PublicTripView({ trip, token }: { trip: PublicTrip; token: strin
       {allPlaces.length > 0 && (
         <section className="max-w-2xl mx-auto px-4 py-7 border-t border-border/60">
           <SectionTitle icon={<MapPin className="size-3.5" />}>Карта путешествия</SectionTitle>
-          <PublicMap places={allPlaces} photoPoints={photoPoints} />
+          {/* День на карте: «Все дни» или один день — его места по порядку маршрута и его фото */}
+          {mapDays.length > 1 && (
+            <div className="mb-2.5 flex gap-1.5 overflow-x-auto no-scrollbar" role="group" aria-label="День на карте">
+              {[{ dayNumber: null as number | null, label: "Все дни" }, ...mapDays.map((d) => ({ dayNumber: d.dayNumber as number | null, label: `Д${d.dayNumber}` }))].map(
+                (o) => (
+                  <button
+                    key={o.label}
+                    type="button"
+                    aria-pressed={mapDay === o.dayNumber}
+                    onClick={() => setMapDay(o.dayNumber)}
+                    className={cn(
+                      "shrink-0 min-h-8 px-3 rounded-full text-xs font-semibold tabular-nums transition-colors",
+                      mapDay === o.dayNumber ? "text-white" : "text-muted-foreground hover:text-foreground bg-muted/60"
+                    )}
+                    style={mapDay === o.dayNumber ? { background: trip.accent } : undefined}
+                  >
+                    {o.label}
+                  </button>
+                )
+              )}
+            </div>
+          )}
+          <PublicMap
+            places={allPlaces}
+            photoPoints={photoPoints}
+            activeDay={mapDay}
+            accent={trip.accent}
+            onPhotoClick={(id) => {
+              const i = indexById.get(id);
+              if (i != null) setViewer({ list: photos, index: i, full: true });
+            }}
+          />
+          {mapDay != null && (
+            <p className="mt-2 text-xs text-muted-foreground">
+              День {mapDay} · {cityByDay.get(mapDay)}
+              {" — "}
+              {allPlaces.filter((p) => p.dayNumber === mapDay && p.lat && p.lng).length} мест,{" "}
+              {photoPoints.filter((p) => p.dayNumber === mapDay).length} фото с геометкой
+            </p>
+          )}
           <div className="mt-2.5 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-muted-foreground">
             <span className="inline-flex items-center gap-1.5">
               <i className="size-2 rounded-full bg-emerald-500" aria-hidden /> посещённые места
@@ -904,10 +981,22 @@ export function PublicTripView({ trip, token }: { trip: PublicTrip; token: strin
           open
           close={() => setViewer(null)}
           index={viewer!.index}
-          on={{ view: ({ index: i }) => setViewer((v) => (v ? { ...v, index: i } : v)) }}
+          on={{
+            view: ({ index: i }) => setViewer((v) => (v ? { ...v, index: i } : v)),
+            enterFullscreen: () => setViewer((v) => (v ? { ...v, fs: true } : v)),
+            exitFullscreen: () => setViewer((v) => (v ? { ...v, fs: false } : v)),
+          }}
           slides={viewerSlides}
-          plugins={[Captions, Counter, Zoom]}
-          carousel={{ finite: false, preload: viewerPreload }}
+          plugins={[Captions, Counter, Zoom, Fullscreen, Slideshow]}
+          // Слайдшоу: сразу полный экран и автопереключение; по окончании альбома стоп, а не по кругу
+          fullscreen={{ auto: !!viewer!.show }}
+          slideshow={{ autoplay: !!viewer!.show, delay: SLIDESHOW_DELAY_MS }}
+          carousel={{
+            finite: !!viewer!.show,
+            preload: viewer!.show ? 2 : viewerPreload,
+            padding: viewerFill ? 0 : "16px",
+            imageProps: viewerFill ? { style: FILL_IMAGE_STYLE } : {},
+          }}
           controller={{ closeOnBackdropClick: true, closeOnPullDown: true }}
           captions={{ showToggle: false }}
           zoom={{ scrollToZoom: true, pinchZoomV4: true }}
@@ -962,6 +1051,8 @@ export function PublicTripView({ trip, token }: { trip: PublicTrip; token: strin
               >
                 <Download className="size-5" />
               </button>,
+              "slideshow",
+              "fullscreen",
               "close",
             ],
           }}

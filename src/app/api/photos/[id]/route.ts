@@ -8,7 +8,8 @@ const PHOTO_INCLUDE = {
   day: { select: { dayNumber: true, city: true, cityKey: true } },
 };
 
-// PATCH /api/photos/[id] — подпись/день (автор или owner), избранное (любой участник)
+// PATCH /api/photos/[id] — подпись/день и скрытие от гостей публичной страницы (автор или owner),
+// избранное (любой участник)
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const body = await req.json().catch(() => null);
@@ -33,9 +34,15 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     data.isFavorite = body.isFavorite;
   }
 
-  if ("caption" in body || "dayId" in body) {
+  if ("caption" in body || "dayId" in body || "hiddenFromPublic" in body) {
     if (!isAuthor && !isOwner) {
-      return NextResponse.json({ error: "Подпись и день меняет автор или владелец" }, { status: 403 });
+      return NextResponse.json({ error: "Подпись, день и видимость для гостей меняет автор или владелец" }, { status: 403 });
+    }
+    if ("hiddenFromPublic" in body) {
+      if (typeof body.hiddenFromPublic !== "boolean") {
+        return NextResponse.json({ error: "hiddenFromPublic must be boolean" }, { status: 400 });
+      }
+      data.hiddenFromPublic = body.hiddenFromPublic;
     }
     if ("caption" in body) {
       const caption = typeof body.caption === "string" ? body.caption.trim().slice(0, 300) : null;

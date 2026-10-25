@@ -12,6 +12,8 @@ import Zoom from "yet-another-react-lightbox/plugins/zoom";
 import {
   CalendarDays,
   Download,
+  Eye,
+  EyeOff,
   Heart,
   MapPin,
   MoreHorizontal,
@@ -43,6 +45,8 @@ interface PhotoLightboxProps {
   /** Переключить избранное (оптимистично обновляет кэш в родителе) */
   onToggleFavorite: (photo: Photo) => void;
   favoritePending: boolean;
+  /** Скрыть фото от гостей публичной страницы / вернуть (автор или владелец) */
+  onToggleHidden?: (photo: Photo) => void;
   /** Сохранить подпись/день; resolve true — успех */
   onSaveEdit: (photoId: string, patch: { caption?: string | null; dayId?: string }) => Promise<boolean>;
   canEdit: (photo: Photo) => boolean;
@@ -84,6 +88,11 @@ function toSlide(p: Photo) {
             <Star className="size-3 fill-yellow-300" /> Лучшее
           </span>
         )}
+        {p.hiddenFromPublic && (
+          <span className="inline-flex items-center gap-1 text-sky-300">
+            <EyeOff className="size-3" /> Скрыто от гостей
+          </span>
+        )}
         {p.day && <span>День {p.day.dayNumber}</span>}
         {p.day?.city && <span>{p.day.city}</span>}
         {p.place?.name && <span>📍 {p.place.name}</span>}
@@ -107,6 +116,7 @@ export function PhotoLightbox({
   pendingDelete,
   onToggleFavorite,
   favoritePending,
+  onToggleHidden,
   onSaveEdit,
   canEdit,
 }: PhotoLightboxProps) {
@@ -317,6 +327,14 @@ export function PhotoLightbox({
                 else toast.info("У этого фото нет геометки");
               }}
             />
+            {showEdit && onToggleHidden && (
+              <ActionRow
+                icon={current.hiddenFromPublic ? <Eye className="size-4" /> : <EyeOff className="size-4" />}
+                label={current.hiddenFromPublic ? "Показывать гостям" : "Скрыть от гостей"}
+                onClick={() => onToggleHidden(current)}
+                disabled={favoritePending}
+              />
+            )}
             {showEdit && (
               <ActionRow
                 icon={<Pencil className="size-4" />}
