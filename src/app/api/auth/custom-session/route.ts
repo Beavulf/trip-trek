@@ -3,6 +3,7 @@ import jwt from "jsonwebtoken";
 import { getJwtSecret } from "@/lib/api-auth";
 import { db } from "@/lib/db";
 import { isPremiumUser } from "@/lib/premium";
+import { sanitizeState } from "@/lib/onboarding-state";
 
 // GET /api/auth/custom-session — кастомная сессия (читает наш JWT).
 // Роль и план сверяются с БД: JWT живёт 30 дней, а premium/admin должны
@@ -30,7 +31,7 @@ export async function GET(req: NextRequest) {
   try {
     const row = await db.user.findUnique({
       where: { id: decoded.id },
-      select: { id: true, name: true, email: true, emoji: true, color: true, avatarUrl: true, plan: true, planExpiry: true, role: true, passwordChangedAt: true, onboardingCompletedAt: true },
+      select: { id: true, name: true, email: true, emoji: true, color: true, avatarUrl: true, plan: true, planExpiry: true, role: true, passwordChangedAt: true, onboardingCompletedAt: true, onboardingState: true },
     });
 
     if (!row) return NextResponse.json({ user: null });
@@ -56,6 +57,8 @@ export async function GET(req: NextRequest) {
         isAdmin: row.role === "admin",
         // null = обучение ещё не показывали (welcome-tour сам решит, открываться ли)
         onboardingCompletedAt: row.onboardingCompletedAt,
+        // Подробный прогресс обучения (туры, пауза, подсказки) — src/lib/onboarding-state.ts
+        onboardingState: sanitizeState(row.onboardingState),
       },
     });
   } catch (e) {

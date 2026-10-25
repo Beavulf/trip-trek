@@ -35,6 +35,8 @@ import {
   MessageSquarePlus,
   Shield,
   UserRound,
+  CircleHelp,
+  GraduationCap,
 } from "lucide-react";
 import { Fragment, useState, useEffect, useRef, type ReactNode } from "react";
 import dynamic from "next/dynamic";
@@ -50,8 +52,9 @@ import { TripSwitcher } from "./trip-switcher";
 import { NotificationsBell } from "./notifications-bell";
 import { PWAUpdateNotification } from "./pwa-update";
 import { TripInfoSheet } from "./trip-info-sheet";
-import { WelcomeTour } from "./onboarding/welcome-tour";
-import { TabTour } from "./onboarding/tab-tour";
+import { TripTourHost } from "./onboarding/tour-host";
+import { tourForTab } from "@/lib/onboarding";
+import { useTourStore } from "@/lib/tour-store";
 import { useAdminStats } from "@/hooks/use-admin-stats";
 import { useFeedbackUnread } from "@/hooks/use-feedback";
 import { startUploadQueue } from "@/lib/upload-queue/browser";
@@ -116,6 +119,14 @@ export function AppShell({ children }: { children: ReactNode }) {
   // Непрочитанные ответы на мои обращения: точка у «Обратной связи»
   const { data: feedbackUnread = 0 } = useFeedbackUnread(!!session?.user);
   const { activeTab, setActiveTab } = useTripStore();
+  // «?»: тур текущей вкладки (у каждой вкладки он есть); Центр обучения — из меню «Ещё» и «Первых шагов»
+  const openTour = useTourStore((s) => s.openTour);
+  const setCenterOpen = useTourStore((s) => s.setCenterOpen);
+  const openTabHelp = () => {
+    const def = tourForTab(activeTab);
+    if (def) openTour(def.id);
+    else setCenterOpen(true);
+  };
   // Ссылка из пуша/уведомления «/?feedback=<id>»: открыть обращение и убрать параметр из адреса
   useEffect(() => {
     const id = new URLSearchParams(window.location.search).get("feedback");
@@ -307,6 +318,9 @@ export function AppShell({ children }: { children: ReactNode }) {
             <HeaderIconBtn onClick={() => setSearchOpen(true)} label="Поиск">
               <Search className="size-4" />
             </HeaderIconBtn>
+            <HeaderIconBtn onClick={openTabHelp} label="Подсказки раздела">
+              <CircleHelp className="size-4" />
+            </HeaderIconBtn>
             <div className="relative">
               <HeaderIconBtn onClick={() => openFeedback()} label="Обратная связь">
                 <MessageSquarePlus className="size-4" />
@@ -365,6 +379,8 @@ export function AppShell({ children }: { children: ReactNode }) {
                     onAdmin={() => router.push("/admin")}
                     onTripInfo={() => setInfoOpen(true)}
                     onSplit={() => router.push("/split")}
+                    onTabHelp={openTabHelp}
+                    onTourCenter={() => setCenterOpen(true)}
                   />
                 )}
               </AnimatePresence>
@@ -514,9 +530,8 @@ export function AppShell({ children }: { children: ReactNode }) {
       {shareOpen && <ShareCard open onOpenChange={setShareOpen} />}
       {premiumOpen && <PremiumModal open onOpenChange={setPremiumOpen} />}
       {feedbackOpen && <FeedbackSheet key={feedbackId ?? "new"} open initialId={feedbackId} onOpenChange={setFeedbackOpen} />}
-      {/* Обучение: welcome-тур при первом входе + обучалки вкладок при первом визите */}
-      <WelcomeTour />
-      <TabTour />
+      {/* Обучение: знакомство при первом входе, туры вкладок, «Что нового», Центр обучения */}
+      <TripTourHost />
       <PWAUpdateNotification />
     </div>
   );
@@ -550,6 +565,8 @@ function MobileMoreSheet({
   onAdmin,
   onTripInfo,
   onSplit,
+  onTabHelp,
+  onTourCenter,
 }: {
   isPremium: boolean;
   isAdmin: boolean;
@@ -564,6 +581,8 @@ function MobileMoreSheet({
   onAdmin: () => void;
   onTripInfo: () => void;
   onSplit: () => void;
+  onTabHelp: () => void;
+  onTourCenter: () => void;
 }) {
   const { theme, setTheme } = useTheme();
   if (typeof document === "undefined") return null;
@@ -633,6 +652,22 @@ function MobileMoreSheet({
               onClick={() => {
                 onClose();
                 onTripInfo();
+              }}
+            />
+            <MoreItem
+              icon={<CircleHelp className="size-4" />}
+              label="Подсказки этого раздела"
+              onClick={() => {
+                onClose();
+                onTabHelp();
+              }}
+            />
+            <MoreItem
+              icon={<GraduationCap className="size-4" />}
+              label="Все обучения"
+              onClick={() => {
+                onClose();
+                onTourCenter();
               }}
             />
             <MoreItem

@@ -2,6 +2,7 @@
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect } from "react";
+import type { OnboardingState } from "@/lib/onboarding-state";
 
 interface AuthUser {
   id: string;
@@ -16,6 +17,8 @@ interface AuthUser {
   isAdmin?: boolean;
   // null = обучение (welcome-tour) ещё не показывали этому аккаунту
   onboardingCompletedAt?: string | null;
+  // Подробный прогресс обучения (туры, пауза, подсказки): src/lib/onboarding-state.ts
+  onboardingState?: OnboardingState;
 }
 
 interface AuthSession {

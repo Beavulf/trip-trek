@@ -8,7 +8,8 @@ import { ArrowRight, Bell, Check, ChevronDown, Crown, GraduationCap, KeyRound, L
 import { toast } from "sonner";
 import { useTheme } from "next-themes";
 import { cn } from "@/lib/utils";
-import { useOnboarding } from "@/hooks/use-onboarding";
+import { LearningCenter } from "@/components/trip/onboarding/learning-center";
+import { tourHref } from "@/lib/onboarding";
 import type { UserProfile } from "./types";
 import { PushToggle } from "./PushToggle";
 import { PasswordField } from "@/components/auth/password-field";
@@ -38,20 +39,8 @@ export function ProfileSettings({ profile, setPremiumOpen, onReportBug, isAdmin,
   const current = mounted ? (theme ?? "system") : "system";
   const currentLabel = THEME_OPTIONS.find((t) => t.value === current)?.label ?? "Системная";
 
-  // === Обучение: «Пройти заново» — сброс отметки на аккаунте и переход на главную ===
-  const { setOnboardingCompleted } = useOnboarding();
-  const [tourReplaying, setTourReplaying] = useState(false);
-  const replayOnboarding = async () => {
-    if (tourReplaying) return;
-    setTourReplaying(true);
-    const ok = await setOnboardingCompleted(false);
-    setTourReplaying(false);
-    if (!ok) {
-      toast.error("Не удалось запустить обучение", { description: "Проверьте связь и попробуйте ещё раз" });
-      return;
-    }
-    router.push("/");
-  };
+  // === Обучение: Центр обучения (туры по разделам, продолжение, подсказки, сброс) ===
+  const [learningOpen, setLearningOpen] = useState(false);
 
   // === Свой ключ ИИ (BYOK): ключ + опционально свой адрес провайдера и модель ===
   // ?ai=1 — переход с вкладки AI («Ввести ключ в профиле»): блок ключа открыт и в поле зрения.
@@ -426,22 +415,30 @@ export function ProfileSettings({ profile, setPremiumOpen, onReportBug, isAdmin,
           )}
         </div>
 
-        {/* Обучение — пройти заново */}
+        {/* Обучение — Центр обучения */}
         <button
           type="button"
-          onClick={replayOnboarding}
-          disabled={tourReplaying}
-          className="w-full flex items-center gap-3 p-3.5 text-left hover:bg-accent/50 transition-colors disabled:opacity-60"
+          onClick={() => setLearningOpen(true)}
+          className="w-full flex items-center gap-3 p-3.5 text-left hover:bg-accent/50 transition-colors"
         >
           <div className="size-9 rounded-xl bg-secondary grid place-items-center shrink-0">
             <GraduationCap className="size-4.5 text-muted-foreground" />
           </div>
           <div className="flex-1 min-w-0">
             <div className="text-sm font-medium">Обучение</div>
-            <div className="text-xs text-muted-foreground">Короткий тур по приложению</div>
+            <div className="text-xs text-muted-foreground">Туры по разделам, подсказки, пройти заново</div>
           </div>
-          {tourReplaying ? <Loader2 className="size-4 text-muted-foreground shrink-0 animate-spin" /> : <ArrowRight className="size-4 text-muted-foreground shrink-0" />}
+          <ArrowRight className="size-4 text-muted-foreground shrink-0" />
         </button>
+        <LearningCenter
+          open={learningOpen}
+          onOpenChange={setLearningOpen}
+          onWatch={(id) => {
+            setLearningOpen(false);
+            router.push(tourHref(id));
+          }}
+          onReset={() => router.push("/")}
+        />
 
         {/* Обратная связь */}
         <button

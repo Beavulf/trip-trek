@@ -29,14 +29,14 @@
 | Роут | Методы | Доступ | Лимит | Что делает |
 |---|---|---|---|---|
 | `auth/custom-login` | POST | 🌐 | 20/15 мин/IP + 8 неудач/15 мин/email | логин (bcrypt), ставит JWT-cookie; проверяет Origin (NEXTAUTH_URL) и Content-Type: application/json (login-CSRF) |
-| `auth/custom-session` | GET | 🌐 | — | текущая сессия (учитывает `passwordChangedAt`); в `user` входит `onboardingCompletedAt` (null = показать обучение) |
+| `auth/custom-session` | GET | 🌐 | — | текущая сессия (учитывает `passwordChangedAt`); в `user` входят `onboardingCompletedAt` и `onboardingState` (прогресс обучения по турам, пауза, подсказки) |
 | `auth/custom-signout` | POST | 🌐 | — | выход (снимает cookie) |
 | `auth/register` | POST | 🌐 | 20/ч/IP | регистрация + welcome-письмо; проверяет `registrationEnabled`; значок профиля `emoji`/`color` принимает только из списков `avatar-presets.ts`, иначе дефолт схемы; email канонизируется (trim+lowercase); при `inviteRequired` требует инвайт-код приложения (`InviteCode`, слот атомарный); вступление в поездку — только через `trips/join` по коду |
 | `auth/register-options` | GET | 🌐 | 60/мин/IP | публично; режим регистрации + контакт для связи (`registrationEnabled`, `inviteRequired`, `contactTelegram`). Форма /login его больше не дёргает: те же данные серверная `login/page.tsx` берёт из `getPublicShowcase()`; роут оставлен для внешних клиентов |
 | `support` | GET | 🌐 | 60/мин/IP | публично; реквизиты блока «Поддержать» внизу профиля: `{ donationAlertsUrl, webmoneyPurse }` (оба nullable, валидируются при чтении; задаются в админке → Настройки → Поддержка) |
 | `auth/forgot-password` | POST | 🌐 | 5/ч/IP (+3/ч/email) | одноразовый токен (sha256 в БД, TTL 60 мин) + письмо; анти-перечисление |
 | `auth/reset-password` | POST | 🌐 | 20/ч/IP | сброс по токену, инвалидирует сессии |
-| `user` | GET, PATCH | U | — | свой профиль (имя, emoji, цвет, аватар, ИИ-ключ); PATCH принимает также `onboardingCompleted`: true — обучение пройдено/пропущено, false — сброс («Пройти заново» в профиле); `paymentDetails` (строка ≤300 / null) — «куда возвращать долги», видят участники поездок в `GET /api/trip` participants |
+| `user` | GET, PATCH | U | — | свой профиль (имя, emoji, цвет, аватар, ИИ-ключ); PATCH принимает также `onboardingCompleted` (старое «знакомство закрыто»/сброс) и `onboardingState` — патч прогресса обучения (`tours`, `snoozedUntil`, `hintsOff`, `checklistHidden`, `seenVersion`, `reset`; невалидное молча игнорируется, слияние под замком на пользователя); `paymentDetails` (строка ≤300 / null) — «куда возвращать долги», видят участники поездок в `GET /api/trip` participants |
 | `user/password` | POST | U | userRateLimit | смена пароля → инвалидация всех сессий |
 | `user/avatar` | POST | U | userRateLimit | аватар (через `src/lib/storage`) |
 | `user/upgrade` | POST | U | — | переход на premium (ручной сценарий; известная заглушка) |

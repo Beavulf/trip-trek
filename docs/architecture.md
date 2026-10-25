@@ -51,7 +51,7 @@ server.close → `db.$disconnect`.
   `trip-switcher.tsx`. Корень защищён middleware (307 на `/login` без cookie).
 - `src/components/trip/` — фичи. Тяжёлые блоки вынесены в подпапки:
   `budget/`, `map/`, `food/`, `phrases/`, `dashboard/`, `rest-chill/`, `profile/`,
-  `quick-add/`, `onboarding/` (общий каркас welcome-тура и обучалок, §7).
+  `quick-add/`, `onboarding/` (туры обучения, макеты, Центр обучения, §7).
 - **Слой данных — хуки** `src/hooks/trip/use-*.ts` поверх TanStack Query:
   queryKey всегда включает `tripId` (из `use-trip-id`/`getTripId()`), иначе после
   переключения поездки показываются чужие данные. Компоненты не делают `fetch` сами.
@@ -314,13 +314,28 @@ S3» — ADR-0003.
   одноразовый токен (в БД только sha256-хеш, TTL 60 мин) → письмо → `reset-password`.
   Смена пароля в профиле: `user/password` — инвалидирует все сессии через
   `passwordChangedAt`.
-- Обучение: `User.onboardingCompletedAt` (`null` = welcome-tour покажется при
-  входе на `/`; пока он не закрыт, обучалки вкладок молчат). Мутация —
-  `PATCH /api/user {onboardingCompleted: boolean}`; шаги туров и обучалок
-  вкладок — `src/lib/onboarding.ts`, компоненты —
-  `src/components/trip/onboarding/` (общая карточка — tour-dialog.tsx),
-  отметки на устройстве дублируются в localStorage (защита от повторного
-  открытия, пока PATCH в пути).
+- Обучение: прогресс на аккаунте — `User.onboardingState` (JSON: запись по каждому
+  туру `done/skipped/paused/later` + шаг, «напомнить позже» `snoozedUntil`, `hintsOff`,
+  `checklistHidden`, `seenVersion` «Что нового», `resetAt`); формат, слияние и проверка
+  входа — `src/lib/onboarding-state.ts` (чистый, с тестами). Старое
+  `onboardingCompletedAt` читается как «знакомство пройдено» и по-прежнему пишется.
+  Мутация — патч: `PATCH /api/user {onboardingState: {tours, snoozedUntil, hintsOff,
+  checklistHidden, seenVersion, reset}}` (сервер применяет `applyPatch` под
+  `withKeyLock`, два устройства не затирают друг друга); клиент применяет тот же патч
+  оптимистично (кэш `auth-session` + копия в localStorage, `use-onboarding.ts`), копия
+  устройства и старые отметки (`triptrek-tabtour-seen`) сливаются с серверной по времени
+  записей и дозаливаются. Содержимое — `src/lib/onboarding-content.ts` (20 туров: знакомство
+  по ролям, 16 вкладок, «Сочтёмся» хаб/группа, «Что нового»; шаг = текст + мини-макет
+  `MockScene` + необязательное действие «Попробовать» + `labels` — подписи из интерфейса,
+  которые тест сверяет с исходниками), выбор тура и запись закрытия —
+  `src/lib/onboarding.ts` (`pickAutoTour`, `exitPatch`), список «Первые шаги» —
+  `onboarding-checklist.ts`. Компоненты `src/components/trip/onboarding/`: `tour-host.tsx`
+  (единственный, кто открывает туры: автозапуск, запросы «?»/Центра/`?tour=`, действия),
+  `tour-dialog.tsx` (оболочка, выход только через панель «Закрыть обучение?»),
+  `mock-scene.tsx` (анимированные макеты в токенах темы), `learning-center.tsx`;
+  `dashboard/FirstSteps.tsx`. Новая крупная фича = новый тур/шаги + поднять
+  `ONBOARDING_CONTENT_VERSION` и переписать тур `whatsnew`. Цели Метрики:
+  `tour_start/done/skip/later/action/off`.
 - Почта: `src/lib/mail/mailer.ts` (nodemailer через постфикс-релей; для
   самоподписанного STARTTLS-серта стоит `tls.rejectUnauthorized: false` — только
   для локального релея) + шаблоны `templates.ts`.

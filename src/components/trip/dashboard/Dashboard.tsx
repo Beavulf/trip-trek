@@ -2,9 +2,11 @@
 
 import { useTrip, useCurrentTripId } from "@/hooks/use-trip";
 import { useRouteDays } from "@/hooks/trip/use-route";
+import { useAuth } from "@/hooks/use-auth";
 import { useTripStore } from "@/lib/trip-store";
 import { currencySymbol } from "@/lib/currencies";
 import { DashboardHero } from "./DashboardHero";
+import { FirstSteps } from "./FirstSteps";
 import { DashboardStats } from "./DashboardStats";
 import { NextPlaceWidget } from "./NextPlaceWidget";
 import { DashboardSkeleton } from "./DashboardSkeleton";
@@ -36,6 +38,7 @@ export function Dashboard() {
   const { data: routeDays } = useRouteDays();
   const days = routeDays ?? [];
   const { setActiveTab, setSelectedDay, setTripSwitcherOpen } = useTripStore();
+  const { data: session } = useAuth();
 
   if (!tripId) {
     return (
@@ -83,6 +86,9 @@ export function Dashboard() {
   const currentCityKey = currentDay?.cityKey ?? "";
   const cityEmoji = CITY_EMOJI[currentCityKey] ?? "🏙️";
   const sym = currencySymbol(trip.settings.currency);
+  // Звать друзей могут все, пока владелец не ограничил это в «О поездке» (как в app-shell)
+  const myRole = trip.participants.find((p) => p.id === session?.user?.id)?.role;
+  const canInvite = myRole === "owner" || trip.settings.allowMemberInvites !== false;
 
   // Обратный отсчёт / прогресс по времени
   const now = new Date();
@@ -118,6 +124,8 @@ export function Dashboard() {
       />
 
       <DashboardStats trip={trip} daysRemaining={daysRemaining} />
+
+      <FirstSteps trip={trip} canInvite={canInvite} />
 
       <NextPlaceWidget trip={trip} days={days} onGoToItinerary={() => { setSelectedDay(null); setActiveTab("itinerary"); }} />
 

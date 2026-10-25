@@ -13,7 +13,7 @@ const CALLBACK_FALLBACK_MS = 500;
  * приняла событие (или по таймеру). Нужно перед уходом со страницы: переход
  * сразу после reachGoal обрывает запрос, и цель теряется. done вызывается один раз.
  */
-export function reachGoal(goal: string, done?: () => void): void {
+export function reachGoal(goal: string, done?: () => void, params?: Record<string, string | number>): void {
   let called = false;
   const finish = () => {
     if (called) return;
@@ -25,7 +25,7 @@ export function reachGoal(goal: string, done?: () => void): void {
   if (!w || typeof w.ym !== "function" || typeof w.ymCounterId !== "number") return finish();
 
   try {
-    w.ym(w.ymCounterId, "reachGoal", goal, {}, finish);
+    w.ym(w.ymCounterId, "reachGoal", goal, params ?? {}, finish);
     setTimeout(finish, CALLBACK_FALLBACK_MS);
   } catch {
     finish();

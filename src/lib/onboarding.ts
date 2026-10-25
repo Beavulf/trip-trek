@@ -1,377 +1,153 @@
-// Обучение (welcome-tour) и интерактивные обучалки вкладок.
-// Файл умышленно без React: шаги/подсказки — данные, storage — чистые функции,
-// покрытые юнит-тестами. Статус «пройдено» живёт на аккаунте
-// (User.onboardingCompletedAt), локальная тень в localStorage страхует от
-// повторного открытия, пока PATCH не долетел (офлайн/обрыв).
+// Логика обучения без React: какой тур открыть сам, как закрытие превращается в запись
+// о прогрессе. Содержимое туров — onboarding-content.ts, формат состояния — onboarding-state.ts.
+// Всё чистое и покрыто тестами; React-часть (TourHost, диалог) только исполняет решения отсюда.
 
+import {
+  ONBOARDING_CONTENT_VERSION,
+  isSnoozed,
+  type OnboardingPatch,
+  type OnboardingState,
+  type TourProgress,
+} from "./onboarding-state";
+import { getTour, stepsFor, tourForTab, type StepActionKind, type TourDef, type TourRole } from "./onboarding-content";
 import type { TripTab } from "./trip-store";
 
-// === Приветственный тур: 5 шагов, по одной мысли на шаг ===
+export {
+  ONBOARDING_CONTENT_VERSION,
+  type OnboardingPatch,
+  type OnboardingState,
+  type TourProgress,
+} from "./onboarding-state";
+export { TOURS, getTour, tourForTab, centerTours, stepsFor, type TourDef, type TourRole } from "./onboarding-content";
 
-export interface TourStep {
-  id: string;
-  art: "welcome" | "tabs" | "quickadd" | "invite" | "done";
-  title: string;
-  text: string;
-  /** Своя надпись основной кнопки (по умолчанию «Далее») */
-  cta?: string;
-}
+/** После закрытия любого тура сами подсказки молчат это время — не заваливать человека подряд */
+export const AUTO_COOLDOWN_MS = 45_000;
+/** «Напомнить позже» */
+export const SNOOZE_MS = 24 * 60 * 60 * 1000;
+/** Пауза перед автозапуском: сперва должен показаться сам экран */
+export const AUTO_OPEN_DELAY_MS = 900;
 
-export const TOUR_STEPS: TourStep[] = [
-  {
-    id: "welcome",
-    art: "welcome",
-    title: "Добро пожаловать в TripTrek!",
-    text: "Маршрут, бюджет, карта и воспоминания поездки — в одном месте, вместе с друзьями.",
-  },
-  {
-    id: "tabs",
-    art: "tabs",
-    title: "Всё — по вкладкам",
-    text: "Разделы поездки — во вкладках сверху: обзор, маршрут, карта, бюджет и другие.",
-  },
-  {
-    id: "quickadd",
-    art: "quickadd",
-    title: "Кнопка «+» — главный помощник",
-    text: "Трата, фото и заметка — кнопкой «+» из любого раздела. Места добавляются на Маршруте и Карте.",
-  },
-  {
-    id: "invite",
-    art: "invite",
-    title: "Планируйте вместе",
-    text: "Пригласите друзей по коду или ссылке — все изменения видны каждому сразу.",
-  },
-  {
-    id: "done",
-    art: "done",
-    title: "Готово!",
-    text: "На каждой вкладке вас встретит короткое обучение с её фичами. Пройти всё заново можно в Профиле.",
-    cta: "Всё ясно",
-  },
-];
+export type TourArea = "trip" | "split";
 
-// === Обучалки вкладок: открываются при первом визите вкладки, один раз ===
-// Контент сверен с кодом фич (кнопки/поведение) — при изменении фич править здесь.
-
-export type TabTourIcon =
-  | "layout"
-  | "rss"
-  | "calendar"
-  | "list"
-  | "map-pin"
-  | "map"
-  | "route"
-  | "sliders"
-  | "crosshair"
-  | "wallet"
-  | "receipt"
-  | "users"
-  | "arrows"
-  | "coffee"
-  | "star"
-  | "languages"
-  | "sparkles"
-  | "maximize"
-  | "volume"
-  | "user-plus"
-  | "crown"
-  | "filter";
-
-export interface TabTourStep {
-  id: string;
-  icon: TabTourIcon;
-  title: string;
-  text: string;
-  /** Подписи-пилюли на иллюстрации (конкретный UI-язык фичи) */
-  chips?: string[];
-}
-
-export interface TabTourDef {
+export interface PickContext {
+  state: OnboardingState;
+  area: TourArea;
   tab: TripTab;
-  /** Подзаголовок карточки — имя вкладки */
-  eyebrow: string;
-  steps: TabTourStep[];
+  splitScreen: "hub" | "group" | null;
+  hasTrip: boolean;
+  /** null — роль ещё не известна (поездка грузится) */
+  role: TourRole | null;
+  now: number;
+  cooldownUntil: number;
 }
 
-export const TAB_TOURS: TabTourDef[] = [
-  {
-    tab: "dashboard",
-    eyebrow: "Обзор",
-    steps: [
-      {
-        id: "dash-summary",
-        icon: "layout",
-        title: "Всё главное — здесь",
-        text: "Сводка поездки: текущий день, прогресс по местам, бюджет и следующая точка маршрута.",
-        chips: ["День 3/12", "0 из 8 мест"],
-      },
-      {
-        id: "dash-invite",
-        icon: "user-plus",
-        title: "Позовите друзей",
-        // Код поездки генерится автоматически (cuid) и выглядит служебным, поэтому
-        // в подсказке не изображаем его формат — только что даёт «Позвать друзей»
-        text: "«Позвать друзей» даёт код, ссылку и QR. Состав и его управление — в «О поездке» и «Пригласить друзей».",
-        chips: ["Код поездки", "Ссылка", "QR"],
-      },
-      {
-        id: "dash-owner",
-        icon: "crown",
-        title: "Владелец держит порядок",
-        text: "Владелец может исключить или заблокировать участника, а также передать владение — кнопки у каждого в списке состава.",
-        chips: ["Исключить", "Заблокировать", "Передать владение"],
-      },
-    ],
-  },
-  {
-    tab: "timeline",
-    eyebrow: "Лента",
-    steps: [
-      {
-        id: "tl-what",
-        icon: "rss",
-        title: "Хроника поездки",
-        text: "Лента собирает всё, что произошло: посещённые места, фото, траты, записи дневника и новых участников.",
-        chips: ["📍 Места", "📸 Фото", "💸 Траты", "📔 Дневник"],
-      },
-      {
-        id: "tl-jump",
-        icon: "filter",
-        title: "Фильтры и переходы",
-        text: "Пилюли сверху оставят только нужные события, а тап по событию откроет его раздел — маршрут, галерею или бюджет.",
-      },
-    ],
-  },
-  {
-    tab: "itinerary",
-    eyebrow: "Маршрут",
-    steps: [
-      {
-        id: "it-days",
-        icon: "calendar",
-        title: "Дни маршрута",
-        text: "День — это город. «Добавить день» берёт следующий номер, дата подставится сама: день №N = дата старта + N−1.",
-        chips: ["Добавить день", "День 4 · Киото"],
-      },
-      {
-        id: "it-places",
-        icon: "list",
-        title: "Места по слотам времени",
-        text: "В карточке дня «Добавить место»: выберите Утро, День или Вечер — порядок дня построится сам.",
-        chips: ["Утро", "День", "Вечер"],
-      },
-      {
-        id: "it-map",
-        icon: "map-pin",
-        title: "Точка прямо на карте",
-        text: "В форме места нажмите «Выбрать на карте»: перетащите карту — адрес подставится автоматически.",
-        chips: ["Выбрать на карте"],
-      },
-      {
-        id: "it-card",
-        icon: "list",
-        title: "Карточка места",
-        text: "Тап по месту: отметить посещённым, построить маршрут до него, прикрепить фото и заметки.",
-        chips: ["Посещено 🎉", "Маршрут"],
-      },
-      {
-        id: "it-planner",
-        icon: "sparkles",
-        title: "ИИ подберёт места",
-        text: "«Подобрать места с ИИ» даёт варианты для посещения, а не готовый маршрут. Добавьте в день отель — ИИ предложит остальное рядом с ним. Названия проверяйте: ИИ может ошибаться.",
-        chips: ["Отель = якорь", "Маршрут — за вами"],
-      },
-    ],
-  },
-  {
-    tab: "map",
-    eyebrow: "Карта",
-    steps: [
-      {
-        id: "mp-markers",
-        icon: "map",
-        title: "Все места — на карте",
-        text: "Маркеры с адресами: серые — запланировано, зелёные — посещено. Тап по маркеру откроет карточку места.",
-        chips: ["Запланировано", "Посещено"],
-      },
-      {
-        id: "mp-lines",
-        icon: "route",
-        title: "Цветные линии",
-        text: "Нити соединяют места одного дня по порядку, цвет = цвет дня. Сплошная — пройдено, пунктир — ещё впереди.",
-      },
-      {
-        id: "mp-filters",
-        icon: "sliders",
-        title: "Фильтры и стиль",
-        text: "Города, только непосещённые, кафе и бары, фото на карте. Стиль карты: классика, спутник или тёмная.",
-        chips: ["Только непосещённые", "Спутник"],
-      },
-      {
-        id: "mp-add",
-        icon: "crosshair",
-        title: "Добавить прямо с карты",
-        text: "Кнопка «+» включает прицел: перетащите карту под точку — и добавьте место с готовым адресом.",
-        chips: ["Добавить здесь"],
-      },
-    ],
-  },
-  {
-    tab: "budget",
-    eyebrow: "Бюджет",
-    steps: [
-      {
-        id: "bg-personal",
-        icon: "wallet",
-        title: "Бюджет каждого",
-        text: "«Настроить» в блоке «Бюджет каждого» задаёт личный лимит участника. Общий бюджет — сумма личных.",
-        chips: ["Бюджет каждого", "Настроить"],
-      },
-      {
-        id: "bg-add",
-        icon: "receipt",
-        title: "Траты — и итоги сразу",
-        text: "«Добавить трату»: сумма в любой валюте, кто заплатил и за кого. Балансы пересчитываются мгновенно.",
-        chips: ["Кто заплатил?", "За кого?"],
-      },
-      {
-        id: "bg-debts",
-        icon: "users",
-        title: "Долги посчитаются сами",
-        text: "Плата «за других» разложится на долги: блок «Расчёт между друзьями» покажет, кто кому сколько должен.",
-        chips: ["A → B: $12"],
-      },
-      {
-        id: "bg-settle",
-        icon: "arrows",
-        title: "Вернули — отметьте",
-        text: "Кнопка «Перевели» подтверждает возврат: долг гаснет, а перевод остаётся в истории трат.",
-        chips: ["Перевели", "Долгов нет 🎉"],
-      },
-    ],
-  },
-  {
-    tab: "rest",
-    eyebrow: "Chill",
-    steps: [
-      {
-        id: "ch-sections",
-        icon: "coffee",
-        title: "Три раздела",
-        text: "«Маршрут» — кафе и бары из плана, «Хочу» — ваш список желаний, «Рядом» — что есть поблизости.",
-        chips: ["Маршрут", "Хочу", "Рядом"],
-      },
-      {
-        id: "ch-nearby",
-        icon: "map-pin",
-        title: "«Рядом»",
-        text: "Кафе, бары и рестораны вокруг вас — данные OpenStreetMap, радиус 500 м–3 км настраивается. ИИ соберёт прогулку на пару часов или подборку ресторанов у города дня.",
-        chips: ["Кафе ☕", "Рестораны 🍽️", "Прогулка 🚶"],
-      },
-      {
-        id: "ch-wish",
-        icon: "star",
-        title: "«Хочу посетить»",
-        text: "Понравилось место из «Рядома»? «Хочу посетить» добавит его в личный вишлист — он виден только вам.",
-      },
-    ],
-  },
-  {
-    tab: "phrases",
-    eyebrow: "Фразы",
-    steps: [
-      {
-        id: "ph-pack",
-        icon: "languages",
-        title: "Язык — целым набором",
-        text: "«Загрузить набор» добавит пачку готовых фраз для 9 языков сразу: основы, еда, транспорт, экстренные.",
-        chips: ["Загрузить набор"],
-      },
-      {
-        id: "ph-ai",
-        icon: "sparkles",
-        title: "Любой язык через ИИ",
-        text: "Страны нет в списке? ИИ соберёт набор почти для любого языка — интернет нужен один раз, дальше офлайн.",
-        chips: ["Собрать ИИ"],
-      },
-      {
-        id: "ph-card",
-        icon: "maximize",
-        title: "Карточка на весь экран",
-        text: "Тап по фразе — крупно на весь экран: свайп листает, есть медленная озвучка и копирование.",
-        chips: ["Медленно 🐢", "Копировать"],
-      },
-      {
-        id: "ph-tts",
-        icon: "volume",
-        title: "Голос телефона",
-        text: "Озвучка — системный голос телефона. Если молчит: скачайте язык страны в настройках речи (TTS) телефона.",
-      },
-    ],
-  },
-];
-
-// === Локальные отметки устройства (SSR-safe, отказоустойчивые к private mode) ===
-
-const localDoneKey = (userId: string) => `triptrek-tour-local-done:${userId}`;
-const seenToursKey = (userId: string) => `triptrek-tabtour-seen:${userId}`;
-
-/** Локальная тень «тур закрыт»: защищает от повторного открытия, пока PATCH в пути/потерялся. */
-export function readLocalTourDone(userId: string | null | undefined): boolean {
-  if (!userId || typeof window === "undefined") return false;
-  try {
-    return window.localStorage.getItem(localDoneKey(userId)) === "1";
-  } catch {
-    return false;
-  }
+/** Тур ждёт показа сам: записи нет или человек просил «напомнить позже» */
+function autoEligible(state: OnboardingState, def: TourDef, role: TourRole | null): boolean {
+  const s = state.tours[def.id]?.status;
+  if (s === "done" || s === "skipped" || s === "paused") return false;
+  return stepsFor(def, role).length > 0;
 }
 
-export function writeLocalTourDone(userId: string | null | undefined, done: boolean): void {
-  if (!userId || typeof window === "undefined") return;
-  try {
-    if (done) window.localStorage.setItem(localDoneKey(userId), "1");
-    else window.localStorage.removeItem(localDoneKey(userId));
-  } catch {
-    // private mode / переполненная квота — обучение просто покажется снова, не страшно
-  }
+/** Тур закончен или отложен руками: больше не блокирует следующие */
+function resolved(state: OnboardingState, id: string): boolean {
+  const s = state.tours[id]?.status;
+  return s === "done" || s === "skipped" || s === "paused";
 }
 
-/** Обучалки вкладок, уже показанные на этом устройстве. null = ещё не читали. */
-export function readSeenTabTours(userId: string | null | undefined): string[] | null {
-  if (!userId || typeof window === "undefined") return null;
-  try {
-    const raw = window.localStorage.getItem(seenToursKey(userId));
-    if (!raw) return [];
-    const parsed: unknown = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return [];
-    return parsed.filter((v): v is string => typeof v === "string");
-  } catch {
-    return [];
+/** Какой тур открыть сам прямо сейчас (null — никакой). Ручной запуск этим не ограничен */
+export function pickAutoTour(ctx: PickContext): string | null {
+  const { state } = ctx;
+  if (state.hintsOff || isSnoozed(state, ctx.now) || ctx.now < ctx.cooldownUntil) return null;
+
+  if (ctx.area === "split") {
+    if (!ctx.splitScreen) return null;
+    const def = getTour(ctx.splitScreen === "hub" ? "split-hub" : "split-group");
+    return def && autoEligible(state, def, ctx.role) ? def.id : null;
   }
+
+  if (!ctx.hasTrip || ctx.role === null) return null;
+
+  const welcome = getTour("welcome");
+  if (welcome && autoEligible(state, welcome, ctx.role)) return welcome.id;
+  if (!resolved(state, "welcome")) return null;
+
+  const news = getTour("whatsnew");
+  if (news && ctx.tab === "dashboard" && state.seenVersion < ONBOARDING_CONTENT_VERSION && autoEligible(state, news, ctx.role)) {
+    return news.id;
+  }
+
+  const def = tourForTab(ctx.tab);
+  return def && autoEligible(state, def, ctx.role) ? def.id : null;
 }
 
-/** Отметить обучалку вкладки показанной; возвращает обновлённый список (дедупликация). */
-export function writeSeenTabTour(userId: string | null | undefined, tab: string): string[] {
-  const current = readSeenTabTours(userId) ?? [];
-  if (current.includes(tab)) return current;
-  const next = [...current, tab];
-  if (userId && typeof window !== "undefined") {
-    try {
-      window.localStorage.setItem(seenToursKey(userId), JSON.stringify(next));
-    } catch {
-      // как выше: приватный режим — обучалки будут показываться заново
-    }
-  }
-  return next;
+/** Шаг, с которого открывать тур: «напомнить позже» и пауза продолжаются с места остановки */
+export function startStepFor(state: OnboardingState, def: TourDef, role: TourRole | null): number {
+  const p = state.tours[def.id];
+  const total = stepsFor(def, role).length;
+  if (!p || (p.status !== "later" && p.status !== "paused")) return 0;
+  return Math.min(Math.max(0, p.step), Math.max(0, total - 1));
 }
 
-/** «Пройти заново» — обучалки вкладок тоже с чистого листа. */
-export function clearSeenTabTours(userId: string | null | undefined): void {
-  if (!userId || typeof window === "undefined") return;
-  try {
-    window.localStorage.removeItem(seenToursKey(userId));
-  } catch {
-    // игнорируем — см. выше
+export type TourExit =
+  | { kind: "done"; action?: StepActionKind }
+  | { kind: "skip"; step: number }
+  | { kind: "later"; step: number }
+  | { kind: "action"; step: number; action: StepActionKind }
+  | { kind: "hints-off"; step: number };
+
+/**
+ * Как закрытие тура пишется в состояние. Welcome и «Что нового» при завершении или
+ * пропуске отмечают, что версию новостей человек уже видел — новичку не нужно «новое».
+ */
+export function exitPatch(def: TourDef, exit: TourExit, now: Date): OnboardingPatch {
+  const at = now.toISOString();
+  const entry = (status: TourProgress["status"], step: number): TourProgress => ({ status, step, at });
+  const patch: OnboardingPatch = {};
+  switch (exit.kind) {
+    case "done":
+      patch.tours = { [def.id]: entry("done", 0) };
+      break;
+    case "skip":
+      patch.tours = { [def.id]: entry("skipped", exit.step) };
+      break;
+    case "action":
+      patch.tours = { [def.id]: entry("paused", exit.step) };
+      break;
+    case "later":
+      patch.tours = { [def.id]: entry("later", exit.step) };
+      patch.snoozedUntil = new Date(now.getTime() + SNOOZE_MS).toISOString();
+      break;
+    case "hints-off":
+      patch.tours = { [def.id]: entry("skipped", exit.step) };
+      patch.hintsOff = true;
+      break;
   }
+  const finished = exit.kind === "done" || exit.kind === "skip" || exit.kind === "hints-off";
+  if (finished && (def.kind === "welcome" || def.kind === "whatsnew")) {
+    patch.seenVersion = ONBOARDING_CONTENT_VERSION;
+  }
+  return patch;
+}
+
+/** Параметр `?tour=<id>` для ссылки «открыть этот тур» из Профиля */
+export function tourHref(id: string): string {
+  return `/?tour=${encodeURIComponent(id)}`;
+}
+
+export interface TourStatusView {
+  label: string;
+  tone: "done" | "paused" | "new";
+  /** Кнопка: «Продолжить» с места остановки или «Смотреть» с начала */
+  resume: boolean;
+}
+
+/** Как тур выглядит в Центре обучения */
+export function tourStatusView(state: OnboardingState, def: TourDef): TourStatusView {
+  const p = state.tours[def.id];
+  const total = stepsFor(def, null).length;
+  if (!p) return { label: "Не смотрели", tone: "new", resume: false };
+  if (p.status === "done") return { label: "Пройдено", tone: "done", resume: false };
+  if (p.status === "skipped") return { label: "Пропущено", tone: "new", resume: false };
+  const at = Math.min(p.step + 1, total);
+  return { label: `Остановились на шаге ${at} из ${total}`, tone: "paused", resume: true };
 }

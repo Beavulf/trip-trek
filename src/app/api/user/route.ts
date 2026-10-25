@@ -3,6 +3,8 @@ import { db } from "@/lib/db";
 import { requireUser } from "@/lib/api-auth";
 import { maskKey, validateAiBaseUrl } from "@/lib/ai-key";
 import { isPremiumUser } from "@/lib/premium";
+import { withKeyLock } from "@/lib/key-lock";
+import { applyPatch, sanitizePatch, sanitizeState } from "@/lib/onboarding-state";
 
 // GET /api/user — профиль текущего пользователя (сессия)
 export async function GET(req: NextRequest) {
@@ -175,7 +177,7 @@ export async function PATCH(req: NextRequest) {
   const userId = authUser!.id;
 
   const body = await req.json();
-  const { name, emoji, color, avatarUrl, aiApiKey, aiBaseUrl, aiModel, onboardingCompleted, paymentDetails } = body;
+  const { name, emoji, color, avatarUrl, aiApiKey, aiBaseUrl, aiModel, onboardingCompleted, onboardingState, paymentDetails } = body;
 
   const data: Record<string, unknown> = {};
   if (typeof name === "string" && name.trim()) data.name = name.trim().slice(0, 80);
@@ -222,6 +224,9 @@ export async function PATCH(req: NextRequest) {
   if (typeof onboardingCompleted === "boolean") {
     data.onboardingCompletedAt = onboardingCompleted ? new Date() : null;
   }
+  // Подробный прогресс обучения — патч, а не целиком: две вкладки/устройства не затирают друг друга.
+  // Невалидный патч молча игнорируем (обучение не должно ломать сохранение профиля)
+  const onboardingPatch = onboardingState !== undefined ? sanitizePatch(onboardingState) : null;
   // Реквизиты для возврата: произвольная строка (карта/телефон), null — убрать.
   // Не секретнее имени: юзер сам решает, что сюда писать, видят только участники
   // его поездок (GET /api/trip participants), публичные выгрузки поле не отдают
@@ -230,17 +235,27 @@ export async function PATCH(req: NextRequest) {
       typeof paymentDetails === "string" ? paymentDetails.trim().slice(0, 300) || null : null;
   }
 
-  if (Object.keys(data).length === 0) {
+  if (Object.keys(data).length === 0 && !onboardingPatch) {
     return NextResponse.json({ error: "no fields to update" }, { status: 400 });
   }
 
-  const user = await db.user.update({
-    where: { id: userId },
-    data,
-    // aiApiKey нужен только чтобы отдать маску aiKeyTail — сам ключ наружу не идёт;
-    // адрес/модель возвращаем, чтобы UI профиля синхронизировался без перезагрузки
-    select: { id: true, name: true, emoji: true, color: true, avatarUrl: true, aiApiKey: true, aiBaseUrl: true, aiModel: true, onboardingCompletedAt: true, paymentDetails: true },
-  });
+  const update = () =>
+    db.user.update({
+      where: { id: userId },
+      data,
+      // aiApiKey нужен только чтобы отдать маску aiKeyTail — сам ключ наружу не идёт;
+      // адрес/модель возвращаем, чтобы UI профиля синхронизировался без перезагрузки
+      select: { id: true, name: true, emoji: true, color: true, avatarUrl: true, aiApiKey: true, aiBaseUrl: true, aiModel: true, onboardingCompletedAt: true, onboardingState: true, paymentDetails: true },
+    });
+  // Слияние патча = чтение + запись: под замком на пользователя, иначе два быстрых закрытия
+  // обучения подряд (пауза + отметка) затёрли бы друг друга
+  const user = onboardingPatch
+    ? await withKeyLock(`onboarding:${userId}`, async () => {
+        const cur = await db.user.findUnique({ where: { id: userId }, select: { onboardingState: true } });
+        data.onboardingState = applyPatch(sanitizeState(cur?.onboardingState), onboardingPatch, new Date());
+        return update();
+      })
+    : await update();
 
   if (data.name || data.emoji || data.color) {
     const memberUpdate: Record<string, unknown> = {};
@@ -261,5 +276,6 @@ export async function PATCH(req: NextRequest) {
     aiBaseUrl: safeUser.aiBaseUrl ?? "",
     aiModel: safeUser.aiModel ?? "",
     onboardingCompleted: safeUser.onboardingCompletedAt != null,
+    onboardingState: sanitizeState(safeUser.onboardingState),
   });
 }

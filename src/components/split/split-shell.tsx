@@ -3,10 +3,12 @@
 import { useEffect, type ReactNode } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { ChevronLeft, Loader2, Plane } from "lucide-react";
+import { ChevronLeft, CircleHelp, Loader2, Plane } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { NotificationsBell } from "@/components/trip/notifications-bell";
 import { UserAvatar } from "@/components/trip/user-avatar";
+import { SplitTourHost } from "@/components/trip/onboarding/tour-host";
+import { useTourStore } from "@/lib/tour-store";
 
 // Оболочка страниц «Сочтёмся»: лёгкая шапка (назад/лого, переключатель на поездки, уведомления, профиль).
 // 16 вкладок поездки здесь ни к чему — это отдельное повседневное приложение (ADR-0009).
@@ -27,6 +29,7 @@ export function SplitShell({ title, subtitle, backHref, lead, tabs, children }: 
   const router = useRouter();
   const pathname = usePathname();
   const { data: session, status } = useAuth();
+  const openTour = useTourStore((s) => s.openTour);
 
   useEffect(() => {
     if (status !== "unauthenticated") return;
@@ -74,6 +77,14 @@ export function SplitShell({ title, subtitle, backHref, lead, tabs, children }: 
             <Plane className="size-4" aria-hidden />
             <span className="hidden min-[420px]:inline">Поездки</span>
           </Link>
+          <button
+            type="button"
+            onClick={() => openTour(pathname === "/split" ? "split-hub" : "split-group")}
+            aria-label="Подсказки раздела"
+            className="shrink-0 grid size-10 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-accent hover:text-foreground active:scale-95"
+          >
+            <CircleHelp className="size-5" aria-hidden />
+          </button>
           <NotificationsBell authed />
           <Link href="/profile" aria-label="Профиль" className="shrink-0 active:scale-95 transition-transform">
             <UserAvatar name={u.name} emoji={u.emoji ?? "👤"} color={u.color ?? "#94a3b8"} avatarUrl={u.avatarUrl} className="size-9" textClassName="text-base" />
@@ -82,6 +93,8 @@ export function SplitShell({ title, subtitle, backHref, lead, tabs, children }: 
         {tabs && <div className="mx-auto max-w-2xl px-3 pb-2">{tabs}</div>}
       </header>
       <main className="flex-1 mx-auto w-full max-w-2xl px-3 py-4 pb-28 safe-bottom relative z-0">{children}</main>
+      {/* Обучение «Сочтёмся»: тур первого экрана и группы открываются сами, «?» в шапке — вручную */}
+      <SplitTourHost />
     </div>
   );
 }
