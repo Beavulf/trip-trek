@@ -1,6 +1,6 @@
 "use client";
 
-// TourDialog — оболочка обучения (приветствие, туры вкладок, «Сочтёмся», «Что нового»):
+// TourDialog — оболочка обучения (приветствие, туры вкладок, «Сочтёмся»):
 // карточка с анимированным макетом шага, текстом, прогрессом и кнопками. Паттерн приложения
 // (MobileMoreSheet): условный маунт без внешнего AnimatePresence — вход анимирован, закрытие
 // мгновенное, без невидимых подложек, блокирующих клики.
@@ -21,7 +21,6 @@ import { StepArt } from "./illustrations";
 
 function eyebrowFor(def: TourDef): string {
   if (def.kind === "welcome") return "Знакомство";
-  if (def.kind === "whatsnew") return "Что нового";
   return `Обучение · ${def.title}`;
 }
 

@@ -316,16 +316,16 @@ S3» — ADR-0003.
   `passwordChangedAt`.
 - Обучение: прогресс на аккаунте — `User.onboardingState` (JSON: запись по каждому
   туру `done/skipped/paused/later` + шаг, «напомнить позже» `snoozedUntil`, `hintsOff`,
-  `checklistHidden`, `seenVersion` «Что нового», `resetAt`); формат, слияние и проверка
+  `checklistHidden`, `updatesRead` — прочитанные обновления, `resetAt`); формат, слияние и проверка
   входа — `src/lib/onboarding-state.ts` (чистый, с тестами). Старое
   `onboardingCompletedAt` читается как «знакомство пройдено» и по-прежнему пишется.
   Мутация — патч: `PATCH /api/user {onboardingState: {tours, snoozedUntil, hintsOff,
-  checklistHidden, seenVersion, reset}}` (сервер применяет `applyPatch` под
+  checklistHidden, updatesRead, reset}}` (сервер применяет `applyPatch` под
   `withKeyLock`, два устройства не затирают друг друга); клиент применяет тот же патч
   оптимистично (кэш `auth-session` + копия в localStorage, `use-onboarding.ts`), копия
   устройства и старые отметки (`triptrek-tabtour-seen`) сливаются с серверной по времени
-  записей и дозаливаются. Содержимое — `src/lib/onboarding-content.ts` (20 туров: знакомство
-  по ролям, 16 вкладок, «Сочтёмся» хаб/группа, «Что нового»; шаг = текст + мини-макет
+  записей и дозаливаются. Содержимое — `src/lib/onboarding-content.ts` (19 туров: знакомство
+  по ролям, 16 вкладок, «Сочтёмся» хаб/группа; шаг = текст + мини-макет
   `MockScene` + необязательное действие «Попробовать» + `labels` — подписи из интерфейса,
   которые тест сверяет с исходниками), выбор тура и запись закрытия —
   `src/lib/onboarding.ts` (`pickAutoTour`, `exitPatch`), список «Первые шаги» —
@@ -333,9 +333,17 @@ S3» — ADR-0003.
   (единственный, кто открывает туры: автозапуск, запросы «?»/Центра/`?tour=`, действия),
   `tour-dialog.tsx` (оболочка, выход только через панель «Закрыть обучение?»),
   `mock-scene.tsx` (анимированные макеты в токенах темы), `learning-center.tsx`;
-  `dashboard/FirstSteps.tsx`. Новая крупная фича = новый тур/шаги + поднять
-  `ONBOARDING_CONTENT_VERSION` и переписать тур `whatsnew`. Цели Метрики:
+  `dashboard/FirstSteps.tsx`. Цели Метрики:
   `tour_start/done/skip/later/action/off`.
+- «Что нового»: лента обновлений — вторая вкладка окна колокольчика
+  (`components/trip/notifications-bell.tsx`: «Уведомления | Обновления», красный счётчик
+  суммирует оба). Записи — данные в `src/lib/updates-content.ts` (id, дата, область
+  `all/trip/split`, демо из 1–4 макетов `MockScene`, пункты, «Попробовать», связанный тур,
+  `labels` для сверки с интерфейсом); «не прочитано» — `src/lib/updates.ts`: id не в
+  `onboardingState.updatesRead` и запись вышла позже дня регистрации (`createdAt` из
+  `custom-session`), поэтому новичку история не показывается; прочитанное живёт на аккаунте.
+  Модального окна «Что нового» и тура `whatsnew` больше нет. Новая фича = новая запись
+  сверху списка (при необходимости — шаги в туре раздела).
 - Почта: `src/lib/mail/mailer.ts` (nodemailer через постфикс-релей; для
   самоподписанного STARTTLS-серта стоит `tls.rejectUnauthorized: false` — только
   для локального релея) + шаблоны `templates.ts`.

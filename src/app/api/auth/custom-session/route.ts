@@ -31,7 +31,7 @@ export async function GET(req: NextRequest) {
   try {
     const row = await db.user.findUnique({
       where: { id: decoded.id },
-      select: { id: true, name: true, email: true, emoji: true, color: true, avatarUrl: true, plan: true, planExpiry: true, role: true, passwordChangedAt: true, onboardingCompletedAt: true, onboardingState: true },
+      select: { id: true, name: true, email: true, emoji: true, color: true, avatarUrl: true, plan: true, planExpiry: true, role: true, passwordChangedAt: true, onboardingCompletedAt: true, onboardingState: true, createdAt: true },
     });
 
     if (!row) return NextResponse.json({ user: null });
@@ -59,6 +59,8 @@ export async function GET(req: NextRequest) {
         onboardingCompletedAt: row.onboardingCompletedAt,
         // Подробный прогресс обучения (туры, пауза, подсказки) — src/lib/onboarding-state.ts
         onboardingState: sanitizeState(row.onboardingState),
+        // Дата регистрации: новичку не показываем историю обновлений как непрочитанную (lib/updates.ts)
+        createdAt: row.createdAt,
       },
     });
   } catch (e) {

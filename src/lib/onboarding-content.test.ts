@@ -24,12 +24,12 @@ describe("TOURS: структура", () => {
     for (const t of tabTours) expect(NAV_TABS).toContain(t.tab);
   });
 
-  it("есть знакомство, «Что нового» и оба экрана «Сочтёмся»", () => {
+  it("есть знакомство и оба экрана «Сочтёмся», «Что нового» теперь в колокольчике", () => {
     expect(getTour("welcome")?.kind).toBe("welcome");
-    expect(getTour("whatsnew")?.kind).toBe("whatsnew");
+    expect(getTour("whatsnew")).toBeUndefined();
     expect(getTour("split-hub")?.splitScreen).toBe("hub");
     expect(getTour("split-group")?.splitScreen).toBe("group");
-    expect(centerTours().some((t) => t.kind === "whatsnew")).toBe(false);
+    expect(centerTours()).toHaveLength(TOURS.length);
   });
 
   it("тексты непустые и не бесконечные, группы известны", () => {

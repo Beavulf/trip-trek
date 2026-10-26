@@ -1,4 +1,4 @@
-// Содержимое обучения: приветственный тур, туры вкладок, «Сочтёмся», «Что нового».
+// Содержимое обучения: приветственный тур, туры вкладок, «Сочтёмся».
 // Только данные (без React): шаги и мини-макеты проверяются тестами, в том числе
 // сверкой подписей кнопок с исходниками (labels) — текст не расходится с интерфейсом.
 // Менялась кнопка в интерфейсе — правьте здесь и в labels; упал тест = обучение устарело.
@@ -40,7 +40,7 @@ export interface TourStepDef {
   labels?: string[];
 }
 
-export type TourKind = "welcome" | "tab" | "split" | "whatsnew";
+export type TourKind = "welcome" | "tab" | "split";
 export type TourGroup = "start" | "plan" | "memories" | "road" | "together" | "split";
 
 export interface TourDef {
@@ -1034,50 +1034,6 @@ const SPLIT_GROUP: TourDef = {
   ],
 };
 
-// === «Что нового» (поднимайте ONBOARDING_CONTENT_VERSION вместе с этим туром) ===
-
-const WHATS_NEW: TourDef = {
-  id: "whatsnew",
-  kind: "whatsnew",
-  title: "Что нового",
-  about: "Свежие возможности приложения",
-  group: "start",
-  steps: [
-    {
-      id: "wn-help",
-      title: "Подсказки теперь везде",
-      text: "Кнопка «?» открывает обучение раздела, на «Обзоре» появился список «Первые шаги». Все туры, паузу и отключение подсказок вы найдёте в «Профиль → Обучение».",
-      scene: {
-        blocks: [{ k: "title", text: "Маршрут", right: "?", id: "help" }, { k: "row", icon: "📅", text: "День 3 · Киото" }],
-        tap: "help",
-        then: [{ k: "note", text: "Подсказки раздела «Маршрут»", tone: "primary" }],
-      },
-    },
-    {
-      id: "wn-split",
-      title: "«Сочтёмся» — общие траты друзей",
-      text: "Отдельный раздел для повседневных расходов: квартира, продукты, кафе. Баланс, напоминания о долгах и реквизиты для возврата. Меню «Ещё» → «Сочтёмся — общие траты».",
-      action: { label: "Открыть «Сочтёмся»", do: "split" },
-      scene: { blocks: [{ k: "row", icon: "🏠", text: "Квартира", badge: "−$25", tone: "red" }, { k: "row", icon: "🍕", text: "Пятничный ужин", badge: "+$18", tone: "green" }] },
-    },
-    {
-      id: "wn-public",
-      roles: ["owner"],
-      title: "Публичная страница поездки",
-      text: "Ссылка для друзей и родных без регистрации: маршрут, фото по ходу поездки, слайдшоу и карта по дням. Срок ссылки и доступ — в «О поездке»; кадр можно скрыть от гостей.",
-      labels: ["Публичная страница"],
-      scene: { blocks: [{ k: "code", text: "Публичная ссылка" }, { k: "photos", count: 3 }] },
-    },
-    {
-      id: "wn-queue",
-      roles: EDITORS,
-      title: "Фото загружаются в фоне",
-      text: "Выберите сколько угодно снимков и закрывайте окно: загрузка идёт сама, ждёт связь и продолжается после перезапуска приложения.",
-      scene: { blocks: [{ k: "photos", count: 4 }, { k: "meter", text: "Загружается в фоне", value: 0.5, right: "6 из 12", tone: "green" }] },
-    },
-  ],
-};
-
 export const TOURS: TourDef[] = [
   WELCOME,
   DASHBOARD,
@@ -1098,7 +1054,6 @@ export const TOURS: TourDef[] = [
   INFO,
   SPLIT_HUB,
   SPLIT_GROUP,
-  WHATS_NEW,
 ];
 
 export function getTour(id: string): TourDef | undefined {
@@ -1110,7 +1065,7 @@ export function tourForTab(tab: TripTab): TourDef | undefined {
   return TOURS.find((t) => t.kind === "tab" && t.tab === tab);
 }
 
-/** Какие туры показывать в Центре обучения (what's new — отдельным блоком, он про версию) */
+/** Какие туры показывать в Центре обучения (новости — отдельно, в колокольчике: updates-content.ts) */
 export function centerTours(): TourDef[] {
-  return TOURS.filter((t) => t.kind !== "whatsnew");
+  return TOURS;
 }

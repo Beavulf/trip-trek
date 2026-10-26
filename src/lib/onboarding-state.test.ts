@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   EMPTY_ONBOARDING_STATE,
-  ONBOARDING_CONTENT_VERSION,
+  MAX_UPDATES_READ,
   applyPatch,
   clearLegacyLocalState,
   isSnoozed,
@@ -50,12 +50,12 @@ describe("sanitizeState", () => {
         food: { status: "later", step: -4, at: iso(1) },
       },
       hintsOff: "yes",
-      seenVersion: 3.9,
+      updatesRead: ["a-1", "BAD ID", "a-1", 7],
     });
     expect(Object.keys(s.tours).sort()).toEqual(["food", "map"]);
     expect(s.tours.food.step).toBe(0); // отрицательный шаг прижат к нулю
     expect(s.hintsOff).toBe(false); // только настоящий true
-    expect(s.seenVersion).toBe(3);
+    expect(s.updatesRead).toEqual(["a-1"]); // дубли и мусор выброшены
   });
 
   it("не принимает больше 64 туров", () => {
@@ -115,20 +115,38 @@ describe("applyPatch", () => {
     expect(EMPTY_ONBOARDING_STATE.tours).toEqual({});
   });
 
-  it("seenVersion только растёт", () => {
-    const a = applyPatch(EMPTY_ONBOARDING_STATE, { seenVersion: 5 }, T0);
-    expect(applyPatch(a, { seenVersion: 2 }, T0).seenVersion).toBe(5);
+  it("updatesRead добавляется к прочитанному без дублей и держит лимит", () => {
+    let a = applyPatch(EMPTY_ONBOARDING_STATE, { updatesRead: ["u-1", "u-2"] }, T0);
+    a = applyPatch(a, { updatesRead: ["u-2", "u-3"] }, T0);
+    expect(a.updatesRead).toEqual(["u-1", "u-2", "u-3"]);
+    for (let i = 0; i < 5; i++) {
+      a = applyPatch(a, { updatesRead: Array.from({ length: 50 }, (_, j) => `x-${i}-${j}`) }, T0);
+    }
+    expect(a.updatesRead).toHaveLength(MAX_UPDATES_READ);
+    expect(a.updatesRead.at(-1)).toBe("x-4-49"); // вытесняются самые старые
   });
 
-  it("reset обнуляет всё, ставит resetAt и не показывает «Что нового»", () => {
-    let s = applyPatch(EMPTY_ONBOARDING_STATE, { tours: { map: done }, hintsOff: true, checklistHidden: true, snoozedUntil: iso(500) }, T0);
+  it("sanitizePatch режет updatesRead: валидные id, не больше 50 за раз", () => {
+    expect(sanitizePatch({ updatesRead: ["ok-1", "Не id", 5] })?.updatesRead).toEqual(["ok-1"]);
+    expect(sanitizePatch({ updatesRead: Array.from({ length: 80 }, (_, i) => `u-${i}`) })?.updatesRead).toHaveLength(50);
+    expect(sanitizePatch({ updatesRead: ["Не id"] })).toBeNull();
+  });
+
+  it("слияние копий объединяет прочитанные обновления", () => {
+    const a = applyPatch(EMPTY_ONBOARDING_STATE, { updatesRead: ["u-1"] }, T0);
+    const b = applyPatch(EMPTY_ONBOARDING_STATE, { updatesRead: ["u-2"] }, new Date(T0.getTime() + 1000));
+    expect(mergeStates(a, b).updatesRead.sort()).toEqual(["u-1", "u-2"]);
+  });
+
+  it("reset обнуляет туры и ставит resetAt, но прочитанные обновления не возвращает", () => {
+    let s = applyPatch(EMPTY_ONBOARDING_STATE, { tours: { map: done }, hintsOff: true, checklistHidden: true, snoozedUntil: iso(500), updatesRead: ["u-1"] }, T0);
     s = applyPatch(s, { reset: true }, T0);
     expect(s.tours).toEqual({});
     expect(s.hintsOff).toBe(false);
     expect(s.checklistHidden).toBe(false);
     expect(s.snoozedUntil).toBeNull();
     expect(s.resetAt).toBe(T0.toISOString());
-    expect(s.seenVersion).toBe(ONBOARDING_CONTENT_VERSION);
+    expect(s.updatesRead).toEqual(["u-1"]);
   });
 
   it("при переполнении оставляет самые свежие туры", () => {

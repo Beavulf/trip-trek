@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
   AUTO_COOLDOWN_MS,
-  ONBOARDING_CONTENT_VERSION,
   SNOOZE_MS,
   exitPatch,
   getTour,
@@ -52,25 +51,17 @@ describe("pickAutoTour — поездка", () => {
   });
 
   it("после знакомства — тур открытой вкладки, один раз", () => {
-    const s = withTours({ welcome: done }, { seenVersion: ONBOARDING_CONTENT_VERSION });
+    const s = withTours({ welcome: done });
     expect(pickAutoTour(ctx({ tab: "map" }, s))).toBe("map");
-    const seen = withTours({ welcome: done, map: done }, { seenVersion: ONBOARDING_CONTENT_VERSION });
+    const seen = withTours({ welcome: done, map: done });
     expect(pickAutoTour(ctx({ tab: "map" }, seen))).toBeNull();
   });
 
   it("у всех вкладок навигации есть тур", () => {
-    const s = withTours({ welcome: done }, { seenVersion: ONBOARDING_CONTENT_VERSION });
+    const s = withTours({ welcome: done });
     for (const tab of ["dashboard", "itinerary", "lodging", "map", "budget", "timeline", "gallery", "journal", "achievements", "food", "rest", "weather", "phrases", "ai", "board", "info"] as const) {
       expect(pickAutoTour(ctx({ tab }, s)), tab).toBe(tab);
     }
-  });
-
-  it("«Что нового» — старожилам один раз на Обзоре, новичкам не нужно", () => {
-    const old = withTours({ welcome: done }, { seenVersion: 0 });
-    expect(pickAutoTour(ctx({ tab: "dashboard" }, old))).toBe("whatsnew");
-    expect(pickAutoTour(ctx({ tab: "map" }, old))).toBe("map");
-    const finished = withTours({ welcome: done, whatsnew: done }, { seenVersion: 0 });
-    expect(pickAutoTour(ctx({ tab: "dashboard" }, finished))).toBe("dashboard");
   });
 
   it("«Больше не показывать», пауза и остывание блокируют автозапуск", () => {
@@ -84,14 +75,14 @@ describe("pickAutoTour — поездка", () => {
   it("«напомнить позже» после паузы возвращает тур, а остановленный действием ждёт руками", () => {
     const later = withTours({ welcome: { status: "later", step: 2, at } });
     expect(pickAutoTour(ctx({}, later))).toBe("welcome");
-    const paused = withTours({ welcome: { status: "paused", step: 2, at } }, { seenVersion: ONBOARDING_CONTENT_VERSION });
+    const paused = withTours({ welcome: { status: "paused", step: 2, at } });
     expect(pickAutoTour(ctx({ tab: "dashboard" }, paused))).toBe("dashboard");
-    const pausedTab = withTours({ welcome: done, map: { status: "paused", step: 1, at } }, { seenVersion: ONBOARDING_CONTENT_VERSION });
+    const pausedTab = withTours({ welcome: done, map: { status: "paused", step: 1, at } });
     expect(pickAutoTour(ctx({ tab: "map" }, pausedTab))).toBeNull();
   });
 
   it("роль без шагов в туре — тур пропускается", () => {
-    const s = withTours({ welcome: done }, { seenVersion: ONBOARDING_CONTENT_VERSION });
+    const s = withTours({ welcome: done });
     // у зрителя в «Маршруте» остаются шаги про карточку места — тур есть
     expect(pickAutoTour(ctx({ tab: "itinerary", role: "viewer" }, s))).toBe("itinerary");
   });
@@ -115,18 +106,16 @@ describe("exitPatch", () => {
   const welcome = getTour("welcome")!;
   const map = getTour("map")!;
 
-  it("done / skip пишут запись тура, знакомство ещё и версию новостей", () => {
+  it("done / skip пишут запись тура", () => {
     expect(exitPatch(map, { kind: "done" }, NOW)).toEqual({ tours: { map: { status: "done", step: 0, at } } });
     const p = exitPatch(welcome, { kind: "skip", step: 2 }, NOW);
     expect(p.tours?.welcome).toEqual({ status: "skipped", step: 2, at });
-    expect(p.seenVersion).toBe(ONBOARDING_CONTENT_VERSION);
   });
 
-  it("later: запись с шагом и пауза на сутки, версию новостей не трогает", () => {
+  it("later: запись с шагом и пауза на сутки", () => {
     const p = exitPatch(welcome, { kind: "later", step: 3 }, NOW);
     expect(p.tours?.welcome).toEqual({ status: "later", step: 3, at });
     expect(p.snoozedUntil).toBe(new Date(NOW.getTime() + SNOOZE_MS).toISOString());
-    expect(p.seenVersion).toBeUndefined();
   });
 
   it("действие «Попробовать» ставит тур на паузу, «выключить» гасит подсказки", () => {

@@ -530,7 +530,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       {shareOpen && <ShareCard open onOpenChange={setShareOpen} />}
       {premiumOpen && <PremiumModal open onOpenChange={setPremiumOpen} />}
       {feedbackOpen && <FeedbackSheet key={feedbackId ?? "new"} open initialId={feedbackId} onOpenChange={setFeedbackOpen} />}
-      {/* Обучение: знакомство при первом входе, туры вкладок, «Что нового», Центр обучения */}
+      {/* Обучение: знакомство при первом входе, туры вкладок, Центр обучения */}
       <TripTourHost />
       <PWAUpdateNotification />
     </div>

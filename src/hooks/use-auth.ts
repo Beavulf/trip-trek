@@ -19,6 +19,8 @@ interface AuthUser {
   onboardingCompletedAt?: string | null;
   // Подробный прогресс обучения (туры, пауза, подсказки): src/lib/onboarding-state.ts
   onboardingState?: OnboardingState;
+  // Дата регистрации (ISO)
+  createdAt?: string;
 }
 
 interface AuthSession {

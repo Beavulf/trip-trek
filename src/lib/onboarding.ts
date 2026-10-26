@@ -3,7 +3,6 @@
 // Всё чистое и покрыто тестами; React-часть (TourHost, диалог) только исполняет решения отсюда.
 
 import {
-  ONBOARDING_CONTENT_VERSION,
   isSnoozed,
   type OnboardingPatch,
   type OnboardingState,
@@ -13,7 +12,6 @@ import { getTour, stepsFor, tourForTab, type StepActionKind, type TourDef, type 
 import type { TripTab } from "./trip-store";
 
 export {
-  ONBOARDING_CONTENT_VERSION,
   type OnboardingPatch,
   type OnboardingState,
   type TourProgress,
@@ -71,11 +69,6 @@ export function pickAutoTour(ctx: PickContext): string | null {
   if (welcome && autoEligible(state, welcome, ctx.role)) return welcome.id;
   if (!resolved(state, "welcome")) return null;
 
-  const news = getTour("whatsnew");
-  if (news && ctx.tab === "dashboard" && state.seenVersion < ONBOARDING_CONTENT_VERSION && autoEligible(state, news, ctx.role)) {
-    return news.id;
-  }
-
   const def = tourForTab(ctx.tab);
   return def && autoEligible(state, def, ctx.role) ? def.id : null;
 }
@@ -95,10 +88,7 @@ export type TourExit =
   | { kind: "action"; step: number; action: StepActionKind }
   | { kind: "hints-off"; step: number };
 
-/**
- * Как закрытие тура пишется в состояние. Welcome и «Что нового» при завершении или
- * пропуске отмечают, что версию новостей человек уже видел — новичку не нужно «новое».
- */
+/** Как закрытие тура пишется в состояние */
 export function exitPatch(def: TourDef, exit: TourExit, now: Date): OnboardingPatch {
   const at = now.toISOString();
   const entry = (status: TourProgress["status"], step: number): TourProgress => ({ status, step, at });
@@ -121,10 +111,6 @@ export function exitPatch(def: TourDef, exit: TourExit, now: Date): OnboardingPa
       patch.tours = { [def.id]: entry("skipped", exit.step) };
       patch.hintsOff = true;
       break;
-  }
-  const finished = exit.kind === "done" || exit.kind === "skip" || exit.kind === "hints-off";
-  if (finished && (def.kind === "welcome" || def.kind === "whatsnew")) {
-    patch.seenVersion = ONBOARDING_CONTENT_VERSION;
   }
   return patch;
 }

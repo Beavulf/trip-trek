@@ -14,6 +14,7 @@ import {
   Mail,
   MessageSquareReply,
   MessageSquareWarning,
+  ChevronLeft,
   ShieldBan,
   ShieldCheck,
   Sparkles,
@@ -24,6 +25,15 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useTripStore } from "@/lib/trip-store";
+import { useTourStore } from "@/lib/tour-store";
+import { getUpdate } from "@/lib/updates-content";
+import type { UpdatesScope } from "@/lib/updates";
+import type { TourRole } from "@/lib/onboarding-content";
+import { useAuth } from "@/hooks/use-auth";
+import { useTrip } from "@/hooks/trip/use-trip";
+import { useTourActions } from "@/hooks/use-tour-actions";
+import { useUpdates } from "@/hooks/use-updates";
+import { UpdateDetail, UpdatesList } from "@/components/trip/updates/updates-feed";
 import { useBackDismiss } from "@/hooks/use-back-dismiss";
 import { useBodyScrollLock } from "@/hooks/use-body-scroll-lock";
 import { useNotifications, useMarkNotificationsRead, type UserNotificationItem } from "@/hooks/use-notifications";
@@ -41,8 +51,9 @@ function relTimeAdmin(ts: string): string {
   return new Date(ts).toLocaleDateString("ru-RU");
 }
 
-// Колокольчик уведомлений: события админ-действий и ответы на обращения.
-// Кнопка в шапке + шторка-список (портал, как остальные оверлеи приложения).
+// Колокольчик: две вкладки одного окна — «Уведомления» (события, ответы на обращения) и
+// «Обновления» (что нового в приложении, с демо; src/lib/updates-content.ts). Красный счётчик
+// суммирует непрочитанное из обоих. Кнопка в шапке + шторка (портал, как остальные оверлеи).
 
 const TYPE_ICON: Record<string, React.ReactNode> = {
   premium: <Crown className="size-4 text-amber-500" />,
@@ -67,29 +78,29 @@ function fmtDateTime(ts: string): string {
   return new Date(ts).toLocaleString("ru-RU", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
 }
 
-export function NotificationsBell({ authed, large }: { authed: boolean; large?: boolean }) {
+type SheetTab = "notifications" | "updates";
+
+export function NotificationsBell({ authed, large, scope = "trip" }: { authed: boolean; large?: boolean; scope?: UpdatesScope }) {
   const [open, setOpen] = useState(false);
+  // Какая вкладка откроется: та, где есть непрочитанное (уведомления в приоритете)
+  const [initialTab, setInitialTab] = useState<SheetTab>("notifications");
   useBodyScrollLock(open);
   const { data } = useNotifications(authed);
-  const markRead = useMarkNotificationsRead();
-  const unread = data?.unread ?? 0;
-
-  // Открыл шторку → всё прочитано (лёгкая задержка, чтобы бейдж успели увидеть)
-  useEffect(() => {
-    if (open && unread > 0) {
-      const t = setTimeout(() => markRead.mutate({ all: true }), 1200);
-      return () => clearTimeout(t);
-    }
-  }, [open, unread, markRead]);
+  const updates = useUpdates(scope);
+  const notifUnread = data?.unread ?? 0;
+  const unread = notifUnread + updates.unread;
 
   return (
     <>
       <div className="relative">
         <button
           type="button"
-          onClick={() => setOpen(true)}
-          aria-label={unread > 0 ? `Уведомления: ${unread} новых` : "Уведомления"}
-          title="Уведомления"
+          onClick={() => {
+            setInitialTab(notifUnread === 0 && updates.unread > 0 ? "updates" : "notifications");
+            setOpen(true);
+          }}
+          aria-label={unread > 0 ? `Уведомления и обновления: ${unread} новых` : "Уведомления и обновления"}
+          title="Уведомления и обновления"
           className={cn(
             "rounded-full grid place-items-center bg-secondary border border-border hover:bg-accent transition-colors shrink-0 relative",
             large ? "size-11" : "size-9 sm:size-8"
@@ -102,16 +113,70 @@ export function NotificationsBell({ authed, large }: { authed: boolean; large?: 
             </span>
           )}
         </button>
-        <AnimatePresence>{open && <NotificationsSheet onClose={() => setOpen(false)} items={data?.items ?? []} />}</AnimatePresence>
+        <AnimatePresence>
+          {open && (
+            <NotificationsSheet
+              onClose={() => setOpen(false)}
+              items={data?.items ?? []}
+              notifUnread={notifUnread}
+              scope={scope}
+              initialTab={initialTab}
+            />
+          )}
+        </AnimatePresence>
       </div>
     </>
   );
 }
 
-function NotificationsSheet({ items, onClose }: { items: UserNotificationItem[]; onClose: () => void }) {
+function roleOf(trip: { participants: { id: string; role?: string | null }[] } | undefined, userId: string | undefined): TourRole | null {
+  const r = trip?.participants.find((p) => p.id === userId)?.role;
+  if (!r) return null;
+  return r === "owner" ? "owner" : r === "viewer" ? "viewer" : "member";
+}
+
+function NotificationsSheet({
+  items,
+  notifUnread,
+  scope,
+  initialTab,
+  onClose,
+}: {
+  items: UserNotificationItem[];
+  notifUnread: number;
+  scope: UpdatesScope;
+  initialTab: SheetTab;
+  onClose: () => void;
+}) {
   const markRead = useMarkNotificationsRead();
-  // лист смонтирован только пока открыт — «назад» закрывает его, а не приложение
+  const [tab, setTab] = useState<SheetTab>(initialTab);
+  const [openId, setOpenId] = useState<string | null>(null);
+  const updates = useUpdates(scope);
+  const { data: session } = useAuth();
+  const { data: trip } = useTrip();
+  const runAction = useTourActions();
+  const openTour = useTourStore((st) => st.openTour);
+  const openEntry = openId ? getUpdate(openId) : undefined;
+
+  // лист смонтирован только пока открыт — «назад» закрывает его, а не приложение;
+  // открытая запись — второй слой: «назад» сначала возвращает к списку
   useBackDismiss(true, onClose);
+  useBackDismiss(!!openEntry, () => setOpenId(null));
+
+  // Уведомления читаются, когда их видно (вкладку «Обновления» это не касается).
+  // Лёгкая задержка, чтобы бейдж успели увидеть
+  useEffect(() => {
+    if (tab === "notifications" && notifUnread > 0) {
+      const t = setTimeout(() => markRead.mutate({ all: true }), 1200);
+      return () => clearTimeout(t);
+    }
+  }, [tab, notifUnread, markRead]);
+
+  const doAction = (action: Parameters<typeof runAction>[0] | "center") => {
+    onClose();
+    if (action === "center") useTourStore.getState().setCenterOpen(true);
+    else runAction(action);
+  };
   return createPortal(
     <AnimatePresence>
       <motion.div
@@ -133,22 +198,26 @@ function NotificationsSheet({ items, onClose }: { items: UserNotificationItem[];
             <div className="w-10 h-1 rounded-full bg-muted-foreground/30" />
           </div>
 
-          <div className="sticky top-0 bg-card/95 backdrop-blur px-4 py-3 border-b border-border flex items-center justify-between">
-            <h2 className="font-bold text-base flex items-center gap-2">
-              <Bell className="size-4 text-primary" /> Уведомления
-            </h2>
-            <div className="flex items-center gap-1">
-              {items.length > 0 && (
-                <button
-                  type="button"
-                  onClick={() => markRead.mutate({ all: true })}
-                  className="size-11 rounded-full hover:bg-accent grid place-items-center text-muted-foreground"
-                  aria-label="Отметить всё прочитанным"
-                  title="Отметить всё прочитанным"
-                >
-                  <CheckCheck className="size-4" />
-                </button>
-              )}
+          <div className="sticky top-0 z-10 bg-card/95 backdrop-blur pl-3 pr-1 py-2.5 border-b border-border flex items-center justify-between gap-1">
+            {openEntry ? (
+              <button
+                type="button"
+                onClick={() => setOpenId(null)}
+                className="flex min-h-11 items-center gap-1 rounded-full pl-1 pr-3 text-sm font-semibold hover:bg-accent"
+              >
+                <ChevronLeft className="size-5" aria-hidden /> Обновления
+              </button>
+            ) : (
+              <div role="tablist" aria-label="Раздел" className="flex min-w-0 flex-1 gap-1 rounded-full bg-secondary p-1">
+                <SheetTabButton active={tab === "notifications"} onClick={() => setTab("notifications")} count={notifUnread}>
+                  Уведомления
+                </SheetTabButton>
+                <SheetTabButton active={tab === "updates"} onClick={() => setTab("updates")} count={updates.unread}>
+                  Обновления
+                </SheetTabButton>
+              </div>
+            )}
+            <div className="flex shrink-0 items-center gap-0.5">
               <button
                 type="button"
                 onClick={onClose}
@@ -160,8 +229,35 @@ function NotificationsSheet({ items, onClose }: { items: UserNotificationItem[];
             </div>
           </div>
 
-          <div className="overflow-y-auto overscroll-contain">
-            {items.length === 0 ? (
+          <div className="overflow-y-auto overscroll-contain min-h-[min(30rem,60dvh)]">
+            {!openEntry && (tab === "notifications" ? notifUnread > 0 : updates.unread > 0) && (
+              <div className="flex justify-end border-b border-border px-2 py-1">
+                <button
+                  type="button"
+                  onClick={() => (tab === "notifications" ? markRead.mutate({ all: true }) : updates.markAllRead())}
+                  className="flex min-h-9 items-center gap-1.5 rounded-full px-3 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                >
+                  <CheckCheck className="size-3.5" aria-hidden /> Отметить всё прочитанным
+                </button>
+              </div>
+            )}
+            {tab === "updates" ? (
+              openEntry ? (
+                <UpdateDetail
+                  entry={openEntry}
+                  scope={scope}
+                  role={roleOf(trip, session?.user?.id)}
+                  onMarkRead={(id) => updates.markRead([id])}
+                  onAction={doAction}
+                  onTour={(id) => {
+                    onClose();
+                    openTour(id);
+                  }}
+                />
+              ) : (
+                <UpdatesList items={updates.items} onOpen={setOpenId} />
+              )
+            ) : items.length === 0 ? (
               <div className="py-14 text-center space-y-2 px-6">
                 <div className="text-4xl">🔔</div>
                 <p className="text-sm font-medium">Пока пусто</p>
@@ -216,5 +312,37 @@ function NotificationsSheet({ items, onClose }: { items: UserNotificationItem[];
       </motion.div>
     </AnimatePresence>,
     document.body
+  );
+}
+
+function SheetTabButton({
+  active,
+  count,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  count: number;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      role="tab"
+      aria-selected={active}
+      onClick={onClick}
+      className={cn(
+        "relative flex min-h-9 min-w-0 flex-1 items-center justify-center rounded-full px-2 text-[13px] font-semibold transition-colors",
+        active ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
+      )}
+    >
+      <span className="truncate">{children}</span>
+      {count > 0 && (
+        <span className="absolute -right-0.5 -top-1 grid h-4 min-w-4 place-items-center rounded-full bg-rose-500 px-1 text-[10px] font-bold text-white ring-2 ring-secondary">
+          {count > 9 ? "9+" : count}
+        </span>
+      )}
+    </button>
   );
 }

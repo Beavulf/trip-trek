@@ -3,8 +3,8 @@
 // чтобы прогресс не зависел от устройства; локальная копия в localStorage нужна лишь на время,
 // пока запись не дошла до сервера (офлайн/обрыв), и сливается с серверной по времени записей.
 
-/** Версия «Что нового»: поднимайте при добавлении крупной фичи вместе с шагами тура whatsnew */
-export const ONBOARDING_CONTENT_VERSION = 1;
+/** Сколько id прочитанных обновлений храним (новости — src/lib/updates-content.ts; старые вытесняются) */
+export const MAX_UPDATES_READ = 200;
 
 /**
  * done — досмотрели, skipped — пропустили, paused — ушли выполнять шаг (продолжить можно
@@ -26,8 +26,8 @@ export interface OnboardingState {
   /** «Больше не показывать подсказки»: ручной запуск (кнопка «?», Профиль) работает всегда */
   hintsOff: boolean;
   checklistHidden: boolean;
-  /** Какую версию «Что нового» пользователь уже видел */
-  seenVersion: number;
+  /** Прочитанные обновления (id из updates-content.ts); непрочитанные считает updates.ts */
+  updatesRead: string[];
   /** Момент «Сбросить всё»: записи о турах старше него — устаревшие (важно при слиянии с копией устройства) */
   resetAt: string | null;
   /** Момент последнего изменения: при слиянии скалярные поля берутся из более свежей копии */
@@ -39,7 +39,7 @@ export const EMPTY_ONBOARDING_STATE: OnboardingState = {
   snoozedUntil: null,
   hintsOff: false,
   checklistHidden: false,
-  seenVersion: 0,
+  updatesRead: [],
   resetAt: null,
   updatedAt: null,
 };
@@ -51,12 +51,15 @@ export interface OnboardingPatch {
   snoozedUntil?: string | null;
   hintsOff?: boolean;
   checklistHidden?: boolean;
-  seenVersion?: number;
+  /** Отметить обновления прочитанными (добавляются к уже прочитанным) */
+  updatesRead?: string[];
   /** «Сбросить всё»: обнулить прогресс, паузу и скрытый чек-лист; hintsOff тоже снимается */
   reset?: boolean;
 }
 
 const TOUR_ID_RE = /^[a-z0-9-]{1,40}$/;
+const UPDATE_ID_RE = /^[a-z0-9-]{1,60}$/;
+const MAX_PATCH_UPDATES = 50;
 const MAX_TOURS = 64;
 const MAX_STEP = 50;
 
@@ -64,6 +67,20 @@ function isoOrNull(v: unknown): string | null {
   if (typeof v !== "string") return null;
   const t = Date.parse(v);
   return Number.isNaN(t) ? null : new Date(t).toISOString();
+}
+
+/** Список id обновлений: только валидные, без дублей, не длиннее лимита (при переполнении остаются последние) */
+function sanitizeUpdateIds(v: unknown, limit: number): string[] {
+  if (!Array.isArray(v)) return [];
+  const seen = new Set<string>();
+  for (const id of v) {
+    if (typeof id === "string" && UPDATE_ID_RE.test(id)) seen.add(id);
+  }
+  return [...seen].slice(-limit);
+}
+
+function addUpdateIds(have: string[], add: string[]): string[] {
+  return [...new Set([...have, ...add])].slice(-MAX_UPDATES_READ);
 }
 
 function sanitizeProgress(v: unknown): TourProgress | null {
@@ -94,10 +111,7 @@ export function sanitizeState(raw: unknown): OnboardingState {
     snoozedUntil: isoOrNull(o.snoozedUntil),
     hintsOff: o.hintsOff === true,
     checklistHidden: o.checklistHidden === true,
-    seenVersion:
-      typeof o.seenVersion === "number" && Number.isFinite(o.seenVersion)
-        ? Math.min(1000, Math.max(0, Math.floor(o.seenVersion)))
-        : 0,
+    updatesRead: sanitizeUpdateIds(o.updatesRead, MAX_UPDATES_READ),
     resetAt: isoOrNull(o.resetAt),
     updatedAt: isoOrNull(o.updatedAt),
   };
@@ -128,9 +142,8 @@ export function sanitizePatch(raw: unknown): OnboardingPatch | null {
   }
   if (typeof o.hintsOff === "boolean") patch.hintsOff = o.hintsOff;
   if (typeof o.checklistHidden === "boolean") patch.checklistHidden = o.checklistHidden;
-  if (typeof o.seenVersion === "number" && Number.isFinite(o.seenVersion)) {
-    patch.seenVersion = Math.min(1000, Math.max(0, Math.floor(o.seenVersion)));
-  }
+  const updatesRead = sanitizeUpdateIds(o.updatesRead, MAX_PATCH_UPDATES);
+  if (updatesRead.length > 0) patch.updatesRead = updatesRead;
   if (o.reset === true) patch.reset = true;
   return Object.keys(patch).length > 0 ? patch : null;
 }
@@ -143,8 +156,8 @@ export function applyPatch(state: OnboardingState, patch: OnboardingPatch, now: 
     next = {
       ...EMPTY_ONBOARDING_STATE,
       tours: {},
-      // после сброса «Что нового» не показываем: человек и так пройдёт все туры заново
-      seenVersion: ONBOARDING_CONTENT_VERSION,
+      // сброс обучения не возвращает прочитанные новости
+      updatesRead: state.updatesRead,
       resetAt: nowIso,
     };
   }
@@ -165,7 +178,7 @@ export function applyPatch(state: OnboardingState, patch: OnboardingPatch, now: 
   if (patch.snoozedUntil !== undefined) next.snoozedUntil = patch.snoozedUntil;
   if (patch.hintsOff !== undefined) next.hintsOff = patch.hintsOff;
   if (patch.checklistHidden !== undefined) next.checklistHidden = patch.checklistHidden;
-  if (patch.seenVersion !== undefined) next.seenVersion = Math.max(next.seenVersion, patch.seenVersion);
+  if (patch.updatesRead) next.updatesRead = addUpdateIds(next.updatesRead, patch.updatesRead);
   next.updatedAt = nowIso;
   return next;
 }
@@ -192,7 +205,7 @@ export function mergeStates(a: OnboardingState, b: OnboardingState): OnboardingS
     snoozedUntil: newer.snoozedUntil,
     hintsOff: newer.hintsOff,
     checklistHidden: newer.checklistHidden,
-    seenVersion: Math.max(a.seenVersion, b.seenVersion),
+    updatesRead: addUpdateIds(a.updatesRead, b.updatesRead),
     resetAt,
     updatedAt: newer.updatedAt,
   };

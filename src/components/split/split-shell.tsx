@@ -85,7 +85,7 @@ export function SplitShell({ title, subtitle, backHref, lead, tabs, children }: 
           >
             <CircleHelp className="size-5" aria-hidden />
           </button>
-          <NotificationsBell authed />
+          <NotificationsBell authed scope="split" />
           <Link href="/profile" aria-label="Профиль" className="shrink-0 active:scale-95 transition-transform">
             <UserAvatar name={u.name} emoji={u.emoji ?? "👤"} color={u.color ?? "#94a3b8"} avatarUrl={u.avatarUrl} className="size-9" textClassName="text-base" />
           </Link>
