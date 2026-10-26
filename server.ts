@@ -33,7 +33,7 @@ process.on("uncaughtException", (err) => {
   process.exit(1);
 });
 
-const [{ createServer }, { Server }, { default: next }, { db }, { setIo }, { setupSocketHandlers }, { wsHandshakeAuth }, { TripRooms }, { handleUploadsRequest }] =
+const [{ createServer }, { Server }, { default: next }, { db }, { setIo }, { setupSocketHandlers }, { wsHandshakeAuth }, { TripRooms }, { handleUploadsRequest }, { handleMaintenance }] =
   await Promise.all([
     import("http"),
     import("socket.io"),
@@ -44,6 +44,7 @@ const [{ createServer }, { Server }, { default: next }, { db }, { setIo }, { set
     import("./server/ws-auth"),
     import("./server/rooms"),
     import("./server/static-uploads"),
+    import("./server/maintenance-gate"),
   ]);
 
 const dev = process.env.NODE_ENV !== "production";
@@ -80,9 +81,14 @@ app.prepare().then(() => {
   const server = createServer((req, res) => {
     // Runtime uploads (Docker volume) — must bypass Next static snapshot
     if (handleUploadsRequest(req, res)) return;
+    // Режим техработ: не-админы получают 503 (сбой гейта не должен класть сайт — пропускаем дальше).
     // Otherwise — Next.js handler (HTTP-мост /emit удалён: API-маршруты
     // сидят в этом же процессе и зовут publish() из ws-bus напрямую)
-    handle(req, res);
+    handleMaintenance(req, res)
+      .catch(() => false)
+      .then((handled) => {
+        if (!handled) handle(req, res);
+      });
   });
 
   // Socket.io server: handshake требует валидный JWT из cookie сессии —

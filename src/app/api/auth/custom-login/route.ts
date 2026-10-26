@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { getJwtSecret } from "@/lib/api-auth";
+import { getMaintenanceState } from "@/lib/maintenance-state";
 import { rateLimitMiddleware, rateLimitBlocked, rateLimitRecord, rateLimitReset } from "@/lib/rate-limit";
 
 // Хеш-пустышка: для несуществующего email всё равно гоняем bcrypt, иначе быстрый
@@ -84,6 +85,17 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Неверный email или пароль" }, { status: 401 });
     }
     rateLimitReset(failKey);
+
+    // Техработы: пароль верный, но вход открыт только админу. Проверяем ПОСЛЕ пароля, чтобы по ответу
+    // нельзя было узнать, чей email зарегистрирован; без cookie сессии — человек не «залипнет» в
+    // залогиненном состоянии за заглушкой
+    const maintenance = await getMaintenanceState();
+    if (maintenance.on && user.role !== "admin") {
+      return NextResponse.json(
+        { error: maintenance.message, maintenance: true },
+        { status: 503, headers: { "Retry-After": "30" } }
+      );
+    }
 
     // Генерируем JWT токен (совместимый с NextAuth)
     const secret = getJwtSecret();

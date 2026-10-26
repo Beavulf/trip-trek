@@ -131,6 +131,11 @@ model AppSettings {
   // Поддержка проекта (блок «Поддержать» внизу профиля): оба поля необязательны, нет ни одного — блока нет
   donationAlertsUrl String? // https-страница DonationAlerts
   webmoneyPurse     String? // WMZ-кошелёк для перевода (Z + 12 цифр)
+  // Техработы и объявление (см. src/lib/maintenance.ts). maintenanceMode: всем, кроме админов,
+  // API и страницы отвечают 503, вход закрыт. announcement — баннер для всех, работает и без техработ
+  maintenanceMode    Boolean @default(false)
+  maintenanceMessage String? // текст на заглушке («вернёмся в 23:30»); null — стандартный
+  announcement       String? // баннер «сегодня в 23:00 обновление»; null — баннера нет
 }
 
 // === Учёт вызовов ИИ: только метаданные, НИКОГДА содержимое промптов/ответов ===

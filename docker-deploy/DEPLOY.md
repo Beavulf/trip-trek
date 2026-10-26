@@ -115,6 +115,51 @@ upstream `triptrek-app:3000` по имени). Поэтому app обязан �
 контейнера 200, а снаружи 502 и в логах Caddy `lookup triptrek-app: i/o timeout`.
 Лечение разово: `docker network connect supabase-network triptrek-app`.
 
+### Техработы: предупредить, закрыть вход, выкатить
+
+Всё из админки (Админка → Настройки → «Техработы и объявление»), без правок на сервере:
+
+1. **За 15–30 минут** — «Объявление для всех» → «Опубликовать»: баннер появится у всех открытых
+   вкладок в течение минуты (закрывается крестиком до конца сессии).
+2. **Перед выкатом** — включить «Режим техработ». Не-админы сразу получают 503 + заглушку
+   (страницы и `/api/*`), вход закрыт (`custom-login` пускает только админа; пароль проверяется
+   до отказа, чтобы не светить, чей email есть в базе). Админ продолжает работать — можно
+   проверить релиз на живых данных до того, как открыть его всем.
+3. Выкат: `git pull && docker compose -f docker-deploy/docker-compose.yml up -d --build`.
+   Пока контейнер пересоздаётся, заглушку показывает уже Caddy (см. ниже), открытые вкладки
+   опрашивают `/api/app-status` раз в 15 секунд и **сами перезагружаются**, когда режим выключен.
+4. Проверка: `curl -fsS https://<домен>/api/health`, зайти админом → выключить режим → убрать объявление.
+
+Механика: `server/maintenance-gate.ts` стоит в `server.ts` перед Next; состояние кэшируется на 3 с
+(`src/lib/maintenance-state.ts`), сохранение в админке сбрасывает кэш сразу. Всегда открыты:
+`/api/health`, `/api/app-status`, `/login`, `custom-login`/`custom-signout`, `/_next`, файлы с расширением
+(sw.js, иконки), `/landing`, `/privacy` (список — `isMaintenanceExempt`, покрыт тестом). Если сам
+сервер не поднялся, а режим забыт включённым — выключить без админки:
+
+```bash
+docker exec triptrek-db psql -U triptrek -d triptrek -c "UPDATE \"AppSettings\" SET \"maintenanceMode\" = false WHERE id = 'app'"
+```
+
+(через ≤3 секунды гейт это подхватит). WebSocket-соединения уже вошедших не рвутся — канал read-only,
+данных они не получают без HTTP-запросов, которые закрыты.
+
+**Заглушка на время рестарта контейнера (Caddy).** Пока `app` недоступен, Caddy отдаёт голый 502.
+Добавь в блок сайта TripTrek в Caddyfile (в проде — общий `/root/guild-ledger/Caddyfile`; правка на
+сервере, `docker exec <caddy> caddy reload --config /etc/caddy/Caddyfile`). 503 самого приложения
+(режим техработ) этот блок не затрагивает — только ошибки соединения с upstream:
+
+```caddy
+	handle_errors {
+		@down expression {err.status_code} in [502, 503, 504]
+		handle @down {
+			header Content-Type "text/html; charset=utf-8"
+			header Retry-After "30"
+			header Cache-Control "no-store"
+			respond `<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="refresh" content="15"><title>Технические работы — TripTrek</title><style>body{margin:0;min-height:100dvh;display:grid;place-items:center;background:#0b1220;color:#e8edf7;font-family:system-ui,sans-serif;text-align:center;padding:24px}p{color:#a9b4c9;max-width:420px;line-height:1.55}</style></head><body><main><div style="font-size:48px">🛠️</div><h1>Технические работы</h1><p>Обновляем TripTrek — вернёмся через пару минут. Страница обновится сама.</p></main></body></html>` 503
+		}
+	}
+```
+
 Откат: `git checkout <предыдущий тег> && docker compose ... up -d --build`.
 Миграции назад не откатываются автоматически — пишем только совместимые
 миграции (additive-first).

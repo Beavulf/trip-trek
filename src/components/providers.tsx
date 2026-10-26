@@ -3,6 +3,7 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ThemeProvider } from "next-themes";
 import { useState, useEffect, ReactNode } from "react";
+import { SiteStatusLayer } from "@/components/site-status";
 
 export function Providers({ children }: { children: ReactNode }) {
   const [client] = useState(
@@ -37,7 +38,10 @@ export function Providers({ children }: { children: ReactNode }) {
 
   return (
     <ThemeProvider attribute="class" defaultTheme="dark" enableSystem disableTransitionOnChange>
-      <QueryClientProvider client={client}>{children}</QueryClientProvider>
+      <QueryClientProvider client={client}>
+        {children}
+        <SiteStatusLayer />
+      </QueryClientProvider>
     </ThemeProvider>
   );
 }

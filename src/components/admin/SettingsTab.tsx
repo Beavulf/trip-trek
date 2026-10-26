@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Switch } from "@/components/ui/switch";
+import { MaintenanceCard } from "./MaintenanceCard";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -65,6 +66,9 @@ interface SettingsData {
   contactTelegram: string;
   donationAlertsUrl: string;
   webmoneyPurse: string;
+  maintenanceMode: boolean;
+  maintenanceMessage: string;
+  announcement: string;
   appConfig: {
     registrationEnabled: boolean;
     inviteRequired: boolean;
@@ -312,6 +316,14 @@ export function SettingsTab() {
 
   return (
     <div className="space-y-4">
+      {/* === Техработы и объявление === */}
+      <MaintenanceCard
+        key={`${settings.maintenanceMode}|${settings.maintenanceMessage}|${settings.announcement}`}
+        maintenanceMode={settings.maintenanceMode}
+        maintenanceMessage={settings.maintenanceMessage}
+        announcement={settings.announcement}
+      />
+
       {/* === ИИ-провайдер === */}
       <SectionCard
         icon={<Sparkles className="size-4 text-indigo-500" />}

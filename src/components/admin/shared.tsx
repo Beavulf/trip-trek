@@ -18,6 +18,7 @@ import {
   Ticket,
   Trash2,
   UserMinus,
+  Wrench,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { FEEDBACK_TYPE_META, type FeedbackStatus, type FeedbackType } from "@/lib/feedback";
@@ -177,6 +178,7 @@ export const ACTION_META: Record<string, { label: string; icon: typeof Pencil; d
   "feedback.delete": { label: "Отзыв удалён", icon: Trash2, danger: true },
   "settings.ai": { label: "Настройки ИИ сохранены", icon: Sparkles },
   "settings.app": { label: "Конфиг приложения изменён", icon: SlidersHorizontal },
+  "settings.maintenance": { label: "Техработы / объявление изменены", icon: Wrench },
   "storage.purge": { label: "Чистка хранилища", icon: HardDrive },
 };
 

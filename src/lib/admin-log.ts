@@ -27,6 +27,7 @@ export type AdminAction =
   | "feedback.delete"
   | "settings.ai"
   | "settings.app"
+  | "settings.maintenance"
   | "storage.purge";
 
 export interface AdminLogTarget {

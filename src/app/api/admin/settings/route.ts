@@ -5,6 +5,8 @@ import { logAdmin } from "@/lib/admin-log";
 import { normalizeDonationUrl, normalizeWmzPurse } from "@/lib/support";
 import { maskKey, validateAiBaseUrl } from "@/lib/ai-key";
 import { getAppConfig } from "@/lib/app-config";
+import { normalizeNotice } from "@/lib/maintenance";
+import { resetMaintenanceState } from "@/lib/maintenance-state";
 
 // GET /api/admin/settings — глобальные настройки. Ключ наружу не отдаётся,
 // только замаскированный хвост; base URL, модель и конфиг приложения — не секреты
@@ -15,7 +17,7 @@ export async function GET(req: NextRequest) {
   const [settings, appConfig] = await Promise.all([
     db.appSettings.findUnique({
       where: { id: "app" },
-      select: { aiApiKey: true, aiBaseUrl: true, aiModel: true, selfUpgradeEnabled: true, demoTripToken: true, contactTelegram: true, donationAlertsUrl: true, webmoneyPurse: true },
+      select: { aiApiKey: true, aiBaseUrl: true, aiModel: true, selfUpgradeEnabled: true, demoTripToken: true, contactTelegram: true, donationAlertsUrl: true, webmoneyPurse: true, maintenanceMode: true, maintenanceMessage: true, announcement: true },
     }),
     getAppConfig(),
   ]);
@@ -29,6 +31,9 @@ export async function GET(req: NextRequest) {
     contactTelegram: settings?.contactTelegram ?? "",
     donationAlertsUrl: settings?.donationAlertsUrl ?? "",
     webmoneyPurse: settings?.webmoneyPurse ?? "",
+    maintenanceMode: settings?.maintenanceMode ?? false,
+    maintenanceMessage: settings?.maintenanceMessage ?? "",
+    announcement: settings?.announcement ?? "",
     appConfig,
   });
 }
@@ -72,6 +77,9 @@ export async function PUT(req: NextRequest) {
     contactTelegram?: string | null;
     donationAlertsUrl?: string | null;
     webmoneyPurse?: string | null;
+    maintenanceMode?: boolean;
+    maintenanceMessage?: string | null;
+    announcement?: string | null;
   } = {};
 
   let aiTouched = false;
@@ -183,6 +191,29 @@ export async function PUT(req: NextRequest) {
     }
   }
 
+  // Техработы и объявление: отдельный блок (своя карточка в админке и своя запись в журнале)
+  let maintenanceTouched = false;
+  {
+    const body_ = body as Record<string, unknown>;
+    if (body_.maintenanceMode !== undefined) {
+      if (typeof body_.maintenanceMode !== "boolean") {
+        return NextResponse.json({ error: "maintenanceMode: boolean" }, { status: 400 });
+      }
+      data.maintenanceMode = body_.maintenanceMode;
+      maintenanceTouched = true;
+    }
+    for (const field of ["maintenanceMessage", "announcement"] as const) {
+      const v = body_[field];
+      if (v !== undefined) {
+        if (v !== null && typeof v !== "string") {
+          return NextResponse.json({ error: `${field}: строка или null` }, { status: 400 });
+        }
+        data[field] = normalizeNotice(v);
+        maintenanceTouched = true;
+      }
+    }
+  }
+
   if (Object.keys(data).length === 0) {
     return NextResponse.json({ error: "ничего не передано" }, { status: 400 });
   }
@@ -209,6 +240,15 @@ export async function PUT(req: NextRequest) {
       freeMemberLimit: settings.freeMemberLimit,
       aiAlertCallsPerDay: settings.aiAlertCallsPerDay,
       aiAlertTokensPerDay: settings.aiAlertTokensPerDay,
+    });
+  }
+
+  if (maintenanceTouched) {
+    resetMaintenanceState(); // гейт в server.ts подхватит режим со следующего запроса, а не через TTL
+    await logAdmin(admin!.id, "settings.maintenance", { type: "settings", label: "Техработы" }, {
+      maintenanceMode: settings.maintenanceMode,
+      maintenanceMessage: settings.maintenanceMessage,
+      announcement: settings.announcement,
     });
   }
 

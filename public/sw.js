@@ -1,6 +1,6 @@
 // Service Worker для TripTrek — push + умное кэширование + авто-обновление
 // Версия кэша — МЕНЯТЬ ПРИ КАЖДОМ ДЕПЛОЕ!
-const CACHE_VERSION = "v26-10-02-perf";
+const CACHE_VERSION = "v26-10-26-maintenance";
 const CACHE_NAME = `triptrek-${CACHE_VERSION}`;
 const STATIC_ASSETS = ["/", "/login", "/manifest.webmanifest", "/icon-192.png", "/icon-512.png", "/icon-1024.png"];
 
@@ -109,9 +109,12 @@ self.addEventListener("fetch", (event) => {
     event.respondWith(
       fetch(request)
         .then((response) => {
-          // Кэшируем свежую версию страницы
-          const clone = response.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put(request, clone));
+          // Кэшируем свежую версию страницы — только успешную: 503-заглушка техработ
+          // не должна стать оффлайн-копией и подменять приложение после окончания работ
+          if (response.ok) {
+            const clone = response.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(request, clone));
+          }
           return response;
         })
         .catch(() => {
