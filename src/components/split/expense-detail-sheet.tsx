@@ -5,7 +5,7 @@ import { Check, HandCoins, Loader2, Pencil, Repeat, Trash2 } from "lucide-react"
 import { toast } from "sonner";
 import { SPLIT_CATEGORIES, categoryOf } from "@/lib/split/categories";
 import { dayLabel, localDateKey } from "@/lib/split/dates";
-import { expenseSettlement } from "@/lib/split/expense-settle";
+import { expenseSettlement, nettedShareMark, type NettedShareMark } from "@/lib/split/expense-settle";
 import { itemsFromExpense } from "@/lib/split/expense-form";
 import { myStake } from "@/lib/split/expense-view";
 import { formatRate } from "@/lib/split/fx";
@@ -14,6 +14,16 @@ import type { SplitExpenseDTO } from "@/lib/split/types";
 import { useDeleteExpense, useSaveExpense } from "@/hooks/split/use-split";
 import type { GroupModel } from "@/hooks/split/use-group-model";
 import { MobileBottomSheet } from "@/components/trip/mobile-bottom-sheet";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import type { SettleTarget } from "./settle-sheet";
 import { MemberAvatar, Money, SecondaryButton, balanceTone } from "./ui";
 import { cn } from "@/lib/utils";
@@ -37,6 +47,8 @@ export function ExpenseDetailSheet({ expense, onClose, onEdit, onSettle, model }
   const del = useDeleteExpense(group.id);
   const restore = useSaveExpense(group.id, group.myMemberId);
   const [confirming, setConfirming] = useState(false);
+  // Отметка перевода по доле, чей долг уже перекрыт нетто-балансом пары: перед записью предупреждаем
+  const [pendingSettle, setPendingSettle] = useState<{ target: SettleTarget; warn: NettedShareMark } | null>(null);
 
   const e = expense ?? shown;
   const open = expense !== null;
@@ -81,6 +93,16 @@ export function ExpenseDetailSheet({ expense, onClose, onEdit, onSettle, model }
     ? expenseSettlement(e, model.payments.filter((p) => p.expenseId === e.id))
     : [];
   const linkedCount = e ? model.payments.filter((p) => p.expenseId === e.id).length : 0;
+
+  // Нетто-долг пары «дольщик → плательщик» (из model.debts): минус или ноль — долг доли уже
+  // перекрыт встречными тратами, отметка перевода его не закрывает, а откатывает баланс назад
+  const shareDirNet = (sharerId: string, payerId: string): number => {
+    const d = model.debts.find(
+      (x) => (x.fromId === sharerId && x.toId === payerId) || (x.fromId === payerId && x.toId === sharerId),
+    );
+    if (!d) return 0;
+    return d.fromId === sharerId ? d.cents : -d.cents;
+  };
 
   const cat = e ? SPLIT_CATEGORIES[categoryOf(e.category)] : null;
   const stake = e ? myStake(e, group.myMemberId) : null;
@@ -161,6 +183,8 @@ export function ExpenseDetailSheet({ expense, onClose, onEdit, onSettle, model }
                 const iAmDebtor = s.memberId === group.myMemberId;
                 const iAmPayer = e.paidById === group.myMemberId;
                 const canMark = !!st && st.remainingCents > 0 && (iAmDebtor || iAmPayer);
+                // Нетто пары против направления доли — «уже учтено»: кнопка переименовывается и предупреждает
+                const nettedAway = canMark ? shareDirNet(s.memberId, e.paidById) <= 0 : false;
                 return (
                   <li key={s.memberId} className="px-3 py-2 text-sm">
                     <div className="flex items-center gap-2.5 min-h-8">
@@ -188,19 +212,33 @@ export function ExpenseDetailSheet({ expense, onClose, onEdit, onSettle, model }
                         {canMark && (
                           <button
                             type="button"
-                            onClick={() =>
-                              onSettle({
+                            onClick={() => {
+                              const target: SettleTarget = {
                                 fromId: s.memberId,
                                 toId: e.paidById,
                                 cents: st.remainingCents,
                                 expenseId: e.id,
                                 forLabel: e.description,
-                              })
-                            }
+                              };
+                              if (nettedAway) {
+                                setPendingSettle({
+                                  target,
+                                  warn: nettedShareMark({
+                                    payerIsViewer: iAmPayer,
+                                    sharerIsViewer: iAmDebtor,
+                                    shareCents: st.remainingCents,
+                                    netCents: shareDirNet(s.memberId, e.paidById),
+                                    currency: group.currency,
+                                  }),
+                                });
+                              } else {
+                                onSettle(target);
+                              }
+                            }}
                             className="ml-auto inline-flex items-center gap-1.5 min-h-9 px-3 rounded-lg bg-primary text-primary-foreground font-semibold active:scale-95 transition-transform"
                           >
                             <HandCoins className="size-3.5" aria-hidden />
-                            {iAmDebtor ? "Перевёл(а)" : "Получил(а)"}
+                            {nettedAway ? (iAmDebtor ? "Перевёл(а) отдельно" : "Получил(а) отдельно") : iAmDebtor ? "Перевёл(а)" : "Получил(а)"}
                           </button>
                         )}
                       </div>
@@ -242,6 +280,27 @@ export function ExpenseDetailSheet({ expense, onClose, onEdit, onSettle, model }
           )}
           <p className="text-[11px] text-muted-foreground text-center">Любой участник может править траты — все изменения видны в журнале группы.</p>
         </div>
+      )}
+      {pendingSettle && (
+        <AlertDialog open onOpenChange={(v) => { if (!v) setPendingSettle(null); }}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>{pendingSettle.warn.title}</AlertDialogTitle>
+              <AlertDialogDescription>{pendingSettle.warn.body}</AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Отмена</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={() => {
+                  onSettle(pendingSettle.target);
+                  setPendingSettle(null);
+                }}
+              >
+                {pendingSettle.warn.confirm}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       )}
     </MobileBottomSheet>
   );

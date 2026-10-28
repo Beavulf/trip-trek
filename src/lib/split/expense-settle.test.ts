@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { expenseSettlement, myExpenseState, paymentsByExpense, type ExpenseCore, type PaymentLink } from "./expense-settle";
+import { expenseSettlement, myExpenseState, nettedShareMark, paymentsByExpense, type ExpenseCore, type PaymentLink } from "./expense-settle";
+import { formatCents } from "./money";
 
 const internet: ExpenseCore = {
   id: "e1",
@@ -62,5 +63,32 @@ describe("paymentsByExpense", () => {
     const m = paymentsByExpense([pay({}), pay({ expenseId: null }), pay({ expenseId: "e2" }), pay({ amountCents: 5 })]);
     expect([...m.keys()].sort()).toEqual(["e1", "e2"]);
     expect(m.get("e1")).toHaveLength(2);
+  });
+});
+
+describe("nettedShareMark", () => {
+  // Intl ставит неразрывные пробелы в «910 ₽» и группировке «1 000» — сравниваем через formatCents
+  const rub = (cents: number) => formatCents(cents, "RUB");
+
+  it("сценарий взаимозачёта: платил я, встречные траты свели нетто против доли — баланс откатывается вперёд", () => {
+    // Я платил за Игоря 90 ₽, но и так должен ему 910 ₽: отметка «он вернул живыми» делает долг 1000 ₽
+    const t = nettedShareMark({ payerIsViewer: true, sharerIsViewer: false, shareCents: 9000, netCents: -91000, currency: "RUB" });
+    expect(t.body).toContain(`ты должен(на) ${rub(91000)}`);
+    expect(t.body).toContain(`ты должен(на) ${rub(100000)}`);
+    expect(t.body).toContain(rub(9000));
+    expect(t.confirm).toBe("Всё равно отметить");
+  });
+
+  it("я дольщик: нетто против моего долга — отметка уходит в «тебе должны»", () => {
+    // Мне должны 90 ₽, я «вернул» свою долю 10 ₽ деньгами — должны станут 100 ₽
+    const t = nettedShareMark({ payerIsViewer: false, sharerIsViewer: true, shareCents: 1000, netCents: -9000, currency: "RUB" });
+    expect(t.body).toContain(`тебе должны ${rub(9000)}`);
+    expect(t.body).toContain(`тебе должны ${rub(10000)}`);
+  });
+
+  it("паритет (нетто 0): было «в расчёте», отметка дольщика-не-зрителя увеличивает мой долг", () => {
+    const t = nettedShareMark({ payerIsViewer: true, sharerIsViewer: false, shareCents: 9000, netCents: 0, currency: "RUB" });
+    expect(t.body).toContain("в расчёте");
+    expect(t.body).toContain(`ты должен(на) ${rub(9000)}`);
   });
 });

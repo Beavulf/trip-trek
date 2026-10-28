@@ -3,6 +3,8 @@
 // сколько из доли участника уже возвращено переводами, привязанными к ЭТОЙ трате, и сколько осталось.
 // Перевод без привязки долю не закрывает (он снижает общий долг пары, но к какой трате относится — неизвестно).
 
+import { formatCents } from "./money";
+
 export interface PaymentLink {
   expenseId: string | null;
   fromId: string;
@@ -55,6 +57,43 @@ export type MyExpenseState =
   | { kind: "lent"; totalCents: number; remainingCents: number }
   /** Я не должен и мне не должны (личная трата или меня в ней нет) */
   | { kind: "none" };
+
+export interface NettedShareMark {
+  title: string;
+  body: string;
+  confirm: string;
+}
+
+/**
+ * Предупреждение для отметки перевода по доле, чей долг перекрыт нетто-балансом пары.
+ * Если встречные траты свели нетто пары против направления доли (или в ноль), долг по доле
+ * уже «учтён» — отметка не закрывает его, а записывает ещё один перевод живыми деньгами,
+ * и общий баланс откатывается назад. Читается как «подтвердить закрытие», поэтому кнопку
+ * переименовываем и предупреждаем конкретными числами «до → после».
+ */
+export function nettedShareMark(args: {
+  /** Плательщик траты — тот, кто смотрит */
+  payerIsViewer: boolean;
+  /** Дольщик — тот, кто смотрит */
+  sharerIsViewer: boolean;
+  shareCents: number;
+  /** Нетто пары в направлении доли: плюс — дольщик должен плательщику */
+  netCents: number;
+  currency: string;
+}): NettedShareMark {
+  const viewerRel = args.payerIsViewer ? args.netCents : -args.netCents;
+  const after = viewerRel + (args.sharerIsViewer ? args.shareCents : -args.shareCents);
+  const pos = (rel: number) =>
+    rel > 0 ? `тебе должны ${formatCents(rel, args.currency)}` : rel < 0 ? `ты должен(на) ${formatCents(-rel, args.currency)}` : "в расчёте";
+  return {
+    title: "Это отметка отдельного перевода",
+    body:
+      `Долг по этой доле уже учтён в общем балансе (${pos(viewerRel)}). ` +
+      `Отметка запишет перевод на ${formatCents(args.shareCents, args.currency)} живыми деньгами, и баланс станет: ${pos(after)}. ` +
+      "Отмечай, только если деньги переданы по-настоящему.",
+    confirm: "Всё равно отметить",
+  };
+}
 
 export function myExpenseState(expense: ExpenseCore, linked: PaymentLink[] | undefined, myId: string): MyExpenseState {
   const rows = expenseSettlement(expense, linked);
