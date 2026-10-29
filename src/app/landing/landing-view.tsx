@@ -7,7 +7,8 @@ import { DEFAULT_SHOWCASE, contactLink, demoHref, registerHrefFor, type LandingS
 // Тексты намеренно без привязки к стране; скриншоты — из демо-поездки.
 // Витрина (режим регистрации, живой пример, контакт) приходит пропсом из page.tsx.
 
-const LOGIN_HREF = "/login";
+// mode=login — «осознанный» заход на форму: временный редирект первого визита (LANDING_REDIRECT) его не трогает
+const LOGIN_HREF = "/login?mode=login";
 
 type IconProps = { className?: string };
 

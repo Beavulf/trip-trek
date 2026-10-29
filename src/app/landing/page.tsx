@@ -3,6 +3,7 @@ import { headers } from "next/headers";
 import { Onest, Unbounded } from "next/font/google";
 import { YandexMetrika } from "@/components/analytics/yandex-metrika";
 import { getPublicShowcase } from "@/lib/app-config";
+import { LandingSeen } from "./landing-seen";
 import { LandingView } from "./landing-view";
 import { isInAppBrowser, sanitizeInviteParam } from "./showcase";
 import "./landing.css";
@@ -41,6 +42,7 @@ export default async function LandingPage({ searchParams }: { searchParams: Prom
   return (
     <div className={`${display.variable} ${text.variable}`}>
       <YandexMetrika />
+      <LandingSeen />
       {/* ?code=… из ссылки в профиле TikTok едет в регистрацию; во встроенном браузере соцсети подсказываем, как открыть нормально */}
       <LandingView
         showcase={showcase}

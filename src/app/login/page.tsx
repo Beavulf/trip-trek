@@ -1,6 +1,9 @@
 import { Suspense } from "react";
+import { cookies } from "next/headers";
+import { redirect } from "next/navigation";
 import { Loader2 } from "lucide-react";
 import { getPublicShowcase } from "@/lib/app-config";
+import { LANDING_SEEN_COOKIE, isLandingRedirectEnabled, landingRedirectTarget } from "@/app/landing/showcase";
 import { LoginForm, type LoginFormProps } from "./login-form";
 
 // Режим регистрации (закрыта ли, нужен ли инвайт-код) и контакт читаем на сервере и отдаём форме
@@ -19,7 +22,22 @@ async function loadOptions(): Promise<LoginFormProps> {
   }
 }
 
-export default async function LoginPage() {
+export default async function LoginPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
+  // Временный режим «первый визит → лендинг» (LANDING_REDIRECT=1 в .env; убрали — форма входа как раньше).
+  // redirect() кидает исключение, поэтому стоит вне try/catch, до любой работы с БД
+  const [jar, params] = await Promise.all([cookies(), searchParams]);
+  const target = landingRedirectTarget({
+    enabled: isLandingRedirectEnabled(process.env.LANDING_REDIRECT),
+    hasSession: jar.has("next-auth.session-token") || jar.has("__Secure-next-auth.session-token"),
+    seen: jar.has(LANDING_SEEN_COOKIE),
+    params,
+  });
+  if (target) redirect(target);
+
   const options = await loadOptions();
   return (
     // useSearchParams в форме требует Suspense

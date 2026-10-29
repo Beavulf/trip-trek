@@ -1,5 +1,13 @@
 import { describe, it, expect } from "vitest";
-import { contactLink, demoHref, isInAppBrowser, registerHrefFor, sanitizeInviteParam } from "./showcase";
+import {
+  contactLink,
+  demoHref,
+  isInAppBrowser,
+  isLandingRedirectEnabled,
+  landingRedirectTarget,
+  registerHrefFor,
+  sanitizeInviteParam,
+} from "./showcase";
 
 describe("contactLink", () => {
   it("«@имя» → ссылка на t.me", () => {
@@ -66,5 +74,42 @@ describe("isInAppBrowser", () => {
     expect(isInAppBrowser("Mozilla/5.0 (iPhone; CPU iPhone OS 17_0) AppleWebKit/605 Version/17.0 Mobile/15E148 Safari/604.1")).toBe(false);
     expect(isInAppBrowser("Mozilla/5.0 (Linux; Android 13) Chrome/120 Mobile Safari/537.36")).toBe(false);
     expect(isInAppBrowser(null)).toBe(false);
+  });
+});
+
+describe("isLandingRedirectEnabled", () => {
+  it("включается только явным значением", () => {
+    for (const v of ["1", "true", "TRUE", " on ", "yes"]) expect(isLandingRedirectEnabled(v), v).toBe(true);
+    for (const v of ["", "0", "false", "off", "no", undefined, null]) expect(isLandingRedirectEnabled(v), String(v)).toBe(false);
+  });
+});
+
+describe("landingRedirectTarget", () => {
+  const base = { enabled: true, hasSession: false, seen: false, params: {} };
+
+  it("первый визит гостя → лендинг", () => {
+    expect(landingRedirectTarget(base)).toBe("/landing");
+  });
+
+  it("код и utm-метки едут на лендинг вместе", () => {
+    expect(
+      landingRedirectTarget({ ...base, params: { code: "FCZEQGLK", utm_source: "tiktok", utm_medium: "profile", utm_campaign: "bio" } })
+    ).toBe("/landing?code=FCZEQGLK&utm_source=tiktok&utm_medium=profile&utm_campaign=bio");
+  });
+
+  it("повторяющийся параметр не теряется, пустое значение сохраняется", () => {
+    expect(landingRedirectTarget({ ...base, params: { a: ["1", "2"], b: "" } })).toBe("/landing?a=1&a=2&b=");
+  });
+
+  it("выключено, вошёл или уже видел лендинг → форма входа", () => {
+    expect(landingRedirectTarget({ ...base, enabled: false })).toBeNull();
+    expect(landingRedirectTarget({ ...base, hasSession: true })).toBeNull();
+    expect(landingRedirectTarget({ ...base, seen: true })).toBeNull();
+  });
+
+  it("осознанный заход на форму (mode, callbackUrl) не редиректится — иначе петля", () => {
+    expect(landingRedirectTarget({ ...base, params: { mode: "register", code: "ABCD1234" } })).toBeNull();
+    expect(landingRedirectTarget({ ...base, params: { mode: "login" } })).toBeNull();
+    expect(landingRedirectTarget({ ...base, params: { callbackUrl: "/split/abc" } })).toBeNull();
   });
 });
