@@ -12,6 +12,7 @@ import { LearningCenter } from "@/components/trip/onboarding/learning-center";
 import { tourHref } from "@/lib/onboarding";
 import type { UserProfile } from "./types";
 import { PushToggle } from "./PushToggle";
+import { InstallAppRow } from "./InstallApp";
 import { PasswordField } from "@/components/auth/password-field";
 import { AiKeyHelp } from "../ai-key-help";
 
@@ -279,6 +280,10 @@ export function ProfileSettings({ profile, setPremiumOpen, onReportBug, isAdmin,
           </div>
           <PushToggle />
         </div>
+
+        {/* Установить как приложение: Android — родной диалог, iOS/in-app — инструкция.
+            В установленном виде строка исчезает сама, поэтому не бросается в глаза */}
+        <InstallAppRow />
 
         {/* Свой ключ ИИ — BYOK: переводчик фраз, советы шефа, ИИ-рассказ */}
         <div id="ai-key" className="scroll-mt-20">
