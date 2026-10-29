@@ -78,23 +78,40 @@ describe("isInAppBrowser", () => {
 });
 
 describe("isLandingRedirectEnabled", () => {
-  it("включается только явным значением", () => {
-    for (const v of ["1", "true", "TRUE", " on ", "yes"]) expect(isLandingRedirectEnabled(v), v).toBe(true);
-    for (const v of ["", "0", "false", "off", "no", undefined, null]) expect(isLandingRedirectEnabled(v), String(v)).toBe(false);
+  it("включается флагом или ссылкой на лендинг", () => {
+    for (const v of ["1", "true", "TRUE", " on ", "yes", "/landing", "/landing?code=ABCD1234&utm_source=tiktok"]) {
+      expect(isLandingRedirectEnabled(v), v).toBe(true);
+    }
+  });
+  it("пусто, «выкл» и чужие адреса не включают", () => {
+    for (const v of ["", "0", "false", "off", "no", undefined, null, "/login", "https://evil.example/landing", "//evil.example/landing", "/landing/../login"]) {
+      expect(isLandingRedirectEnabled(v), String(v)).toBe(false);
+    }
   });
 });
 
 describe("landingRedirectTarget", () => {
-  const base = { enabled: true, hasSession: false, seen: false, params: {} };
+  const link = "/landing?code=FCZEQGLK&utm_source=tiktok&utm_medium=profile&utm_campaign=bio";
+  const base = { setting: "1", hasSession: false, seen: false, params: {} };
 
-  it("первый визит гостя → лендинг", () => {
+  it("флаг: первый визит гостя → просто лендинг", () => {
     expect(landingRedirectTarget(base)).toBe("/landing");
   });
 
-  it("код и utm-метки едут на лендинг вместе", () => {
-    expect(
-      landingRedirectTarget({ ...base, params: { code: "FCZEQGLK", utm_source: "tiktok", utm_medium: "profile", utm_campaign: "bio" } })
-    ).toBe("/landing?code=FCZEQGLK&utm_source=tiktok&utm_medium=profile&utm_campaign=bio");
+  it("ссылка в настройке: новичок без параметров попадает именно на неё, с кодом", () => {
+    expect(landingRedirectTarget({ ...base, setting: link })).toBe(link);
+  });
+
+  it("параметры самого запроса перекрывают заданные, остальные сохраняются", () => {
+    expect(landingRedirectTarget({ ...base, setting: link, params: { code: "OTHER123", ref: "x" } })).toBe(
+      "/landing?utm_source=tiktok&utm_medium=profile&utm_campaign=bio&code=OTHER123&ref=x"
+    );
+  });
+
+  it("код и utm-метки из запроса едут на лендинг вместе (флаг)", () => {
+    expect(landingRedirectTarget({ ...base, params: { code: "FCZEQGLK", utm_source: "tiktok" } })).toBe(
+      "/landing?code=FCZEQGLK&utm_source=tiktok"
+    );
   });
 
   it("повторяющийся параметр не теряется, пустое значение сохраняется", () => {
@@ -102,14 +119,16 @@ describe("landingRedirectTarget", () => {
   });
 
   it("выключено, вошёл или уже видел лендинг → форма входа", () => {
-    expect(landingRedirectTarget({ ...base, enabled: false })).toBeNull();
-    expect(landingRedirectTarget({ ...base, hasSession: true })).toBeNull();
-    expect(landingRedirectTarget({ ...base, seen: true })).toBeNull();
+    expect(landingRedirectTarget({ ...base, setting: "" })).toBeNull();
+    expect(landingRedirectTarget({ ...base, setting: undefined })).toBeNull();
+    expect(landingRedirectTarget({ ...base, setting: "/login?code=1" })).toBeNull();
+    expect(landingRedirectTarget({ ...base, setting: link, hasSession: true })).toBeNull();
+    expect(landingRedirectTarget({ ...base, setting: link, seen: true })).toBeNull();
   });
 
   it("осознанный заход на форму (mode, callbackUrl) не редиректится — иначе петля", () => {
-    expect(landingRedirectTarget({ ...base, params: { mode: "register", code: "ABCD1234" } })).toBeNull();
-    expect(landingRedirectTarget({ ...base, params: { mode: "login" } })).toBeNull();
-    expect(landingRedirectTarget({ ...base, params: { callbackUrl: "/split/abc" } })).toBeNull();
+    expect(landingRedirectTarget({ ...base, setting: link, params: { mode: "register", code: "ABCD1234" } })).toBeNull();
+    expect(landingRedirectTarget({ ...base, setting: link, params: { mode: "login" } })).toBeNull();
+    expect(landingRedirectTarget({ ...base, setting: link, params: { callbackUrl: "/split/abc" } })).toBeNull();
   });
 });
