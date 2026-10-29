@@ -4,7 +4,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 // Состояние публичной страницы (/p/<token>) — единственный источник данных
 // и для карточки в «О поездке», и для шита «Поделиться» из «Маршрута».
-// API пускает только владельца (requireTripOwner) — хук зовут из владельческого UI.
+// GET пускает участников кроме зрителей (ссылку копируют все, кто участвовал),
+// мутации — только владельца (requireTripOwner в API).
 
 export interface PublicShareState {
   enabled: boolean;

@@ -7,21 +7,24 @@ import { PublicShareSettings } from "./trip-public-share";
 import { usePublicShare } from "@/hooks/trip/use-public-share";
 import { resolveShareAction } from "@/lib/share-action";
 
-// Быстрый шеринг публичной страницы (/p/<token>) из hero «Маршрута».
+// Быстрый шеринг публичной страницы (/p/<token>) из hero «Маршрута» и «Галереи».
 // Копия — главный сценарий, «Поделиться…» открывает системное меню телефона
 // (где Web Share API нет, сама кнопка деградирует в копирование).
-// Настройки ссылки — та же карточка, что в «О поездке»; рендерит только владелец.
+// Ссылку копируют все участники кроме зрителей; настройки — карточка владельца
+// (canManage), тем же компонентом, что в «О поездке».
 
 export function ShareTripSheet({
   open,
   onOpenChange,
   tripId,
   tripTitle,
+  canManage = true,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
   tripId: string;
   tripTitle: string;
+  canManage?: boolean;
 }) {
   const { state, url, isLoading, isError, refetch, update, updating } = usePublicShare(tripId);
 
@@ -86,9 +89,13 @@ export function ShareTripSheet({
             <Share2 className="size-4" /> Поделиться…
           </button>
 
-          <PublicShareSettings tripId={tripId} />
+          {canManage ? (
+            <PublicShareSettings tripId={tripId} />
+          ) : (
+            <p className="text-[11px] text-muted-foreground px-1">Настройки ссылки — у владельца поездки.</p>
+          )}
         </div>
-      ) : (
+      ) : canManage ? (
         <div className="space-y-3 pb-2">
           <div className="rounded-2xl bg-muted/50 p-3 text-[12px] leading-snug text-muted-foreground">
             Публичный «живой журнал» поездки: фото и маршрут можно открыть без входа в аккаунт.
@@ -110,6 +117,13 @@ export function ShareTripSheet({
           </button>
           <p className="flex items-center gap-1 text-[11px] text-muted-foreground">
             <RefreshCw className="size-3" /> Ссылку потом можно сменить — старая закроется.
+          </p>
+        </div>
+      ) : (
+        <div className="rounded-2xl bg-muted/50 p-3 flex items-center gap-2.5 text-muted-foreground pb-2">
+          <Globe className="size-4 shrink-0" />
+          <p className="text-[12px] leading-snug">
+            Публичный «живой журнал» выключен — включить его может владелец поездки.
           </p>
         </div>
       )}

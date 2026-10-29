@@ -382,8 +382,9 @@ export function TripInfoSheet({
                   </p>
                 </div>
               )}
-              {/* Публичная страница для родных — только владельцу, рядом с приглашением */}
-              {isOwner && <PublicShareSettings tripId={tripId} />}
+              {/* Публичная страница для родных — рядом с приглашением: участники копируют ссылку,
+                  настройка (тумблер/срок/rotate) только владельцу */}
+              {myMember?.role !== "viewer" && <PublicShareSettings tripId={tripId} canManage={isOwner} />}
 
               {/* Участники (с управлением для владельца) */}
               <MemberManager tripId={tripId} members={trip.participants} refetch={refetch} detailed />

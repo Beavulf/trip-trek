@@ -326,8 +326,8 @@ export function Gallery() {
             >
               <Camera className="size-4" /> Добавить фото
             </button>
-            {/* Публичная ссылка — решение владельца (как в hero «Маршрута») */}
-            {isOwner && (
+            {/* Публичной ссылкой делятся все участники кроме зрителей, управляет владелец */}
+            {!!myRole && myRole !== "viewer" && (
               <button
                 type="button"
                 onClick={() => setShareOpen(true)}
@@ -584,7 +584,7 @@ export function Gallery() {
       </MobileBottomSheet>
 
       {/* Тот же шит публичной ссылки, что в «Маршруте» */}
-      <ShareTripSheet open={shareOpen} onOpenChange={setShareOpen} tripId={tripId} tripTitle={trip?.trip?.title || ""} />
+      <ShareTripSheet open={shareOpen} onOpenChange={setShareOpen} tripId={tripId} tripTitle={trip?.trip?.title || ""} canManage={isOwner} />
 
       <PhotoLightbox
         open={lightbox !== null}

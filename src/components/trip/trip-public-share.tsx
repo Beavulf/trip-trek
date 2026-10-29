@@ -8,7 +8,8 @@ import { usePublicShare, type PublicSharePatch } from "@/hooks/trip/use-public-s
 // Управление публичной страницей поездки (/p/<token> — журнал «только
 // смотреть» для гостей). Живёт в «О поездке» и в шите «Поделиться» из
 // «Маршрута»: настройка доступности поездки наружу. Данные — общий хук
-// usePublicShare; доступно только владельцу (гарды и в API).
+// usePublicShare; управляет ссылкой только владелец (гард и в API),
+// остальные участники (кроме зрителей) видят ссылку и копируют (canManage=false).
 
 // Срок отсчитывается от момента нажатия: «ещё неделя» — удобнее, чем выбирать дату
 const EXPIRY_OPTIONS: { days: number | null; label: string }[] = [
@@ -22,7 +23,7 @@ const EXPIRY_OPTIONS: { days: number | null; label: string }[] = [
 const fmtDate = (iso: string | null) =>
   iso ? new Date(iso).toLocaleDateString("ru-RU", { day: "numeric", month: "long" }) : "";
 
-export function PublicShareSettings({ tripId }: { tripId: string }) {
+export function PublicShareSettings({ tripId, canManage = true }: { tripId: string; canManage?: boolean }) {
   const { state, url, update, updating } = usePublicShare(tripId);
   const busy = updating;
 
@@ -47,6 +48,53 @@ export function PublicShareSettings({ tripId }: { tripId: string }) {
     );
   const knobCls = (on: boolean) =>
     cn("absolute top-1 size-5 rounded-full bg-white shadow transition-all", on ? "left-6" : "left-1");
+
+  // Не-владельцу: ссылка на копирование, без тумблеров/срока/rotate
+  if (!canManage) {
+    if (!state) return null; // ещё грузится — чтобы не мигала заметка «включит владелец»
+    if (!(state.enabled && state.token)) {
+      return (
+        <div className="rounded-2xl border border-border p-3 flex items-center gap-2.5 text-muted-foreground">
+          <Globe className="size-4 shrink-0" />
+          <p className="text-xs leading-snug">
+            Публичный «живой журнал» поездки выключен — включить его может владелец.
+          </p>
+        </div>
+      );
+    }
+    return (
+      <div className="rounded-2xl border border-border p-3 space-y-2.5">
+        <div className="min-w-0">
+          <div className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground/80">
+            публичный доступ
+          </div>
+          <div className="text-sm font-semibold flex items-center gap-1.5">
+            <Globe className="size-3.5" /> Публичная страница
+          </div>
+        </div>
+        <p className="text-[11px] text-muted-foreground leading-snug">
+          Живой журнал поездки «только смотреть»: фото с подписями, маршрут и карта — без входа в аккаунт.
+        </p>
+        <div className="flex items-center gap-1.5">
+          <code className="flex-1 min-w-0 truncate text-[11px] bg-muted rounded-lg px-2 py-2">{url}</code>
+          <button
+            type="button"
+            onClick={() => {
+              void navigator.clipboard?.writeText(url).then(
+                () => toast.success("Ссылка скопирована — можно отправлять кому угодно"),
+                () => toast.error("Не удалось скопировать")
+              );
+            }}
+            className="shrink-0 size-9 rounded-lg border border-border grid place-items-center hover:bg-muted active:scale-95 transition-transform"
+            aria-label="Скопировать публичную ссылку"
+          >
+            <Copy className="size-3.5" />
+          </button>
+        </div>
+        <p className="text-[11px] text-muted-foreground">Настройки ссылки — у владельца поездки.</p>
+      </div>
+    );
+  }
 
   return (
     <div className="rounded-2xl border border-border p-3 space-y-2.5">

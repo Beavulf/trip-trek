@@ -1,13 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { randomBytes } from "node:crypto";
 import { db } from "@/lib/db";
-import { requireTripOwner } from "@/lib/api-auth";
+import { requireTripEditor, requireTripOwner } from "@/lib/api-auth";
 import { isShareExpired, parseExpiryDays, shareExpiryFromDays } from "@/lib/public-share";
 
 // Публичная read-only страница поездки: /p/<shareToken>. Управляет только
-// владелец: включить/выключить ссылку, перегенерировать токен (rotate),
+// владелец (POST): включить/выключить ссылку, перегенерировать токен (rotate),
 // разрешить ли гостям скачивать ZIP всех фото (shareAllowDownload) и до какого
 // срока ссылка действует (expiresInDays: 1/7/30/90 суток от сейчас, null — бессрочно).
+// Состояние (GET) читают все участники кроме зрителей — ссылку копируют
+// и отправляют друзьям те, кто в поездке участвовал.
 // Выключение или rotate мгновенно закрывает старую ссылку — страница ходит
 // в БД по токену на каждый запрос, кэша с секретом нет.
 
@@ -37,11 +39,11 @@ function shareState(trip: {
   };
 }
 
-// GET /api/trip/share?tripId=... — состояние ссылки (владельцу)
+// GET /api/trip/share?tripId=... — состояние ссылки (участникам кроме зрителей)
 export async function GET(req: NextRequest) {
   const tripId = new URL(req.url).searchParams.get("tripId") || "";
   if (!tripId) return NextResponse.json({ error: "tripId required" }, { status: 400 });
-  const { response } = await requireTripOwner(req, tripId);
+  const { response } = await requireTripEditor(req, tripId);
   if (response) return response;
 
   const trip = await db.trip.findUnique({

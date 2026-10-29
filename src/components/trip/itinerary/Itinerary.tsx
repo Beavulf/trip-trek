@@ -216,10 +216,12 @@ export function Itinerary() {
       : "Город не указан";
   }
   const accent = currentDay?.accentColor ?? dayList[0]?.accentColor ?? "#f97316";
-  // Кнопкой «Поделиться» управляет публичной страницей — она только у владельца
-  // (как в trip-info-sheet: роль берём из участников поездки, не из токена)
+  // «Поделиться» — публичной ссылкой делятся все участники кроме зрителей,
+  // управляет ею владелец (как в trip-info-sheet: роль из участников, не из токена)
   const me = session?.user as { id?: string } | undefined;
-  const isOwner = trip.participants.find((p) => p.id === me?.id)?.role === "owner";
+  const myRole = trip.participants.find((p) => p.id === me?.id)?.role;
+  const isOwner = myRole === "owner";
+  const canShare = !!myRole && myRole !== "viewer";
 
   return (
     <div className="space-y-3 animate-fade-up pb-4 mx-auto w-full max-w-3xl">
@@ -257,7 +259,7 @@ export function Itinerary() {
             >
               <CalendarPlus className="size-4" /> Добавить день
             </button>
-            {isOwner ? (
+            {canShare ? (
               <button
                 type="button"
                 onClick={() => setShareOpen(true)}
@@ -412,7 +414,7 @@ export function Itinerary() {
       <PlaceDialog place={openPlace} currency={curSym} onClose={() => setOpenPlace(null)} />
       <AddPlaceSheet open={addOpen} onOpenChange={setAddOpen} initial={addData} />
       <DaySheet day={editDay} open={daySheetOpen || !!editDay} onOpenChange={(v) => { setDaySheetOpen(v); if (!v) setEditDay(null); }} />
-      <ShareTripSheet open={shareOpen} onOpenChange={setShareOpen} tripId={tripId} tripTitle={trip.settings.title} />
+      <ShareTripSheet open={shareOpen} onOpenChange={setShareOpen} tripId={tripId} tripTitle={trip.settings.title} canManage={isOwner} />
       {/* Планер смонтирован всегда: состояние черновика он сбрасывает сам при открытии */}
       <PlannerWizard open={plannerOpen} onOpenChange={setPlannerOpen} />
     </div>
