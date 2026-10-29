@@ -70,33 +70,42 @@ export function ProfileHeader({ profile, onEdit }: ProfileHeaderProps) {
       </div>
 
       {/* Аватар + имя */}
-      <div className="px-4 pb-4 -mt-12 relative">
-        <div className="flex items-end gap-3">
+      <div className="px-4 pb-4 relative">
+        {/* items-start и pt-3 у текста: аватар выступает на баннер (-mt-12), а имя и почта целиком лежат
+            на карточке. Раньше блок текста выравнивался по низу аватара и верхней частью заезжал на цветной
+            баннер — на светлых цветах профиля имя терялось */}
+        <div className="flex items-start gap-3">
           <button
             type="button"
             onClick={onEdit}
-            className="relative shrink-0 rounded-3xl focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-card"
-            aria-label="Редактировать профиль"
+            className="relative -mt-12 shrink-0 rounded-3xl outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-card"
+            aria-label="Изменить фото и данные профиля"
           >
             <div
-              className="size-24 rounded-3xl overflow-hidden grid place-items-center text-5xl shadow-xl border-4 border-card transition-transform active:scale-95"
+              className="size-24 rounded-3xl overflow-hidden grid place-items-center text-5xl shadow-xl border-4 border-card transition-transform duration-150 ease-out active:scale-95 motion-reduce:transition-none"
               style={{ background: profile.color }}
             >
               {profile.avatarUrl ? (
-                <img src={profile.avatarUrl} alt={profile.name} className="w-full h-full object-cover" />
+                // Нейтральный контур по краю — фото со светлым фоном не «сливается» с карточкой
+                <img
+                  src={profile.avatarUrl}
+                  alt=""
+                  decoding="async"
+                  className="w-full h-full object-cover outline outline-1 -outline-offset-1 outline-black/10 dark:outline-white/10"
+                />
               ) : (
-                <span className="select-none">{profile.emoji}</span>
+                <span className="select-none" aria-hidden>{profile.emoji}</span>
               )}
             </div>
-            <span className="absolute -bottom-1 -right-1 size-9 rounded-full bg-primary text-primary-foreground grid place-items-center shadow-lg border-2 border-card">
+            <span className="absolute -bottom-1 -right-1 size-9 rounded-full bg-primary text-primary-foreground grid place-items-center shadow-lg border-2 border-card" aria-hidden>
               <Pencil className="size-3.5" />
             </span>
           </button>
 
-          <div className="flex-1 min-w-0 pb-1">
+          <div className="flex-1 min-w-0 pt-3">
             <h2 className="text-xl font-bold truncate">{profile.name}</h2>
             <p className="text-sm text-muted-foreground truncate">{profile.email}</p>
-            <p className="mt-1 flex items-center gap-2 text-[11px] text-muted-foreground">
+            <p className="mt-1 flex items-center gap-2 text-[11px] text-muted-foreground tabular-nums">
               <span className="inline-flex items-center gap-1">
                 <Plane className="size-3" style={{ color: profile.color }} />
                 {profile.stats.trips} {plural(profile.stats.trips, "поездка", "поездки", "поездок")}
@@ -113,7 +122,7 @@ export function ProfileHeader({ profile, onEdit }: ProfileHeaderProps) {
         <button
           type="button"
           onClick={onEdit}
-          className="mt-3 w-full min-h-11 rounded-xl bg-secondary border border-border py-2.5 text-sm font-medium flex items-center justify-center gap-2 hover:bg-accent transition-colors active:scale-[0.98]"
+          className="mt-3 w-full min-h-11 rounded-xl bg-secondary border border-border py-2.5 text-sm font-medium flex items-center justify-center gap-2 outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-card transition-[background-color,transform] duration-150 ease-out active:scale-[0.98] motion-reduce:transition-none"
         >
           <Pencil className="size-4" /> Редактировать профиль
         </button>
@@ -135,7 +144,7 @@ export function PremiumCTA({ profile, onOpen }: { profile: UserProfile; onOpen: 
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: 0.03 }}
       onClick={onOpen}
-      className="w-full rounded-2xl bg-gradient-to-br from-amber-500 to-orange-500 p-4 text-left shadow-xl shadow-amber-500/20 active:scale-[0.98] transition-transform"
+      className="w-full rounded-2xl bg-gradient-to-br from-amber-500 to-orange-500 p-4 text-left shadow-xl shadow-amber-500/20 outline-none focus-visible:ring-2 focus-visible:ring-amber-300 focus-visible:ring-offset-2 focus-visible:ring-offset-background transition-transform duration-150 ease-out active:scale-[0.98] motion-reduce:transition-none"
     >
       <div className="flex items-center gap-3">
         <div className="size-12 rounded-2xl bg-white/20 backdrop-blur grid place-items-center shrink-0">
@@ -150,7 +159,7 @@ export function PremiumCTA({ profile, onOpen }: { profile: UserProfile; onOpen: 
 
       {/* Живой лимит: поездки кончаются — карточка об этом честно говорит */}
       <div className="mt-3 rounded-xl bg-black/15 px-3 py-2.5">
-        <div className="flex items-center justify-between text-[11px] font-medium text-white/90">
+        <div className="flex items-center justify-between text-[11px] font-medium text-white/90 tabular-nums">
           <span>
             Создано поездок: {used} из {max}
           </span>
@@ -161,7 +170,7 @@ export function PremiumCTA({ profile, onOpen }: { profile: UserProfile; onOpen: 
           )}
         </div>
         <div className="mt-1.5 h-1.5 rounded-full bg-white/25 overflow-hidden">
-          <div className="h-full rounded-full bg-white transition-all" style={{ width: `${pct}%` }} />
+          <div className="h-full rounded-full bg-white transition-[width] duration-500 ease-out motion-reduce:transition-none" style={{ width: `${pct}%` }} />
         </div>
       </div>
 

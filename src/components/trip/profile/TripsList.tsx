@@ -30,6 +30,8 @@ interface TripsListProps {
 }
 
 export function TripsList({ profile, onOpenTrip, onCreateTrip }: TripsListProps) {
+  // Открытая поездка одна на весь список — читаем один раз, а не на каждой строке
+  const currentTripId = typeof window !== "undefined" ? getTripId() : "";
   return (
     <motion.section
       initial={{ opacity: 0, y: 10 }}
@@ -48,7 +50,7 @@ export function TripsList({ profile, onOpenTrip, onCreateTrip }: TripsListProps)
         <button
           type="button"
           onClick={onCreateTrip}
-          className="size-8 -mr-1 rounded-lg bg-primary/10 text-primary grid place-items-center hover:bg-primary/20 transition-colors"
+          className="size-10 -my-1.5 -mr-2 rounded-xl bg-primary/10 text-primary grid place-items-center outline-none hover:bg-primary/20 focus-visible:ring-2 focus-visible:ring-primary transition-colors duration-150"
           aria-label="Создать поездку"
           title="Создать поездку"
         >
@@ -71,7 +73,6 @@ export function TripsList({ profile, onOpenTrip, onCreateTrip }: TripsListProps)
           </div>
         ) : (
           profile.trips.map((trip) => {
-            const currentTripId = typeof window !== "undefined" ? getTripId() : "";
             const isCurrent = trip.id === currentTripId;
             const chip = tripStatusChip(trip);
             return (
@@ -80,7 +81,7 @@ export function TripsList({ profile, onOpenTrip, onCreateTrip }: TripsListProps)
                 key={trip.id}
                 onClick={() => onOpenTrip(trip.id)}
                 className={cn(
-                  "w-full flex items-center gap-3 p-3 text-left transition-colors",
+                  "w-full flex items-center gap-3 p-3 text-left outline-none transition-colors duration-150 focus-visible:bg-accent/60 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary",
                   isCurrent ? "bg-primary/5" : "hover:bg-accent/50"
                 )}
               >

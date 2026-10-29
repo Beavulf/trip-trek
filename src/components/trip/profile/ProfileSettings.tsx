@@ -23,6 +23,36 @@ interface ProfileSettingsProps {
   feedbackNew: number;
 }
 
+// Версия приложения подставляется при сборке (next.config.ts → package.json): раньше здесь была строка,
+// которую приходилось менять руками при каждом релизе
+const APP_VERSION = process.env.NEXT_PUBLIC_APP_VERSION || "—";
+
+// Строка-кнопка списка настроек: одинаковые наведение, фокус с клавиатуры и «нажатие»
+const ROW =
+  "w-full flex items-center gap-3 p-3.5 text-left outline-none transition-colors duration-150 hover:bg-accent/50 focus-visible:bg-accent/60 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary";
+
+// Раскрывающийся блок: высота плавно ведётся через grid-template-rows (0fr → 1fr), без измерений в JS.
+// Содержимое монтируется при первом открытии и остаётся (закрытие тоже анимируется), пока закрыто — inert:
+// поля не берут фокус и не читаются скринридером. До первого открытия поля пароля не создаются вовсе —
+// иначе менеджеры паролей подставляли бы сохранённый пароль в «скрытое» поле «Текущий пароль»
+function Collapse({ open, id, children }: { open: boolean; id: string; children: React.ReactNode }) {
+  const [shown, setShown] = useState(open);
+  if (open && !shown) setShown(true);
+  return (
+    <div
+      id={id}
+      className={cn(
+        "grid transition-[grid-template-rows] duration-200 ease-out motion-reduce:transition-none",
+        open ? "grid-rows-[1fr]" : "grid-rows-[0fr]"
+      )}
+    >
+      <div className="min-h-0 overflow-hidden" inert={!open}>
+        {open || shown ? children : null}
+      </div>
+    </div>
+  );
+}
+
 const THEME_OPTIONS = [
   { value: "system", icon: Monitor, label: "Системная" },
   { value: "light", icon: Sun, label: "Светлая" },
@@ -202,7 +232,7 @@ export function ProfileSettings({ profile, setPremiumOpen, onReportBug, isAdmin,
                   title={t.label}
                   onClick={() => setTheme(t.value)}
                   className={cn(
-                    "size-10 rounded-lg grid place-items-center transition-all",
+                    "size-10 rounded-lg grid place-items-center outline-none transition-[background-color,box-shadow,color] duration-150 focus-visible:ring-2 focus-visible:ring-primary motion-reduce:transition-none",
                     active ? "bg-card shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"
                   )}
                 >
@@ -217,7 +247,7 @@ export function ProfileSettings({ profile, setPremiumOpen, onReportBug, isAdmin,
         <button
           type="button"
           onClick={() => setPremiumOpen(true)}
-          className="w-full flex items-center gap-3 p-3.5 text-left hover:bg-accent/50 transition-colors"
+          className={ROW}
         >
           <div
             className={cn(
@@ -255,8 +285,9 @@ export function ProfileSettings({ profile, setPremiumOpen, onReportBug, isAdmin,
           <button
             type="button"
             onClick={() => setAiOpen((v) => !v)}
-            className="w-full flex items-center gap-3 p-3.5 text-left hover:bg-accent/50 transition-colors"
+            className={ROW}
             aria-expanded={aiOpen}
+            aria-controls="ai-key-panel"
           >
             <div className="size-9 rounded-xl bg-secondary grid place-items-center shrink-0">
               <Sparkles className="size-4.5 text-indigo-500" />
@@ -267,32 +298,47 @@ export function ProfileSettings({ profile, setPremiumOpen, onReportBug, isAdmin,
                 {aiTail ? `Свой ключ подключён (${aiTail})` : "Подключить свой ключ для ИИ-функций"}
               </div>
             </div>
-            <ChevronDown className={cn("size-4 text-muted-foreground shrink-0 transition-transform", aiOpen && "rotate-180")} />
+            <ChevronDown className={cn("size-4 text-muted-foreground shrink-0 transition-transform duration-200 motion-reduce:transition-none", aiOpen && "rotate-180")} />
           </button>
-          {aiOpen && (
+          <Collapse open={aiOpen} id="ai-key-panel">
             <div className="px-3.5 pb-3.5 space-y-2">
+              {/* Подписи — только для скринридера: плейсхолдер исчезает при вводе и подписью не считается.
+                  input-mobile = 16px, чтобы iOS не увеличивал страницу при фокусе */}
               <input
                 type="password"
+                name="ai-api-key"
+                aria-label="Ключ ИИ-провайдера"
                 value={aiKey}
                 onChange={(e) => setAiKey(e.target.value)}
                 placeholder="sk-…"
                 autoComplete="off"
-                className="w-full rounded-xl border border-input bg-background px-3 py-2.5 text-sm font-mono"
+                autoCapitalize="off"
+                spellCheck={false}
+                className="input-mobile w-full rounded-xl border border-input bg-background px-3 py-2.5 font-mono outline-none transition-[border-color,box-shadow] duration-150 focus:border-primary focus:ring-2 focus:ring-primary/25"
               />
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 <input
+                  name="ai-base-url"
+                  aria-label="Адрес провайдера (Base URL)"
+                  inputMode="url"
                   value={aiBase}
                   onChange={(e) => setAiBase(e.target.value)}
                   placeholder="Base URL — https://…/v1"
                   autoComplete="off"
-                  className="w-full rounded-xl border border-input bg-background px-3 py-2.5 text-sm font-mono"
+                  autoCapitalize="off"
+                  spellCheck={false}
+                  className="input-mobile w-full rounded-xl border border-input bg-background px-3 py-2.5 font-mono outline-none transition-[border-color,box-shadow] duration-150 focus:border-primary focus:ring-2 focus:ring-primary/25"
                 />
                 <input
+                  name="ai-model"
+                  aria-label="Модель"
                   value={aiModel}
                   onChange={(e) => setAiModel(e.target.value)}
                   placeholder="Модель — glm-4.6, gpt-4o-mini…"
                   autoComplete="off"
-                  className="w-full rounded-xl border border-input bg-background px-3 py-2.5 text-sm font-mono"
+                  autoCapitalize="off"
+                  spellCheck={false}
+                  className="input-mobile w-full rounded-xl border border-input bg-background px-3 py-2.5 font-mono outline-none transition-[border-color,box-shadow] duration-150 focus:border-primary focus:ring-2 focus:ring-primary/25"
                 />
               </div>
               <AiKeyHelp />
@@ -324,7 +370,7 @@ export function ProfileSettings({ profile, setPremiumOpen, onReportBug, isAdmin,
                       type="button"
                       onClick={() => saveAiKey(null)}
                       disabled={aiSaving || aiChecking}
-                      className="min-h-10 rounded-lg bg-secondary px-3 text-xs text-red-500 font-medium flex items-center gap-1 disabled:opacity-50"
+                      className="min-h-10 rounded-lg bg-secondary px-3 text-xs text-destructive font-medium flex items-center gap-1 outline-none focus-visible:ring-2 focus-visible:ring-destructive disabled:opacity-50"
                     >
                       <Trash2 className="size-3" /> Убрать
                     </button>
@@ -344,7 +390,7 @@ export function ProfileSettings({ profile, setPremiumOpen, onReportBug, isAdmin,
                 </p>
               )}
             </div>
-          )}
+          </Collapse>
         </div>
 
         {/* Смена пароля: текущее устройство остаётся, прочие сессии выходят */}
@@ -352,8 +398,9 @@ export function ProfileSettings({ profile, setPremiumOpen, onReportBug, isAdmin,
           <button
             type="button"
             onClick={() => setPwdOpen((v) => !v)}
-            className="w-full flex items-center gap-3 p-3.5 text-left hover:bg-accent/50 transition-colors"
+            className={ROW}
             aria-expanded={pwdOpen}
+            aria-controls="password-panel"
           >
             <div className="size-9 rounded-xl bg-secondary grid place-items-center shrink-0">
               <KeyRound className="size-4.5 text-muted-foreground" />
@@ -362,41 +409,49 @@ export function ProfileSettings({ profile, setPremiumOpen, onReportBug, isAdmin,
               <div className="text-sm font-medium">Безопасность</div>
               <div className="text-xs text-muted-foreground">Сменить пароль для входа</div>
             </div>
-            <ChevronDown className={cn("size-4 text-muted-foreground shrink-0 transition-transform", pwdOpen && "rotate-180")} />
+            <ChevronDown className={cn("size-4 text-muted-foreground shrink-0 transition-transform duration-200 motion-reduce:transition-none", pwdOpen && "rotate-180")} />
           </button>
-          {pwdOpen && (
+          <Collapse open={pwdOpen} id="password-panel">
             <div className="px-3.5 pb-3.5 space-y-2">
               <div>
-                <label className="text-[10px] text-muted-foreground mb-1 block">Текущий пароль</label>
+                <label htmlFor="pwd-current" className="text-[11px] text-muted-foreground mb-1 block">Текущий пароль</label>
                 <PasswordField
+                  id="pwd-current"
+                  name="current-password"
                   value={currentPassword}
                   onChange={setCurrentPassword}
                   autoComplete="current-password"
                 />
               </div>
               <div>
-                <label className="text-[10px] text-muted-foreground mb-1 block">Новый пароль</label>
+                <label htmlFor="pwd-new" className="text-[11px] text-muted-foreground mb-1 block">Новый пароль</label>
                 <PasswordField
+                  id="pwd-new"
+                  name="new-password"
                   value={newPassword}
                   onChange={setNewPassword}
                   autoComplete="new-password"
                   status={newPassword ? checkPassword(newPassword) : undefined}
+                  describedBy={newPassword && !checkPassword(newPassword) ? "pwd-new-hint" : undefined}
                 />
                 {newPassword && !checkPassword(newPassword) && (
-                  <p className="text-[10px] text-amber-500 mt-1">Минимум 8 символов, буквы и цифры</p>
+                  <p id="pwd-new-hint" className="text-[11px] text-amber-600 dark:text-amber-400 mt-1">Минимум 8 символов, буквы и цифры</p>
                 )}
               </div>
               <div>
-                <label className="text-[10px] text-muted-foreground mb-1 block">Подтвердите новый пароль</label>
+                <label htmlFor="pwd-confirm" className="text-[11px] text-muted-foreground mb-1 block">Подтвердите новый пароль</label>
                 <PasswordField
+                  id="pwd-confirm"
+                  name="confirm-password"
                   value={pwdConfirm}
                   onChange={setPwdConfirm}
                   autoComplete="new-password"
                   status={pwdConfirm ? pwdConfirm === newPassword : undefined}
+                  describedBy={pwdConfirm && pwdConfirm !== newPassword ? "pwd-confirm-hint" : undefined}
                   onKeyDown={(e) => e.key === "Enter" && changePassword()}
                 />
                 {pwdConfirm && pwdConfirm !== newPassword && (
-                  <p className="text-[10px] text-red-500 mt-1">Пароли не совпадают</p>
+                  <p id="pwd-confirm-hint" role="alert" className="text-[11px] text-destructive mt-1">Пароли не совпадают</p>
                 )}
               </div>
               <button
@@ -408,18 +463,18 @@ export function ProfileSettings({ profile, setPremiumOpen, onReportBug, isAdmin,
                 {pwdSaving ? <Loader2 className="size-3 animate-spin" /> : <KeyRound className="size-3" />}
                 Изменить пароль
               </button>
-              <p className="text-[10px] text-muted-foreground leading-snug">
+              <p className="text-[11px] text-muted-foreground leading-snug text-pretty">
                 После смены пароля со всех других устройств произойдёт выход из аккаунта.
               </p>
             </div>
-          )}
+          </Collapse>
         </div>
 
         {/* Обучение — Центр обучения */}
         <button
           type="button"
           onClick={() => setLearningOpen(true)}
-          className="w-full flex items-center gap-3 p-3.5 text-left hover:bg-accent/50 transition-colors"
+          className={ROW}
         >
           <div className="size-9 rounded-xl bg-secondary grid place-items-center shrink-0">
             <GraduationCap className="size-4.5 text-muted-foreground" />
@@ -444,7 +499,7 @@ export function ProfileSettings({ profile, setPremiumOpen, onReportBug, isAdmin,
         <button
           type="button"
           onClick={onReportBug}
-          className="w-full flex items-center gap-3 p-3.5 text-left hover:bg-accent/50 transition-colors"
+          className={ROW}
         >
           <div className="size-9 rounded-xl bg-secondary grid place-items-center shrink-0">
             <MessageSquarePlus className="size-4.5 text-muted-foreground" />
@@ -466,7 +521,7 @@ export function ProfileSettings({ profile, setPremiumOpen, onReportBug, isAdmin,
           <button
             type="button"
             onClick={() => router.push("/admin")}
-            className="w-full flex items-center gap-3 p-3.5 text-left hover:bg-accent/50 transition-colors"
+            className={ROW}
           >
             <div className="size-9 rounded-xl bg-secondary grid place-items-center shrink-0">
               <Shield className="size-4.5 text-muted-foreground" />
@@ -491,7 +546,7 @@ export function ProfileSettings({ profile, setPremiumOpen, onReportBug, isAdmin,
           </div>
           <div className="flex-1 min-w-0">
             <div className="text-sm font-medium">TripTrek</div>
-            <div className="text-xs text-muted-foreground">Версия 0.2.16</div>
+            <div className="text-xs text-muted-foreground tabular-nums">Версия {APP_VERSION}</div>
           </div>
         </div>
       </div>

@@ -36,9 +36,9 @@
 | `support` | GET | 🌐 | 60/мин/IP | публично; реквизиты блока «Поддержать» внизу профиля: `{ donationAlertsUrl, webmoneyPurse }` (оба nullable, валидируются при чтении; задаются в админке → Настройки → Поддержка) |
 | `auth/forgot-password` | POST | 🌐 | 5/ч/IP (+3/ч/email) | одноразовый токен (sha256 в БД, TTL 60 мин) + письмо; анти-перечисление |
 | `auth/reset-password` | POST | 🌐 | 20/ч/IP | сброс по токену, инвалидирует сессии |
-| `user` | GET, PATCH | U | — | свой профиль (имя, emoji, цвет, аватар, ИИ-ключ); PATCH принимает также `onboardingCompleted` (старое «знакомство закрыто»/сброс) и `onboardingState` — патч прогресса обучения (`tours`, `snoozedUntil`, `hintsOff`, `checklistHidden`, `updatesRead` — id прочитанных обновлений, `reset`; невалидное молча игнорируется, слияние под замком на пользователя); `paymentDetails` (строка ≤300 / null) — «куда возвращать долги», видят участники поездок в `GET /api/trip` participants |
+| `user` | GET, PATCH | U | PATCH 300/ч/user | свой профиль (имя, emoji, цвет, аватар, ИИ-ключ); PATCH проверяет форму значений: `emoji` — один эмодзи ≤16 знаков (`isProfileEmoji`), `avatarUrl` — только `/uploads/avatars/avatar-<имя>.jpg` без слэшей и `..` (`isAvatarUploadUrl`, обход префикса вёл к удалению чужого файла), битое тело → 400; Premium-штамп в `achievements` — по `isPremiumUser`; PATCH принимает также `onboardingCompleted` (старое «знакомство закрыто»/сброс) и `onboardingState` — патч прогресса обучения (`tours`, `snoozedUntil`, `hintsOff`, `checklistHidden`, `updatesRead` — id прочитанных обновлений, `reset`; невалидное молча игнорируется, слияние под замком на пользователя); `paymentDetails` (строка ≤300 / null) — «куда возвращать долги», видят участники поездок в `GET /api/trip` participants |
 | `user/password` | POST | U | userRateLimit | смена пароля → инвалидация всех сессий |
-| `user/avatar` | POST | U | userRateLimit | аватар (через `src/lib/storage`) |
+| `user/avatar` | POST | U | 10/ч/user | аватар (через `src/lib/storage`); прежний файл удаляется, только если путь — `isAvatarUploadUrl` и на него никто не ссылается |
 | `user/upgrade` | POST | U | — | переход на premium (ручной сценарий; известная заглушка) |
 | `user/ai-key-check` | POST | U | userRateLimit | проверка ТОЛЬКО своего BYOK-ключа у LLM (общий не трогается), наружу — только маска; юзерский `aiBaseUrl` перед запросом проверяется на SSRF (`net-guard`) |
 | `limits` | GET, POST, PATCH | U / M | — | лимиты плана юзера (maxTrips/maxMembers: free из `AppSettings`, premium = ∞) |
@@ -196,6 +196,7 @@ In-memory, сбрасываются рестартом контейнера (ADR
 - reset-password — 20 / ч / IP
 - join (GET-превью и POST) — 30 / мин / IP, POST ещё и 30 / мин / user
 - «Сочтёмся»: напоминание о долге — 30 / ч / user и раз в 12 ч на пару; split/join — как join поездок; создание группы 20 / ч / user; траты 120 / мин, переводы 60 / мин, шаблоны 30 / мин, безаккаунтные участники 30 / ч (все — / user)
+- user PATCH — 300 / ч / user; user/avatar — 10 / ч / user
 - health — 60 / мин / IP (БД-пинг кэшируется на 5 с)
 - weather — 30 / мин / IP
 - geocode — 60 / ч / user

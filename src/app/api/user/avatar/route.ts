@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { requireUser } from "@/lib/api-auth";
 import { put as storagePut, remove as storageRemove, StorageError } from "@/lib/storage";
 import { userRateLimit } from "@/lib/rate-limit";
+import { isAvatarUploadUrl } from "@/lib/avatar-presets";
 
 // POST /api/user/avatar — загрузить фото профиля (только себе)
 export async function POST(req: NextRequest) {
@@ -49,7 +50,9 @@ export async function POST(req: NextRequest) {
     // НИКТО не ссылается: URL аватарки виден соучастникам по поездке, и «забрать»
     // чужой URL себе через PATCH /api/user с последующей загрузкой новой
     // аватарки удаляло бы чужой файл (аудит 2026-09-12)
-    if (prev?.avatarUrl) {
+    // isAvatarUploadUrl — второй рубеж: даже если в БД уже лежит «кривой» путь, удаляем только
+    // файлы вида /uploads/avatars/avatar-<имя>.jpg, а не произвольный путь внутри /uploads
+    if (prev?.avatarUrl && isAvatarUploadUrl(prev.avatarUrl)) {
       const [otherUser, otherPhoto] = await Promise.all([
         db.user.findFirst({ where: { avatarUrl: prev.avatarUrl, id: { not: userId } }, select: { id: true } }),
         db.photo.findFirst({ where: { url: prev.avatarUrl }, select: { id: true } }),

@@ -148,7 +148,7 @@ export function AchievementsGrid({ profile, onOpenPremium }: AchievementsGridPro
         <button
           type="button"
           onClick={() => setSelected(spotlight.label)}
-          className="w-full px-4 py-3 border-b border-border flex items-center gap-3 text-left hover:bg-accent/50 transition-colors"
+          className="w-full px-4 py-3 border-b border-border flex items-center gap-3 text-left outline-none hover:bg-accent/50 focus-visible:bg-accent/50 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary transition-colors duration-150"
         >
           <div className="shrink-0 rounded-full bg-amber-500/10 p-1.5">
             <StampMark emoji={spotlight.emoji} unlocked={false} pct={spotlight.progress.pct} size={44} />
@@ -158,10 +158,10 @@ export function AchievementsGrid({ profile, onOpenPremium }: AchievementsGridPro
               Ближайший штамп
             </div>
             <div className="font-semibold text-sm truncate">{spotlight.label}</div>
-            <div className="text-xs text-primary font-medium mt-0.5">{spotlight.progress.needText}</div>
+            <div className="text-xs text-primary font-medium mt-0.5 tabular-nums">{spotlight.progress.needText}</div>
             <div className="mt-1.5 h-1.5 rounded-full bg-muted overflow-hidden">
               <div
-                className="h-full rounded-full bg-gradient-to-r from-amber-500 to-orange-500 transition-all"
+                className="h-full rounded-full bg-gradient-to-r from-amber-500 to-orange-500 transition-[width] duration-500 ease-out motion-reduce:transition-none"
                 style={{ width: `${spotlight.progress.pct}%` }}
               />
             </div>
@@ -170,7 +170,9 @@ export function AchievementsGrid({ profile, onOpenPremium }: AchievementsGridPro
       )}
 
       {/* Сетка штампов */}
-      <div className="p-3 grid grid-cols-4 sm:grid-cols-6 gap-1.5">
+      {/* 3 колонки на узких экранах: в 4 колонках подписи («Исследователь», «Первое путешествие») рвались
+          посреди слова или обрезались многоточием, а кегль 10px был трудночитаем */}
+      <div className="p-3 grid grid-cols-3 min-[480px]:grid-cols-4 sm:grid-cols-6 gap-1.5">
         {withProgress.map((a, i) => (
           <motion.button
             key={a.label}
@@ -181,7 +183,7 @@ export function AchievementsGrid({ profile, onOpenPremium }: AchievementsGridPro
             onClick={() => setSelected(a.label)}
             aria-label={`${a.label}: ${a.unlocked ? "получено" : a.progress ? `${a.progress.pct}%` : "не получено"}`}
             className={cn(
-              "rounded-xl py-2 px-1 flex flex-col items-center gap-1 text-center transition-all active:scale-95",
+              "rounded-xl py-2 px-1 flex flex-col items-center gap-1 text-center outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-card transition-[background-color,transform] duration-150 ease-out active:scale-95 motion-reduce:transition-none",
               a.unlocked
                 ? "bg-gradient-to-br from-amber-500/15 to-orange-500/5 border border-amber-500/25"
                 : "border border-border/60 hover:bg-accent/40"
@@ -190,7 +192,7 @@ export function AchievementsGrid({ profile, onOpenPremium }: AchievementsGridPro
             <StampMark emoji={a.emoji} unlocked={a.unlocked} pct={a.progress?.pct ?? 0} />
             <div
               className={cn(
-                "text-[10px] font-medium leading-tight line-clamp-2 break-words w-full",
+                "text-[11px] font-medium leading-tight line-clamp-2 break-words text-balance w-full",
                 !a.unlocked && "text-muted-foreground"
               )}
             >

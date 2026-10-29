@@ -143,7 +143,7 @@ export function SupportCard({ onReportBug }: { onReportBug: () => void }) {
                 href={data.donationAlertsUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="flex items-center gap-3 rounded-2xl border border-border bg-card p-3.5 min-h-14 hover:border-primary/40 active:scale-[0.99] transition-all"
+                className="flex items-center gap-3 rounded-2xl border border-border bg-card p-3.5 min-h-14 hover:border-primary/40 active:scale-[0.99] transition-[border-color,transform] duration-150 ease-out motion-reduce:transition-none"
               >
                 <span className="size-10 shrink-0 rounded-xl bg-amber-500/15 text-amber-500 grid place-items-center" aria-hidden="true">
                   <Heart className="size-5" />

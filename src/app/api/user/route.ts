@@ -5,6 +5,8 @@ import { maskKey, validateAiBaseUrl } from "@/lib/ai-key";
 import { isPremiumUser } from "@/lib/premium";
 import { withKeyLock } from "@/lib/key-lock";
 import { applyPatch, sanitizePatch, sanitizeState } from "@/lib/onboarding-state";
+import { isAvatarUploadUrl, isProfileEmoji } from "@/lib/avatar-presets";
+import { userRateLimit } from "@/lib/rate-limit";
 
 // GET /api/user — профиль текущего пользователя (сессия)
 export async function GET(req: NextRequest) {
@@ -36,11 +38,12 @@ export async function GET(req: NextRequest) {
 
   if (!user) return NextResponse.json({ error: "user not found" }, { status: 404 });
 
-  const [photos, expenses, journals, messages, visitedPlaces] = await Promise.all([
+  const [photos, spent, journals, messages, visitedPlaces] = await Promise.all([
     db.photo.count({ where: { userId } }),
     // Переводы (settlement) — не траты: каждая отметка «Перевели» раньше накручивала «Потрачено» и
-    // выдавала «Шопоголика»/«Тяжеловеса» (как и в /api/trip, итог трат считается без переводов)
-    db.expense.findMany({ where: { paidById: userId, category: { not: "settlement" } }, select: { amount: true } }),
+    // выдавала «Шопоголика»/«Тяжеловеса» (как и в /api/trip, итог трат считается без переводов).
+    // Сумма — агрегатом в БД: раньше выгружались все траты пользователя ради одного числа
+    db.expense.aggregate({ where: { paidById: userId, category: { not: "settlement" } }, _sum: { amount: true } }),
     db.journalEntry.count({ where: { userId } }),
     db.boardMessage.count({ where: { userId } }),
     db.place.count({
@@ -102,7 +105,8 @@ export async function GET(req: NextRequest) {
     journals: m.trip._count.journals,
   }));
 
-  const totalSpent = expenses.reduce((sum, e) => sum + e.amount, 0);
+  const totalSpent = spent._sum.amount ?? 0;
+  const isPremium = isPremiumUser(user);
 
   const unlocked: { emoji: string; label: string; unlocked: boolean }[] = [];
   if (trips.length >= 1) unlocked.push({ emoji: "🌏", label: "Первое путешествие", unlocked: true });
@@ -117,7 +121,9 @@ export async function GET(req: NextRequest) {
   if (messages >= 10) unlocked.push({ emoji: "💬", label: "Болтун", unlocked: true });
   if (messages >= 50) unlocked.push({ emoji: "📢", label: "Оратор", unlocked: true });
   if (visitedPlaces >= 10) unlocked.push({ emoji: "📍", label: "Маршрут", unlocked: true });
-  if (user.plan === "premium") unlocked.push({ emoji: "👑", label: "Premium", unlocked: true });
+  // По isPremiumUser, а не по голому plan: с истёкшим сроком штамп оставался «оттиснутым»,
+  // хотя карточка рядом уже предлагала купить Premium
+  if (isPremium) unlocked.push({ emoji: "👑", label: "Premium", unlocked: true });
 
   const allAchievements = [
     { emoji: "🌏", label: "Первое путешествие", req: "1 поездка" },
@@ -135,7 +141,6 @@ export async function GET(req: NextRequest) {
     { emoji: "👑", label: "Premium", req: "Premium подписка" },
   ];
 
-  const isPremium = isPremiumUser(user);
   const ownedTrips = trips.filter((t) => t.role === "owner").length;
   const maxOwnedTrips = isPremium ? null : 1;
   const maxMembersPerTrip = isPremium ? null : 5;
@@ -176,19 +181,35 @@ export async function PATCH(req: NextRequest) {
   if (response) return response;
   const userId = authUser!.id;
 
-  const body = await req.json();
+  // Потолок на запись профиля: обучение и профиль пишут сюда часто, но не сотнями в час
+  const limited = userRateLimit(req, userId, "user-patch", 300, 60 * 60_000);
+  if (limited) return limited;
+
+  // Битое тело — 400, а не необработанное исключение (500)
+  const body = await req.json().catch(() => null);
+  if (!body || typeof body !== "object" || Array.isArray(body)) {
+    return NextResponse.json({ error: "invalid body" }, { status: 400 });
+  }
   const { name, emoji, color, avatarUrl, aiApiKey, aiBaseUrl, aiModel, onboardingCompleted, onboardingState, paymentDetails } = body;
 
   const data: Record<string, unknown> = {};
   if (typeof name === "string" && name.trim()) data.name = name.trim().slice(0, 80);
-  if (typeof emoji === "string") data.emoji = emoji;
+  // Эмодзи дублируется в TripMember всех поездок и виден участникам: принимаем один эмодзи, не любую строку
+  if (emoji !== undefined) {
+    if (!isProfileEmoji(emoji)) {
+      return NextResponse.json({ error: "emoji: недопустимое значение" }, { status: 400 });
+    }
+    data.emoji = emoji;
+  }
   if (typeof color === "string" && color.match(/^#[0-9a-fA-F]{6}$/)) data.color = color;
   // avatarUrl: строка — установить фото, null — убрать фото (вернуться к эмодзи).
   // Принимаем только пути аватарок этого инстанса: произвольная строка позже
   // уходила аргументом в storageRemove при следующей загрузке аватара, и через
-  // это можно было удалить чужой файл (аудит 2026-09-12).
+  // это можно было удалить чужой файл (аудит 2026-09-12). Одной проверки префикса мало:
+  // `/uploads/avatars/avatar-x/../../<файл>` проходил её и вёл в чужое фото — поэтому
+  // имя проверяется целиком (isAvatarUploadUrl), без слэшей и точек.
   if (typeof avatarUrl === "string") {
-    if (!avatarUrl.startsWith("/uploads/avatars/avatar-")) {
+    if (!isAvatarUploadUrl(avatarUrl)) {
       return NextResponse.json({ error: "avatarUrl: недопустимый путь" }, { status: 400 });
     }
     data.avatarUrl = avatarUrl;

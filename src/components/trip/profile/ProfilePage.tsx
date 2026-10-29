@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { motion } from "framer-motion";
+import { MotionConfig, motion } from "framer-motion";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth as useSession } from "@/hooks/use-auth";
 import { ChevronLeft, Loader2, LogOut } from "lucide-react";
@@ -22,6 +22,7 @@ import { setTripId } from "@/hooks/use-trip";
 import { useTripStore } from "@/lib/trip-store";
 import type { UserProfile } from "./types";
 import { ProfileHeader, PremiumActiveCard, PremiumCTA } from "./ProfileHeader";
+import { ProfileSkeleton } from "./ProfileSkeleton";
 import { ProfileStats } from "./ProfileStats";
 import { AchievementsGrid } from "./AchievementsGrid";
 import { TripsList } from "./TripsList";
@@ -31,7 +32,20 @@ import { EditProfileSheet } from "./EditProfileSheet";
 import { FeedbackSheet } from "@/components/trip/feedback/feedback-sheet";
 import { useAdminStats } from "@/hooks/use-admin-stats";
 
+// Предел размера фото профиля — как на сервере (api/user/avatar)
+const AVATAR_MAX_BYTES = 5 * 1024 * 1024;
+
+// reducedMotion="user": при «уменьшить движение» в системе блоки профиля появляются без сдвига и масштаба
+// (раньше каждая карточка выезжала снизу независимо от настройки)
 export function ProfilePage() {
+  return (
+    <MotionConfig reducedMotion="user">
+      <ProfileScreen />
+    </MotionConfig>
+  );
+}
+
+function ProfileScreen() {
   const router = useRouter();
   const { data: session, status } = useSession();
   const qc = useQueryClient();
@@ -63,17 +77,32 @@ export function ProfilePage() {
 
   const uploadAvatar = async (file: File) => {
     if (!userId) return;
+    // Те же пределы, что на сервере (5 МБ, только картинка): отказываем сразу, не гоняя файл по сети
+    if (!file.type.startsWith("image/")) {
+      toast.error("Нужна картинка", { description: "Выберите фото в формате JPG, PNG или WebP" });
+      return;
+    }
+    if (file.size > AVATAR_MAX_BYTES) {
+      toast.error("Фото слишком большое", { description: "Максимум 5 МБ — выберите файл поменьше" });
+      return;
+    }
     setUploadingAvatar(true);
     try {
       const fd = new FormData();
       fd.append("file", file);
       const r = await fetch("/api/user/avatar", { method: "POST", body: fd });
-      if (!r.ok) throw new Error("upload failed");
+      if (!r.ok) {
+        // Причину (формат, размер, лимит загрузок) отдаёт сервер — покажем её, а не общее «не удалось»
+        const b = await r.json().catch(() => ({}));
+        throw new Error(typeof b?.error === "string" ? b.error : "");
+      }
       toast.success("Фото обновлено 📸");
       qc.invalidateQueries({ queryKey: ["user-profile"] });
       qc.invalidateQueries({ queryKey: ["trip"] });
-    } catch {
-      toast.error("Не удалось загрузить фото");
+    } catch (e) {
+      toast.error("Не удалось загрузить фото", {
+        description: e instanceof Error && e.message ? e.message : "Проверьте соединение и попробуйте ещё раз",
+      });
     } finally {
       setUploadingAvatar(false);
     }
@@ -102,13 +131,16 @@ export function ProfilePage() {
   };
 
   const handleSignOut = async () => {
+    if (signingOut) return;
     setSigningOut(true);
     try {
-      await fetch("/api/auth/custom-signout", { method: "POST" });
+      const r = await fetch("/api/auth/custom-signout", { method: "POST" });
+      if (!r.ok) throw new Error("signout failed");
+      // Уходим со страницы целиком: signingOut не сбрасываем, чтобы кнопка не «ожила» до перехода
       window.location.assign("/login");
     } catch {
-      window.location.assign("/login");
-    } finally {
+      // Раньше при ошибке всё равно уводило на /login, хотя сессия оставалась — и вход тут же возвращал назад
+      toast.error("Не удалось выйти", { description: "Проверьте соединение и попробуйте ещё раз" });
       setSigningOut(false);
     }
   };
@@ -120,13 +152,9 @@ export function ProfilePage() {
     router.push("/");
   };
 
-  if (status === "loading" || status === "unauthenticated" || !userId) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
-        <Loader2 className="size-8 animate-spin text-muted-foreground" />
-      </div>
-    );
-  }
+  // Сессия ещё грузится (или идёт редирект на /login) — та же оболочка со скелетоном, без отдельного
+  // полноэкранного спиннера: иначе на входе были два «мигания» подряд (спиннер → шапка → контент)
+  const waiting = status === "loading" || status === "unauthenticated" || !userId;
 
   return (
     <div className="min-h-screen bg-background">
@@ -146,8 +174,8 @@ export function ProfilePage() {
       </header>
 
       <main className="mx-auto max-w-2xl px-4 py-4 pb-24 space-y-4">
-        {isError ? (
-          <div className="py-16 text-center space-y-3">
+        {isError && !waiting ? (
+          <div role="alert" className="py-16 text-center space-y-3">
             <div className="text-4xl">🤔</div>
             <p className="text-sm font-medium">Не удалось загрузить профиль</p>
             <button
@@ -158,10 +186,8 @@ export function ProfilePage() {
               Повторить
             </button>
           </div>
-        ) : isLoading || !profile ? (
-          <div className="flex items-center justify-center py-20">
-            <Loader2 className="size-8 animate-spin text-muted-foreground" />
-          </div>
+        ) : waiting || isLoading || !profile ? (
+          <ProfileSkeleton />
         ) : (
           <>
             <ProfileHeader profile={profile} onEdit={() => setEditOpen(true)} />
@@ -231,7 +257,8 @@ export function ProfilePage() {
       {bugOpen && <FeedbackSheet open onOpenChange={setBugOpen} />}
 
       {/* Подтверждение выхода */}
-      <AlertDialog open={signOutOpen} onOpenChange={setSignOutOpen}>
+      {/* Пока идёт выход, окно не закрывается: иначе «ничего не происходит» до перехода, и кнопку жмут повторно */}
+      <AlertDialog open={signOutOpen} onOpenChange={(v) => !signingOut && setSignOutOpen(v)}>
         <AlertDialogContent className="max-w-sm rounded-3xl">
           <AlertDialogHeader>
             <AlertDialogTitle>Выйти из аккаунта?</AlertDialogTitle>
@@ -240,17 +267,17 @@ export function ProfilePage() {
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter className="gap-2">
-            <AlertDialogCancel className="mt-0 rounded-xl">Остаться</AlertDialogCancel>
+            <AlertDialogCancel disabled={signingOut} className="mt-0 rounded-xl">Остаться</AlertDialogCancel>
             <AlertDialogAction
+              disabled={signingOut}
               onClick={(e) => {
                 e.preventDefault();
-                setSignOutOpen(false);
                 void handleSignOut();
               }}
               className="rounded-xl bg-destructive text-white hover:bg-destructive/90"
             >
               {signingOut ? <Loader2 className="size-4 animate-spin" /> : <LogOut className="size-4" />}
-              Выйти
+              {signingOut ? "Выходим…" : "Выйти"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
