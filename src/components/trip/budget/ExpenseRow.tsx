@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { Trash2, Users, Loader2 } from "lucide-react";
+import { AnimatePresence, motion } from "framer-motion";
+import { Trash2, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { useDeleteExpense, useTrip } from "@/hooks/use-trip";
@@ -9,6 +10,7 @@ import { isOptimisticExpenseId } from "@/hooks/trip/use-expenses";
 import { useAuth } from "@/hooks/use-auth";
 import { EXPENSE_CATEGORIES, type Expense, type Participant } from "@/lib/types";
 import { currencySymbol } from "@/lib/currencies";
+import { moneyExact } from "@/lib/budget/format";
 import { UserAvatar } from "../user-avatar";
 
 interface ExpenseRowProps {
@@ -16,15 +18,16 @@ interface ExpenseRowProps {
   participants: Participant[];
 }
 
+// Строка — две линии: что и сколько, кто и как делили. Время, состав и удаление — по тапу на строку:
+// корзина на каждой трате превращала список в ряд одинаковых опасных кнопок
 export function ExpenseRow({ expense, participants }: ExpenseRowProps) {
   const { data: trip } = useTrip();
   const { data: session } = useAuth();
   const currentUserId = (session?.user as { id?: string } | undefined)?.id || "";
   const myRole = participants.find((p) => p.id === currentUserId)?.role;
 
-  // Split info
   const splitIds = expense.splitWith ? expense.splitWith.split(",").filter(Boolean) : [];
-  const splitUsers = participants.filter(p => splitIds.includes(p.id));
+  const splitUsers = participants.filter((p) => splitIds.includes(p.id));
   const hasSplit = splitIds.length > 0;
   const excludeSelf = expense.excludeSelf;
   // Сколько человек делят трату; «За всех» — только если это вся группа (раньше писалось и для части группы)
@@ -38,15 +41,33 @@ export function ExpenseRow({ expense, participants }: ExpenseRowProps) {
   const canDelete = !saving && (expense.paidById === currentUserId || myRole === "owner" || isSettlementRecipient);
   const sym = currencySymbol(trip?.settings.currency);
   const del = useDeleteExpense();
+  const [open, setOpen] = useState(false);
   const [confirming, setConfirming] = useState(false);
   // Категория вне справочника (старые данные) рисуется как «Прочее», а не «undefined22»
   const cat = EXPENSE_CATEGORIES[expense.category] ?? EXPENSE_CATEGORIES.other;
   const paidBy = participants.find((p) => p.id === expense.paidById);
 
-  // Время
-  const timeStr = new Date(expense.createdAt).toLocaleString("ru-RU", {
-    day: "numeric", month: "short", hour: "2-digit", minute: "2-digit"
+  const when = new Date(expense.createdAt).toLocaleString("ru-RU", {
+    day: "numeric",
+    month: "long",
+    hour: "2-digit",
+    minute: "2-digit",
   });
+
+  const splitShort = !hasSplit || isSettlement
+    ? null
+    : excludeSelf
+      ? splitUsers.length > 0
+        ? `за ${splitUsers.map((u) => u.name).join(", ")}`
+        : `за ${splitIds.length} чел.`
+      : sharers >= selectableCount
+        ? "на всех"
+        : `на ${sharers} чел.`;
+
+  const original =
+    expense.originalAmount != null && expense.originalCurrency && expense.originalCurrency !== trip?.settings.currency
+      ? `${expense.originalAmount.toFixed(2).replace(".", ",")} ${expense.originalCurrency}`
+      : null;
 
   const handleDelete = async () => {
     try {
@@ -61,115 +82,120 @@ export function ExpenseRow({ expense, participants }: ExpenseRowProps) {
   };
 
   return (
-    <div className={cn(
-      "flex items-start gap-2.5 p-2.5 rounded-xl hover:bg-accent/50 transition-[background-color,opacity] duration-200",
-      isSettlement && "bg-green-500/5 border border-green-500/20",
-      saving && "opacity-60"
-    )}>
-      {/* Иконка категории */}
-      <div
-        className={cn("size-9 rounded-xl grid place-items-center text-base shrink-0 mt-0.5", isSettlement ? "bg-green-600/15" : "")}
-        style={{ background: isSettlement ? undefined : `${cat?.color}22` }}
-      >
-        {isSettlement ? "💸" : cat?.emoji}
-      </div>
-
-      {/* Контент */}
-      <div className="min-w-0 flex-1">
-        {/* Описание + сумма (исходная валюта — мелкой строкой под итоговой, справа) */}
-        <div className="flex items-start justify-between gap-2">
-          <span className="text-sm font-medium truncate">{expense.description}</span>
-          <span className="flex flex-col items-end shrink-0">
-            <span className="font-semibold text-sm tabular-nums">{sym}{expense.amount.toFixed(2)}</span>
-            {expense.originalAmount != null && expense.originalCurrency && expense.originalCurrency !== trip?.settings.currency && (
-              <span className="text-[10px] text-muted-foreground/80 tabular-nums">
-                ≈ {expense.originalAmount.toFixed(2)} {expense.originalCurrency}
-              </span>
-            )}
-          </span>
-        </div>
-
-        {/* Мета: кто заплатил + категория + день */}
-        <div className="text-[11px] text-muted-foreground flex items-center gap-1.5 mt-0.5 flex-wrap">
-          {paidBy && (
-            <span className="flex items-center gap-0.5">
-              <UserAvatar
-                name={paidBy.name}
-                emoji={paidBy.emoji}
-                color={paidBy.color}
-                avatarUrl={paidBy.avatarUrl}
-                className="size-3.5"
-                textClassName="text-[7px]"
-              />
-              <span className="font-medium">{paidBy.name}</span>
-            </span>
-          )}
-          <span className="opacity-50">·</span>
-          <span>{isSettlement ? "Перевод" : cat?.label}</span>
-          {expense.day && (
-            <>
-              <span className="opacity-50">·</span>
-              <span>День {expense.day.dayNumber}</span>
-            </>
-          )}
-        </div>
-
-        {/* Split badge */}
-        {hasSplit && !isSettlement && (
-          <div className="mt-1.5 inline-flex items-center gap-1 bg-primary/8 rounded-md px-1.5 py-0.5 text-[10px]">
-            <Users className="size-2.5 text-primary" />
-            <span className="text-primary font-medium">
-              {excludeSelf
-                ? splitUsers.length > 0
-                  ? `За ${splitUsers.map(u => u.name).join(", ")}`
-                  : `За ${splitIds.length} чел.`
-                : sharers >= selectableCount
-                  ? `За всех (${sharers} чел)`
-                  : `На ${sharers} чел.`
-              }
-            </span>
-          </div>
-        )}
-
-        {/* Время добавления */}
-        <div className="text-[10px] text-muted-foreground/80 mt-0.5">
-          {saving ? "Сохраняется…" : timeStr}
-        </div>
-      </div>
-
-      {/* Удаление — только плательщик или owner */}
-      {canDelete && (
-      <div className="shrink-0">
-        {confirming ? (
-          <div className="flex items-center gap-1">
-            <button
-              onClick={handleDelete}
-              disabled={del.isPending}
-              className="min-h-11 min-w-11 text-xs bg-red-500 text-white px-3 rounded-xl font-medium flex items-center justify-center gap-1"
-            >
-              {del.isPending ? <Loader2 className="size-3.5 animate-spin" /> : null}
-              {del.isPending ? "…" : "Да"}
-            </button>
-            <button
-              onClick={() => setConfirming(false)}
-              disabled={del.isPending}
-              className="min-h-11 min-w-11 text-xs bg-secondary px-3 rounded-xl"
-            >
-              Нет
-            </button>
-          </div>
-        ) : (
-          <button
-            onClick={() => setConfirming(true)}
-            className="size-11 rounded-xl hover:bg-red-500/10 hover:text-red-500 grid place-items-center transition-colors text-muted-foreground"
-            title="Удалить"
-            aria-label="Удалить трату"
-          >
-            <Trash2 className="size-4" />
-          </button>
-        )}
-      </div>
+    <div
+      className={cn(
+        "rounded-xl transition-[background-color,opacity] duration-200",
+        open ? "bg-accent/50" : "hover:bg-accent/40",
+        isSettlement && !open && "bg-green-500/5",
+        saving && "opacity-60"
       )}
+    >
+      <button
+        type="button"
+        onClick={() => {
+          setOpen((v) => !v);
+          setConfirming(false);
+        }}
+        aria-expanded={open}
+        className="flex min-h-14 w-full items-center gap-2.5 rounded-xl p-2 text-left"
+      >
+        <span
+          className={cn("grid size-9 shrink-0 place-items-center rounded-xl text-base", isSettlement && "bg-green-600/15")}
+          style={{ background: isSettlement ? undefined : `${cat.color}22` }}
+          aria-hidden="true"
+        >
+          {isSettlement ? "💸" : cat.emoji}
+        </span>
+
+        <span className="min-w-0 flex-1">
+          <span className="block truncate text-sm font-medium">{expense.description}</span>
+          <span className="mt-0.5 flex items-center gap-1 text-xs text-muted-foreground">
+            {paidBy && (
+              <>
+                <UserAvatar
+                  name={paidBy.name}
+                  emoji={paidBy.emoji}
+                  color={paidBy.color}
+                  avatarUrl={paidBy.avatarUrl}
+                  className="size-3.5 shrink-0"
+                  textClassName="text-[7px]"
+                />
+                <span className="max-w-24 shrink-0 truncate">{paidBy.name}</span>
+                <span className="opacity-50" aria-hidden="true">·</span>
+              </>
+            )}
+            <span className="truncate">
+              {saving ? "сохраняется…" : isSettlement ? "перевод" : splitShort ?? cat.label.toLowerCase()}
+            </span>
+          </span>
+        </span>
+
+        <span className="flex shrink-0 flex-col items-end">
+          <span className={cn("text-sm font-semibold tabular-nums", isSettlement && "font-medium text-muted-foreground")}>
+            {moneyExact(sym, expense.amount)}
+          </span>
+          {original && <span className="text-xs text-muted-foreground tabular-nums">{original}</span>}
+        </span>
+      </button>
+
+      <AnimatePresence initial={false}>
+        {open && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
+            className="overflow-hidden"
+          >
+            <div className="flex items-center gap-3 px-2 pb-2 pl-[3.25rem]">
+              <div className="min-w-0 flex-1 text-xs text-muted-foreground">
+                <div>
+                  {when}
+                  {expense.day ? `, день ${expense.day.dayNumber}` : ""}
+                </div>
+                {!isSettlement && (
+                  <div>
+                    {cat.label}
+                    {hasSplit && splitUsers.length > 0 && !excludeSelf ? `, вместе с ${splitUsers.map((u) => u.name).join(", ")}` : ""}
+                    {!hasSplit ? ", личная трата" : ""}
+                  </div>
+                )}
+              </div>
+              {canDelete &&
+                (confirming ? (
+                  <div className="flex shrink-0 items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={handleDelete}
+                      disabled={del.isPending}
+                      className="flex min-h-11 min-w-11 items-center justify-center gap-1 rounded-xl bg-red-500 px-3 text-xs font-medium text-white"
+                    >
+                      {del.isPending ? <Loader2 className="size-3.5 animate-spin" /> : "Удалить"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setConfirming(false)}
+                      disabled={del.isPending}
+                      className="min-h-11 min-w-11 rounded-xl bg-secondary px-3 text-xs"
+                    >
+                      Нет
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setConfirming(true)}
+                    className="grid size-11 shrink-0 place-items-center rounded-xl text-muted-foreground transition-colors hover:bg-red-500/10 hover:text-red-500"
+                    title="Удалить трату"
+                    aria-label="Удалить трату"
+                  >
+                    <Trash2 className="size-4" />
+                  </button>
+                ))}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

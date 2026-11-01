@@ -93,7 +93,7 @@ export function GlobalSearch({ open, onOpenChange }: { open: boolean; onOpenChan
   const [recents, setRecents] = useState<string[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
   const tripId = useCurrentTripId();
-  const { setActiveTab, setSelectedDay, setTripSwitcherOpen, setMapCityFilter } = useTripStore();
+  const { setActiveTab, openBudget, setSelectedDay, setTripSwitcherOpen, setMapCityFilter } = useTripStore();
 
   useEffect(() => {
     const t = setTimeout(() => setDebounced(query.trim()), 280);
@@ -162,7 +162,7 @@ export function GlobalSearch({ open, onOpenChange }: { open: boolean; onOpenChan
           setActiveTab("food");
           break;
         case "expense":
-          setActiveTab("budget");
+          openBudget("expenses");
           break;
         case "journal":
           setActiveTab("journal");

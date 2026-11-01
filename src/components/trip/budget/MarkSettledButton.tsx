@@ -89,7 +89,7 @@ export function MarkSettledButton({ from, to, amount }: MarkSettledButtonProps) 
         type="button"
         onClick={handleSettle}
         disabled={addExpense.isPending}
-        className="shrink-0 min-h-11 text-xs bg-green-600/10 text-green-600 hover:bg-green-600/20 px-3 py-2 rounded-lg font-medium flex items-center gap-1 transition-colors active:scale-95 disabled:opacity-50"
+        className="shrink-0 min-h-11 text-sm bg-green-700 text-white hover:bg-green-800 px-4 py-2 rounded-xl font-semibold flex items-center gap-1.5 transition-[background-color,transform] active:scale-95 disabled:opacity-50"
         title={`Подтвердить что ${from.name} перевёл ${amount.toFixed(2)}`}
       >
         {addExpense.isPending ? <Loader2 className="size-3.5 animate-spin" /> : <Check className="size-3.5" />}

@@ -6,8 +6,10 @@ import { toast } from "sonner";
 import { useTrip, useUpdateMember, getTripId } from "@/hooks/use-trip";
 import { useAuth } from "@/hooks/use-auth";
 import { expenseSelectableParticipants } from "@/lib/budget";
+import { moneyWhole } from "@/lib/budget/format";
 import { currencySymbol } from "@/lib/currencies";
 import { MobileBottomSheet } from "../mobile-bottom-sheet";
+import { UserAvatar } from "../user-avatar";
 
 interface BudgetEditModalProps {
   open: boolean;
@@ -95,16 +97,12 @@ export function BudgetEditModal({ open, onOpenChange }: BudgetEditModalProps) {
         {/* Список участников */}
         {budgetPeople.map((p) => (
           <div key={p.id} className="flex items-center gap-3 p-2.5 rounded-xl bg-muted/50">
-            <div className="size-10 rounded-full grid place-items-center text-lg shrink-0" style={{ background: p.color }}>
-              {p.emoji}
-            </div>
-            <div className="flex-1 min-w-0">
-              <div className="text-sm font-medium truncate">{p.name}</div>
-              {p.role && <div className="text-[10px] text-muted-foreground">{p.role}</div>}
-            </div>
+            <UserAvatar name={p.name} emoji={p.emoji} color={p.color} avatarUrl={p.avatarUrl} className="size-10" textClassName="text-lg" />
+            <label htmlFor={`member-budget-${p.id}`} className="flex-1 min-w-0 text-sm font-medium truncate">{p.name}</label>
             <div className="flex items-center gap-1 shrink-0">
               <span className="text-sm text-muted-foreground">{sym}</span>
               <input
+                id={`member-budget-${p.id}`}
                 type="number"
                 inputMode="decimal"
                 value={budgets[p.id] ?? ""}
@@ -120,7 +118,7 @@ export function BudgetEditModal({ open, onOpenChange }: BudgetEditModalProps) {
         {/* Итого */}
         <div className="flex items-center justify-between p-3 rounded-xl bg-primary/10 border border-primary/20">
           <span className="text-sm font-semibold">Общий бюджет:</span>
-          <span className="text-lg font-bold text-primary">{sym}{total.toFixed(0)}</span>
+          <span className="text-lg font-bold text-primary tabular-nums">{moneyWhole(sym, total)}</span>
         </div>
 
         {/* Кнопка сохранить */}

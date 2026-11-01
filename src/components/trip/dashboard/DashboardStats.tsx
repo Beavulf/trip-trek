@@ -18,7 +18,7 @@ interface DashboardStatsProps {
  * Погода и обратный отсчёт живут в hero, чтобы каждая цифра встречалась один раз.
  */
 export function DashboardStats({ trip, daysRemaining }: DashboardStatsProps) {
-  const { setActiveTab, setRestView } = useTripStore();
+  const { setActiveTab, openBudget, setRestView } = useTripStore();
   const sym = currencySymbol(trip.settings.currency);
   const budget = trip.settings.totalBudget;
   const hasBudget = budget > 0;
@@ -29,7 +29,7 @@ export function DashboardStats({ trip, daysRemaining }: DashboardStatsProps) {
     <div className="grid grid-cols-3 lg:grid-cols-5 gap-3">
       <button
         type="button"
-        onClick={() => setActiveTab("budget")}
+        onClick={() => openBudget("summary")}
         className="col-span-3 lg:col-span-2 rounded-2xl bg-card border border-border p-4 text-left hover:shadow-lg card-hover group active:scale-[0.99]"
       >
         <div className="flex items-center justify-between mb-2">

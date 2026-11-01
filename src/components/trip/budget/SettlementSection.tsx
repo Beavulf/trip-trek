@@ -2,12 +2,12 @@
 
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { ArrowRight, Scale, Info, ChevronDown, Copy, CreditCard } from "lucide-react";
+import { Scale, Info, ChevronDown, Copy, CreditCard, CheckCircle2 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import type { Balance, Settlement } from "@/lib/budget";
+import { moneyDelta, moneyExact } from "@/lib/budget/format";
 import { MarkSettledButton } from "./MarkSettledButton";
-import { AnimatedNumber } from "./AnimatedNumber";
 import { UserAvatar } from "../user-avatar";
 
 interface SettlementSectionProps {
@@ -15,286 +15,238 @@ interface SettlementSectionProps {
   settlements: Settlement[];
   participantsCount: number;
   currencySymbol?: string;
-  /** Текущий пользователь: сводка «ты должен / тебе должны» и подсветка его переводов */
+  /** Текущий пользователь: его переводы идут первыми и подсвечены */
   currentUserId?: string;
 }
 
+const REVEAL = {
+  initial: { height: 0, opacity: 0 },
+  animate: { height: "auto", opacity: 1 },
+  exit: { height: 0, opacity: 0 },
+  transition: { duration: 0.2, ease: [0.22, 1, 0.36, 1] as const },
+};
+
 // Пометка у вышедшего/исключённого участника: его долги остаются в расчёте (lib/budget/people.ts)
 function FormerTag({ former }: { former?: boolean }) {
-  return former ? <span className="ml-1.5 text-[10px] font-normal text-muted-foreground">вышел</span> : null;
+  return former ? <span className="ml-1.5 text-[11px] font-normal text-muted-foreground">вышел</span> : null;
 }
 
-// "Расчёт между друзьями" — балансы, расшифровка, список переводов
+/**
+ * «Расчёт между друзьями». Главное здесь — действие: кто кому сколько переводит.
+ * Поэтому сначала переводы (свои сверху), а балансы — справка, свёрнутая под ними.
+ * Итог «сколько должен я» живёт в шапке страницы и здесь не дублируется.
+ */
 export function SettlementSection({ balances, settlements, participantsCount, currencySymbol: sym = "$", currentUserId = "" }: SettlementSectionProps) {
-  const [showBalanceHint, setShowBalanceHint] = useState(false);
-  const [showSettlementHint, setShowSettlementHint] = useState(false);
-  const [expandedBalance, setExpandedBalance] = useState<string | null>(null);
+  const [showHint, setShowHint] = useState(false);
+  const [showBalances, setShowBalances] = useState(false);
 
-  // Личная позиция: сколько должен я и сколько должны мне — главный вопрос этого экрана.
-  // Свои переводы идут первыми и подсвечены (чужие пары — ниже, как справка)
-  const iAmIn = !!currentUserId && balances.some((b) => b.participant.id === currentUserId);
-  const iOwe = settlements.filter((s) => s.from.id === currentUserId).reduce((a, s) => a + s.amount, 0);
-  const owedToMe = settlements.filter((s) => s.to.id === currentUserId).reduce((a, s) => a + s.amount, 0);
   const involvesMe = (s: Settlement) => s.from.id === currentUserId || s.to.id === currentUserId;
   const orderedSettlements = [...settlements].sort((a, b) => Number(involvesMe(b)) - Number(involvesMe(a)));
 
   return (
-    <div className="rounded-2xl bg-card border border-border p-4">
-      <div className="flex items-center gap-2 mb-2">
-        <Scale className="size-4" />
-        <h2 className="font-semibold text-sm">Расчёт между друзьями</h2>
+    <section id="budget-settlement" aria-labelledby="budget-settlement-title" className="scroll-mt-32 rounded-2xl border border-border bg-card p-4">
+      <div className="flex items-center gap-2">
+        <Scale className="size-4 shrink-0" aria-hidden="true" />
+        <h2 id="budget-settlement-title" className="text-sm font-semibold">Расчёт между друзьями</h2>
         <button
-          onClick={() => setShowBalanceHint(v => !v)}
-          className="ml-auto size-11 rounded-full bg-muted grid place-items-center text-muted-foreground shrink-0 active:scale-90 transition-transform"
-          title="Как это работает?"
+          type="button"
+          onClick={() => setShowHint((v) => !v)}
+          aria-expanded={showHint}
+          aria-label="Как считаются долги"
+          title="Как считаются долги"
+          className="-my-2 -mr-2 ml-auto grid size-11 shrink-0 place-items-center rounded-full text-muted-foreground transition-colors hover:text-foreground"
         >
-          <Info className="size-3.5" />
+          <Info className="size-4" />
         </button>
       </div>
 
-      {/* Разворачивающаяся подсказка (тап по ℹ️) */}
-      <AnimatePresence>
-        {showBalanceHint && (
-          <motion.div
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: "auto", opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            className="overflow-hidden"
-          >
-            <div className="bg-muted/50 rounded-xl p-3 mb-3 space-y-1.5 text-[11px] text-muted-foreground">
-              <div className="flex items-start gap-1.5">
-                <span className="text-primary shrink-0">①</span>
-                <span><b className="text-foreground">Личная трата</b> (только за себя) — просто учитывается в статистике, долги не создаёт.</span>
-              </div>
-              <div className="flex items-start gap-1.5">
-                <span className="text-primary shrink-0">②</span>
-                <span><b className="text-foreground">Заплатил за других</b> — те, за кого заплатил, должны тебе деньги.</span>
-              </div>
-              <div className="flex items-start gap-1.5">
-                <span className="text-primary shrink-0">③</span>
-                <span><b className="text-foreground">Внёс</b> — сколько человек заплатил за траты поездки (переводы не считаются).</span>
-              </div>
-              <div className="flex items-start gap-1.5">
-                <span className="text-primary shrink-0">④</span>
-                <span><b className="text-green-600">+</b> зелёная — человеку должны. <b className="text-red-500">−</b> красная — человек должен.</span>
-              </div>
-              <div className="flex items-start gap-1.5">
-                <span className="text-primary shrink-0">⑤</span>
-                <span>Кнопка <b className="text-foreground">«Перевели»</b> — у того, кому должны. Нажми когда получил перевод.</span>
-              </div>
-            </div>
+      <AnimatePresence initial={false}>
+        {showHint && (
+          <motion.div {...REVEAL} className="overflow-hidden">
+            <ul className="mt-3 space-y-1.5 rounded-xl bg-muted/50 p-3 text-xs text-muted-foreground">
+              <li><b className="text-foreground">Личная трата</b> идёт только в статистику и долгов не создаёт.</li>
+              <li><b className="text-foreground">Заплатил за других</b>: те, за кого заплатили, должны свою долю.</li>
+              <li>Для каждой пары показан чистый долг: сколько A должен B минус сколько B должен A.</li>
+              <li>Кнопка <b className="text-foreground">«Перевели»</b> есть у того, кому должны. Нажмите, когда деньги пришли.</li>
+              {participantsCount > 2 && (
+                <li>Втроём и больше число переводов иногда можно сократить, но суммы здесь всегда честные.</li>
+              )}
+            </ul>
           </motion.div>
         )}
       </AnimatePresence>
 
-      {/* Моя позиция: два крупных числа вместо поиска себя в списке */}
-      {iAmIn && (iOwe > 0 || owedToMe > 0) && (
-        <div className="grid grid-cols-2 gap-2 mb-3">
-          {iOwe > 0 && (
-            <div className="rounded-xl bg-red-500/10 border border-red-500/20 px-3 py-2">
-              <div className="text-[10px] text-red-600 dark:text-red-400 font-medium">Ты должен</div>
-              <div className="text-lg font-bold tabular-nums text-red-600 dark:text-red-400">
-                <AnimatedNumber value={iOwe} format={(v) => `${sym}${v.toFixed(2)}`} />
-              </div>
-            </div>
-          )}
-          {owedToMe > 0 && (
-            <div className="rounded-xl bg-green-500/10 border border-green-500/20 px-3 py-2">
-              <div className="text-[10px] text-green-700 dark:text-green-400 font-medium">Тебе должны</div>
-              <div className="text-lg font-bold tabular-nums text-green-700 dark:text-green-400">
-                <AnimatedNumber value={owedToMe} format={(v) => `${sym}${v.toFixed(2)}`} />
-              </div>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Балансы участников */}
-      <div className="space-y-2 mb-3">
-        {balances.map((b) => {
-          return (
-            <div key={b.participant.id} className="flex items-center gap-2.5 text-sm">
-              <UserAvatar
-                name={b.participant.name}
-                emoji={b.participant.emoji}
-                color={b.participant.color}
-                avatarUrl={b.participant.avatarUrl}
-                className="size-8"
-                textClassName="text-xs"
-              />
-              <div className="flex-1 min-w-0">
-                <div className="font-medium truncate">
-                  {b.participant.name}
-                  {b.participant.id === currentUserId && <span className="ml-1.5 text-[10px] font-medium text-primary">ты</span>}
-                  <FormerTag former={b.participant.former} />
-                </div>
-                <button
-                  onClick={() => setExpandedBalance(expandedBalance === b.participant.id ? null : b.participant.id)}
-                  className="text-[10px] text-muted-foreground flex items-center gap-1 active:scale-95 transition-transform"
-                >
-                  внёс {sym}{b.paid.toFixed(2)}
-                  <ChevronDown className={cn("size-2.5 transition-transform", expandedBalance === b.participant.id && "rotate-180")} />
-                </button>
-              </div>
-              <span className={cn("font-semibold text-right text-sm shrink-0 tabular-nums", b.balance > 0 ? "text-green-600" : b.balance < 0 ? "text-red-500" : "text-muted-foreground")}>
-                {b.balance > 0 ? `+${sym}${b.balance.toFixed(2)}` : b.balance < 0 ? `−${sym}${Math.abs(b.balance).toFixed(2)}` : "ровно"}
-              </span>
-            </div>
-          );
-        })}
-      </div>
-
-      {/* Расшифровка для выбранного участника */}
-      <AnimatePresence>
-        {expandedBalance && (() => {
-          const b = balances.find(x => x.participant.id === expandedBalance);
-          if (!b) return null;
-          return (
-            <motion.div
-              initial={{ height: 0, opacity: 0 }}
-              animate={{ height: "auto", opacity: 1 }}
-              exit={{ height: 0, opacity: 0 }}
-              className="overflow-hidden"
-            >
-              <div className="bg-muted/40 rounded-xl p-3 mb-3 space-y-1.5 text-[11px]">
-                <div className="flex items-center justify-between">
-                  <span className="text-muted-foreground">{b.participant.name} заплатил всего</span>
-                  <span className="font-medium">{sym}{b.paid.toFixed(2)}</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-muted-foreground">Ему должны</span>
-                  <span className="font-medium text-green-600">{sym}{b.owedToMe.toFixed(2)}</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-muted-foreground">Он должен</span>
-                  <span className="font-medium text-red-500">{sym}{b.owedToOthers.toFixed(2)}</span>
-                </div>
-                <div className="border-t border-border pt-1.5 flex items-center justify-between">
-                  <span className="text-muted-foreground">
-                    {b.balance > 0 ? "Итог: ему должны" : b.balance < 0 ? "Итог: он должен" : "Итог: всё поровну"}
-                  </span>
-                  <span className={cn("font-bold", b.balance > 0 ? "text-green-600" : b.balance < 0 ? "text-red-500" : "text-muted-foreground")}>
-                    {b.balance > 0 ? `+${sym}${b.balance.toFixed(2)}` : b.balance < 0 ? `−${sym}${Math.abs(b.balance).toFixed(2)}` : `${sym}0`}
-                  </span>
-                </div>
-              </div>
-            </motion.div>
-          );
-        })()}
-      </AnimatePresence>
-
-      {/* Кто кому переводит */}
       {settlements.length > 0 ? (
-        <div className="pt-2 border-t border-border">
-          <div className="flex items-center gap-2 mb-1">
-            <span className="text-xs text-muted-foreground font-medium">Кому сколько перевести:</span>
-            <button
-              onClick={() => setShowSettlementHint(v => !v)}
-              className="size-5 rounded-full bg-muted grid place-items-center text-muted-foreground shrink-0 active:scale-90 transition-transform"
-            >
-              <Info className="size-3" />
-            </button>
-          </div>
-          <AnimatePresence>
-            {showSettlementHint && (
+        // Ключ строки — пара участников, не индекс: после перевода список пересчитывается и меняет
+        // порядок/длину (при key={i} React переиспользовал done-состояние кнопки у чужой пары).
+        // Погашенная пара сворачивается и исчезает (оптимистично — до ответа сервера)
+        <div className="mt-3">
+          <AnimatePresence initial={false}>
+            {orderedSettlements.map((s) => (
               <motion.div
-                initial={{ height: 0, opacity: 0 }}
-                animate={{ height: "auto", opacity: 1 }}
-                exit={{ height: 0, opacity: 0 }}
+                key={`${s.from.id}-${s.to.id}`}
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: "auto" }}
+                exit={{ opacity: 0, height: 0 }}
+                transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
                 className="overflow-hidden"
               >
-                <div className="bg-muted/50 rounded-lg p-2.5 mb-2 text-[11px] text-muted-foreground">
-                  💡 Это <b className="text-foreground">попарные переводы</b> («кто кому сколько должен»).
-                  Для каждой пары участников показан чистый долг A→B минус B→A. Нажми «Перевели» когда получил перевод — у пары баланс обнулится.
-                  {participantsCount > 2 && (
-                    <span className="block mt-1 text-amber-500">
-                      При 3+ участниках иногда можно уменьшить число переводов — это упрощённая схема, всегда честная по суммам.
-                    </span>
-                  )}
+                <div className="pb-2">
+                  <TransferRow settlement={s} sym={sym} currentUserId={currentUserId} mine={involvesMe(s)} />
                 </div>
               </motion.div>
-            )}
-          </AnimatePresence>
-          {/* Ключ строки — пара участников, не индекс: после перевода список пересчитывается и меняет
-              порядок/длину (при key={i} React переиспользовал done-состояние кнопки у чужой пары).
-              Погашенная пара сворачивается и исчезает (оптимистично — до ответа сервера) */}
-          <AnimatePresence initial={false}>
-          {orderedSettlements.map((s) => (
-            <motion.div
-              key={`${s.from.id}-${s.to.id}`}
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: "auto" }}
-              exit={{ opacity: 0, height: 0 }}
-              transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
-              className="overflow-hidden"
-            >
-            <div className="pb-2">
-            <div className={cn("bg-muted/40 rounded-xl px-3 py-2.5", involvesMe(s) && "ring-1 ring-primary/30")}>
-              {/* Главная строка: от → кому + сумма */}
-              <div className="flex items-center gap-2">
-                <UserAvatar
-                  name={s.from.name}
-                  emoji={s.from.emoji}
-                  color={s.from.color}
-                  avatarUrl={s.from.avatarUrl}
-                  className="size-7"
-                  textClassName="text-[10px]"
-                />
-                <div className="flex-1 min-w-0">
-                  <div className="text-xs font-medium truncate">{s.from.name}<FormerTag former={s.from.former} /></div>
-                  <div className="text-[10px] text-red-500">должен</div>
-                </div>
-                <ArrowRight className="size-3.5 text-muted-foreground shrink-0" />
-                <UserAvatar
-                  name={s.to.name}
-                  emoji={s.to.emoji}
-                  color={s.to.color}
-                  avatarUrl={s.to.avatarUrl}
-                  className="size-7"
-                  textClassName="text-[10px]"
-                />
-                <div className="flex-1 min-w-0">
-                  <div className="text-xs font-medium truncate">{s.to.name}<FormerTag former={s.to.former} /></div>
-                  <div className="text-[10px] text-green-600">получит</div>
-                </div>
-                <span className="font-bold text-primary text-sm shrink-0">{sym}{s.amount.toFixed(2)}</span>
-              </div>
-              {/* Куда переводить: реквизиты получателя, если он их заполнил
-                  (иначе номер карты летит в общий чат — кейс реальной поездки) */}
-              {s.to.paymentDetails && (
-                <div className="mt-1.5 flex items-center gap-1.5 text-[11px] text-muted-foreground">
-                  <CreditCard className="size-3 shrink-0" />
-                  <span className="truncate flex-1" title={s.to.paymentDetails}>
-                    {s.to.paymentDetails}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      void navigator.clipboard?.writeText(s.to.paymentDetails ?? "").then(
-                        () => toast.success("Реквизиты скопированы"),
-                        () => toast.error("Не удалось скопировать")
-                      );
-                    }}
-                    className="shrink-0 inline-flex items-center gap-1 min-h-8 px-2 rounded-lg border border-border hover:bg-muted active:scale-95 transition-transform"
-                  >
-                    <Copy className="size-3" /> Копировать
-                  </button>
-                </div>
-              )}
-              {/* Кнопка отметки */}
-              <div className="mt-2 flex justify-end">
-                {/* key по сумме: «Получено» не залипает, если у пары остался новый долг */}
-                <MarkSettledButton key={Math.round(s.amount * 100)} from={s.from} to={s.to} amount={s.amount} />
-              </div>
-            </div>
-            </div>
-            </motion.div>
-          ))}
+            ))}
           </AnimatePresence>
         </div>
       ) : (
-        <div className="text-xs text-green-600 text-center py-2 animate-fade-up">Долгов нет 🎉</div>
+        <p className="mt-3 flex items-center gap-2 text-sm font-medium text-green-700 dark:text-green-400">
+          <CheckCircle2 className="size-4 shrink-0" aria-hidden="true" /> Долгов нет
+        </p>
       )}
+
+      <button
+        type="button"
+        onClick={() => setShowBalances((v) => !v)}
+        aria-expanded={showBalances}
+        className="-mb-2 mt-1 flex min-h-11 w-full items-center gap-1 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
+      >
+        Кто сколько внёс
+        <ChevronDown className={cn("size-3.5 transition-transform", showBalances && "rotate-180")} aria-hidden="true" />
+      </button>
+
+      <AnimatePresence initial={false}>
+        {showBalances && (
+          <motion.div {...REVEAL} className="overflow-hidden">
+            <ul className="mt-2 divide-y divide-border">
+              {balances.map((b) => (
+                <BalanceRow key={b.participant.id} balance={b} sym={sym} isMe={b.participant.id === currentUserId} />
+              ))}
+            </ul>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </section>
+  );
+}
+
+function TransferRow({
+  settlement: s,
+  sym,
+  currentUserId,
+  mine,
+}: {
+  settlement: Settlement;
+  sym: string;
+  currentUserId: string;
+  mine: boolean;
+}) {
+  const iPay = s.from.id === currentUserId;
+  const iGet = s.to.id === currentUserId;
+
+  return (
+    <div className={cn("flex flex-wrap items-center gap-x-3 gap-y-2 rounded-xl bg-muted/40 p-3", mine && "ring-1 ring-inset ring-primary/30")}>
+      <div className="flex min-w-0 flex-1 basis-56 items-center gap-2.5">
+        <div className="flex shrink-0 -space-x-2">
+          <UserAvatar name={s.from.name} emoji={s.from.emoji} color={s.from.color} avatarUrl={s.from.avatarUrl} className="size-8 ring-2 ring-card" textClassName="text-xs" />
+          <UserAvatar name={s.to.name} emoji={s.to.emoji} color={s.to.color} avatarUrl={s.to.avatarUrl} className="size-8 ring-2 ring-card" textClassName="text-xs" />
+        </div>
+        <div className="min-w-0 flex-1">
+          {/* Две строки, а не одна: длинное имя отправителя не должно съедать получателя */}
+          <div className="truncate text-sm font-medium">{iPay ? "Ты" : s.from.name}<FormerTag former={s.from.former} /></div>
+          <div className="truncate text-sm font-medium">
+            <span className="mr-1 text-muted-foreground" aria-label="переводит">→</span>
+            {iGet ? "тебе" : s.to.name}
+            <FormerTag former={s.to.former} />
+          </div>
+        </div>
+        <span className="shrink-0 text-base font-bold tabular-nums">{moneyExact(sym, s.amount)}</span>
+      </div>
+
+      {/* На телефоне действия ниже, на широком экране — в той же строке */}
+      <div className="flex w-full min-w-0 items-center justify-end gap-2 empty:hidden lg:w-auto">
+        {/* Куда переводить: реквизиты получателя, если он их заполнил
+            (иначе номер карты летит в общий чат — кейс реальной поездки) */}
+        {s.to.paymentDetails && (
+          <div className="flex min-w-0 flex-1 items-center gap-1.5 text-xs text-muted-foreground">
+            <CreditCard className="size-3.5 shrink-0" aria-hidden="true" />
+            <span className="truncate" title={s.to.paymentDetails}>{s.to.paymentDetails}</span>
+            <button
+              type="button"
+              onClick={() => {
+                void navigator.clipboard?.writeText(s.to.paymentDetails ?? "").then(
+                  () => toast.success("Реквизиты скопированы"),
+                  () => toast.error("Не удалось скопировать")
+                );
+              }}
+              aria-label="Копировать реквизиты"
+              title="Копировать реквизиты"
+              className="grid size-11 shrink-0 place-items-center rounded-lg transition-colors hover:bg-muted hover:text-foreground"
+            >
+              <Copy className="size-4" />
+            </button>
+          </div>
+        )}
+        {/* key по сумме: «Получено» не залипает, если у пары остался новый долг */}
+        <MarkSettledButton key={Math.round(s.amount * 100)} from={s.from} to={s.to} amount={s.amount} />
+      </div>
+    </div>
+  );
+}
+
+function BalanceRow({ balance: b, sym, isMe }: { balance: Balance; sym: string; isMe: boolean }) {
+  const [open, setOpen] = useState(false);
+  const tone = b.balance > 0 ? "text-green-700 dark:text-green-400" : b.balance < 0 ? "text-red-600 dark:text-red-400" : "text-muted-foreground";
+
+  return (
+    <li>
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        className="flex min-h-12 w-full items-center gap-2.5 py-1.5 text-left"
+      >
+        <UserAvatar
+          name={b.participant.name}
+          emoji={b.participant.emoji}
+          color={b.participant.color}
+          avatarUrl={b.participant.avatarUrl}
+          className="size-8"
+          textClassName="text-xs"
+        />
+        <span className="min-w-0 flex-1">
+          <span className="block truncate text-sm font-medium">
+            {b.participant.name}
+            {isMe && <span className="ml-1.5 text-[11px] font-medium text-primary">ты</span>}
+            <FormerTag former={b.participant.former} />
+          </span>
+          <span className="block text-xs text-muted-foreground tabular-nums">внёс {moneyExact(sym, b.paid)}</span>
+        </span>
+        <span className={cn("shrink-0 text-sm font-semibold tabular-nums", tone)}>
+          {b.balance === 0 ? "ровно" : moneyDelta(sym, b.balance)}
+        </span>
+        <ChevronDown className={cn("size-3.5 shrink-0 text-muted-foreground transition-transform", open && "rotate-180")} aria-hidden="true" />
+      </button>
+
+      <AnimatePresence initial={false}>
+        {open && (
+          <motion.div {...REVEAL} className="overflow-hidden">
+            <dl className="mb-2 space-y-1 rounded-xl bg-muted/40 p-3 text-xs">
+              <BalanceFact label="Заплачено всего" value={moneyExact(sym, b.paid)} />
+              <BalanceFact label="К получению" value={moneyExact(sym, b.owedToMe)} />
+              <BalanceFact label="К возврату" value={moneyExact(sym, b.owedToOthers)} />
+            </dl>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </li>
+  );
+}
+
+function BalanceFact({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-center justify-between gap-3">
+      <dt className="text-muted-foreground">{label}</dt>
+      <dd className="font-medium tabular-nums">{value}</dd>
     </div>
   );
 }

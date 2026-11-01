@@ -130,7 +130,7 @@ export function Timeline() {
   const { data: expenses, isLoading: expensesLoading } = useExpenses();
   const { data: photos, isLoading: photosLoading } = usePhotos();
   const { data: journals, isLoading: journalsLoading } = useJournal();
-  const { setActiveTab, setSelectedDay } = useTripStore();
+  const { setActiveTab, openBudget, setSelectedDay } = useTripStore();
   const [filter, setFilter] = useState<EventType | "all">("all");
   const [showAll, setShowAll] = useState(false);
   const [sheetEvent, setSheetEvent] = useState<TimelineEvent | null>(null);
@@ -347,7 +347,9 @@ export function Timeline() {
   const jump = (e: TimelineEvent) => {
     if (!e.targetTab) return;
     if (e.dayNumber != null) setSelectedDay(e.dayNumber);
-    setActiveTab(e.targetTab);
+    // Лента показывает конкретную трату: её ищут в истории, а не в сводке
+    if (e.targetTab === "budget") openBudget("expenses");
+    else setActiveTab(e.targetTab);
   };
 
   if (!tripId) {

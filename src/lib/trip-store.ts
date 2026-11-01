@@ -4,6 +4,9 @@ import { persist } from "zustand/middleware";
 /** Режимы шита быстрого добавления (FAB) */
 export type QuickAddMode = "photo" | "expense" | "journal";
 
+/** Разделы вкладки «Бюджет» */
+export type BudgetView = "summary" | "expenses" | "plan";
+
 export type TripTab =
   | "dashboard"
   | "timeline"
@@ -68,6 +71,13 @@ interface TripState {
   // одной кнопкой. Транзиентное — сбрасывается после consumption в RestChill.
   restView: "route" | "wishlist" | "nearby" | null;
   setRestView: (v: "route" | "wishlist" | "nearby" | null) => void;
+  // Раздел вкладки «Бюджет» и шит новой траты. В сторе, потому что переключают их снаружи вкладки:
+  // поиск и лента ведут сразу в «Траты», плавающий «+» открывает форму. Транзиентное, не в persist
+  budgetView: BudgetView;
+  setBudgetView: (v: BudgetView) => void;
+  openBudget: (v: BudgetView) => void;
+  budgetAddOpen: boolean;
+  setBudgetAddOpen: (v: boolean) => void;
 }
 
 export const useTripStore = create<TripState>()(
@@ -104,6 +114,7 @@ export const useTripStore = create<TripState>()(
           mapOnlyUnvisited: false,
           mapOnlyChill: false,
           selectedDay: null,
+          budgetView: "summary",
         }),
       pendingTripId: null,
       setPendingTripId: (id) => set({ pendingTripId: id }),
@@ -117,6 +128,11 @@ export const useTripStore = create<TripState>()(
       setMapOnlyChill: (v) => set({ mapOnlyChill: v }),
       restView: null,
       setRestView: (v) => set({ restView: v }),
+      budgetView: "summary",
+      setBudgetView: (v) => set({ budgetView: v }),
+      openBudget: (v) => set({ activeTab: "budget", budgetView: v }),
+      budgetAddOpen: false,
+      setBudgetAddOpen: (v) => set({ budgetAddOpen: v }),
     }),
     {
       name: "triptrek-store",

@@ -22,7 +22,7 @@ export function TripFinishedBanner() {
   const { data: expenses } = useExpenses();
   const { data: session } = useAuth();
   const setStatus = useSetTripStatus();
-  const { setActiveTab } = useTripStore();
+  const { openBudget } = useTripStore();
   const [confirming, setConfirming] = useState(false);
 
   if (!trip || !isTripFinished(trip.settings.endDate, trip.trip?.status)) return null;
@@ -75,7 +75,7 @@ export function TripFinishedBanner() {
               </p>
               <button
                 type="button"
-                onClick={() => setActiveTab("budget")}
+                onClick={() => openBudget("summary")}
                 className="inline-flex min-h-11 items-center gap-1.5 rounded-xl bg-emerald-600 px-4 text-xs font-semibold text-white active:scale-[0.98] transition-transform"
               >
                 <Scale className="size-4" /> Закрыть долги →

@@ -1,6 +1,7 @@
 "use client";
 
 import { useTrip } from "@/hooks/use-trip";
+import { useHideOnScroll } from "@/hooks/use-hide-on-scroll";
 import { useTripStore } from "@/lib/trip-store";
 import { cn } from "@/lib/utils";
 import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
@@ -144,6 +145,11 @@ export function AppShell({ children }: { children: ReactNode }) {
   const canInvite = myRole === "owner" || trip?.settings.allowMemberInvites !== false;
   // Зритель — read-only: FAB быстрых добавлений ему не нужен (API всё равно 403)
   const isViewer = myRole === "viewer";
+  // На «Бюджете» FAB работает на вкладку: сразу полная форма траты (быстрая не умеет «кто заплатил»)
+  // и прячется при листании вниз, потому что суммы там стоят у правого края, ровно под ним
+  const onBudgetTab = activeTab === "budget";
+  const setBudgetAddOpen = useTripStore((s) => s.setBudgetAddOpen);
+  const fabHidden = useHideOnScroll(onBudgetTab);
   const tabScrollRef = useRef<HTMLDivElement>(null);
   const headerRef = useRef<HTMLElement>(null);
   const [showLeftArrow, setShowLeftArrow] = useState(false);
@@ -476,18 +482,26 @@ export function AppShell({ children }: { children: ReactNode }) {
 
       {!isViewer && (
       <motion.button
-        onClick={() => setQuickOpen(true)}
+        onClick={() => (onBudgetTab ? setBudgetAddOpen(true) : setQuickOpen(true))}
         // Прогрев чанка PhotoForm (exifr ~100 KB) на касании — к моменту открытия
         // шита форма уже готова, первый FAB-тап не платит за загрузку (аудит 2026-10-06)
         onPointerDown={() => {
           void import("./quick-add/PhotoForm");
           void import("exifr");
         }}
+        initial={false}
+        animate={{ y: fabHidden ? 112 : 0, opacity: fabHidden ? 0 : 1 }}
+        transition={{ duration: 0.2, ease: "easeOut" }}
         whileTap={{ scale: 0.88 }}
         whileHover={{ scale: 1.06 }}
-        className="fixed z-40 size-16 sm:size-14 rounded-full bg-gradient-to-br from-orange-500 to-rose-500 text-white shadow-2xl shadow-orange-500/40 grid place-items-center border-2 border-white/20 right-4 sm:right-6"
+        className={cn(
+          "fixed z-40 size-16 sm:size-14 rounded-full bg-gradient-to-br from-orange-500 to-rose-500 text-white shadow-2xl shadow-orange-500/40 grid place-items-center border-2 border-white/20 right-4 sm:right-6",
+          fabHidden && "pointer-events-none"
+        )}
         style={{ bottom: "calc(1.25rem + env(safe-area-inset-bottom, 0px))" }}
-        aria-label="Быстрое добавление"
+        tabIndex={fabHidden ? -1 : undefined}
+        aria-hidden={fabHidden || undefined}
+        aria-label={onBudgetTab ? "Добавить трату" : "Быстрое добавление"}
       >
         {/* Хало живёт только при полной анимации: бесконечный пульс при reduced motion не нужен */}
         <FabHalo />

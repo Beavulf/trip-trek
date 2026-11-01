@@ -4,7 +4,7 @@ import { useMemo } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import type { Expense, Participant } from "@/lib/types";
 import { groupByDay } from "@/lib/budget/history";
-import { fmtMoney } from "@/lib/utils";
+import { moneyExact } from "@/lib/budget/format";
 import { ExpenseRow } from "./ExpenseRow";
 
 // После «Показать ещё» строк бывают сотни: motion-узлы с height-анимацией на каждой тормозят телефон
@@ -32,12 +32,11 @@ export function ExpenseList({
     <div className="space-y-2.5">
       {groups.map((g) => (
         <section key={g.key} aria-label={g.label}>
-          <div className="flex items-baseline justify-between px-1 pb-1 text-[11px] text-muted-foreground">
-            <span className="font-semibold uppercase tracking-wider">{g.label}</span>
+          <div className="flex items-baseline justify-between px-2 pb-1 text-xs">
+            <span className="font-semibold text-muted-foreground">{g.label}</span>
             {g.total > 0 && (
-              <span className="tabular-nums" title="Траты за день без переводов">
-                {sym}
-                {fmtMoney(g.total)}
+              <span className="text-muted-foreground tabular-nums" title="Траты за день без переводов">
+                {moneyExact(sym, g.total)}
               </span>
             )}
           </div>
@@ -50,12 +49,12 @@ export function ExpenseList({
                   animate={{ opacity: 1, height: "auto" }}
                   exit={{ opacity: 0, height: 0, paddingBottom: 0 }}
                   transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
-                  className="pb-1.5 overflow-hidden"
+                  className="pb-0.5 overflow-hidden"
                 >
                   <ExpenseRow expense={e} participants={participants} />
                 </motion.div>
               ) : (
-                <div key={e.id} className="pb-1.5">
+                <div key={e.id} className="pb-0.5">
                   <ExpenseRow expense={e} participants={participants} />
                 </div>
               )

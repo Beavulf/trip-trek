@@ -7,7 +7,8 @@ import { useRouteDays, useTrip, useExpenses } from "@/hooks/use-trip";
 import { calculatePlannedRoute } from "@/lib/budget";
 import { CATEGORY_META } from "@/lib/types";
 import { currencySymbol } from "@/lib/currencies";
-import { cn, fmtMoney, plural } from "@/lib/utils";
+import { cn, plural } from "@/lib/utils";
+import { moneyWhole } from "@/lib/budget/format";
 import { fromCents, toCents } from "@/lib/budget/money";
 
 type PlanMode = "days" | "categories";
@@ -64,20 +65,18 @@ export function RoutePlanCard() {
   const placesCount = stats.days.reduce((s, d) => s + d.placesCount, 0);
 
   return (
-    <div className="rounded-2xl bg-card border border-border p-4">
+    <div className="rounded-2xl bg-card border border-border">
       {/* Свёрнуто: одна строка итогов; развернуть/свернуть — тап по всей шапке */}
       <button
         type="button"
         onClick={() => setExpanded((v) => !v)}
         aria-expanded={expanded}
-        className="w-full flex items-center gap-2 text-left"
+        className="w-full min-h-12 px-4 flex items-center gap-2 text-left"
       >
         <Compass className="size-4 text-primary shrink-0" />
         <h2 className="font-semibold text-sm whitespace-nowrap">План по маршруту</h2>
-        <span className="ml-auto text-xs text-muted-foreground tabular-nums shrink-0 whitespace-nowrap">
-          {sym}{fmtMoney(stats.total)}
-          {factByDay.total > 0 && <span title="Все траты с привязкой к дню; план — только места, где указана сумма"> · траты {sym}{fmtMoney(factByDay.total)}</span>}
-        </span>
+        {/* Только план: сумма трат «по дням» рядом с итогами страницы читалась как третий, спорящий итог */}
+        <span className="ml-auto text-sm font-semibold tabular-nums shrink-0 whitespace-nowrap">{moneyWhole(sym, stats.total)}</span>
         <motion.span animate={{ rotate: expanded ? 180 : 0 }} transition={{ duration: 0.2 }} className="shrink-0">
           <ChevronDown className="size-4 text-muted-foreground" />
         </motion.span>
@@ -92,12 +91,12 @@ export function RoutePlanCard() {
             transition={{ duration: 0.2 }}
             className="overflow-hidden"
           >
-            <div className="pt-3">
+            <div className="px-4 pb-4">
               {/* Итог: план на поездку + факт по всем дням маршрута */}
               <div className="flex items-end gap-2 flex-wrap mb-1">
-                <span className="text-2xl font-bold tabular-nums leading-none">{sym}{fmtMoney(stats.total)}</span>
+                <span className="text-2xl font-bold tabular-nums leading-none">{moneyWhole(sym, stats.total)}</span>
                 <span className="text-xs text-muted-foreground pb-0.5">
-                  ≈ {sym}{fmtMoney(stats.perPerson)} на человека · {plural(participantsCount, "участник", "участника", "участников")}: {participantsCount}
+                  ≈ {moneyWhole(sym, stats.perPerson)} на человека · {plural(participantsCount, "участник", "участника", "участников")}: {participantsCount}
                 </span>
               </div>
               <div className="flex items-center gap-2 mb-3 text-xs">
@@ -107,8 +106,8 @@ export function RoutePlanCard() {
                 {factByDay.total > 0 && (
                   // Без красного «перерасхода»: план покрывает только места с суммой, а траты — всё подряд
                   // (такси, еда вне мест), поэтому прямое сравнение вводило бы в заблуждение
-                  <span className="font-medium tabular-nums text-muted-foreground" title="Все траты с привязкой к дню; план — только места, где указана сумма">
-                    траты по дням: {sym}{fmtMoney(factByDay.total)}
+                  <span className="tabular-nums text-muted-foreground" title="Все траты с привязкой к дню; план — только места, где указана сумма">
+                    {moneyWhole(sym, factByDay.total)} потрачено в дни маршрута
                   </span>
                 )}
               </div>
@@ -156,17 +155,17 @@ export function RoutePlanCard() {
                           <span className="ml-auto shrink-0 text-right">
                             {d.total > 0 && (
                               <span className="text-sm font-semibold tabular-nums">
-                                {sym}{fmtMoney(d.total)}
+                                {moneyWhole(sym, d.total)}
                               </span>
                             )}
                             {/* Факт дня: зелёный, пока в плане; красный при перерасходе */}
                             {fact > 0 && (
-                              <span className={cn("text-[10px] tabular-nums ml-1.5 font-medium", d.total === 0 ? "text-muted-foreground" : overFact ? "text-red-500" : "text-green-600")}>
-                                факт {sym}{fmtMoney(fact)}
+                              <span className={cn("text-[11px] tabular-nums ml-1.5 font-medium", d.total === 0 ? "text-muted-foreground" : overFact ? "text-red-500" : "text-green-600")}>
+                                факт {moneyWhole(sym, fact)}
                               </span>
                             )}
                             {d.total > 0 && (
-                              <span className="text-[10px] text-muted-foreground tabular-nums ml-1.5">≈ {sym}{fmtMoney(d.perPerson)}/чел</span>
+                              <span className="text-[11px] text-muted-foreground tabular-nums ml-1.5">≈ {moneyWhole(sym, d.perPerson)}/чел</span>
                             )}
                           </span>
                         </div>
@@ -201,12 +200,12 @@ export function RoutePlanCard() {
                             {meta?.emoji ?? "📌"}
                           </span>
                           <span className="text-sm font-medium truncate">{meta?.label ?? c.category}</span>
-                          <span className="text-[10px] text-muted-foreground tabular-nums">
+                          <span className="text-[11px] text-muted-foreground tabular-nums">
                             {c.count} {plural(c.count, "место", "места", "мест")}
                           </span>
                           <span className="ml-auto shrink-0 text-right">
-                            <span className="text-sm font-semibold tabular-nums">{sym}{fmtMoney(c.total)}</span>
-                            <span className="text-[10px] text-muted-foreground tabular-nums ml-1.5">≈ {sym}{fmtMoney(c.perPerson)}/чел</span>
+                            <span className="text-sm font-semibold tabular-nums">{moneyWhole(sym, c.total)}</span>
+                            <span className="text-[11px] text-muted-foreground tabular-nums ml-1.5">≈ {moneyWhole(sym, c.perPerson)}/чел</span>
                           </span>
                         </div>
                         <div className="h-1 rounded-full bg-muted overflow-hidden mt-1 ml-8">

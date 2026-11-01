@@ -7,7 +7,8 @@ import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { CURRENCIES, currencySelectOptions } from "@/lib/currencies";
 
-export function CurrencyConverter() {
+/** embedded — внутри чужой карточки: своя рамка и заголовок не нужны */
+export function CurrencyConverter({ embedded = false }: { embedded?: boolean }) {
   const { data: rates, isLoading, isError, refetch, isFetching } = useCurrency();
   const { data: trip } = useTrip();
   const tripCurrency = trip?.settings?.currency;
@@ -43,26 +44,30 @@ export function CurrencyConverter() {
     setTo(from);
   };
 
+  const refreshButton = rates && (
+    <button
+      type="button"
+      onClick={() => refetch()}
+      disabled={isFetching}
+      className="size-11 rounded-lg hover:bg-accent grid place-items-center text-muted-foreground disabled:opacity-50"
+      aria-label="Обновить курсы"
+    >
+      <RefreshCw className={cn("size-4", isFetching && "animate-spin")} />
+    </button>
+  );
+
   return (
     <motion.div
-      initial={{ opacity: 0, y: 8 }}
+      initial={{ opacity: 0, y: embedded ? 0 : 8 }}
       animate={{ opacity: 1, y: 0 }}
-      className="rounded-2xl bg-card border border-border p-4"
+      className={embedded ? undefined : "rounded-2xl bg-card border border-border p-4"}
     >
-      <div className="flex items-center justify-between gap-2 text-sm font-semibold mb-3">
-        <span>💱 Конвертер валют</span>
-        {rates && (
-          <button
-            type="button"
-            onClick={() => refetch()}
-            disabled={isFetching}
-            className="size-11 rounded-lg hover:bg-accent grid place-items-center text-muted-foreground disabled:opacity-50"
-            aria-label="Обновить курсы"
-          >
-            <RefreshCw className={cn("size-4", isFetching && "animate-spin")} />
-          </button>
-        )}
-      </div>
+      {!embedded && (
+        <div className="flex items-center justify-between gap-2 text-sm font-semibold mb-3">
+          <span>💱 Конвертер валют</span>
+          {refreshButton}
+        </div>
+      )}
 
       {isLoading ? (
         <div className="flex items-center gap-2 py-4 text-muted-foreground text-sm">
@@ -146,6 +151,7 @@ export function CurrencyConverter() {
                 : rates.updated
                   ? <>🔄 {new Date(rates.updated).toLocaleDateString("ru-RU", { day: "numeric", month: "short" })}</>
                   : "🔄 обновлено"}
+              {embedded && refreshButton}
             </span>
           </div>
 
