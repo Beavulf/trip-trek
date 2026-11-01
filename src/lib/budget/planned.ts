@@ -41,7 +41,7 @@ export interface PlannedRouteStats {
 const hasBudget = (v: number | null | undefined): v is number => v != null && v > 0;
 
 // Категория места → категория трат: план из маршрута попадает в те же группы,
-// что и в «План vs Факт» (BudgetPlan). Неизвестная категория — в «Прочее».
+// что и в плане категорий (BudgetPlan). Неизвестная категория — в «Прочее».
 export const EXPENSE_CATEGORY_BY_PLACE: Record<string, string> = {
   hotel: "accommodation",
   restaurant: "food",
@@ -128,7 +128,7 @@ export function calculatePlannedRoute(days: Day[], participantsCount: number): P
 
 /**
  * План маршрута, свёрнутый по КАТЕГОРИЯМ ТРАТ (accommodation, food, …) —
- * для «План vs Факт»: суммы из бюджетов мест складываются в те же группы,
+ * для плана категорий: суммы из бюджетов мест складываются в те же группы,
  * что и ручной план. Ручной план при этом не трогается — они суммируются на клиенте.
  */
 export function calculateRoutePlanByExpenseCategory(days: Day[]): Record<string, number> {

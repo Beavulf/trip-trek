@@ -148,6 +148,8 @@ export function AppShell({ children }: { children: ReactNode }) {
   // На «Бюджете» FAB работает на вкладку: сразу полная форма траты (быстрая не умеет «кто заплатил»)
   // и прячется при листании вниз, потому что суммы там стоят у правого края, ровно под ним
   const onBudgetTab = activeTab === "budget";
+  // Без загруженной поездки форме вкладки не на что опираться: «+» работает как везде
+  const fabOpensBudget = onBudgetTab && !!trip;
   const setBudgetAddOpen = useTripStore((s) => s.setBudgetAddOpen);
   const fabHidden = useHideOnScroll(onBudgetTab);
   const tabScrollRef = useRef<HTMLDivElement>(null);
@@ -482,7 +484,7 @@ export function AppShell({ children }: { children: ReactNode }) {
 
       {!isViewer && (
       <motion.button
-        onClick={() => (onBudgetTab ? setBudgetAddOpen(true) : setQuickOpen(true))}
+        onClick={() => (fabOpensBudget ? setBudgetAddOpen(true) : setQuickOpen(true))}
         // Прогрев чанка PhotoForm (exifr ~100 KB) на касании — к моменту открытия
         // шита форма уже готова, первый FAB-тап не платит за загрузку (аудит 2026-10-06)
         onPointerDown={() => {
@@ -501,7 +503,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         style={{ bottom: "calc(1.25rem + env(safe-area-inset-bottom, 0px))" }}
         tabIndex={fabHidden ? -1 : undefined}
         aria-hidden={fabHidden || undefined}
-        aria-label={onBudgetTab ? "Добавить трату" : "Быстрое добавление"}
+        aria-label={fabOpensBudget ? "Добавить трату" : "Быстрое добавление"}
       >
         {/* Хало живёт только при полной анимации: бесконечный пульс при reduced motion не нужен */}
         <FabHalo />

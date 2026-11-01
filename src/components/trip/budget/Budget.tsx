@@ -56,6 +56,12 @@ export function Budget() {
   const [showAllHistory, setShowAllHistory] = useState(false);
   const currentUserId = (session?.user as { id?: string } | undefined)?.id || "";
 
+  // «Все траты» нажимают внизу «Сводки»: без прокрутки раздел открылся бы посреди чужого списка
+  const openView = (view: BudgetView) => {
+    setBudgetView(view);
+    window.scrollTo({ top: 0 });
+  };
+
   // Плавающий «+» просит форму через стор: уходим с вкладки — запрос не должен дожить до возврата
   useEffect(() => () => setBudgetAddOpen(false), [setBudgetAddOpen]);
 
@@ -71,6 +77,18 @@ export function Budget() {
   const people = useMemo(
     () => moneyParticipants(trip?.participants ?? [], trip?.formerParticipants, expenses ?? []),
     [trip?.participants, trip?.formerParticipants, expenses]
+  );
+
+  // Форма живёт и на экране ошибки трат: «+» виден всегда и не должен становиться мёртвой кнопкой
+  const addSheet = (
+    <MobileBottomSheet
+      open={budgetAddOpen}
+      onOpenChange={setBudgetAddOpen}
+      title="Новая трата"
+      titleIcon={<Wallet className="size-5 text-primary" />}
+    >
+      <AddExpenseForm onDone={() => setBudgetAddOpen(false)} />
+    </MobileBottomSheet>
   );
 
   if (!tripId) {
@@ -121,6 +139,7 @@ export function Budget() {
         >
           Обновить
         </button>
+        {addSheet}
       </div>
     );
   }
@@ -148,7 +167,7 @@ export function Budget() {
   return (
     <Tabs
       value={budgetView}
-      onValueChange={(v) => setBudgetView(v as BudgetView)}
+      onValueChange={(v) => openView(v as BudgetView)}
       className="gap-4 animate-fade-up"
     >
       <TabsList className="grid h-auto w-full grid-cols-3 gap-1 rounded-2xl p-1 lg:mx-auto lg:max-w-md">
@@ -167,7 +186,8 @@ export function Budget() {
         ))}
       </TabsList>
 
-      <TabsContent value="summary">
+      {/* Смонтирована всегда: иначе каждый возврат заново считал сумму от нуля и сворачивал раскрытое */}
+      <TabsContent value="summary" forceMount className="data-[state=inactive]:hidden">
         <div className="grid gap-4 lg:grid-cols-2 lg:items-start">
           <div className="min-w-0 space-y-4">
             <BudgetHero
@@ -215,7 +235,7 @@ export function Budget() {
                   <h2 id="budget-recent-title" className="text-sm font-semibold">Последние траты</h2>
                   <button
                     type="button"
-                    onClick={() => setBudgetView("expenses")}
+                    onClick={() => openView("expenses")}
                     className="-my-2 flex min-h-11 items-center gap-0.5 text-xs font-medium text-primary hover:underline"
                   >
                     Все траты <ChevronRight className="size-3.5" aria-hidden="true" />
@@ -267,15 +287,7 @@ export function Budget() {
       </TabsContent>
 
       <BudgetEditModal open={showBudgetModal} onOpenChange={setShowBudgetModal} />
-
-      <MobileBottomSheet
-        open={budgetAddOpen}
-        onOpenChange={setBudgetAddOpen}
-        title="Новая трата"
-        titleIcon={<Wallet className="size-5 text-primary" />}
-      >
-        <AddExpenseForm onDone={() => setBudgetAddOpen(false)} />
-      </MobileBottomSheet>
+      {addSheet}
     </Tabs>
   );
 }

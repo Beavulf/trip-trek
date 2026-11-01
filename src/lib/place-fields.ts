@@ -85,7 +85,7 @@ export function pickPatchablePlace(body: unknown): PlacePatch {
         break;
       case "budget":
         // Отрицательное и заведомо нереальное ($99 999 999 на одно место) раздувает план
-        // дня и «План vs Факт» — такое значение просто не принимаем.
+        // дня и план категорий — такое значение просто не принимаем.
         if (v === null) take("budget", null);
         else if (typeof v === "number" && Number.isFinite(v) && v >= 0 && v <= MAX_PLACE_BUDGET) {
           take("budget", v);
