@@ -2,6 +2,9 @@
 // Раньше список жил в trip-map.tsx, а пикер держал свой устаревший CARTO URL
 // (с 2025 требует apikey — карта от него отказалась, пикер продолжал им пользоваться).
 
+/** Подпись источников на вкладке «Карта»: заменяет штатную плашку Leaflet, обязательна по лицензиям. */
+export const MAP_CREDIT = "OpenStreetMap · Esri";
+
 export type MapLayerKey = "voyager" | "satellite" | "light" | "dark";
 
 export const TILE_LAYERS: Record<MapLayerKey, { url: string; attr: string }> = {

@@ -203,11 +203,13 @@ export const MapCanvas = forwardRef<MapCanvasHandle, MapCanvasProps>(function Ma
       zoom={zoom}
       scrollWheelZoom={isDesktop}
       zoomControl={false}
+      // Штатная плашка Leaflet наезжала на рейку мест. Источники подписаны
+      // в trip-map.tsx (MAP_CREDIT): без подписи OSM и Esri подложку использовать нельзя
+      attributionControl={false}
       className={className ?? "w-full h-full bg-muted"}
     >
       <TileLayer
         key={layer}
-        attribution={TILE_LAYERS[layer].attr}
         url={TILE_LAYERS[layer].url}
         keepBuffer={4}
         eventHandlers={onTileError ? { tileerror: () => onTileError() } : undefined}

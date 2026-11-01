@@ -36,6 +36,7 @@ import { PlaceDialog } from "./itinerary/PlaceDialog";
 import { FiltersSheet } from "./map/filters-sheet";
 import { useMapFilters } from "@/hooks/trip/use-map-filters";
 import { LayersSheet, type MapLayerKey } from "./map/layers-sheet";
+import { MAP_CREDIT } from "@/lib/map-layers";
 import { isChillCategory } from "@/lib/chill-categories";
 import { resolveCityCoords, decodeCustomKey } from "@/lib/city-coords";
 import { peekMapFocus, ackMapFocus, subscribeMapFocus } from "@/lib/map-bus";
@@ -553,7 +554,11 @@ export default function TripMap({ active = true }: { active?: boolean }) {
                   <span className="text-green-600 font-semibold"> · {visitedCount} ✓</span>
                 )}
               </span>
-              {railCollapsed ? <ChevronUp className="size-4 ml-auto" /> : <ChevronDown className="size-4 ml-auto" />}
+              <span className="ml-auto flex items-center gap-2">
+                {/* Строка под картой в полном экране не видна, а подпись источников нужна всегда */}
+                {fullscreen && <span className="text-[10px] font-normal opacity-70">{MAP_CREDIT}</span>}
+                {railCollapsed ? <ChevronUp className="size-4" /> : <ChevronDown className="size-4" />}
+              </span>
             </button>
             {!railCollapsed && filtered.length > 0 && (
               <div className="flex gap-1.5 overflow-x-auto no-scrollbar px-2 pb-2">
@@ -626,7 +631,7 @@ export default function TripMap({ active = true }: { active?: boolean }) {
             · {photoCount} {plural(photoCount, "фото", "фото", "фото")} на карте
           </span>
         )}
-        <span className="ml-auto opacity-70">OpenStreetMap · Esri</span>
+        <span className="ml-auto opacity-70">{MAP_CREDIT}</span>
       </div>
 
       <AddPlaceSheet open={addOpen} onOpenChange={setAddOpen} initial={addData} />
