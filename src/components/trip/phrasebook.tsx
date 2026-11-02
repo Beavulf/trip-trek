@@ -22,7 +22,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn, plural } from "@/lib/utils";
-import { detectLanguage } from "@/lib/language-detect";
+import { detectLanguage, guessPackLanguage } from "@/lib/language-detect";
 import { useTripStore } from "@/lib/trip-store";
 import { MobileBottomSheet } from "./mobile-bottom-sheet";
 import { ShowCard } from "./phrases/ShowCard";
@@ -61,25 +61,11 @@ export function Phrasebook() {
     () => phrases?.find((p) => p.category === "basics") ?? phrases?.[0],
     [phrases]
   );
-  const lang = coverPhrase ? detectLanguage(coverPhrase.cn) : null;
+  const lang = coverPhrase ? detectLanguage(coverPhrase.cn, coverPhrase.language) : null;
   const langName = lang ? lang.langName.charAt(0).toUpperCase() + lang.langName.slice(1) : null;
 
   // Угадываем язык набора по направлению поездки — стартовый выбор в шторке загрузки
-  const guessLang = useMemo(() => {
-    const d = (trip?.trip?.destination || "").toLowerCase();
-    const table: Array<[RegExp, string]> = [
-      [/китай|china/, "zh"],
-      [/япон|japan/, "ja"],
-      [/корей|korea/, "ko"],
-      [/таил|тайв|thai|taiwan/, "th"],
-      [/вьет|viet/, "vi"],
-      [/франц|franc/, "fr"],
-      [/герман|german/, "de"],
-      [/испан|spain/, "es"],
-    ];
-    for (const [re, code] of table) if (re.test(d)) return code;
-    return "en";
-  }, [trip]);
+  const guessLang = useMemo(() => guessPackLanguage(trip?.trip?.destination || ""), [trip]);
 
   // Язык пакета для ИИ-действий: по фразам, фолбэк — направление поездки
   const packLanguage = lang?.langPrefix ?? guessLang;
@@ -255,9 +241,7 @@ export function Phrasebook() {
               <h1 className="text-2xl font-bold">
                 {activeLangName
                   ? `${activeLangName.charAt(0).toUpperCase()}${activeLangName.slice(1)} в дорогу`
-                  : lang?.langPrefix === "zh"
-                    ? "Китайский в дорогу"
-                    : `${langName ?? "Фразы"} в дорогу`}
+                  : `${langName ?? "Фразы"} в дорогу`}
               </h1>
               <p className="mt-1 text-sm text-white/80">
                 Тапни по фразе — покажем крупно · 🔊 озвучит вслух
@@ -787,7 +771,7 @@ function PhraseCard({
 }) {
   const [speaking, setSpeaking] = useState(false);
   const meta = categoryMeta(phrase.category);
-  const lang = detectLanguage(phrase.cn);
+  const lang = detectLanguage(phrase.cn, phrase.language);
   const langFlag = showLang ? langBadge(phrase.language) : null;
 
   return (
@@ -832,7 +816,7 @@ function PhraseCard({
           onClick={(e) => {
             e.stopPropagation();
             if (speaking) return;
-            speakPhrase(phrase.cn, { onStart: () => setSpeaking(true), onEnd: () => setSpeaking(false) });
+            speakPhrase(phrase.cn, { language: phrase.language, onStart: () => setSpeaking(true), onEnd: () => setSpeaking(false) });
           }}
           disabled={speaking}
           aria-label={speaking ? "Произносим…" : "Произнести фразу"}

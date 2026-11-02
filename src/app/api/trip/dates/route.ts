@@ -5,7 +5,7 @@ import { dayDateFor } from "@/lib/trip-days";
 
 const startOfDay = (x: Date | string) => {
   const d = new Date(x);
-  d.setHours(0, 0, 0, 0);
+  d.setUTCHours(0, 0, 0, 0);
   return d;
 };
 
@@ -21,7 +21,7 @@ export async function PATCH(req: NextRequest) {
   if (startDate) {
     const d = new Date(startDate);
     if (!isNaN(d.getTime())) {
-      d.setHours(0, 0, 0, 0);
+      d.setUTCHours(0, 0, 0, 0);
       data.startDate = d;
     }
   }
@@ -35,7 +35,7 @@ export async function PATCH(req: NextRequest) {
   if (endDate) {
     const d = new Date(endDate);
     if (!isNaN(d.getTime())) {
-      d.setHours(23, 59, 59, 999);
+      d.setUTCHours(23, 59, 59, 999);
       data.endDate = d;
       // пересчитать totalDays: диапазон включительно; endDate — конец дня, поэтому floor
       const s = await resolveStart();

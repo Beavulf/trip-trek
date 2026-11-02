@@ -2,7 +2,7 @@
 
 // Общие помощники страницы «Фразы»: TTS, поиск без диакритики, вибрация, размер шрифта.
 
-import { detectLanguage } from "@/lib/language-detect";
+import { detectLanguage, voiceMatches } from "@/lib/language-detect";
 import { toast } from "sonner";
 
 /** Короткая вибрация (Android; iOS игнорирует — не страшно) */
@@ -27,11 +27,11 @@ export function phraseFontSize(text: string): string {
   return "clamp(1.75rem, 9vw, 2.75rem)";
 }
 
-type SpeakOpts = { slow?: boolean; onStart?: () => void; onEnd?: () => void };
+type SpeakOpts = { slow?: boolean; language?: string | null; onStart?: () => void; onEnd?: () => void };
 
 /**
- * Озвучка фразы голосом телефона. Язык определяется по письму (detectLanguage),
- * для латиницы без установленного голоса — читаем английским.
+ * Озвучка фразы голосом телефона. Язык — из набора, а у старых фраз без кода — по тексту
+ * (detectLanguage); для латиницы без установленного голоса читаем английским.
  */
 export function speakPhrase(text: string, opts: SpeakOpts = {}) {
   if (typeof window === "undefined" || !("speechSynthesis" in window)) {
@@ -45,8 +45,8 @@ export function speakPhrase(text: string, opts: SpeakOpts = {}) {
   const finish = () => opts.onEnd?.();
 
   const run = (voices: SpeechSynthesisVoice[]) => {
-    const lang = detectLanguage(text);
-    const voice = voices.find((v) => v.lang.toLowerCase().startsWith(lang.langPrefix));
+    const lang = detectLanguage(text, opts.language);
+    const voice = voices.find((v) => voiceMatches(v.lang, lang));
 
     const utter = new SpeechSynthesisUtterance(text);
     utter.rate = opts.slow ? 0.55 : 0.8;

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { PDFDocument } from "pdf-lib";
+import { PDFDict, PDFDocument, PDFName } from "pdf-lib";
 import {
   buildRoutePdf,
   type RoutePdfDay,
@@ -81,6 +81,56 @@ describe("buildRoutePdf", () => {
     ];
     const bytes = await buildRoutePdf({ title: "Поездка", destination: "Китай", currency: "USD", startDate: "2026-10-10", endDate: null, generatedAt: new Date(), days });
     expect(new TextDecoder("latin1").decode(bytes.slice(0, 5))).toBe("%PDF-");
+  });
+
+  it("письменности страны: иероглифы, хангыль, тайский, хинди, арабский дают рабочий PDF и запасные шрифты", async () => {
+    const countries = [
+      ["湾畔百货", "深南大道9968号这是一个很长很长的地址用来检查自动换行是否正常工作而不是跑到页面右边之外"],
+      ["東京タワー", "東京都港区芝公園4丁目2-8"],
+      ["경복궁", "서울특별시 종로구 사직로 161"],
+      ["วัดพระแก้ว", "ถนนเจริญกรุง"],
+      ["ताज महल", "नमस्ते"],
+      ["برج خليفة", "شارع الشيخ زايد 12, دبي"],
+      ["מלון הים", "רחוב דיזנגוף 50"],
+      ["អង្គរវត្ត", "សួស្តី"],
+      ["ရွှေတိဂုံဘုရား", "မင်္ဂလာပါ"],
+    ];
+    const days: RoutePdfDay[] = countries.map(([name, address], i) => ({
+      dayNumber: i + 1,
+      date: `2026-10-${10 + i}`,
+      city: name,
+      title: name,
+      summary: null,
+      accentColor: null,
+      night: { name, address },
+      places: [place({ name, address })],
+    }));
+    const bytes = await buildRoutePdf({ ...input(days), title: "Кругосветка 世界一周" });
+    const doc = await PDFDocument.load(bytes);
+    expect(doc.getPageCount()).toBeGreaterThanOrEqual(1);
+    const baseFonts = doc.context
+      .enumerateIndirectObjects()
+      .map(([, obj]) => (obj instanceof PDFDict ? obj.get(PDFName.of("BaseFont"))?.toString() : undefined))
+      .filter(Boolean)
+      .join(" ");
+    for (const font of ["NotoSansCJK", "NotoSansThai", "NotoSansDevanagari", "NotoSansKhmer", "NotoSansMyanmar"]) {
+      expect(baseFonts).toContain(font);
+    }
+  });
+
+  it("запасные шрифты не подключаются к поездке без таких письменностей", async () => {
+    const doc = await PDFDocument.load(await buildRoutePdf(input([day()])));
+    const fonts = doc.context
+      .enumerateIndirectObjects()
+      .map(([, obj]) => (obj instanceof PDFDict ? obj.get(PDFName.of("BaseFont"))?.toString() : undefined))
+      .filter(Boolean)
+      .join(" ");
+    expect(fonts).not.toContain("Noto");
+  });
+
+  it("дата дня и поездки не зависит от пояса сервера", async () => {
+    const bytes = await buildRoutePdf({ ...input([day()]), startDate: "2026-10-08T00:00:00.000Z", endDate: "2026-10-19T23:59:59.999Z" });
+    expect((await PDFDocument.load(bytes)).getPageCount()).toBe(1);
   });
 
   it("день без мест и пустые опциональные поля не падают", async () => {

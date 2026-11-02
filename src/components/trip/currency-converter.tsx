@@ -5,7 +5,7 @@ import { ArrowRight, Loader2, RefreshCw } from "lucide-react";
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
-import { CURRENCIES, currencySelectOptions } from "@/lib/currencies";
+import { CurrencySelect } from "./currency-select";
 
 /** embedded — внутри чужой карточки: своя рамка и заголовок не нужны */
 export function CurrencyConverter({ embedded = false }: { embedded?: boolean }) {
@@ -14,7 +14,7 @@ export function CurrencyConverter({ embedded = false }: { embedded?: boolean }) 
   const tripCurrency = trip?.settings?.currency;
   const [amount, setAmount] = useState("100");
   const [from, setFrom] = useState("USD");
-  const [to, setTo] = useState("CNY");
+  const [to, setTo] = useState("EUR");
   const [userPicked, setUserPicked] = useState(false);
 
   // Дефолтная пара — валюта поездки ↔ USD (не жёсткий USD→CNY)
@@ -88,18 +88,14 @@ export function CurrencyConverter({ embedded = false }: { embedded?: boolean }) 
         <>
           <div className="space-y-2">
             <div className="flex gap-2">
-              <select
+              <CurrencySelect
                 value={from}
-                onChange={(e) => {
-                  setFrom(e.target.value);
+                onChange={(code) => {
+                  setFrom(code);
                   setUserPicked(true);
                 }}
                 className="rounded-lg border border-input bg-background px-2 py-2.5 text-sm w-28 min-h-11"
-              >
-                {currencySelectOptions(tripCurrency).map((c) => (
-                  <option key={c.code} value={c.code}>{c.flag} {c.code}</option>
-                ))}
-              </select>
+              />
               <input
                 type="number"
                 inputMode="decimal"
@@ -123,18 +119,14 @@ export function CurrencyConverter({ embedded = false }: { embedded?: boolean }) 
             </div>
 
             <div className="flex gap-2">
-              <select
+              <CurrencySelect
                 value={to}
-                onChange={(e) => {
-                  setTo(e.target.value);
+                onChange={(code) => {
+                  setTo(code);
                   setUserPicked(true);
                 }}
                 className="rounded-lg border border-input bg-background px-2 py-2.5 text-sm w-28 min-h-11"
-              >
-                {currencySelectOptions(tripCurrency).map((c) => (
-                  <option key={c.code} value={c.code}>{c.flag} {c.code}</option>
-                ))}
-              </select>
+              />
               <div className="flex-1 min-h-11 rounded-lg border border-input bg-muted/30 px-3 py-2.5 text-sm text-right font-bold flex items-center justify-end">
                 {result.toFixed(2)}
               </div>

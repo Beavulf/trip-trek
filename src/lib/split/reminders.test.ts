@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   dueAutoReminders,
   inAutoRemindWindow,
+  isTimeZone,
   isRemindAfterDays,
   manualCooldownLeft,
   MANUAL_COOLDOWN_MS,
@@ -105,11 +106,33 @@ describe("manualCooldownLeft", () => {
 });
 
 describe("окно и допустимые сроки", () => {
-  it("шлём только днём по Минску (06–18 UTC)", () => {
+  it("пояс неизвестен — считаем по Минску (09–21 = 06–18 UTC)", () => {
     expect(inAutoRemindWindow(new Date("2026-10-24T05:59:00Z"))).toBe(false);
     expect(inAutoRemindWindow(new Date("2026-10-24T06:00:00Z"))).toBe(true);
     expect(inAutoRemindWindow(new Date("2026-10-24T17:59:00Z"))).toBe(true);
     expect(inAutoRemindWindow(new Date("2026-10-24T18:00:00Z"))).toBe(false);
+    expect(inAutoRemindWindow(new Date("2026-10-24T12:00:00Z"), null)).toBe(true);
+    expect(inAutoRemindWindow(new Date("2026-10-24T03:00:00Z"), "Не/Пояс")).toBe(false);
+  });
+  it("в поездке окно идёт по часам должника", () => {
+    // 18:00 UTC — в Минске уже поздно, а в Китае глубокая ночь, в Нью-Йорке день
+    const evening = new Date("2026-10-24T18:00:00Z");
+    expect(inAutoRemindWindow(evening, "Asia/Shanghai")).toBe(false);
+    expect(inAutoRemindWindow(evening, "America/New_York")).toBe(true);
+    // 02:00 UTC — в Китае 10 утра, в Минске ещё ночь
+    const morning = new Date("2026-10-24T02:00:00Z");
+    expect(inAutoRemindWindow(morning, "Asia/Shanghai")).toBe(true);
+    expect(inAutoRemindWindow(morning, "Europe/Minsk")).toBe(false);
+  });
+  it("полночь по поясу не считается 24 часами", () => {
+    expect(inAutoRemindWindow(new Date("2026-10-24T21:00:00Z"), "Europe/Minsk")).toBe(false);
+  });
+  it("isTimeZone отсеивает мусор с устройства", () => {
+    expect(isTimeZone("Asia/Shanghai")).toBe(true);
+    expect(isTimeZone("Марс/Купол")).toBe(false);
+    expect(isTimeZone("")).toBe(false);
+    expect(isTimeZone(5)).toBe(false);
+    expect(isTimeZone("x".repeat(65))).toBe(false);
   });
   it("допустимые сроки — 3, 7, 14", () => {
     expect([3, 7, 14].every(isRemindAfterDays)).toBe(true);

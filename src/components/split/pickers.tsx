@@ -1,7 +1,7 @@
 "use client";
 
 import { cn } from "@/lib/utils";
-import { CURRENCIES } from "@/lib/currencies";
+import { CURRENCIES, currencyLabel } from "@/lib/currencies";
 
 // Пикеры для создания/правки группы и участника: значок, цвет, валюта.
 
@@ -74,7 +74,7 @@ export function CurrencySelect({ value, onChange, disabled }: { value: string; o
       >
         {CURRENCY_OPTIONS.map((c) => (
           <option key={c.code} value={c.code}>
-            {c.flag} {c.code} · {c.name}
+            {currencyLabel(c)}
           </option>
         ))}
       </select>

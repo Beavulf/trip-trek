@@ -12,6 +12,7 @@ import { useBodyScrollLock } from "@/hooks/use-body-scroll-lock";
 import { useTripStore } from "@/lib/trip-store";
 import { CARD_VARIANTS, type CardData, type CardVariantId } from "./share-card-art";
 import { currencySymbol } from "@/lib/currencies";
+import { formatTripDate, tripDateKey } from "@/lib/trip-days";
 
 // GIF кодим в половинном размере (540 по ширине) — 36 кадров дают гладкий
 // бесшовный цикл, а кодирование на слабых телефонах остаётся в пределах пары секунд
@@ -66,12 +67,12 @@ export function ShareCard({ open, onOpenChange }: { open: boolean; onOpenChange:
       else cities.push({ name: d.city, days: 1 });
     }
     const fmt = (iso?: string | null) =>
-      iso ? new Date(iso).toLocaleDateString("ru-RU", { day: "numeric", month: "short" }).replace(".", "") : "";
+      iso ? formatTripDate(iso).replace(".", "") : "";
     const start = trip.settings.startDate;
     const end = trip.settings.endDate;
     const dateLabel =
       start && end
-        ? `${fmt(start)} — ${fmt(end)} ${new Date(end).getFullYear()}`
+        ? `${fmt(start)} — ${fmt(end)} ${tripDateKey(end).slice(0, 4)}`
         : start
           ? `с ${fmt(start)}`
           : "скоро в путь";

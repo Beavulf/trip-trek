@@ -31,14 +31,12 @@ interface LodgingHeroProps {
   nightsOver: boolean;
   /** Поездка ещё не началась: «на эту ночь» говорить рано */
   beforeTrip: boolean;
-  /** Для выбора карты в кнопке «Маршрут»: страна часто только в названии поездки */
-  tripTitle?: string;
   /** Добавить жильё на сегодня (нет у зрителя) — кнопка в состоянии «жилья на сегодня нет» */
   onAddToday?: () => void;
   onTaxi: (l: Lodging) => void;
 }
 
-export function LodgingHero({ lodgings, todayKey, currencySymbol, nightsOver, beforeTrip, tripTitle, onAddToday, onTaxi }: LodgingHeroProps) {
+export function LodgingHero({ lodgings, todayKey, currencySymbol, nightsOver, beforeTrip, onAddToday, onTaxi }: LodgingHeroProps) {
   const reduceMotion = useReducedMotion();
   const now = currentLodging(lodgings, todayKey);
   const dayRoom = now ? undefined : dayUseLodging(lodgings, todayKey);
@@ -118,7 +116,7 @@ export function LodgingHero({ lodgings, todayKey, currencySymbol, nightsOver, be
           ))}
           {focus?.address && <p className="text-xs text-white/85 break-words pt-1 line-clamp-2">{focus.address}</p>}
         </div>
-        {focus && <StayActions lodging={focus} tone="hero" tripTitle={tripTitle} onTaxi={() => onTaxi(focus)} />}
+        {focus && <StayActions lodging={focus} tone="hero" onTaxi={() => onTaxi(focus)} />}
         {!focus && !nightsOver && !beforeTrip && onAddToday && (
           <button
             type="button"

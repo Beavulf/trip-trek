@@ -21,6 +21,7 @@ import {
 import { useState, useMemo, useEffect } from "react";
 import { cn } from "@/lib/utils";
 import { useTripStore } from "@/lib/trip-store";
+import { tripDateKey } from "@/lib/trip-days";
 
 const WEEKDAYS = ["Вс", "Пн", "Вт", "Ср", "Чт", "Пт", "Сб"];
 const MONTHS = ["янв", "фев", "мар", "апр", "мая", "июн", "июл", "авг", "сен", "окт", "ноя", "дек"];
@@ -297,12 +298,12 @@ export function WeatherPanel() {
     if (!days?.length) return null;
     const todayStr = localDateStr(new Date());
     return (
-      [...days].sort((a, b) => a.dayNumber - b.dayNumber).find((d) => localDateStr(d.date) >= todayStr) ?? null
+      [...days].sort((a, b) => a.dayNumber - b.dayNumber).find((d) => tripDateKey(d.date) >= todayStr) ?? null
     );
   }, [days]);
   const routeStart = useMemo(() => {
     if (!upcomingDay) return null;
-    const s = localDateStr(upcomingDay.date);
+    const s = tripDateKey(upcomingDay.date);
     return s > localDateStr(new Date()) ? s : null;
   }, [upcomingDay]);
 
@@ -344,7 +345,7 @@ export function WeatherPanel() {
     return [...days]
       .sort((a, b) => a.dayNumber - b.dayNumber)
       .map((d) => {
-        const dateStr = localDateStr(d.date);
+        const dateStr = tripDateKey(d.date);
         const city = cities.find((c) => c.key === d.cityKey) || cities.find((c) => c.name === d.city);
         const entry = city ? citiesWeather.get(city.key) : undefined;
         const fc =

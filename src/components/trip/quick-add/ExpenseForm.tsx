@@ -7,7 +7,8 @@ import { draftKey, readDraft, writeDraft } from "@/lib/form-draft";
 import { useTripStore } from "@/lib/trip-store";
 import { useRateFor } from "@/hooks/trip/use-currency";
 import { EXPENSE_CATEGORIES } from "@/lib/types";
-import { BASE_CURRENCY, currencySelectOptions, currencySymbol } from "@/lib/currencies";
+import { BASE_CURRENCY, currencySymbol } from "@/lib/currencies";
+import { CurrencySelect } from "@/components/trip/currency-select";
 import { expenseSelectableParticipants } from "@/lib/budget";
 import { toBaseCurrency } from "@/lib/budget/convert";
 import { FxHint } from "../fx-hint";
@@ -240,20 +241,14 @@ export function ExpenseForm({ userId, onDone }: ExpenseFormProps) {
         </div>
         <div>
           <label className="text-xs text-muted-foreground mb-1 block">Валюта</label>
-          <select
+          <CurrencySelect
             value={currencyCode}
-            onChange={(e) => {
-              setCurrencyCode(e.target.value);
+            onChange={(code) => {
+              setCurrencyCode(code);
               setCurrencyTouched(true);
             }}
             className="rounded-xl border border-input bg-background px-2 py-3.5 text-base input-mobile min-w-[6.5rem]"
-          >
-            {currencySelectOptions(tripCurrency).map((c) => (
-              <option key={c.code} value={c.code}>
-                {c.flag} {c.code}
-              </option>
-            ))}
-          </select>
+          />
         </div>
       </div>
 

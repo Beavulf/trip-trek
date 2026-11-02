@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { ChevronLeft, CircleHelp, Loader2, Plane } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
+import { useReportTimeZone } from "@/hooks/use-report-time-zone";
 import { NotificationsBell } from "@/components/trip/notifications-bell";
 import { UserAvatar } from "@/components/trip/user-avatar";
 import { SplitTourHost } from "@/components/trip/onboarding/tour-host";
@@ -29,6 +30,7 @@ export function SplitShell({ title, subtitle, backHref, lead, tabs, children }: 
   const router = useRouter();
   const pathname = usePathname();
   const { data: session, status } = useAuth();
+  useReportTimeZone(session?.user?.id);
   const openTour = useTourStore((s) => s.openTour);
 
   useEffect(() => {

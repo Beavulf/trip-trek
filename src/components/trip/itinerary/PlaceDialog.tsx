@@ -35,7 +35,7 @@ import { focusOnMap } from "@/lib/map-bus";
 import { CATEGORY_META, type Place, type Photo } from "@/lib/types";
 import { diffPlaceDraft, draftFromPlace, type PlaceDraft } from "@/lib/place-draft";
 import { flatRoutePlaces } from "@/lib/route-threads";
-import { directionsUrl, isChinaTrip } from "@/lib/place-links";
+import { directionsUrl } from "@/lib/place-links";
 import { useDialogA11y } from "@/hooks/use-dialog-a11y";
 import { MobileBottomSheet } from "../mobile-bottom-sheet";
 import { toast } from "sonner";
@@ -160,7 +160,6 @@ function PlaceDialogBody({
   const isOwner = myRole === "owner";
   // Зритель только смотрит: API принимает правки лишь от редакторов
   const canEdit = myRole !== "viewer";
-  const china = isChinaTrip(`${tripCtx?.settings.title ?? ""} ${(days ?? []).map((d) => d.city).join(" ")}`);
   const { data: lodgings } = useLodgings();
   const linkedLodging = fresh.lodgingId ? lodgings?.find((l) => l.id === fresh.lodgingId) : undefined;
 
@@ -352,7 +351,7 @@ function PlaceDialogBody({
               </button>
             )}
             <a
-              href={directionsUrl(fresh, china)}
+              href={directionsUrl(fresh)}
               target="_blank"
               rel="noopener noreferrer"
               className="rounded-xl py-3 text-sm font-medium bg-primary text-primary-foreground flex items-center justify-center gap-2 min-h-11"

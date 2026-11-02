@@ -13,15 +13,20 @@ import {
   isBeforeTripStart,
   tripDateKey,
   tripRangeKeys,
+  formatTripDate,
+  trustedTodayKey,
 } from "./trip-days";
 
 afterEach(() => {
   vi.useRealTimers();
 });
 
+/** Время по часам устройства: без Z строка читается как местная, и тест верен в любом поясе */
+const deviceTime = (iso: string) => new Date(iso.replace(/Z$/, ""));
+
 describe("calculateCurrentDayNumber", () => {
   // Функция берёт день по часам устройства; тесты идут в UTC, поэтому время задано в UTC.
-  const fakeNow = (iso: string) => vi.setSystemTime(new Date(iso));
+  const fakeNow = (iso: string) => vi.setSystemTime(deviceTime(iso));
 
   it("в первый день поездки возвращает 1", () => {
     fakeNow("2026-09-10T15:00:00Z");
@@ -53,21 +58,19 @@ describe("calculateCurrentDayNumber", () => {
 });
 
 describe("dayDateFor / dayEndFor", () => {
-  // Локальные даты: функции работают в локальной полночи (каноническая формула дней).
-  const start = new Date(2026, 8, 10, 18, 45); // 10.09.2026, вечер — время должно обнуляться
+  // Календарные дни хранятся в UTC и не зависят от пояса процесса
+  const start = new Date("2026-09-10T18:45:00.000Z"); // вечер — время должно обнуляться
 
-  it("день 1 совпадает с датой старта в локальную полночь", () => {
-    const d = dayDateFor(start, 1);
-    expect(d.getFullYear()).toBe(2026);
-    expect(d.getMonth()).toBe(8);
-    expect(d.getDate()).toBe(10);
-    expect(d.getHours()).toBe(0);
+  it("день 1 совпадает с датой старта в полночь UTC", () => {
+    expect(dayDateFor(start, 1).toISOString()).toBe("2026-09-10T00:00:00.000Z");
   });
 
   it("день N = старт + (N−1) суток", () => {
-    const d = dayDateFor(start, 3);
-    expect(d.getDate()).toBe(12);
-    expect(d.getHours()).toBe(0);
+    expect(dayDateFor(start, 3).toISOString()).toBe("2026-09-12T00:00:00.000Z");
+  });
+
+  it("переход через месяц", () => {
+    expect(dayDateFor(start, 25).toISOString()).toBe("2026-10-04T00:00:00.000Z");
   });
 
   it("не мутирует переданный startDate", () => {
@@ -77,33 +80,74 @@ describe("dayDateFor / dayEndFor", () => {
   });
 
   it("dayEndFor — 23:59:59.999 того же дня", () => {
-    const d = dayEndFor(start, 2);
-    expect(d.getDate()).toBe(11);
-    expect(d.getHours()).toBe(23);
-    expect(d.getMinutes()).toBe(59);
-    expect(d.getSeconds()).toBe(59);
-    expect(d.getMilliseconds()).toBe(999);
+    expect(dayEndFor(start, 2).toISOString()).toBe("2026-09-11T23:59:59.999Z");
+  });
+});
+
+describe("календарные дни поездки в любом поясе", () => {
+  // Набор идёт и в других поясах: bun run test:tz
+  const start = "2026-10-08T00:00:00.000Z";
+  const end = "2026-10-19T23:59:59.999Z";
+
+  it("formatTripDate показывает выбранный день, а не день в поясе устройства", () => {
+    expect(formatTripDate(start)).toBe("8 окт.");
+    expect(formatTripDate(end)).toBe("19 окт.");
+    expect(formatTripDate(end, { day: "numeric", month: "long" })).toBe("19 октября");
+    expect(formatTripDate("2026-10-19")).toBe("19 окт.");
+    expect(formatTripDate(end, { day: "2-digit", month: "2-digit", year: "numeric" })).toBe("19.10.2026");
+  });
+
+  it("dayDateFor и dayEndFor не зависят от пояса процесса", () => {
+    expect(dayDateFor(new Date(start), 3).toISOString()).toBe("2026-10-10T00:00:00.000Z");
+    expect(dayEndFor(new Date(start), 12).toISOString()).toBe(end);
+    // Старт из старых шаблонов лежит в полдень: день тот же
+    expect(dayDateFor(new Date("2026-10-08T12:00:00.000Z"), 1).toISOString()).toBe(start);
+  });
+
+  it("первый и последний день поездки читаются без сдвига", () => {
+    expect(tripRangeKeys({ startDate: start, endDate: end, totalDays: 12 })).toEqual({ startKey: "2026-10-08", lastKey: "2026-10-19" });
+  });
+
+  it("поездка заканчивается по последнему календарному дню, в любом поясе", () => {
+    expect(isTripOver(end, new Date(2026, 9, 19, 23, 30))).toBe(false);
+    expect(isTripOver(end, new Date(2026, 9, 20, 0, 30))).toBe(true);
+    expect(calculateCurrentDayNumber(start, 12, new Date(2026, 9, 7, 23, 30))).toBe(0);
+    expect(calculateCurrentDayNumber(start, 12, new Date(2026, 9, 8, 0, 30))).toBe(1);
+  });
+
+  it("trustedTodayKey верит устройству только в пределах суток", () => {
+    const now = new Date("2026-10-08T22:00:00.000Z");
+    expect(trustedTodayKey("2026-10-09", now)).toBe("2026-10-09");
+    expect(trustedTodayKey("2026-10-07", now)).toBe("2026-10-07");
+    expect(trustedTodayKey("2026-10-20", now)).toBe("2026-10-08");
+    expect(trustedTodayKey("2026-02-31", now)).toBe("2026-10-08");
+    expect(trustedTodayKey(undefined, now)).toBe("2026-10-08");
+    expect(trustedTodayKey(20261008, now)).toBe("2026-10-08");
   });
 });
 
 describe("dayIdForDate / isTripFinished", () => {
   it("dayIdForDate находит день по дате и игнорирует время", () => {
+    // Дни в БД — полночь UTC, снимок — часы устройства: в Америке день уезжал на сутки назад
     const days = [
-      { id: "d1", date: new Date(2026, 9, 8).toISOString() },
-      { id: "d2", date: new Date(2026, 9, 9).toISOString() },
+      { id: "d1", date: "2026-10-08T00:00:00.000Z" },
+      { id: "d2", date: "2026-10-09T00:00:00.000Z" },
     ];
+    expect(dayIdForDate(days, new Date(2026, 9, 8, 15, 0))).toBe("d1");
     expect(dayIdForDate(days, new Date(2026, 9, 9, 22, 15))).toBe("d2");
+    expect(dayIdForDate(days, new Date(2026, 9, 9, 0, 30))).toBe("d2");
     expect(dayIdForDate(days, new Date(2026, 9, 1))).toBeNull();
   });
 
   it("isTripFinished: endDate прошёл и не completed", () => {
     vi.setSystemTime(new Date(2026, 9, 21, 12, 0));
-    expect(isTripFinished(new Date(2026, 9, 20, 23, 59), "planning")).toBe(true);
-    expect(isTripFinished(new Date(2026, 9, 20, 23, 59), "active")).toBe(true);
+    const end = "2026-10-20T23:59:59.999Z";
+    expect(isTripFinished(end, "planning")).toBe(true);
+    expect(isTripFinished(end, "active")).toBe(true);
     // закрытая поездка больше не «незакрытая», даже если endDate прошёл
-    expect(isTripFinished(new Date(2026, 9, 20, 23, 59), "completed")).toBe(false);
+    expect(isTripFinished(end, "completed")).toBe(false);
     // ещё едем
-    expect(isTripFinished(new Date(2026, 9, 25), "active")).toBe(false);
+    expect(isTripFinished("2026-10-25T23:59:59.999Z", "active")).toBe(false);
     // без конца (totalDays-only) финал не наступает — конец вычисляется на клиенте
     expect(isTripFinished(null, "planning")).toBe(false);
   });
@@ -124,7 +168,7 @@ describe("dayIdForDate / isTripFinished", () => {
 
 describe("daysLeftInTrip (единая формула с номером дня)", () => {
   const start = new Date("2026-09-10T00:00:00Z");
-  const at = (iso: string) => new Date(iso);
+  const at = deviceTime;
 
   it("до старта — все дни", () => {
     expect(daysLeftInTrip(start, 7, "planning", at("2026-09-08T12:00:00Z"))).toBe(7);
@@ -140,9 +184,9 @@ describe("daysLeftInTrip (единая формула с номером дня)"
   });
   it("согласован с calculateCurrentDayNumber: осталось = totalDays − день + 1", () => {
     for (const iso of ["2026-09-10T01:00:00Z", "2026-09-13T12:00:00Z", "2026-09-16T23:59:00Z"]) {
-      vi.setSystemTime(new Date(iso));
+      vi.setSystemTime(deviceTime(iso));
       const day = calculateCurrentDayNumber(start, 7);
-      expect(daysLeftInTrip(start, 7, "active", new Date(iso))).toBe(7 - day + 1);
+      expect(daysLeftInTrip(start, 7, "active", deviceTime(iso))).toBe(7 - day + 1);
     }
   });
   it("tripDaysElapsed: отрицательное до старта, без клампа после", () => {

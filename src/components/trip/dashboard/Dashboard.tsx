@@ -14,6 +14,8 @@ import { DailyTip } from "./DashboardWidgets";
 import { RouteRail } from "./RouteRail";
 import { TodayList } from "./TodayList";
 import { TripFinishedBanner } from "./TripFinishedBanner";
+import { daysBetween, localTodayKey } from "@/lib/lodging";
+import { tripRangeKeys } from "@/lib/trip-days";
 
 const CITY_EMOJI: Record<string, string> = {
   "": "🏙️",
@@ -90,25 +92,13 @@ export function Dashboard() {
   const myRole = trip.participants.find((p) => p.id === session?.user?.id)?.role;
   const canInvite = myRole === "owner" || trip.settings.allowMemberInvites !== false;
 
-  // Обратный отсчёт / прогресс по времени
-  const now = new Date();
-  const start = new Date(trip.settings.startDate);
-  start.setHours(0, 0, 0, 0);
-  const end = trip.settings.endDate
-    ? new Date(trip.settings.endDate)
-    : new Date(start);
-  if (!trip.settings.endDate) {
-    end.setDate(end.getDate() + trip.settings.totalDays - 1);
-  }
-  end.setHours(23, 59, 59, 999);
-
-  const isBefore = now < start;
-  const isAfter = now > end;
-  const daysRemaining = isBefore
-    ? Math.ceil((start.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
-    : isAfter
-    ? 0
-    : Math.ceil((end.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+  // Обратный отсчёт — по календарным дням: сравнение мгновений в поясе устройства добавляло
+  // поездке лишний день в Минске и Китае и начинало её на день раньше в Америке
+  const today = localTodayKey();
+  const { startKey, lastKey } = tripRangeKeys(trip.settings);
+  const isBefore = today < startKey;
+  const isAfter = today > lastKey;
+  const daysRemaining = isBefore ? daysBetween(today, startKey) : isAfter ? 0 : daysBetween(today, lastKey) + 1;
 
   return (
     <div className="space-y-4 animate-fade-up">

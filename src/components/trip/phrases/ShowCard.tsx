@@ -56,7 +56,7 @@ export function ShowCard({
 
   const speak = (slow = false) => {
     if (!phrase || speaking) return;
-    speakPhrase(phrase.cn, { slow, onStart: () => setSpeaking(true), onEnd: () => setSpeaking(false) });
+    speakPhrase(phrase.cn, { slow, language: phrase.language, onStart: () => setSpeaking(true), onEnd: () => setSpeaking(false) });
   };
 
   const copy = async () => {
@@ -72,7 +72,7 @@ export function ShowCard({
   if (!phrase || typeof document === "undefined") return null;
 
   const meta = categoryMeta(phrase.category);
-  const lang = detectLanguage(phrase.cn);
+  const lang = detectLanguage(phrase.cn, phrase.language);
 
   return createPortal(
     <AnimatePresence>

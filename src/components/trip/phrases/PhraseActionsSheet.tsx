@@ -50,7 +50,7 @@ export function PhraseActionsSheet({
   }, [phrase]);
 
   if (!phrase) return null;
-  const lang = detectLanguage(phrase.cn);
+  const lang = detectLanguage(phrase.cn, phrase.language);
   const dirty = ru !== phrase.ru || foreign !== phrase.cn || pinyin !== phrase.pinyin || category !== phrase.category;
   const canSave = dirty && ru.trim() && foreign.trim();
 
@@ -119,7 +119,7 @@ export function PhraseActionsSheet({
           <button
             type="button"
             onClick={() =>
-              speakPhrase(phrase.cn, { onStart: () => setSpeaking(true), onEnd: () => setSpeaking(false) })
+              speakPhrase(phrase.cn, { language: phrase.language, onStart: () => setSpeaking(true), onEnd: () => setSpeaking(false) })
             }
             className="min-h-11 rounded-xl bg-primary/10 text-primary text-xs font-medium inline-flex flex-col sm:flex-row items-center justify-center gap-1 active:scale-95 transition-transform"
           >
@@ -133,7 +133,7 @@ export function PhraseActionsSheet({
             <Copy className="size-4" /> Копировать
           </button>
           <a
-            href={googleTranslateUrl(phrase.cn)}
+            href={googleTranslateUrl(phrase.cn, phrase.language)}
             target="_blank"
             rel="noopener noreferrer"
             className="min-h-11 rounded-xl bg-blue-500/10 text-blue-500 text-xs font-medium inline-flex flex-col sm:flex-row items-center justify-center gap-1 active:scale-95 transition-transform"

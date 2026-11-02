@@ -2,6 +2,7 @@
 
 import { useMutation } from "@tanstack/react-query";
 import { getTripId } from "./trip-id";
+import { localTodayKey } from "@/lib/lodging";
 
 // P1 #10: убран мёртвый invalidateQueries(["ai-summary"]) — нет useQuery с этим ключом,
 // state локальный в компоненте. Сброс content по tripId делается в самом компоненте.
@@ -34,7 +35,7 @@ export function useAISummary() {
       const r = await fetch(`/api/ai-summary?tripId=${tripId}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ type, style, dayNumber }),
+        body: JSON.stringify({ type, style, dayNumber, today: localTodayKey() }),
       });
       const body = await r.json().catch(() => ({}));
       if (!r.ok) {

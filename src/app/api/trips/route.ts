@@ -3,7 +3,7 @@ import { db } from "@/lib/db";
 import { requireUser } from "@/lib/api-auth";
 import { tripCreateGate } from "@/lib/app-config";
 import { BASE_CURRENCY } from "@/lib/currencies";
-import { buildInitialDays, dayEndFor } from "@/lib/trip-days";
+import { buildInitialDays, dayDateFor, dayEndFor } from "@/lib/trip-days";
 
 // GET /api/trips — только поездки текущего пользователя (из сессии, не из query)
 export async function GET(req: NextRequest) {
@@ -67,7 +67,7 @@ export async function POST(req: NextRequest) {
 
   // Дни создаём сразу: «Дней: 12» в форме — это 12 дней в маршруте, а не число, которое потом теряется.
   // Без них быстрое добавление отвечало «Нет дней в маршруте», а первый «Добавить день» сбрасывал totalDays в 1
-  const start = new Date(startDate || Date.now());
+  const start = dayDateFor(new Date(startDate || Date.now()), 1);
   const initialDays = buildInitialDays(start, totalDays || 12, destination || "");
 
   const trip = await db.trip.create({

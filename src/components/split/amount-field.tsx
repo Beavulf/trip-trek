@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import { cn } from "@/lib/utils";
-import { CURRENCIES, currencySymbol } from "@/lib/currencies";
+import { currencySymbol } from "@/lib/currencies";
+import { CurrencySelect } from "@/components/trip/currency-select";
 import { convertCents, exchangeRate, formatRate } from "@/lib/split/fx";
 import { centsToInput, parseAmountToCents } from "@/lib/split/money";
 import { useCurrency } from "@/hooks/trip/use-currency";
@@ -84,15 +85,10 @@ export function useAmountField(groupCurrency: string, seed: Seed | null) {
 
 export type AmountField = ReturnType<typeof useAmountField>;
 
-const flagOf = (code: string) => CURRENCIES.find((c) => c.code === code)?.flag ?? "🏳️";
-
 export function AmountFieldView({ field, groupCurrency, autoFocus }: { field: AmountField; groupCurrency: string; autoFocus: boolean }) {
   const f = field;
   const groupSym = currencySymbol(groupCurrency).trim();
   const sym = currencySymbol(f.currency).trim();
-  // Группа первой, дальше остальные; код вне списка (старая трата) остаётся доступным
-  const codes = [groupCurrency, ...CURRENCIES.map((c) => c.code as string).filter((c) => c !== groupCurrency)];
-  if (!codes.includes(f.currency)) codes.push(f.currency);
 
   return (
     <div>
@@ -118,21 +114,16 @@ export function AmountFieldView({ field, groupCurrency, autoFocus }: { field: Am
           )}
         />
         <div className="relative shrink-0 pb-1">
-          <select
+          <CurrencySelect
             value={f.currency}
-            onChange={(e) => f.setCurrency(e.target.value)}
-            aria-label="Валюта траты"
+            onChange={f.setCurrency}
+            pinned={groupCurrency}
+            ariaLabel="Валюта траты"
             className={cn(
-              "appearance-none w-[6.5rem] rounded-xl border bg-background pl-3 pr-2 min-h-11 text-base font-semibold input-mobile focus:outline-none focus:ring-2 focus:ring-ring/40",
+              "w-[6.5rem] rounded-xl border bg-background pl-3 pr-2 min-h-11 text-base font-semibold input-mobile",
               f.foreign ? "border-primary/50 text-foreground" : "border-input text-muted-foreground"
             )}
-          >
-            {codes.map((c) => (
-              <option key={c} value={c}>
-                {flagOf(c)} {c}
-              </option>
-            ))}
-          </select>
+          />
         </div>
       </div>
       {f.amountInvalid && <p className="text-xs text-destructive mt-1">Сумма — число, не больше двух знаков после запятой</p>}

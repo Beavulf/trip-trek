@@ -41,6 +41,8 @@ import { DataBackup } from "./data-backup";
 import { PushSettings } from "./push-settings";
 import { MobileBottomSheet } from "./mobile-bottom-sheet";
 import { useTripStore } from "@/lib/trip-store";
+import { daysBetween, localTodayKey } from "@/lib/lodging";
+import { tripRangeKeys } from "@/lib/trip-days";
 
 const CHECKLIST_CATS: Record<string, { label: string; emoji: string; color: string }> = {
   documents: { label: "Документы", emoji: "📄", color: "#ef4444" },
@@ -144,16 +146,11 @@ async function copyText(text: string, label = "Скопировано") {
 
 /** Фаза поездки одной строкой: до старта / день N из M / завершилась */
 function tripPhaseLabel(trip: TripSummary): string {
-  const DAY = 86400000;
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const start = new Date(trip.settings.startDate);
-  start.setHours(0, 0, 0, 0);
-  const end = trip.settings.endDate ? new Date(trip.settings.endDate) : null;
-  if (end) end.setHours(0, 0, 0, 0);
-  const toStart = Math.round((start.getTime() - today.getTime()) / DAY);
+  const { startKey, lastKey } = tripRangeKeys(trip.settings);
+  const today = localTodayKey();
+  const toStart = daysBetween(today, startKey);
   if (toStart > 0) return `до старта ${toStart} ${plural(toStart, "день", "дня", "дней")}`;
-  if (end && today.getTime() > end.getTime()) return "поездка завершилась";
+  if (today > lastKey) return "поездка завершилась";
   return `день ${trip.currentDayNumber || 1} из ${trip.settings.totalDays}`;
 }
 

@@ -129,7 +129,6 @@ export function LodgingTab() {
             currencySymbol={sym}
             nightsOver={nightsOver}
             beforeTrip={beforeTrip}
-            tripTitle={trip.settings.title}
             onAddToday={canEdit ? () => setSheet({ lodging: null, defaults: { checkIn: todayKey, checkOut: addDaysKey(todayKey, 1) } }) : undefined}
             onTaxi={setTaxi}
           />
@@ -183,8 +182,7 @@ export function LodgingTab() {
                 overlapping={overlaps.has(l.id)}
                 hideActions={l.id === focusId}
                 pastTone={lodgingPhase(l, todayKey) === "past"}
-                tripTitle={trip.settings.title}
-              />
+                  />
             ))}
           </ul>
         </>

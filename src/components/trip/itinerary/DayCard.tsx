@@ -28,8 +28,6 @@ interface DayCardProps {
   canEdit?: boolean;
   /** Где ночуем в этот день; "missing" — жильё на эту ночь не указано */
   night?: { name: string } | "missing";
-  /** Ссылка «Как добраться» для Китая: Google там без VPN недоступен */
-  china?: boolean;
   onOpenPlace: (p: Place) => void;
   onAddPlace?: (dayId: string) => void;
   onEditDay?: (day: Day) => void;
@@ -57,7 +55,6 @@ export function DayCard({
   defaultExpanded = false,
   canEdit = true,
   night,
-  china = false,
   onOpenPlace,
   onAddPlace,
   onEditDay,
@@ -118,13 +115,12 @@ export function DayCard({
         accentColor={accent}
         currency={currency}
         hideTime={hideTime}
-        china={china}
         onOpenPlace={onOpenPlace}
       />
     ) : (
       <div className="space-y-1.5">
         {s.places.map((p) => (
-          <PlaceRow key={p.id} place={p} accentColor={accent} currency={currency} hideTime={hideTime} canEdit={canEdit} china={china} onOpen={() => onOpenPlace(p)} />
+          <PlaceRow key={p.id} place={p} accentColor={accent} currency={currency} hideTime={hideTime} canEdit={canEdit} onOpen={() => onOpenPlace(p)} />
         ))}
       </div>
     );
@@ -305,7 +301,6 @@ function SortablePlaces({
   accentColor,
   currency,
   hideTime,
-  china,
   onOpenPlace,
 }: {
   places: Place[];
@@ -313,13 +308,12 @@ function SortablePlaces({
   accentColor: string;
   currency?: string;
   hideTime: boolean;
-  china: boolean;
   onOpenPlace: (p: Place) => void;
 }) {
   return (
     <Reorder.Group axis="y" values={places} onReorder={onReorder} className="space-y-1.5">
       {places.map((p) => (
-        <SortableRow key={p.id} place={p} accentColor={accentColor} currency={currency} hideTime={hideTime} china={china} onOpenPlace={onOpenPlace} />
+        <SortableRow key={p.id} place={p} accentColor={accentColor} currency={currency} hideTime={hideTime} onOpenPlace={onOpenPlace} />
       ))}
     </Reorder.Group>
   );
@@ -330,14 +324,12 @@ function SortableRow({
   accentColor,
   currency,
   hideTime,
-  china,
   onOpenPlace,
 }: {
   place: Place;
   accentColor: string;
   currency?: string;
   hideTime: boolean;
-  china: boolean;
   onOpenPlace: (p: Place) => void;
 }) {
   const controls = useDragControls();
@@ -357,7 +349,7 @@ function SortableRow({
         <GripVertical className="size-4" aria-hidden="true" />
       </button>
       <div className="flex-1 min-w-0">
-        <PlaceRow place={place} accentColor={accentColor} currency={currency} hideTime={hideTime} china={china} onOpen={() => onOpenPlace(place)} />
+        <PlaceRow place={place} accentColor={accentColor} currency={currency} hideTime={hideTime} onOpen={() => onOpenPlace(place)} />
       </div>
     </Reorder.Item>
   );

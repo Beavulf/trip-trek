@@ -4,23 +4,23 @@ import { motion } from "framer-motion";
 import { ArrowRight, Plane, Plus } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { getTripId } from "@/hooks/use-trip";
+import { localTodayKey } from "@/lib/lodging";
+import { formatTripDate, tripRangeKeys } from "@/lib/trip-days";
 import type { TripInfo, UserProfile } from "./types";
 
 /** Статус поездки по календарю — честнее, чем поле status в БД */
 function tripStatusChip(trip: TripInfo): { label: string; cls: string } {
-  const now = new Date();
-  const start = new Date(trip.startDate);
-  const end = trip.endDate ? new Date(trip.endDate) : null;
-  if (end && end < now) return { label: "Завершена", cls: "bg-muted text-muted-foreground" };
-  if (start > now) return { label: "Планируется", cls: "bg-primary/10 text-primary" };
+  const { startKey, lastKey } = tripRangeKeys(trip);
+  const today = localTodayKey();
+  if (today > lastKey) return { label: "Завершена", cls: "bg-muted text-muted-foreground" };
+  if (today < startKey) return { label: "Планируется", cls: "bg-primary/10 text-primary" };
   return { label: "Идёт сейчас", cls: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400" };
 }
 
 function dateRange(trip: TripInfo): string {
-  const fmt = (d: Date) => d.toLocaleDateString("ru-RU", { day: "numeric", month: "short" });
-  const start = fmt(new Date(trip.startDate));
+  const start = formatTripDate(trip.startDate);
   if (!trip.endDate) return start;
-  return `${start} – ${fmt(new Date(trip.endDate))}`;
+  return `${start} – ${formatTripDate(trip.endDate)}`;
 }
 
 interface TripsListProps {

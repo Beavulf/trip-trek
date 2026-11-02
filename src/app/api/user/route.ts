@@ -7,6 +7,7 @@ import { withKeyLock } from "@/lib/key-lock";
 import { applyPatch, sanitizePatch, sanitizeState } from "@/lib/onboarding-state";
 import { isAvatarUploadUrl, isProfileEmoji } from "@/lib/avatar-presets";
 import { userRateLimit } from "@/lib/rate-limit";
+import { isTimeZone } from "@/lib/split/reminders";
 
 // GET /api/user — профиль текущего пользователя (сессия)
 export async function GET(req: NextRequest) {
@@ -190,7 +191,7 @@ export async function PATCH(req: NextRequest) {
   if (!body || typeof body !== "object" || Array.isArray(body)) {
     return NextResponse.json({ error: "invalid body" }, { status: 400 });
   }
-  const { name, emoji, color, avatarUrl, aiApiKey, aiBaseUrl, aiModel, onboardingCompleted, onboardingState, paymentDetails } = body;
+  const { name, emoji, color, avatarUrl, aiApiKey, aiBaseUrl, aiModel, onboardingCompleted, onboardingState, paymentDetails, timeZone } = body;
 
   const data: Record<string, unknown> = {};
   if (typeof name === "string" && name.trim()) data.name = name.trim().slice(0, 80);
@@ -254,6 +255,12 @@ export async function PATCH(req: NextRequest) {
   if (paymentDetails !== undefined) {
     data.paymentDetails =
       typeof paymentDetails === "string" ? paymentDetails.trim().slice(0, 300) || null : null;
+  }
+
+  // Пояс устройства: по нему считается «днём» для автонапоминаний о долгах
+  if (timeZone !== undefined) {
+    if (!isTimeZone(timeZone)) return NextResponse.json({ error: "timeZone: неизвестный пояс" }, { status: 400 });
+    data.timeZone = timeZone;
   }
 
   if (Object.keys(data).length === 0 && !onboardingPatch) {

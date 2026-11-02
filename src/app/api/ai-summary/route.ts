@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { requireTripEditor } from "@/lib/api-auth";
-import { calculateCurrentDayNumber } from "@/lib/trip-days";
+import { tripDateKey, trustedTodayKey } from "@/lib/trip-days";
+import { daysBetween } from "@/lib/lodging";
 import { EXPENSE_CATEGORIES, CATEGORY_META } from "@/lib/types";
 import { currencySymbol } from "@/lib/currencies";
 import { runAi, aiFailResponse } from "@/lib/ai";
@@ -32,14 +33,11 @@ const STYLE_PROMPTS: Record<string, string> = {
 
 const DEFAULT_STYLE = "warm";
 
-// Неклампнутый номер дня (calculateCurrentDayNumber зажат в [1..totalDays],
-// а для «будущий день vs прожитый» нужна настоящая фаза поездки)
-function dayOffsetFor(startDate: Date): number {
-  const now = new Date();
-  const nowUTC = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
-  const s = new Date(startDate);
-  const startUTC = Date.UTC(s.getUTCFullYear(), s.getUTCMonth(), s.getUTCDate());
-  return Math.round((nowUTC - startUTC) / 86400000) + 1;
+// Неклампнутый номер дня (текущий день для форм зажат в [1..totalDays], а для «будущий день
+// vs прожитый» нужна настоящая фаза поездки). «Сегодня» — с устройства: по часам сервера (UTC)
+// в Китае до 08:00 шёл вчерашний день, а вечером в Америке — уже завтрашний.
+function dayOffsetFor(startDate: Date, todayKey: string): number {
+  return daysBetween(tripDateKey(startDate), todayKey) + 1;
 }
 
 // POST /api/ai-summary — генерация AI-итогов
@@ -62,6 +60,7 @@ export async function POST(req: NextRequest) {
     if (response) return response;
 
     const body = (await req.json().catch(() => ({}))) as {
+      today?: unknown;
       type?: string;
       style?: string;
       dayNumber?: number;
@@ -148,9 +147,9 @@ export async function POST(req: NextRequest) {
       })
       .join(", ");
 
-    const todayIso = new Date().toISOString().slice(0, 10);
-    const realCurrentDay = calculateCurrentDayNumber(trip.startDate, trip.totalDays);
-    const dayOffset = dayOffsetFor(trip.startDate);
+    const todayIso = trustedTodayKey(body.today);
+    const dayOffset = dayOffsetFor(trip.startDate, todayIso);
+    const realCurrentDay = dayOffset <= 0 ? 0 : Math.min(trip.totalDays, dayOffset);
     const phaseNote =
       dayOffset <= 0
         ? "поездка ещё не началась"

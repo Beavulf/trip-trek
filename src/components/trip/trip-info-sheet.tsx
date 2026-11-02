@@ -39,6 +39,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { formatTripDate, tripRangeKeys } from "@/lib/trip-days";
 
 // Окно «О поездке»: всё о поездке на одном экране — статус, даты, бюджет,
 // участники с датами вступления; владельцу — управление составом и статусом,
@@ -109,9 +110,10 @@ export function TripInfoSheet({
   const t = trip?.trip;
   const status = STATUS_META[t?.status || "planning"] || STATUS_META.planning;
 
-  const start = s?.startDate ? new Date(s.startDate) : null;
-  const end = start && s?.totalDays ? new Date(start.getTime() + (s.totalDays - 1) * 86_400_000) : null;
-  const fmt = (d: Date | null) => (d ? d.toLocaleDateString("ru-RU") : "—");
+  const range = s?.startDate && s?.totalDays ? tripRangeKeys({ startDate: s.startDate, totalDays: s.totalDays }) : null;
+  const start = s?.startDate ?? null;
+  const end = range?.lastKey ?? null;
+  const fmt = (d: string | null) => (d ? formatTripDate(d, { day: "2-digit", month: "2-digit", year: "numeric" }) : "—");
 
   // Приглашать можно, пока владелец не выключил это для участников
   // (undefined — старый кэш/ответ без поля: считаем, что разрешено)
@@ -273,7 +275,7 @@ export function TripInfoSheet({
                 <div className="flex justify-between text-xs mb-1.5">
                   <span className="font-medium">
                     {trip.currentDayNumber < 1
-                      ? `Поездка начнётся ${new Intl.DateTimeFormat("ru-RU", { day: "numeric", month: "long" }).format(new Date(s?.startDate ?? Date.now()))}`
+                      ? `Поездка начнётся ${formatTripDate(s?.startDate ?? new Date(), { day: "numeric", month: "long" })}`
                       : `День ${trip.currentDayNumber} из ${s?.totalDays}`}
                   </span>
                   <span className="font-mono text-muted-foreground">{trip.dayProgress}%</span>

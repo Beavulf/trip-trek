@@ -1,4 +1,4 @@
-import { addDaysKey, daysBetween, localTodayKey, toDateKey } from "./lodging";
+import { addDaysKey, daysBetween, keyToStoredDate, localTodayKey, toDateKey } from "./lodging";
 
 // Shared helper для вычисления текущего дня поездки.
 // P1 #6: раньше в api/trip/route.ts была формула floor+UTC,
@@ -17,6 +17,28 @@ export function calculateCurrentDayNumber(startDate: Date | string, totalDays: n
  * иначе конец поездки в Китае уезжал на следующие сутки, а старт в Америке — на предыдущие.
  */
 export const tripDateKey = (v: Date | string): string => toDateKey(new Date(v));
+
+/**
+ * Подпись календарного дня поездки («8 окт.», «19 октября»). Пояс UTC обязателен по той же причине,
+ * что и в tripDateKey: в поясе устройства конец поездки (23:59 UTC) в Минске и Китае показывался
+ * следующим числом, а старт (00:00 UTC) в Америке — предыдущим.
+ */
+export function formatTripDate(
+  v: Date | string,
+  opts: Intl.DateTimeFormatOptions = { day: "numeric", month: "short" }
+): string {
+  return new Date(v).toLocaleDateString("ru-RU", { ...opts, timeZone: "UTC" });
+}
+
+/**
+ * «Сегодня», присланное устройством, для серверных расчётов: часы сервера в UTC, а день у человека
+ * свой. Верим не дальше суток от UTC-даты: это разница поясов, а не способ подделать дату.
+ */
+export function trustedTodayKey(claimed: unknown, now: Date = new Date()): string {
+  const utc = toDateKey(now);
+  if (typeof claimed !== "string" || !keyToStoredDate(claimed)) return utc;
+  return Math.abs(daysBetween(utc, claimed)) <= 1 ? claimed : utc;
+}
 
 /**
  * Сколько календарных суток прошло от старта поездки до сегодня: <0 — поездка ещё не началась,
@@ -63,40 +85,38 @@ export function isBeforeTripStart(at: string | Date, startDate: string | Date): 
 }
 
 /**
- * Дата дня N маршрута — каноническая формула: старт поездки + (N−1) суток, локальная полночь.
+ * Дата дня N маршрута — каноническая формула: старт поездки + (N−1) суток, полночь UTC.
  * Единая для всех путей создания дней («Добавить день», синхронизация в редакторе дат),
  * чтобы день 1 всегда совпадал с датой старта, а соседние дни не зависели от дат друг друга.
+ * UTC явно, а не часы процесса: календарный день не должен зависеть от пояса контейнера.
  */
 export function dayDateFor(startDate: Date, dayNumber: number): Date {
   const d = new Date(startDate);
-  d.setHours(0, 0, 0, 0);
-  d.setDate(d.getDate() + (dayNumber - 1));
+  d.setUTCHours(0, 0, 0, 0);
+  d.setUTCDate(d.getUTCDate() + (dayNumber - 1));
   return d;
 }
 
 /** Конец дня N (23:59:59.999) — каноническое значение endDate поездки. */
 export function dayEndFor(startDate: Date, dayNumber: number): Date {
   const d = dayDateFor(startDate, dayNumber);
-  d.setHours(23, 59, 59, 999);
+  d.setUTCHours(23, 59, 59, 999);
   return d;
 }
 
 /**
  * День маршрута по дате-времени (съёмки) — для автокладки вечернего батча фото:
  * EXIF-дата снимка кладёт фото в день, на чью календарную дату пришлась съёмка.
- * Сравнение по локальной дате устройства: EXIF-время — локальное время камеры,
- * а батч грузит тот, кто снимал. Нет совпадения (снимки до/после поездки) → null.
+ * Снимок читаем по часам устройства: EXIF-время — локальное время камеры, а батч грузит тот,
+ * кто снимал. День маршрута — календарный (tripDateKey): в поясе устройства в Америке он уезжал
+ * на сутки назад, и снимок ложился в следующий день. Нет совпадения (до/после поездки) → null.
  */
 export function dayIdForDate(
   days: ReadonlyArray<{ id: string; date: string | Date }>,
   takenAt: Date
 ): string | null {
-  const key = (d: Date) => `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
-  const wanted = key(takenAt);
-  for (const d of days) {
-    if (key(new Date(d.date)) === wanted) return d.id;
-  }
-  return null;
+  const wanted = localTodayKey(takenAt);
+  return days.find((d) => tripDateKey(d.date) === wanted)?.id ?? null;
 }
 
 /**

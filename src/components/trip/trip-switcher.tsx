@@ -30,14 +30,11 @@ import { cn } from "@/lib/utils";
 import { useTripStore } from "@/lib/trip-store";
 import { useBackDismiss } from "@/hooks/use-back-dismiss";
 import { useBodyScrollLock } from "@/hooks/use-body-scroll-lock";
+import { calculateCurrentDayNumber, formatTripDate, tripDaysElapsed, tripRangeKeys } from "@/lib/trip-days";
 
 /** Фаза поездки по датам: ещё не началась / идёт / закончилась */
 function tripPhase(startDate: string | Date, totalDays: number): "upcoming" | "active" | "done" {
-  const start = new Date(startDate);
-  const now = new Date();
-  const startDay = Date.UTC(start.getFullYear(), start.getMonth(), start.getDate());
-  const todayDay = Date.UTC(now.getFullYear(), now.getMonth(), now.getDate());
-  const diff = Math.floor((todayDay - startDay) / 86_400_000); // 0 = первый день
+  const diff = tripDaysElapsed(startDate); // 0 = первый день
   if (diff < 0) return "upcoming";
   if (diff >= totalDays) return "done";
   return "active";
@@ -45,14 +42,7 @@ function tripPhase(startDate: string | Date, totalDays: number): "upcoming" | "a
 
 /** Номер текущего дня поездки (1-based), зажат в 1..totalDays; 0 если ещё не началась */
 function tripDayNo(startDate: string | Date, totalDays: number): number {
-  const start = new Date(startDate);
-  const now = new Date();
-  const diff = Math.floor(
-    (Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()) -
-      Date.UTC(start.getFullYear(), start.getMonth(), start.getDate())) /
-      86_400_000,
-  );
-  return Math.max(0, Math.min(totalDays, diff + 1));
+  return calculateCurrentDayNumber(startDate, totalDays);
 }
 
 const PHASE_STYLE = {
@@ -76,14 +66,13 @@ function StatusStamp({ phase }: { phase: keyof typeof PHASE_STYLE }) {
 }
 
 function fmtDate(iso: string) {
-  return new Date(iso).toLocaleDateString("ru-RU", { day: "numeric", month: "short" }).replace(".", "");
+  return formatTripDate(iso).replace(".", "");
 }
 
 function dateRangeLabel(startDate: string, totalDays: number) {
-  const end = new Date(new Date(startDate).getTime() + (totalDays - 1) * 86_400_000);
-  const endLabel = fmtDate(end.toISOString());
-  const year = new Date(end).getFullYear();
-  return `${fmtDate(startDate)} – ${endLabel}${year !== new Date().getFullYear() ? ` ${year}` : ""}`;
+  const { lastKey } = tripRangeKeys({ startDate, totalDays });
+  const year = Number(lastKey.slice(0, 4));
+  return `${fmtDate(startDate)} – ${fmtDate(lastKey)}${year !== new Date().getFullYear() ? ` ${year}` : ""}`;
 }
 
 export function TripSwitcher() {
@@ -478,7 +467,7 @@ function HeaderTripChip({
   // До старта currentDayNumber = 0 — показываем дату вылета вместо «День 0»
   const dayLine = tripData
     ? tripData.currentDayNumber < 1
-      ? `Старт ${new Intl.DateTimeFormat("ru-RU", { day: "numeric", month: "short" }).format(new Date(tripData.settings.startDate))}`
+      ? `Старт ${formatTripDate(tripData.settings.startDate)}`
       : `День ${tripData.currentDayNumber}/${tripData.settings.totalDays}`
     : null;
   const title = trip?.title || "Поездки";

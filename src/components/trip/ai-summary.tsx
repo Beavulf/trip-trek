@@ -22,6 +22,7 @@ import { currencySymbol } from "@/lib/currencies";
 import { MobileBottomSheet } from "./mobile-bottom-sheet";
 import { AiKeyCard } from "./ai-key-help";
 import { useAiStatus } from "@/hooks/trip/use-ai-status";
+import { tripDaysElapsed } from "@/lib/trip-days";
 
 // ─── Форматы рассказа ───────────────────────────────────────────────────────
 
@@ -194,11 +195,7 @@ function AISummaryInner({ tripId }: { tripId: string }) {
   // а фазу поездки (до старта / идёт / завершена) нужно знать точно
   const dayOffset = useMemo(() => {
     if (!trip) return 1;
-    const s = new Date(trip.settings.startDate);
-    const startUTC = Date.UTC(s.getFullYear(), s.getMonth(), s.getDate());
-    const now = new Date();
-    const nowUTC = Date.UTC(now.getFullYear(), now.getMonth(), now.getDate());
-    return Math.round((nowUTC - startUTC) / 86400000) + 1;
+    return tripDaysElapsed(trip.settings.startDate) + 1;
   }, [trip]);
 
   // «Умное» предложение формата по состоянию поездки

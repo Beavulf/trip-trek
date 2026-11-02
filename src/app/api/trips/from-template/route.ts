@@ -4,6 +4,7 @@ import { TRIP_TEMPLATES } from "@/lib/trip-templates";
 import { requireUser } from "@/lib/api-auth";
 import { isPremiumUser } from "@/lib/premium";
 import { getPlanLimits } from "@/lib/app-config";
+import { dayDateFor, dayEndFor } from "@/lib/trip-days";
 
 // POST /api/trips/from-template — создать поездку из шаблона (owner = session)
 export async function POST(req: NextRequest) {
@@ -33,9 +34,11 @@ export async function POST(req: NextRequest) {
 
     // Create trip with all template data
     // дата старта от клиента (YYYY-MM-DD), иначе — сегодня
-    const parsed = startDateRaw ? new Date(`${startDateRaw}T12:00:00`) : null;
-    const startDate = parsed && !isNaN(parsed.getTime()) ? parsed : new Date();
-    const endDate = new Date(startDate.getTime() + template.totalDays * 24 * 60 * 60 * 1000);
+    // Те же формулы, что у поездки «с нуля»: раньше конец считался как старт + N суток и уходил
+    // на день за последний день маршрута, поэтому поездка длилась на сутки дольше своих дней
+    const parsed = startDateRaw ? new Date(startDateRaw) : null;
+    const startDate = dayDateFor(parsed && !isNaN(parsed.getTime()) ? parsed : new Date(), 1);
+    const endDate = dayEndFor(startDate, template.totalDays);
 
     // Лимит + create в одной транзакции: меньше гонки double-click и никакой
     // полусобранной поездки (дни+места+блюда+фразы — атомарно, Phase 3)
@@ -65,15 +68,22 @@ export async function POST(req: NextRequest) {
           },
         },
         days: {
-          create: template.days.map((d) => ({
-            dayNumber: d.dayNumber,
-            date: new Date(startDate.getTime() + (d.dayNumber - 1) * 24 * 60 * 60 * 1000),
-            city: d.city,
-            cityKey: d.cityKey,
-            title: d.title,
-            summary: d.summary,
-            accentColor: d.accentColor,
-          })),
+          // В шаблоне расписаны только первые дни: остальные создаём пустыми в том же городе,
+          // иначе поездка на 12 дней открывалась с двумя днями маршрута
+          create: Array.from({ length: template.totalDays }, (_, i) => {
+            const dayNumber = i + 1;
+            const planned = template.days.find((d) => d.dayNumber === dayNumber);
+            const base = planned ?? template.days[template.days.length - 1];
+            return {
+              dayNumber,
+              date: dayDateFor(startDate, dayNumber),
+              city: base.city,
+              cityKey: base.cityKey,
+              title: planned?.title ?? `День ${dayNumber}`,
+              summary: planned?.summary ?? "",
+              accentColor: base.accentColor,
+            };
+          }),
         },
       },
       include: { days: true, members: true },

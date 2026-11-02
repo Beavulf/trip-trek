@@ -9,7 +9,6 @@ import { tripDateKey, tripRangeKeys } from "@/lib/trip-days";
 import { type Day, type Place } from "@/lib/types";
 import { resolveCityCoords, decodeCustomKey } from "@/lib/city-coords";
 import { expenseSelectableParticipants } from "@/lib/budget";
-import { isChinaTrip } from "@/lib/place-links";
 import { ChevronDown, FileDown, Loader2, Map as MapIcon, Plus, Share2, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import { cn, plural } from "@/lib/utils";
@@ -232,7 +231,6 @@ export function Itinerary() {
   const canShare = !!myRole && myRole !== "viewer";
   // Делят расходы только участники: зритель смотрит и в «на человека» не входит
   const payers = expenseSelectableParticipants(trip.participants).length;
-  const china = isChinaTrip(`${trip.settings.title} ${dayList.map((d) => d.city).join(" ")}`);
 
   // Идущая поездка: сверху то, что впереди, а не позавчерашний день
   const pastDays = inTrip && !selectedDay ? filteredDays.filter((d) => d.dayNumber < trip.currentDayNumber) : [];
@@ -435,7 +433,6 @@ export function Itinerary() {
                 isCurrent={isDayCurrent && inTrip}
                 isPast={day.dayNumber < trip.currentDayNumber || tripOver}
                 canEdit={canEdit}
-                china={china}
                 night={nightOf(day)}
                 defaultExpanded={
                   // По умолчанию раскрыт только сегодня (или первый день до старта),

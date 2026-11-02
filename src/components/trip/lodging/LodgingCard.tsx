@@ -40,8 +40,6 @@ interface LodgingCardProps {
   hideActions?: boolean;
   /** Проживание закончилось: приглушаем */
   pastTone?: boolean;
-  /** Для выбора карты в кнопке «Маршрут» */
-  tripTitle?: string;
 }
 
 export function LodgingCard({
@@ -57,7 +55,6 @@ export function LodgingCard({
   overlapping,
   hideActions = false,
   pastTone = false,
-  tripTitle,
 }: LodgingCardProps) {
   const reduceMotion = useReducedMotion();
   const phase = lodgingPhase(l, todayKey);
@@ -179,7 +176,7 @@ export function LodgingCard({
                 ))}
               </ul>
             )}
-            {!hideActions && <StayActions lodging={l} tone="card" tripTitle={tripTitle} onTaxi={onTaxi} />}
+            {!hideActions && <StayActions lodging={l} tone="card" onTaxi={onTaxi} />}
             {canEdit && (
               <button
                 type="button"

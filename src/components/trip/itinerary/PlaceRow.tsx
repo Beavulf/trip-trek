@@ -28,12 +28,10 @@ interface PlaceRowProps {
   hideTime?: boolean;
   /** Зритель видит статус, но не меняет его */
   canEdit?: boolean;
-  /** Поездка по Китаю: «Как добраться» ведёт в Amap */
-  china?: boolean;
   onOpen: () => void;
 }
 
-export function PlaceRow({ place, accentColor, currency, hideTime = false, canEdit = true, china = false, onOpen }: PlaceRowProps) {
+export function PlaceRow({ place, accentColor, currency, hideTime = false, canEdit = true, onOpen }: PlaceRowProps) {
   const update = useUpdatePlace();
   const { setActiveTab } = useTripStore();
   const meta = CATEGORY_META[place.category];
@@ -135,7 +133,7 @@ export function PlaceRow({ place, accentColor, currency, hideTime = false, canEd
             колонки (аудит 2026-10-03) и они переносились в столбик */}
         <div className="flex items-center gap-1 mt-0.5 -ml-2.5 -mb-1.5">
           <a
-            href={directionsUrl(place, china)}
+            href={directionsUrl(place)}
             target="_blank"
             rel="noopener noreferrer"
             onClick={(e) => e.stopPropagation()}

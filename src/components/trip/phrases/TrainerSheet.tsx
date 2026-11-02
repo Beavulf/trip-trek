@@ -45,7 +45,7 @@ export function TrainerSheet({
   const started = deck.length > 0;
   const card = started ? deck[pos] : null;
   const done = started && pos >= deck.length;
-  const lang = card ? detectLanguage(card.cn) : null;
+  const lang = card ? detectLanguage(card.cn, card.language) : null;
 
   const startRound = () => {
     stopSpeaking();
@@ -172,7 +172,7 @@ export function TrainerSheet({
                     <span
                       onClick={(e) => {
                         e.stopPropagation();
-                        if (!speaking) speakPhrase(card!.cn, { onStart: () => setSpeaking(true), onEnd: () => setSpeaking(false) });
+                        if (!speaking) speakPhrase(card!.cn, { language: card!.language, onStart: () => setSpeaking(true), onEnd: () => setSpeaking(false) });
                       }}
                       className="mt-2 size-11 rounded-full bg-primary/10 text-primary grid place-items-center"
                       role="button"

@@ -8,14 +8,15 @@ import type { ReactNode } from "react";
 import { Copy, Navigation, Phone } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import { amapSearchUrl, directionsUrl, googleSearchUrl, isChinaTrip } from "@/lib/place-links";
+import { amapSearchUrl, directionsUrl, googleSearchUrl, searchInChina } from "@/lib/place-links";
+import { useRouteDays } from "@/hooks/use-trip";
 import { phoneHref, type Lodging } from "@/lib/lodging";
 
 type Routable = Pick<Lodging, "lat" | "lng" | "address" | "name" | "city">;
 
-/** В Китае Google Maps без VPN недоступен, поэтому там ведём в Amap */
+/** С координатами карту выбирает сама точка; без них подсказкой служит маршрут (china) */
 export function routeUrl(l: Routable, china = false): string | null {
-  if (l.lat != null && l.lng != null) return directionsUrl({ lat: l.lat, lng: l.lng, name: l.name }, china);
+  if (l.lat != null && l.lng != null) return directionsUrl({ lat: l.lat, lng: l.lng, name: l.name });
   const q = [l.address || l.name, l.address ? null : l.city].filter(Boolean).join(", ");
   if (!q) return null;
   return china ? amapSearchUrl(q) : googleSearchUrl(q);
@@ -40,15 +41,13 @@ export function StayActions({
   lodging,
   tone,
   onTaxi,
-  tripTitle = "",
 }: {
   lodging: Lodging;
   tone: Tone;
   onTaxi: () => void;
-  /** Страна поездки часто только в её названии */
-  tripTitle?: string;
 }) {
-  const route = routeUrl(lodging, isChinaTrip(`${lodging.city ?? ""} ${lodging.address ?? ""} ${tripTitle}`));
+  const { data: days } = useRouteDays();
+  const route = routeUrl(lodging, searchInChina(lodging.city, days ?? []));
   const tel = phoneHref(lodging.phone);
 
   // Второстепенные кнопки стоят одним рядом: одинокая широкая кнопка «Адрес» выглядела главной

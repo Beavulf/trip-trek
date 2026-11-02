@@ -38,7 +38,7 @@ import { FiltersSheet } from "./map/filters-sheet";
 import { useMapFilters } from "@/hooks/trip/use-map-filters";
 import { LayersSheet, type MapLayerKey } from "./map/layers-sheet";
 import { MAP_CREDIT } from "@/lib/map-layers";
-import { isChinaTrip } from "@/lib/place-links";
+import { tripTouchesChina } from "@/lib/place-links";
 import { isChillCategory } from "@/lib/chill-categories";
 import { resolveCityCoords, decodeCustomKey } from "@/lib/city-coords";
 import { peekMapFocus, ackMapFocus, subscribeMapFocus } from "@/lib/map-bus";
@@ -148,10 +148,7 @@ export default function TripMap({ active = true }: { active?: boolean }) {
     return (lodgings ?? []).filter((l) => l.lat != null && l.lng != null && !linked.has(l.id));
   }, [lodgings, allPlaces]);
 
-  const chinaTrip = isChinaTrip(
-    `${route?.meta.destination ?? ""} ${route?.meta.title ?? ""} ${(days || []).map((d) => d.city).join(" ")}`
-  );
-  const mapNote = chinaTrip
+  const mapNote = tripTouchesChina(days ?? [])
     ? "В Китае OpenStreetMap может грузиться медленно без VPN. Для навигации на месте удобнее приложение Amap (高德地图) или Baidu Maps."
     : "Метки хранятся в поездке и видны всем участникам.";
 

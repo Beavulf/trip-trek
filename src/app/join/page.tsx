@@ -8,6 +8,7 @@ import { toast } from "sonner";
 import { useAuth } from "@/hooks/use-auth";
 import { setTripId } from "@/hooks/use-trip";
 import { useQueryClient } from "@tanstack/react-query";
+import { formatTripDate } from "@/lib/trip-days";
 
 function memberLabel(n: number) {
   const mod10 = n % 10;
@@ -200,7 +201,7 @@ function JoinPageContent() {
                   <div className="flex items-center justify-between gap-2">
                     <span className="flex items-center gap-1.5 text-[11px] text-muted-foreground min-w-0">
                       <Calendar className="size-3.5 shrink-0" />
-                      {new Date(preview.startDate).toLocaleDateString("ru-RU", { day: "numeric", month: "long" })}
+                      {formatTripDate(preview.startDate, { day: "numeric", month: "long" })}
                       {" · "}
                       {preview.totalDays} дн.
                     </span>

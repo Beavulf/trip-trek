@@ -15,6 +15,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { useWeather } from "@/hooks/use-trip";
 import { useTripStore } from "@/lib/trip-store";
 import { DatesEditor } from "./DatesEditor";
+import { formatTripDate } from "@/lib/trip-days";
 
 interface DashboardHeroProps {
   trip: TripSummary;
@@ -36,7 +37,7 @@ function dayGreeting(): { text: string; emoji: string } {
 }
 
 function dateRu(iso: string) {
-  return new Date(iso).toLocaleDateString("ru-RU", { day: "numeric", month: "long" });
+  return formatTripDate(iso, { day: "numeric", month: "long" });
 }
 
 export function DashboardHero({

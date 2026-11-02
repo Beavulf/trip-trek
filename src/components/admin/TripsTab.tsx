@@ -19,6 +19,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { EmptyState, Stamp, TripStatusStamp, TRIP_STATUS_META, relTime, type TripStatus } from "./shared";
+import { formatTripDate } from "@/lib/trip-days";
 
 interface TripCounts {
   members: number;
@@ -243,7 +244,7 @@ export function TripsTab() {
                     <td className="px-4 py-2.5 text-right tabular-nums">{t._count.photos}</td>
                     <td className="px-4 py-2.5 text-right tabular-nums">{t._count.expenses}</td>
                     <td className="px-4 py-2.5 text-right font-mono text-xs text-muted-foreground">
-                      {new Date(t.startDate).toLocaleDateString("ru-RU")}
+                      {formatTripDate(t.startDate, { day: "2-digit", month: "2-digit", year: "numeric" })}
                     </td>
                   </tr>
                 ))}
@@ -453,7 +454,7 @@ function TripDetailSheet({
           {[
             { label: "Направление", value: trip.destination },
             { label: "Длительность", value: `${trip.totalDays} ${plural(trip.totalDays, "день", "дня", "дней")}` },
-            { label: "Старт", value: new Date(trip.startDate).toLocaleDateString("ru-RU") },
+            { label: "Старт", value: formatTripDate(trip.startDate, { day: "2-digit", month: "2-digit", year: "numeric" }) },
             { label: "Бюджет", value: `${trip.totalBudget} ${trip.currency}` },
             { label: "Дней создано", value: String(trip._count.days) },
             { label: "Сообщений", value: String(trip._count.messages) },

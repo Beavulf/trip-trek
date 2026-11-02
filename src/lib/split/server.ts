@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import type { Prisma, SplitMember } from "@prisma/client";
 import { db } from "@/lib/db";
-import { dateToKey, diffDays, isDateKey } from "./dates";
+import { trustedTodayKey } from "@/lib/trip-days";
 import type { ActivityType } from "./activity";
 import { MEMBER_INCLUDE, memberDTO } from "./serialize";
 import type { SplitGroupDTO } from "./types";
@@ -15,17 +15,12 @@ export async function readJson(req: NextRequest): Promise<Record<string, unknown
   return body && typeof body === "object" && !Array.isArray(body) ? (body as Record<string, unknown>) : null;
 }
 
-const utcToday = () => dateToKey(new Date());
-
 /**
  * «Сегодня» запроса. Клиент присылает свою локальную дату (`?today=`) — «вчерашний чек» и «сегодня»
- * считаются по календарю пользователя, а не сервера. Верим не дальше суток от серверной UTC-даты:
- * это часовые пояса, а не способ внести трату в 2099-м.
+ * считаются по календарю пользователя, а не сервера (границы доверия — trustedTodayKey).
  */
 export function requestToday(req: NextRequest): string {
-  const q = new URL(req.url).searchParams.get("today");
-  const utc = utcToday();
-  return isDateKey(q) && Math.abs(diffDays(utc, q)) <= 1 ? q : utc;
+  return trustedTodayKey(new URL(req.url).searchParams.get("today"));
 }
 
 export async function activeMemberIds(groupId: string): Promise<Set<string>> {

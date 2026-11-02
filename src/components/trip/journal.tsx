@@ -15,7 +15,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn, plural } from "@/lib/utils";
-import { dayDateFor, isTripOver } from "@/lib/trip-days";
+import { dayDateFor, formatTripDate, isTripOver } from "@/lib/trip-days";
 import { MOODS, MOOD_META, isValidMood } from "@/lib/moods";
 import { useTripStore } from "@/lib/trip-store";
 import type { JournalEntry, TripDay, TripSummary } from "@/lib/types";
@@ -194,10 +194,7 @@ export function Journal() {
     (dayNumber: number) => {
       try {
         if (!trip) return "";
-        return dayDateFor(new Date(trip.settings.startDate), dayNumber).toLocaleDateString("ru-RU", {
-          day: "numeric",
-          month: "short",
-        });
+        return formatTripDate(dayDateFor(new Date(trip.settings.startDate), dayNumber));
       } catch {
         return "";
       }

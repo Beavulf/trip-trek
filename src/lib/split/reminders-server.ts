@@ -88,9 +88,10 @@ export async function loadStampedLedger(groupId: string): Promise<{ expenses: St
 async function remindGroup(group: { id: string; name: string; currency: string; remindAfterDays: number }, now: Date): Promise<number> {
   const members = await db.splitMember.findMany({
     where: { groupId: group.id, status: "active", userId: { not: null } },
-    select: { id: true },
+    select: { id: true, user: { select: { timeZone: true } } },
   });
-  const notifiable = new Set(members.map((m) => m.id));
+  // Окно — у каждого должника своё: тому, у кого сейчас ночь, напомним на одном из следующих тиков
+  const notifiable = new Set(members.filter((m) => inAutoRemindWindow(now, m.user?.timeZone)).map((m) => m.id));
   if (notifiable.size === 0) return 0;
 
   const since = new Date(now.getTime() - group.remindAfterDays * 86_400_000);
@@ -125,7 +126,6 @@ async function remindGroup(group: { id: string; name: string; currency: string; 
 
 /** Обход всех групп с включённым автонапоминанием. Никогда не бросает: сбой одной группы не мешает остальным. */
 export async function runSplitReminders(now = new Date()): Promise<number> {
-  if (!inAutoRemindWindow(now)) return 0;
   let total = 0;
   try {
     const groups = await db.splitGroup.findMany({

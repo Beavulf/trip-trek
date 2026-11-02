@@ -60,6 +60,8 @@ import { useAdminStats } from "@/hooks/use-admin-stats";
 import { useFeedbackUnread } from "@/hooks/use-feedback";
 import { startUploadQueue } from "@/lib/upload-queue/browser";
 import { FabUploadRing, UploadTray } from "./upload/UploadTray";
+import { formatTripDate } from "@/lib/trip-days";
+import { useReportTimeZone } from "@/hooks/use-report-time-zone";
 
 // Оверлеи, открываемые действием юзера, грузим по требованию — в первичном
 // бандле им делать нечего (аудит 2026-09-13: qrcode/react в InviteFriends,
@@ -112,6 +114,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   const [moreOpen, setMoreOpen] = useState(false);
   const [infoOpen, setInfoOpen] = useState(false);
   const { data: session } = useSession();
+  useReportTimeZone(session?.user?.id);
   const isPremium = (session?.user as { plan?: string } | undefined)?.plan === "premium";
   const isAdmin = session?.user?.isAdmin === true;
   // Бейдж новых отзывов для админа (неадминам эндпоинт недоступен — не опрашиваем)
@@ -252,7 +255,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   // иначе новый юзер вечно видит «загрузку» и думает, что что-то сломалось.
   // До старта currentDayNumber = 0 — дата вылета вместо «День 0».
   const startLine = trip
-    ? `Старт ${new Intl.DateTimeFormat("ru-RU", { day: "numeric", month: "short" }).format(new Date(trip.settings.startDate))}`
+    ? `Старт ${formatTripDate(trip.settings.startDate)}`
     : null;
   const dayLine = trip
     ? trip.currentDayNumber < 1

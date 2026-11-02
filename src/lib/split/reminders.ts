@@ -17,15 +17,27 @@ export const MANUAL_COOLDOWN_MS = 12 * 60 * 60 * 1000;
 /** Долги меньше 1,00 в валюте группы не напоминаем: копейки не стоят уведомления. */
 export const MIN_REMIND_CENTS = 100;
 
-/**
- * Окно отправки автонапоминаний по UTC: 06–18 = 09–21 по Минску (пользователи в Беларуси, ADR-0010).
- * Ночью пуш никому не нужен.
- */
-export const AUTO_REMIND_HOURS_UTC = { from: 6, to: 18 } as const;
+/** Окно отправки автонапоминаний по часам должника: ночью пуш никому не нужен (ADR-0010) */
+export const AUTO_REMIND_LOCAL_HOURS = { from: 9, to: 21 } as const;
 
-export function inAutoRemindWindow(now: Date): boolean {
-  const h = now.getUTCHours();
-  return h >= AUTO_REMIND_HOURS_UTC.from && h < AUTO_REMIND_HOURS_UTC.to;
+/** Пока устройство не сообщило пояс: большинство пользователей в Беларуси */
+export const DEFAULT_REMIND_TIME_ZONE = "Europe/Minsk";
+
+/** Настоящий ли это пояс: значение приходит с устройства */
+export function isTimeZone(value: unknown): value is string {
+  if (typeof value !== "string" || !value || value.length > 64) return false;
+  try {
+    new Intl.DateTimeFormat("en", { timeZone: value });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export function inAutoRemindWindow(now: Date, timeZone?: string | null): boolean {
+  const zone = isTimeZone(timeZone) ? timeZone : DEFAULT_REMIND_TIME_ZONE;
+  const hour = Number(new Intl.DateTimeFormat("en-GB", { hour: "2-digit", hourCycle: "h23", timeZone: zone }).format(now));
+  return hour >= AUTO_REMIND_LOCAL_HOURS.from && hour < AUTO_REMIND_LOCAL_HOURS.to;
 }
 
 const DAY_MS = 24 * 60 * 60 * 1000;

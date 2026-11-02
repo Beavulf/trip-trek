@@ -33,6 +33,7 @@ import {
   type ResumePoint,
 } from "@/lib/public-viewer";
 import { cn } from "@/lib/utils";
+import { formatTripDate } from "@/lib/trip-days";
 
 // Секция «Все фото» рендерится порциями: целиком это сотни кнопок,
 // картинок и IntersectionObserver'ов в DOM у гостя с телефона. Анимация входа — только у первых.
@@ -96,9 +97,12 @@ const plural = (n: number, forms: [string, string, string]) => {
   return forms[2];
 };
 
-const fmtShort = (iso?: string | null) =>
-  iso ? new Date(iso).toLocaleDateString("ru-RU", { day: "numeric", month: "short" }).replace(".", "") : "";
+// Даты поездки и дней — календарные (страница рендерится и на сервере, и у гостя в любом поясе)
+const fmtShort = (iso?: string | null) => (iso ? formatTripDate(iso).replace(".", "") : "");
 
+const fmtDayLong = (iso?: string | null) => (iso ? formatTripDate(iso, { day: "numeric", month: "long" }) : "");
+
+// Момент съёмки, а не календарный день поездки: читается по часам зрителя
 const fmtLong = (iso?: string | null) =>
   iso ? new Date(iso).toLocaleDateString("ru-RU", { day: "numeric", month: "long" }) : "";
 
@@ -693,7 +697,7 @@ export function PublicTripView({ trip, token }: { trip: PublicTrip; token: strin
                     Д{d.dayNumber}
                   </span>
                   <span className="min-w-0 truncate text-sm font-semibold">{d.city}</span>
-                  <span className="shrink-0 text-xs text-muted-foreground">{fmtLong(d.date)}</span>
+                  <span className="shrink-0 text-xs text-muted-foreground">{fmtDayLong(d.date)}</span>
                   {dayPhotos.length > 0 && (
                     <button
                       type="button"
