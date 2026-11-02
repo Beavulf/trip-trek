@@ -88,7 +88,7 @@
 | `budget-plan` | GET, PATCH | `budget:updated` | плановый бюджет по категориям (категория из справочника, сумма 0…1e9) |
 | `board` | GET, POST, PATCH, DELETE | `board:added` | чат поездки (реакции JSON, ответы, pin) |
 | `journal` | GET, POST, PATCH, DELETE | `journal:added` | дневник (запись на день, mood) |
-| `checklist` | GET, POST, PATCH, DELETE | `checklist:updated` | чек-лист подготовки |
+| `checklist` | GET, POST, PATCH, DELETE | `checklist:updated` | чек-лист подготовки; POST принимает один пункт или `items` (до 100, одной транзакцией) |
 | `info` | GET, POST, PATCH, DELETE | `info:updated` | справка (визы, сим-карты…) |
 | `lodgings` | GET, POST, PATCH, DELETE | `lodging:added` (POST), `lodging:updated` (PATCH/DELETE), при DELETE ещё `place:updated` | проживание: заезд/выезд, адрес на местном языке, бронь, телефон, цена. Вход нормализует `src/lib/lodging.ts` (`pickLodgingInput`), даты — ключи `ГГГГ-ММ-ДД`; чтение — участник, правка — редактор (не зритель); ≤200 записей на поездку |
 | `lodgings/import` | POST | `lodging:added` (создано новое) или `lodging:updated`, плюс `place:updated` | перенос отелей из маршрута: `stays[]` с `placeIds` и полями нового жилья либо `lodgingId` существующего; всё одной транзакцией, чужое или уже привязанное место — 409 (гард E) |

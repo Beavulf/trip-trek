@@ -2,6 +2,7 @@
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { getTripId, useCurrentTripId } from "./trip-id";
+import { fetchWithOfflineCopy } from "@/lib/offline-copy";
 
 // === Info ===
 export interface InfoItem {
@@ -15,19 +16,17 @@ export interface InfoItem {
 
 // P0 #1: enabled !!tripId, placeholderData: []
 // P1 #8: throw on !ok
-export function useInfo(type?: string) {
+export function useInfo() {
   const tripId = useCurrentTripId();
-  const params = new URLSearchParams();
-  if (tripId) params.set("tripId", tripId);
-  if (type) params.set("type", type);
   return useQuery<InfoItem[]>({
-    queryKey: ["info", tripId, type],
+    queryKey: ["info", tripId],
     queryFn: async () => {
       if (!tripId) return [];
-      const r = await fetch(`/api/info?${params}`);
-      if (!r.ok) throw new Error("fetch info failed");
-      const data = await r.json();
-      return Array.isArray(data) ? data : [];
+      return fetchWithOfflineCopy<InfoItem[]>("info", tripId, () => fetch(`/api/info?tripId=${tripId}`), async (r) => {
+        if (!r.ok) throw new Error("fetch info failed");
+        const data = await r.json();
+        return Array.isArray(data) ? data : [];
+      });
     },
     enabled: !!tripId,
   });

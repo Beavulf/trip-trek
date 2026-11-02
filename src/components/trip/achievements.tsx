@@ -111,7 +111,12 @@ async function shareText(text: string, title: string) {
 
 export function Achievements() {
   const tripId = useCurrentTripId();
-  const { setTripSwitcherOpen, setActiveTab } = useTripStore();
+  const { setTripSwitcherOpen, setActiveTab, setInfoView } = useTripStore();
+  // Награда за чек-лист ведёт в него, а вкладка «Инфо» в поездке открывается на справке
+  const goToTab = (tab: TripTab) => {
+    if (tab === "info") setInfoView("checklist");
+    setActiveTab(tab);
+  };
   const { data: trip, error: tripError, isLoading: tripLoading, refetch: refetchTrip } = useTrip();
   const { data: expenses, error: expensesError, isLoading: expensesLoading, refetch: refetchExpenses } = useExpenses();
   const { data: foods, isLoading: foodsLoading } = useFoods();
@@ -298,7 +303,7 @@ export function Achievements() {
       </div>
 
       {/* Прожектор: ближайшая награда */}
-      {next && <NextBadgePlaque badge={next} sym={sym} onGo={(tab) => setActiveTab(tab)} />}
+      {next && <NextBadgePlaque badge={next} sym={sym} onGo={goToTab} />}
       {allDone && (
         <div className="rounded-3xl border border-amber-500/40 bg-gradient-to-br from-amber-500/10 to-orange-500/10 p-4">
           <div className="flex items-center gap-3">
@@ -377,7 +382,7 @@ export function Achievements() {
         onClose={() => setSheetId(null)}
         onGo={(tab) => {
           setSheetId(null);
-          setActiveTab(tab);
+          goToTab(tab);
         }}
       />
     </div>

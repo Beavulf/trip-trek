@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
+import type { InfoView } from "./info-page";
 
 /** Режимы шита быстрого добавления (FAB) */
 export type QuickAddMode = "photo" | "expense" | "journal";
@@ -78,6 +79,10 @@ interface TripState {
   openBudget: (v: BudgetView) => void;
   budgetAddOpen: boolean;
   setBudgetAddOpen: (v: boolean) => void;
+  // Раздел вкладки «Инфо». null — человек не выбирал: раздел зависит от фазы поездки (defaultInfoView).
+  // В сторе, потому что награды ведут сразу в чек-лист. Транзиентное, не в persist
+  infoView: InfoView | null;
+  setInfoView: (v: InfoView) => void;
 }
 
 export const useTripStore = create<TripState>()(
@@ -115,6 +120,7 @@ export const useTripStore = create<TripState>()(
           mapOnlyChill: false,
           selectedDay: null,
           budgetView: "summary",
+          infoView: null,
         }),
       pendingTripId: null,
       setPendingTripId: (id) => set({ pendingTripId: id }),
@@ -133,6 +139,8 @@ export const useTripStore = create<TripState>()(
       openBudget: (v) => set({ activeTab: "budget", budgetView: v }),
       budgetAddOpen: false,
       setBudgetAddOpen: (v) => set({ budgetAddOpen: v }),
+      infoView: null,
+      setInfoView: (v) => set({ infoView: v }),
     }),
     {
       name: "triptrek-store",

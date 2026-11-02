@@ -7,7 +7,6 @@ import {
   CalendarDays,
   Check,
   Copy,
-  Download,
   Loader2,
   Lock,
   LogOut,
@@ -27,6 +26,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { useTrip, useCurrentTripId } from "@/hooks/use-trip";
 import { useTripStore } from "@/lib/trip-store";
 import { X, Share2 } from "lucide-react";
+import { DataBackup } from "./data-backup";
 import { MemberManager } from "./member-manager";
 import { PublicShareSettings } from "./trip-public-share";
 import {
@@ -131,23 +131,6 @@ export function TripInfoSheet({
     }
   };
 
-  const downloadBackup = async () => {
-    if (!tripId) return;
-    try {
-      const r = await fetch(`/api/export?tripId=${tripId}`);
-      if (!r.ok) throw new Error("Экспорт не удался");
-      const blob = await r.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `${(t?.title || "trip").replace(/[^\p{L}\p{N} _-]/gu, "").trim() || "trip"}-backup.json`;
-      a.click();
-      URL.revokeObjectURL(url);
-      toast.success("Бэкап скачан");
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Экспорт не удался");
-    }
-  };
 
   return createPortal(
     <AnimatePresence>
@@ -391,20 +374,11 @@ export function TripInfoSheet({
               {/* Участники (с управлением для владельца) */}
               <MemberManager tripId={tripId} members={trip.participants} refetch={refetch} detailed />
 
-              {/* Действия с поездкой: бэкап — полный дамп, только владельцу */}
-              <div className="rounded-2xl border border-border divide-y divide-border overflow-hidden">
-                {isOwner && (
-                  <button
-                    type="button"
-                    onClick={() => void downloadBackup()}
-                    className="w-full flex items-center gap-3 px-3.5 py-3 text-sm hover:bg-accent/50 transition-colors text-left"
-                  >
-                    <Download className="size-4 text-muted-foreground" />
-                    <span className="flex-1">Скачать бэкап JSON</span>
-                    <span className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground/80">v2.0</span>
-                  </button>
-                )}
+              {/* Бэкап — полный дамп поездки, только владельцу (жил на вкладке «Инфо», где его никто не искал) */}
+              {isOwner && <DataBackup />}
 
+              {/* Действия с поездкой */}
+              <div className="rounded-2xl border border-border divide-y divide-border overflow-hidden">
                 {isOwner ? (
                   <div className="px-3.5 py-3 flex items-center gap-3">
                     <LogOut className="size-4 text-muted-foreground" />

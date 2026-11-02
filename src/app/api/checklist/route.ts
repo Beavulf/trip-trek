@@ -20,17 +20,45 @@ export async function GET(req: NextRequest) {
   return NextResponse.json(items);
 }
 
+const MAX_ITEMS_AT_ONCE = 100;
+const MAX_TEXT = 500;
+
+type NewItem = { text: string; category: string };
+
+/** Вход POST: один пункт или пачка из шаблонов. null — вход негодный */
+function pickNewItems(body: { text?: unknown; category?: unknown; items?: unknown }): NewItem[] | null {
+  const raw = Array.isArray(body.items) ? body.items : [body];
+  if (raw.length === 0 || raw.length > MAX_ITEMS_AT_ONCE) return null;
+  const items: NewItem[] = [];
+  for (const r of raw as { text?: unknown; category?: unknown }[]) {
+    const text = typeof r?.text === "string" ? r.text.trim().slice(0, MAX_TEXT) : "";
+    if (!text) return null;
+    items.push({ text, category: (typeof r.category === "string" && r.category.slice(0, 50)) || "preparation" });
+  }
+  return items;
+}
+
 export async function POST(req: NextRequest) {
   const body = await req.json();
-  const { text, category, tripId } = body;
+  const { tripId } = body;
   const tripIdForAuth = tripId || new URL(req.url).searchParams.get("tripId");
   const { response } = await requireTripEditor(req, tripIdForAuth);
   if (response) return response;
-  if (!text || !tripId) return NextResponse.json({ error: "text, tripId required" }, { status: 400 });
-  const order = await db.checklistItem.count({ where: { tripId, category: category || "preparation" } });
-  const item = await db.checklistItem.create({ data: { text: text.slice(0, 500), category: (category || "preparation").slice(0, 50), tripId, order } });
+  const items = tripId ? pickNewItems(body) : null;
+  if (!items) return NextResponse.json({ error: "text, tripId required" }, { status: 400 });
+
+  // Порядок внутри категории считаем один раз: пачка параллельных запросов получала одинаковый order
+  const counts = await db.checklistItem.groupBy({ by: ["category"], where: { tripId }, _count: true });
+  const next = new Map(counts.map((c) => [c.category, c._count]));
+  const created = await db.$transaction(
+    items.map((item) => {
+      const order = next.get(item.category) ?? 0;
+      next.set(item.category, order + 1);
+      return db.checklistItem.create({ data: { ...item, order, tripId } });
+    })
+  );
   publish(tripId, "checklist:updated", {});
-  return NextResponse.json(item);
+  return NextResponse.json(created.length === 1 ? created[0] : created);
 }
 
 export async function PATCH(req: NextRequest) {

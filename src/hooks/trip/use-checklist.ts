@@ -2,6 +2,7 @@
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { getTripId, useCurrentTripId } from "./trip-id";
+import { fetchWithOfflineCopy } from "@/lib/offline-copy";
 
 // === Checklist ===
 export interface ChecklistItem {
@@ -20,10 +21,11 @@ export function useChecklist() {
     queryKey: ["checklist", tripId],
     queryFn: async () => {
       if (!tripId) return [];
-      const r = await fetch(`/api/checklist?tripId=${tripId}`);
-      if (!r.ok) throw new Error("fetch checklist failed");
-      const data = await r.json();
-      return Array.isArray(data) ? data : [];
+      return fetchWithOfflineCopy<ChecklistItem[]>("checklist", tripId, () => fetch(`/api/checklist?tripId=${tripId}`), async (r) => {
+        if (!r.ok) throw new Error("fetch checklist failed");
+        const data = await r.json();
+        return Array.isArray(data) ? data : [];
+      });
     },
     enabled: !!tripId,
   });
@@ -45,18 +47,30 @@ export function useToggleChecklist() {
       }
       return body;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["checklist"] }),
+    // Отметка видна сразу: на слабой сети пункт иначе висел неотмеченным до ответа сервера
+    onMutate: async ({ id, ...patch }) => {
+      const key = ["checklist", getTripId()];
+      await qc.cancelQueries({ queryKey: key });
+      const previous = qc.getQueryData<ChecklistItem[]>(key);
+      qc.setQueryData<ChecklistItem[]>(key, (items) => items?.map((i) => (i.id === id ? { ...i, ...patch } : i)));
+      return { key, previous };
+    },
+    onError: (_e, _v, ctx) => {
+      if (ctx) qc.setQueryData(ctx.key, ctx.previous);
+    },
+    onSettled: () => qc.invalidateQueries({ queryKey: ["checklist"] }),
   });
 }
 
 export function useAddChecklist() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ text, category }: { text: string; category: string }) => {
+    /** Несколько пунктов — одним запросом: шаблон на 30 пунктов целиком сохранится или не сохранится */
+    mutationFn: async (items: { text: string; category: string }[]) => {
       const r = await fetch("/api/checklist", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text, category, tripId: getTripId() }),
+        body: JSON.stringify({ items, tripId: getTripId() }),
       });
       const body = await r.json().catch(() => ({}));
       if (!r.ok) {

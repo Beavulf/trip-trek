@@ -31,6 +31,7 @@ import { SupportCard } from "./SupportCard";
 import { EditProfileSheet } from "./EditProfileSheet";
 import { FeedbackSheet } from "@/components/trip/feedback/feedback-sheet";
 import { useAdminStats } from "@/hooks/use-admin-stats";
+import { clearOfflineData } from "@/lib/offline-copy";
 
 // Предел размера фото профиля — как на сервере (api/user/avatar)
 const AVATAR_MAX_BYTES = 5 * 1024 * 1024;
@@ -136,6 +137,7 @@ function ProfileScreen() {
     try {
       const r = await fetch("/api/auth/custom-signout", { method: "POST" });
       if (!r.ok) throw new Error("signout failed");
+      clearOfflineData();
       // Уходим со страницы целиком: signingOut не сбрасываем, чтобы кнопка не «ожила» до перехода
       window.location.assign("/login");
     } catch {

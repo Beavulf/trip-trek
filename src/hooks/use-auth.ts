@@ -3,6 +3,7 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect } from "react";
 import type { OnboardingState } from "@/lib/onboarding-state";
+import { clearOfflineData, readOfflineUser, saveOfflineUser } from "@/lib/offline-copy";
 
 interface AuthUser {
   id: string;
@@ -40,10 +41,15 @@ export function useAuth(): {
       try {
         const r = await fetch("/api/auth/custom-session", { cache: "no-store" });
         if (!r.ok) return { user: null };
-        const json = await r.json();
-        return json as AuthSession;
+        const json = (await r.json()) as AuthSession;
+        // Сессии нет: сервер решил, значит, копию пользователя и данных на устройстве не оставляем
+        if (json.user) saveOfflineUser(json.user);
+        else clearOfflineData();
+        return json;
       } catch {
-        return { user: null };
+        // Нет сети — это не выход из аккаунта: без копии приложение уводило на /login,
+        // и в дороге нельзя было открыть даже справку с экстренными номерами
+        return { user: readOfflineUser<AuthUser>() };
       }
     },
     staleTime: 5 * 60 * 1000, // 5 минут — кэш свежий

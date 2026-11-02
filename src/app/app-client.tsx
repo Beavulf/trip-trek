@@ -39,7 +39,9 @@ const Gallery = dynamic(() => import("@/components/trip/gallery").then(m => m.Ga
 const Budget = dynamic(() => import("@/components/trip/budget").then(m => m.Budget), { loading: TabLoader });
 const RestChill = dynamic(() => import("@/components/trip/rest-chill").then(m => m.RestChill), { loading: TabLoader });
 const Journal = dynamic(() => import("@/components/trip/journal").then(m => m.Journal), { loading: TabLoader });
-const InfoPanel = dynamic(() => import("@/components/trip/info-panel").then(m => m.InfoPanel), { loading: TabLoader });
+// Справка должна открываться без сети, а чанк вкладки кэшируется только после загрузки: прогреваем заранее
+const loadInfoPanel = () => import("@/components/trip/info");
+const InfoPanel = dynamic(() => loadInfoPanel().then(m => m.InfoPanel), { loading: TabLoader });
 const AISummary = dynamic(() => import("@/components/trip/ai-summary").then(m => m.AISummary), { loading: TabLoader });
 const Phrasebook = dynamic(() => import("@/components/trip/phrasebook").then(m => m.Phrasebook), { loading: TabLoader });
 const WeatherPanel = dynamic(() => import("@/components/trip/weather-panel").then(m => m.WeatherPanel), { loading: TabLoader });
@@ -65,6 +67,7 @@ export function MainApp() {
   useEffect(() => {
     const warm = () => {
       void loadTripMap();
+      void loadInfoPanel();
     };
     if ("requestIdleCallback" in window) {
       const id = window.requestIdleCallback(warm, { timeout: 5000 });
