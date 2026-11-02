@@ -8,13 +8,17 @@ import type { ReactNode } from "react";
 import { Copy, Navigation, Phone } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import { googleDirectionsUrl, googleSearchUrl } from "@/lib/place-links";
+import { amapSearchUrl, directionsUrl, googleSearchUrl, isChinaTrip } from "@/lib/place-links";
 import { phoneHref, type Lodging } from "@/lib/lodging";
 
-export function routeUrl(l: Pick<Lodging, "lat" | "lng" | "address" | "name" | "city">): string | null {
-  if (l.lat != null && l.lng != null) return googleDirectionsUrl(l.lat, l.lng);
+type Routable = Pick<Lodging, "lat" | "lng" | "address" | "name" | "city">;
+
+/** В Китае Google Maps без VPN недоступен, поэтому там ведём в Amap */
+export function routeUrl(l: Routable, china = false): string | null {
+  if (l.lat != null && l.lng != null) return directionsUrl({ lat: l.lat, lng: l.lng, name: l.name }, china);
   const q = [l.address || l.name, l.address ? null : l.city].filter(Boolean).join(", ");
-  return q ? googleSearchUrl(q) : null;
+  if (!q) return null;
+  return china ? amapSearchUrl(q) : googleSearchUrl(q);
 }
 
 export function copyText(text: string, okMessage: string) {
@@ -36,16 +40,18 @@ export function StayActions({
   lodging,
   tone,
   onTaxi,
+  tripTitle = "",
 }: {
   lodging: Lodging;
   tone: Tone;
   onTaxi: () => void;
+  /** Страна поездки часто только в её названии */
+  tripTitle?: string;
 }) {
-  const route = routeUrl(lodging);
+  const route = routeUrl(lodging, isChinaTrip(`${lodging.city ?? ""} ${lodging.address ?? ""} ${tripTitle}`));
   const tel = phoneHref(lodging.phone);
 
-  // Второстепенные кнопки идут парами; при нечётном числе последняя тянется на всю
-  // ширину, иначе она одиноко повисает на полстроки
+  // Второстепенные кнопки стоят одним рядом: одинокая широкая кнопка «Адрес» выглядела главной
   const extras: ((cls: string) => ReactNode)[] = [];
   if (route) {
     extras.push((cls) => (
@@ -70,20 +76,20 @@ export function StayActions({
   }
 
   return (
-    <div className="grid grid-cols-2 gap-2">
+    <div className="space-y-2">
       <button
         type="button"
         onClick={onTaxi}
         className={cn(
           base,
-          "col-span-2 min-h-12 text-sm font-semibold",
+          "w-full min-h-12 text-sm font-semibold",
           tone === "hero" ? "bg-white text-indigo-950 hover:bg-white/90" : "bg-primary text-primary-foreground"
         )}
       >
         🚕 Показать таксисту
       </button>
-      {extras.map((render, i) =>
-        render(cn(base, secondary[tone], extras.length % 2 === 1 && i === extras.length - 1 && "col-span-2"))
+      {extras.length > 0 && (
+        <div className="grid auto-cols-fr grid-flow-col gap-2">{extras.map((render) => render(cn(base, "px-2", secondary[tone])))}</div>
       )}
     </div>
   );

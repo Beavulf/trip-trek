@@ -3,25 +3,33 @@
 // Вкладка «Жильё»: где ночуем сегодня, лента проживаний по датам, предупреждения о
 // ночах без жилья и о двойной брони. Жильё — отдельная сущность (не пункты маршрута):
 // маршрут говорит «что делаем», эта вкладка — «где спим» (см. модель Lodging).
+// Старые поездки вели отели местами маршрута: их можно перенести сюда (HotelImportSheet).
 
 import { useMemo, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { AlertTriangle, BedDouble, Plus } from "lucide-react";
+import { AlertTriangle, BedDouble, ChevronRight, Plus } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
-import { useLodgings, useTrip, type Lodging } from "@/hooks/use-trip";
+import { useLodgings, useRouteDays, useTrip, type Lodging } from "@/hooks/use-trip";
+import { useTodayKey } from "@/hooks/use-today-key";
 import { currencySymbol as symbolOf } from "@/lib/currencies";
-import { cn, fmtMoney, plural } from "@/lib/utils";
+import { moneyWhole } from "@/lib/budget/format";
+import { cn, plural } from "@/lib/utils";
 import {
   addDaysKey,
+  currentLodging,
   findLodgingGaps,
   findOverlaps,
   formatDayMonth,
-  localTodayKey,
   lodgingPhase,
+  nextLodging,
   nightsOf,
   sortLodgings,
   toDateKey,
+  upcomingGaps,
 } from "@/lib/lodging";
+import { proposeStays } from "@/lib/lodging-import";
+import { tripRangeKeys } from "@/lib/trip-days";
+import { HotelImportSheet } from "./HotelImportSheet";
 import { LodgingCard } from "./LodgingCard";
 import { LodgingHero } from "./LodgingHero";
 import { LodgingSheet, type LodgingSheetProps } from "./LodgingSheet";
@@ -32,27 +40,25 @@ type SheetState = Pick<LodgingSheetProps, "lodging" | "defaults"> | null;
 export function LodgingTab() {
   const { data: trip } = useTrip();
   const { data: lodgings, isLoading, isError, refetch } = useLodgings();
+  const { data: days } = useRouteDays();
   const { data: session } = useAuth();
 
   const [sheet, setSheet] = useState<SheetState>(null);
+  const [importOpen, setImportOpen] = useState(false);
   const [taxi, setTaxi] = useState<Lodging | null>(null);
-  // Ручное раскрытие карточек; пока не трогали — раскрыто только текущее проживание
   const [open, setOpen] = useState<Record<string, boolean>>({});
 
-  const todayKey = useMemo(() => localTodayKey(), []);
+  const todayKey = useTodayKey();
   const sorted = useMemo(() => sortLodgings(lodgings ?? []), [lodgings]);
   const overlaps = useMemo(() => findOverlaps(sorted), [sorted]);
 
-  // Границы поездки в локальных календарных днях (как их видит пользователь)
-  const range = useMemo(() => {
-    if (!trip) return null;
-    const startKey = localTodayKey(new Date(trip.settings.startDate));
-    const lastKey = trip.settings.endDate
-      ? localTodayKey(new Date(trip.settings.endDate))
-      : addDaysKey(startKey, Math.max(trip.settings.totalDays - 1, 0));
-    return { startKey, lastKey };
-  }, [trip]);
-  const gaps = useMemo(() => (range ? findLodgingGaps(sorted, range.startKey, range.lastKey) : []), [sorted, range]);
+  const range = useMemo(() => (trip ? tripRangeKeys(trip.settings) : null), [trip]);
+  const gaps = useMemo(
+    () => (range ? upcomingGaps(findLodgingGaps(sorted, range.startKey, range.lastKey), todayKey) : []),
+    [sorted, range, todayKey]
+  );
+  // Отели из маршрута, ещё не перенесённые сюда
+  const proposals = useMemo(() => (days && range ? proposeStays(days, sorted, range.lastKey) : []), [days, sorted, range]);
 
   if (!trip || isLoading) return <LodgingSkeleton />;
   if (isError) {
@@ -79,8 +85,14 @@ export function LodgingTab() {
 
   const totalNights = sorted.reduce((s, l) => s + nightsOf(l), 0);
   const totalPrice = sorted.reduce((s, l) => s + (l.price ?? 0), 0);
-
-  const isOpen = (l: Lodging) => open[l.id] ?? lodgingPhase(l, todayKey) === "current";
+  // Ночь последнего дня обычно уже дома: с этого дня не просим добавить жильё
+  const nightsOver = !!range && todayKey >= range.lastKey;
+  const tripOver = !!range && todayKey > range.lastKey;
+  const beforeTrip = !!range && todayKey < range.startKey;
+  // Карточка, чьи действия уже стоят в герое: второй раз те же кнопки не показываем
+  const focusId = (currentLodging(sorted, todayKey) ?? nextLodging(sorted, todayKey))?.id;
+  const isOpen = (l: Lodging) => open[l.id] ?? false;
+  const mapCenter = days?.flatMap((d) => d.places)[0];
 
   return (
     // Одна колонка ограничена по ширине: на десктопе растянутые на 1200px герой и
@@ -88,7 +100,7 @@ export function LodgingTab() {
     <div className="space-y-4 mx-auto w-full max-w-2xl">
       <div className="flex items-center gap-2">
         <h1 className="text-xl font-bold flex items-center gap-2">
-          <BedDouble className="size-5 text-primary" /> Жильё
+          <BedDouble className="size-5 text-primary" aria-hidden="true" /> Жильё
         </h1>
         {canEdit && (
           <button
@@ -96,20 +108,28 @@ export function LodgingTab() {
             onClick={() => setSheet({ lodging: null, defaults: newDefaults() })}
             className="ml-auto min-h-11 px-4 rounded-xl bg-primary text-primary-foreground text-sm font-medium inline-flex items-center gap-1.5 active:scale-95 transition-transform"
           >
-            <Plus className="size-4" /> Добавить
+            <Plus className="size-4" aria-hidden="true" /> Добавить
           </button>
         )}
       </div>
 
       {sorted.length === 0 ? (
-        <EmptyState canEdit={canEdit} onAdd={() => setSheet({ lodging: null, defaults: newDefaults() })} />
+        <EmptyState
+          canEdit={canEdit}
+          tripOver={tripOver}
+          onAdd={() => setSheet({ lodging: null, defaults: newDefaults() })}
+          importCount={proposals.length}
+          onImport={() => setImportOpen(true)}
+        />
       ) : (
         <>
           <LodgingHero
             lodgings={sorted}
             todayKey={todayKey}
             currencySymbol={sym}
-            tripEnded={!!range && todayKey > range.lastKey}
+            nightsOver={nightsOver}
+            beforeTrip={beforeTrip}
+            tripTitle={trip.settings.title}
             onAddToday={canEdit ? () => setSheet({ lodging: null, defaults: { checkIn: todayKey, checkOut: addDaysKey(todayKey, 1) } }) : undefined}
             onTaxi={setTaxi}
           />
@@ -117,8 +137,10 @@ export function LodgingTab() {
           <div className="grid grid-cols-3 gap-2">
             <Stat value={String(sorted.length)} label={plural(sorted.length, "проживание", "проживания", "проживаний")} />
             <Stat value={String(totalNights)} label={plural(totalNights, "ночь", "ночи", "ночей")} />
-            <Stat value={totalPrice > 0 ? `${sym}${fmtMoney(totalPrice)}` : "—"} label="на жильё" />
+            <Stat value={totalPrice > 0 ? moneyWhole(sym, totalPrice) : "—"} label="на жильё" />
           </div>
+
+          {canEdit && proposals.length > 0 && <ImportBanner count={proposals.length} onOpen={() => setImportOpen(true)} />}
 
           {gaps.map((g) => (
             <div key={g.fromKey} className="rounded-2xl border border-amber-500/40 bg-amber-500/10 p-3 flex items-center gap-3">
@@ -159,6 +181,9 @@ export function LodgingTab() {
                 onTaxi={() => setTaxi(l)}
                 currencySymbol={sym}
                 overlapping={overlaps.has(l.id)}
+                hideActions={l.id === focusId}
+                pastTone={lodgingPhase(l, todayKey) === "past"}
+                tripTitle={trip.settings.title}
               />
             ))}
           </ul>
@@ -166,8 +191,15 @@ export function LodgingTab() {
       )}
 
       {sheet && (
-        <LodgingSheet lodging={sheet.lodging} defaults={sheet.defaults} currencySymbol={sym} onClose={() => setSheet(null)} />
+        <LodgingSheet
+          lodging={sheet.lodging}
+          defaults={sheet.defaults}
+          currencySymbol={sym}
+          mapCenter={mapCenter ? { lat: mapCenter.lat, lng: mapCenter.lng } : undefined}
+          onClose={() => setSheet(null)}
+        />
       )}
+      {importOpen && <HotelImportSheet proposals={proposals} currencySymbol={sym} onClose={() => setImportOpen(false)} />}
       <AnimatePresence>
         {taxi && (
           <TaxiShowCard
@@ -176,11 +208,39 @@ export function LodgingTab() {
             subtitle={taxi.nameLocal ? taxi.name : null}
             address={taxi.address}
             city={taxi.city}
+            onAddAddress={
+              canEdit
+                ? () => {
+                    const l = taxi;
+                    setTaxi(null);
+                    setSheet({ lodging: l });
+                  }
+                : undefined
+            }
             onClose={() => setTaxi(null)}
           />
         )}
       </AnimatePresence>
     </div>
+  );
+}
+
+function ImportBanner({ count, onOpen }: { count: number; onOpen: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      className="w-full rounded-2xl border border-primary/30 bg-primary/5 p-3 flex items-center gap-3 text-left hover:bg-primary/10 transition-colors"
+    >
+      <span className="text-xl" aria-hidden="true">🏨</span>
+      <span className="min-w-0 flex-1">
+        <span className="block text-sm font-semibold">В маршруте есть отели</span>
+        <span className="block text-xs text-muted-foreground">
+          Можно перенести сюда: {count} {plural(count, "проживание", "проживания", "проживаний")}
+        </span>
+      </span>
+      <ChevronRight className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+    </button>
   );
 }
 
@@ -193,7 +253,20 @@ function Stat({ value, label }: { value: string; label: string }) {
   );
 }
 
-function EmptyState({ canEdit, onAdd }: { canEdit: boolean; onAdd: () => void }) {
+function EmptyState({
+  canEdit,
+  tripOver,
+  onAdd,
+  importCount,
+  onImport,
+}: {
+  canEdit: boolean;
+  tripOver: boolean;
+  onAdd: () => void;
+  importCount: number;
+  onImport: () => void;
+}) {
+  const canImport = canEdit && importCount > 0;
   return (
     <motion.div
       initial={{ opacity: 0, y: 8 }}
@@ -204,17 +277,35 @@ function EmptyState({ canEdit, onAdd }: { canEdit: boolean; onAdd: () => void })
         🏨
       </div>
       <h2 className="text-lg font-semibold">Пока нет жилья</h2>
-      <p className="text-sm text-muted-foreground max-w-xs mx-auto">
-        Добавьте отель с адресом на местном языке: в дороге одно нажатие покажет его таксисту, а приложение подскажет, где вы ночуете сегодня.
+      <p className="text-sm text-muted-foreground max-w-xs mx-auto text-pretty">
+        {canImport
+          ? `В маршруте нашлись отели: ${importCount} ${plural(importCount, "проживание", "проживания", "проживаний")}. Перенесите их сюда, проверив названия и даты.`
+          : tripOver
+            ? "Жильё этой поездки не заполнено."
+            : "Добавьте отель с адресом на местном языке: в дороге одно нажатие покажет его таксисту, а приложение подскажет, где вы ночуете сегодня."}
       </p>
-      {canEdit && (
+      {canImport && (
         <button
           type="button"
-          onClick={onAdd}
-          className={cn("min-h-12 px-6 rounded-xl bg-primary text-primary-foreground font-medium inline-flex items-center gap-1.5 active:scale-95 transition-transform")}
+          onClick={onImport}
+          className="min-h-12 px-6 rounded-xl bg-primary text-primary-foreground font-medium inline-flex items-center gap-1.5 active:scale-95 transition-transform"
         >
-          <Plus className="size-4" /> Добавить первое жильё
+          Перенести отели из маршрута
         </button>
+      )}
+      {canEdit && (
+        <div>
+          <button
+            type="button"
+            onClick={onAdd}
+            className={cn(
+              "inline-flex items-center gap-1.5 active:scale-95 transition-transform rounded-xl font-medium",
+              canImport ? "min-h-11 px-4 text-sm text-muted-foreground hover:text-foreground" : "min-h-12 px-6 bg-primary text-primary-foreground"
+            )}
+          >
+            <Plus className="size-4" aria-hidden="true" /> Добавить первое жильё
+          </button>
+        </div>
       )}
     </motion.div>
   );

@@ -27,6 +27,9 @@ export interface Lodging {
   notes: string | null;
 }
 
+/** Потолок записей на поездку: реальных проживаний единицы, лимит страхует от мусора */
+export const MAX_LODGINGS_PER_TRIP = 200;
+
 /** Потолок цены проживания в валюте поездки (как MAX_PLACE_BUDGET: отсекает опечатки). */
 export const MAX_LODGING_PRICE = 1_000_000;
 
@@ -97,8 +100,21 @@ export function sortLodgings<T extends Pick<Lodging, "checkIn" | "checkOut">>(li
   );
 }
 
-export function currentLodging<T extends Pick<Lodging, "checkIn" | "checkOut">>(list: T[], todayKey: string): T | undefined {
-  return sortLodgings(list).find((l) => lodgingPhase(l, todayKey) === "current");
+/** Здесь проводят ночь этого дня: [заезд, выезд). Жильё без ночёвки ночи не даёт. */
+export function coversNight(l: Pick<Lodging, "checkIn" | "checkOut">, key: string): boolean {
+  return key >= toDateKey(l.checkIn) && key < toDateKey(l.checkOut);
+}
+
+/** Где ночуем в этот день. Номер на день без ночёвки сюда не попадает, иначе он перебивал настоящий отель. */
+export function nightLodging<T extends Pick<Lodging, "checkIn" | "checkOut">>(list: T[], key: string): T | undefined {
+  return sortLodgings(list).find((l) => coversNight(l, key));
+}
+
+export const currentLodging = nightLodging;
+
+/** Номер на день (заезд = выезд) именно сегодня: показываем его, но не называем ночёвкой */
+export function dayUseLodging<T extends Pick<Lodging, "checkIn" | "checkOut">>(list: T[], key: string): T | undefined {
+  return sortLodgings(list).find((l) => toDateKey(l.checkIn) === key && toDateKey(l.checkOut) === key);
 }
 
 export function nextLodging<T extends Pick<Lodging, "checkIn" | "checkOut">>(list: T[], todayKey: string): T | undefined {
@@ -122,6 +138,7 @@ export interface LodgingGap {
  * Ночи поездки без жилья. Ночи — это дни [start, end): ночь последнего дня поездки
  * обычно уже дома/в дороге, поэтому её не считаем «дырой». Диапазон ограничен
  * 400 сутками — защита от кривых дат (endDate из прошлого века и т.п.).
+ * Жильё без ночёвки ночь не закрывает: иначе оно прятало бы настоящую дыру.
  */
 export function findLodgingGaps(
   list: Pick<Lodging, "checkIn" | "checkOut">[],
@@ -130,8 +147,7 @@ export function findLodgingGaps(
 ): LodgingGap[] {
   const total = daysBetween(startKey, endKey);
   if (!(total > 0) || total > 400) return [];
-  const ranges = list.map((l) => [toDateKey(l.checkIn), toDateKey(l.checkOut)] as const);
-  const covered = (key: string) => ranges.some(([a, b]) => (a === b ? key === a : key >= a && key < b));
+  const covered = (key: string) => list.some((l) => coversNight(l, key));
 
   const gaps: LodgingGap[] = [];
   let open: string | null = null;
@@ -148,6 +164,14 @@ export function findLodgingGaps(
   return gaps;
 }
 
+/**
+ * Дыры, о которых ещё есть смысл предупреждать: полностью прошедшие и всё, что после конца
+ * поездки, уже ничего не изменит — кнопка «Добавить» там только шумит.
+ */
+export function upcomingGaps(gaps: LodgingGap[], todayKey: string): LodgingGap[] {
+  return gaps.filter((g) => g.toKey > todayKey);
+}
+
 /** id проживаний, чьи ночи пересекаются с другим проживанием (двойная бронь). */
 export function findOverlaps(list: Pick<Lodging, "id" | "checkIn" | "checkOut">[]): Set<string> {
   const out = new Set<string>();
@@ -155,8 +179,9 @@ export function findOverlaps(list: Pick<Lodging, "id" | "checkIn" | "checkOut">[
     for (let j = i + 1; j < list.length; j++) {
       const a = [toDateKey(list[i].checkIn), toDateKey(list[i].checkOut)] as const;
       const b = [toDateKey(list[j].checkIn), toDateKey(list[j].checkOut)] as const;
-      // Полуинтервалы [in, out): встык (выезд = заезд другого) — не пересечение
-      if (a[0] < b[1] && b[0] < a[1]) {
+      // Полуинтервалы [in, out): встык (выезд = заезд другого) — не пересечение.
+      // Без ночёвки (a = b) пересекаться нечему: номер на день внутри проживания не двойная бронь
+      if (a[0] < a[1] && b[0] < b[1] && a[0] < b[1] && b[0] < a[1]) {
         out.add(list[i].id);
         out.add(list[j].id);
       }
@@ -177,6 +202,18 @@ export function formatStayRange(l: Pick<Lodging, "checkIn" | "checkOut">): strin
 }
 
 export const formatDayMonth = dayMonth;
+
+/** Стоимость из поля формы: «1 200», «1200,50». null — поле пустое, NaN — не число. */
+export function parseLodgingPrice(raw: string): number | null {
+  const clean = raw.replace(/[\s\u00a0]/g, "").replace(",", ".");
+  return clean === "" ? null : Number(clean);
+}
+
+/** Ссылка из поля формы: адрес без протокола дополняем, а не отказываем молча */
+export function normalizeBookingUrl(raw: string): string {
+  const v = raw.trim();
+  return !v || /^[a-z][a-z\d+.-]*:/i.test(v) ? v : `https://${v}`;
+}
 
 /** tel:-ссылка из свободно набранного номера; null — цифр слишком мало. */
 export function phoneHref(phone: string | null | undefined): string | null {

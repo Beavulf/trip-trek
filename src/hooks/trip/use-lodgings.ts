@@ -2,6 +2,7 @@
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import type { Lodging } from "@/lib/lodging";
+import { invalidateRouteData } from "@/lib/query-keys";
 import { getTripId, useCurrentTripId } from "./trip-id";
 
 // === Проживание (вкладка «Жильё») ===
@@ -62,6 +63,26 @@ export function useDeleteLodging() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => send<{ ok: true }>(`/api/lodgings?id=${encodeURIComponent(id)}`, "DELETE"),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["lodgings"] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["lodgings"] });
+      // С удалённым жильём снимается и связь с отелями маршрута: их бюджеты возвращаются в план
+      invalidateRouteData(qc);
+    },
+  });
+}
+
+/** Проживание для переноса из маршрута: новое (поля формы) или привязка к уже существующему */
+export type LodgingImportStay = LodgingInput & { placeIds: string[]; lodgingId?: string | null };
+
+/** Перенос отелей из маршрута в «Жильё» одной операцией */
+export function useImportLodgings() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (stays: LodgingImportStay[]) =>
+      send<{ ok: true; created: number }>("/api/lodgings/import", "POST", { tripId: getTripId(), stays }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["lodgings"] });
+      invalidateRouteData(qc);
+    },
   });
 }

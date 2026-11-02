@@ -2,9 +2,10 @@
 
 import { useState } from "react";
 import { motion, AnimatePresence, Reorder, useDragControls, useReducedMotion } from "framer-motion";
-import { Check, ChevronDown, GripVertical, MapPin, Pencil, Plus, Wallet } from "lucide-react";
+import { AlertTriangle, Check, ChevronDown, GripVertical, MapPin, Moon, Pencil, Plus } from "lucide-react";
 import { type Day, type Place } from "@/lib/types";
-import { cn, fmtMoney } from "@/lib/utils";
+import { cn } from "@/lib/utils";
+import { moneyWhole } from "@/lib/budget/format";
 import { daySections, type DaySection } from "@/lib/time-of-day";
 import { useReorderPlaces } from "@/hooks/use-trip";
 import { toast } from "sonner";
@@ -15,7 +16,7 @@ interface DayCardProps {
   day: Day;
   /** Символ валюты поездки */
   currency?: string;
-  /** Сколько участников в поездке — для «на человека» в плане дня */
+  /** Сколько человек делит расходы — для «на человека» в плане дня */
   participantsCount?: number;
   /** День = «сегодня» по календарю поездки */
   isCurrent?: boolean;
@@ -23,22 +24,28 @@ interface DayCardProps {
   isPast?: boolean;
   /** Раскрыт при монтировании (по умолчанию — нет) */
   defaultExpanded?: boolean;
+  /** Зритель только смотрит: кнопок правки нет */
+  canEdit?: boolean;
+  /** Где ночуем в этот день; "missing" — жильё на эту ночь не указано */
+  night?: { name: string } | "missing";
+  /** Ссылка «Как добраться» для Китая: Google там без VPN недоступен */
+  china?: boolean;
   onOpenPlace: (p: Place) => void;
   onAddPlace?: (dayId: string) => void;
   onEditDay?: (day: Day) => void;
+  /** Перейти к жилью */
+  onOpenLodging?: () => void;
 }
 
-// Форматтеры на уровне модуля: Intl сам по себе дорог в создании
-const dateFmt = new Intl.DateTimeFormat("ru-RU", { day: "numeric", month: "short" });
-const weekdayFmt = new Intl.DateTimeFormat("ru-RU", { weekday: "short" });
+// Форматтеры на уровне модуля: Intl сам по себе дорог в создании.
+// Пояс UTC: дата дня хранится как полночь UTC, и в поясе устройства в Америке она уезжала на сутки назад
+const dateFmt = new Intl.DateTimeFormat("ru-RU", { day: "numeric", month: "short", timeZone: "UTC" });
+const weekdayFmt = new Intl.DateTimeFormat("ru-RU", { weekday: "short", timeZone: "UTC" });
 
-function dateLabel(iso: string): { date: string; weekday: string } | null {
+function dateLabel(iso: string): string | null {
   const d = new Date(iso);
   if (isNaN(d.getTime())) return null;
-  return {
-    date: dateFmt.format(d),
-    weekday: weekdayFmt.format(d),
-  };
+  return `${dateFmt.format(d)}, ${weekdayFmt.format(d)}`;
 }
 
 export function DayCard({
@@ -48,9 +55,13 @@ export function DayCard({
   isCurrent,
   isPast,
   defaultExpanded = false,
+  canEdit = true,
+  night,
+  china = false,
   onOpenPlace,
   onAddPlace,
   onEditDay,
+  onOpenLodging,
 }: DayCardProps) {
   // Свёрнутые по умолчанию не смонтированы в DOM: вход на вкладку с длинным
   // маршрутом раньше фризил поток на сотни мс — motion-дерево росло на каждый
@@ -72,8 +83,10 @@ export function DayCard({
   }
 
   const visited = day.places.filter((p) => p.status === "visited").length;
-  const progress = day.places.length ? (visited / day.places.length) * 100 : 0;
-  const dl = dateLabel(day.date);
+  const date = dateLabel(day.date);
+  const allDone = day.places.length > 0 && visited === day.places.length;
+  // Автозаголовок «День N» повторил бы первую строку: тогда главным идёт город
+  const title = day.title && day.title !== `День ${day.dayNumber}` ? day.title : day.city;
 
   // План дня по бюджетам, указанным в местах; рядом — в пересчёте на человека
   const sym = currency ?? "$";
@@ -96,9 +109,26 @@ export function DayCard({
     );
   };
 
-  const placeRow = (p: Place) => (
-    <PlaceRow key={p.id} place={p} accentColor={accent} currency={currency} onOpen={() => onOpenPlace(p)} />
-  );
+  const placeList = (s: DaySection) => {
+    const hideTime = !!s.label; // Слот уже назван в заголовке секции
+    return canEdit && s.places.length > 1 ? (
+      <SortablePlaces
+        places={s.places}
+        onReorder={(next) => applyReorder(s.key, next)}
+        accentColor={accent}
+        currency={currency}
+        hideTime={hideTime}
+        china={china}
+        onOpenPlace={onOpenPlace}
+      />
+    ) : (
+      <div className="space-y-1.5">
+        {s.places.map((p) => (
+          <PlaceRow key={p.id} place={p} accentColor={accent} currency={currency} hideTime={hideTime} canEdit={canEdit} china={china} onOpen={() => onOpenPlace(p)} />
+        ))}
+      </div>
+    );
+  };
 
   const contentId = `day-card-content-${day.id}`;
 
@@ -107,106 +137,82 @@ export function DayCard({
       {/* Станция на нити маршрута: прошедший день залит, сегодняшний пульсирует, будущий контурный */}
       <span
         className={cn(
-          "absolute left-0 top-5 z-10 size-6 rounded-full grid place-items-center text-[10px] font-bold border-2 border-background",
+          "absolute left-0 top-4 z-10 size-6 rounded-full grid place-items-center text-[10px] font-bold border-2 border-background",
           isCurrent ? "text-white" : isPast ? "text-white/90" : "bg-card text-muted-foreground border-border"
         )}
         style={(isPast || isCurrent) ? { background: accent } : undefined}
         aria-hidden="true"
       >
-        {isPast && visited === day.places.length && day.places.length > 0 ? <Check className="size-3" /> : day.dayNumber}
+        {isPast && allDone ? <Check className="size-3" /> : day.dayNumber}
       </span>
       {isCurrent && !reduceMotion && (
         <motion.span
           aria-hidden="true"
-          className="absolute -left-1 top-4 z-0 size-8 rounded-full border-2"
+          className="absolute -left-1 top-3 z-0 size-8 rounded-full border-2"
           style={{ borderColor: accent }}
           animate={{ scale: [1, 1.5], opacity: [0.6, 0] }}
           transition={{ duration: 1.8, repeat: Infinity, ease: "easeOut" }}
         />
       )}
 
-      <div className="rounded-2xl bg-card border border-border overflow-hidden card-hover">
-        {/* Шапка-«талон» */}
-        <div
-          role="button"
-          tabIndex={0}
+      <div className={cn("rounded-2xl bg-card border overflow-hidden card-hover", isCurrent ? "border-primary/40" : "border-border")}>
+        {/* Шапка-«талон»: только то, что отвечает на вопрос «что за день». Правка живёт внутри
+            раскрытого дня: карандаш и корзина на каждой из 13 карточек забивали список */}
+        <button
+          type="button"
           aria-expanded={expanded}
           aria-controls={contentId}
           onClick={() => setExpanded((v) => !v)}
-          onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setExpanded((v) => !v); } }}
-          className="w-full flex items-start gap-3 p-4 hover:bg-accent/40 transition-colors text-left active:bg-accent/60 cursor-pointer"
+          className="w-full flex items-start gap-2 p-3.5 hover:bg-accent/40 transition-colors text-left active:bg-accent/60"
         >
-          <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-1.5 text-xs text-muted-foreground flex-wrap">
+          <span className="min-w-0 flex-1">
+            <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
               {isCurrent && (
-                <span className="px-1.5 py-0.5 rounded-full bg-primary text-primary-foreground text-[10px] font-bold uppercase tracking-wide">
-                  Сегодня
-                </span>
+                <span className="px-1.5 py-0.5 rounded-full bg-primary text-primary-foreground text-[10px] font-semibold">Сегодня</span>
               )}
-              {!isCurrent && isPast && (
-                <span className="px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground text-[10px] font-medium uppercase tracking-wide">
-                  Прошёл
-                </span>
+              <span className="font-medium text-foreground/85 shrink-0">День {day.dayNumber}</span>
+              {date && <span className="tabular-nums truncate">{date}</span>}
+            </span>
+            <span className="block font-semibold text-[15px] leading-snug mt-0.5 line-clamp-2 text-pretty">{title}</span>
+            <span className="mt-1 flex items-center gap-1 text-xs text-muted-foreground min-w-0">
+              {title !== day.city && (
+                <>
+                  <MapPin className="size-3 shrink-0" aria-hidden="true" />
+                  <span className="truncate">{day.city}</span>
+                </>
               )}
-              {dl && (
-                <span className="tabular-nums">{dl.date} · {dl.weekday}</span>
-              )}
-              <span className="flex items-center gap-0.5">
-                <MapPin className="size-3" /> {day.city}
-              </span>
               {plannedTotal > 0 && (
                 <span
-                  className="flex items-center gap-1 tabular-nums font-medium"
-                  style={{ color: accent }}
-                  title={`План дня по бюджетам мест, ≈ ${sym}${fmtMoney(plannedPerPerson)} на человека`}
+                  className="shrink-0 tabular-nums"
+                  title={`План дня по бюджетам мест, ≈ ${moneyWhole(sym, plannedPerPerson)} на человека`}
                 >
-                  <Wallet className="size-3" /> ≈{sym}{fmtMoney(plannedTotal)}
-                  {plannedPerPerson > 0 && (
-                    <span className="text-muted-foreground font-normal">· {sym}{fmtMoney(plannedPerPerson)}/чел</span>
-                  )}
+                  {title !== day.city && <span className="opacity-50 mr-1" aria-hidden="true">·</span>}
+                  ≈{moneyWhole(sym, plannedTotal)}
+                  {plannedPerPerson > 0 && <span className="opacity-80"> · {moneyWhole(sym, plannedPerPerson)}/чел</span>}
                 </span>
               )}
-            </div>
-            <div className="font-semibold text-sm truncate mt-0.5">{day.title}</div>
-            <div className="mt-2 h-1.5 rounded-full bg-muted overflow-hidden">
-              <motion.div
-                initial={{ scaleX: 0 }}
-                animate={{ scaleX: Math.min(1, Math.max(0, progress / 100)) }}
-                transition={{ duration: 0.5, ease: "easeOut" }}
-                className="h-full w-full origin-left rounded-full"
-                style={{ background: accent }}
-              />
-            </div>
-          </div>
-          <div className="text-right shrink-0 flex flex-col items-end gap-1.5">
-            <div className="flex items-center gap-1">
-              {onEditDay && (
-                <button
-                  type="button"
-                  onClick={(e) => { e.stopPropagation(); onEditDay(day); }}
-                  className="size-8 rounded-lg grid place-items-center text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
-                  title="Изменить день"
-                  aria-label={`Изменить день ${day.dayNumber}`}
-                >
-                  <Pencil className="size-3.5" />
-                </button>
-              )}
-              <DeleteDayButton dayId={day.id} dayNumber={day.dayNumber} />
-            </div>
-            <div className="flex items-center gap-1.5">
-              <span className="text-xs font-medium tabular-nums text-muted-foreground">{visited}/{day.places.length}</span>
-              <motion.div animate={{ rotate: expanded ? 180 : 0 }} transition={{ duration: 0.2 }}>
-                <ChevronDown className="size-4 text-muted-foreground" />
-              </motion.div>
-            </div>
-          </div>
-        </div>
-
-        {/* Перфорация «билета» — день как талон маршрута */}
-        <div className="relative border-t border-dashed border-border" aria-hidden="true">
-          <span className="absolute -left-1.5 -top-[5px] size-3 rounded-full bg-background" />
-          <span className="absolute -right-1.5 -top-[5px] size-3 rounded-full bg-background" />
-        </div>
+            </span>
+            {night && night !== "missing" && (
+              <span className="mt-1 flex items-center gap-1 text-xs text-muted-foreground min-w-0">
+                <Moon className="size-3 shrink-0" aria-hidden="true" />
+                <span className="truncate">{night.name}</span>
+              </span>
+            )}
+            {night === "missing" && (
+              <span className="mt-1 flex items-center gap-1 text-xs font-medium text-amber-700 dark:text-amber-400">
+                <AlertTriangle className="size-3 shrink-0" aria-hidden="true" /> Жильё на эту ночь не указано
+              </span>
+            )}
+          </span>
+          <span className="shrink-0 flex items-center gap-1 pt-0.5">
+            <span className={cn("text-xs font-medium tabular-nums", allDone ? "text-green-600 dark:text-green-400" : "text-muted-foreground")}>
+              {visited}/{day.places.length}
+            </span>
+            <motion.span animate={{ rotate: expanded ? 180 : 0 }} transition={{ duration: 0.2 }}>
+              <ChevronDown className="size-4 text-muted-foreground" aria-hidden="true" />
+            </motion.span>
+          </span>
+        </button>
 
         <AnimatePresence initial={false}>
           {expanded && (
@@ -218,38 +224,66 @@ export function DayCard({
               transition={{ duration: 0.2 }}
               className="overflow-hidden"
             >
-              <div className="px-4 pb-4 pt-3 space-y-1.5">
+              {/* Перфорация «билета» — день как талон маршрута */}
+              <div className="relative border-t border-dashed border-border" aria-hidden="true">
+                <span className="absolute -left-1.5 -top-[5px] size-3 rounded-full bg-background" />
+                <span className="absolute -right-1.5 -top-[5px] size-3 rounded-full bg-background" />
+              </div>
+
+              <div className="px-3 pb-3 pt-2 space-y-1.5">
                 {day.places.length === 0 && (
-                  <p className="text-xs text-muted-foreground/80 italic pb-1">В этот день ещё нет мест</p>
+                  <p className="text-xs text-muted-foreground py-1">В этот день ещё нет мест</p>
                 )}
                 {sections.map((s) =>
                   s.label ? (
                     <div key={s.key}>
-                      <div className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground/80 mt-2 mb-1 flex items-center gap-1.5">
-                        <span className="h-px flex-1 bg-border" aria-hidden="true" />
+                      <div className="text-xs font-medium text-muted-foreground mt-2 mb-1 flex items-center gap-2">
                         {s.label}
-                        <span className="h-px w-6 bg-border" aria-hidden="true" />
+                        <span className="h-px flex-1 bg-border" aria-hidden="true" />
                       </div>
-                      {s.places.length > 1 ? (
-                        <SortablePlaces places={s.places} onReorder={(next) => applyReorder(s.key, next)} accentColor={accent} currency={currency} onOpenPlace={onOpenPlace} />
-                      ) : (
-                        s.places.map(placeRow)
-                      )}
+                      {placeList(s)}
                     </div>
-                  ) : s.places.length > 1 ? (
-                    <SortablePlaces key={s.key} places={s.places} onReorder={(next) => applyReorder(s.key, next)} accentColor={accent} currency={currency} onOpenPlace={onOpenPlace} />
                   ) : (
-                    s.places.map(placeRow)
+                    <div key={s.key}>{placeList(s)}</div>
                   )
                 )}
+
+                {night === "missing" && canEdit && onOpenLodging && (
+                  <button
+                    type="button"
+                    onClick={onOpenLodging}
+                    className="w-full min-h-11 rounded-xl border border-amber-500/40 bg-amber-500/10 text-xs font-medium text-amber-800 dark:text-amber-300"
+                  >
+                    Указать, где ночуем
+                  </button>
+                )}
+
                 {onAddPlace && (
                   <button
+                    type="button"
                     onClick={() => onAddPlace(day.id)}
                     className="w-full flex items-center justify-center gap-1.5 py-3 mt-1.5 rounded-xl border-2 border-dashed border-border hover:border-primary hover:text-primary transition-colors active:scale-[0.98] min-h-11"
                   >
-                    <Plus className="size-4" />
+                    <Plus className="size-4" aria-hidden="true" />
                     <span className="text-xs font-medium">Добавить место</span>
                   </button>
+                )}
+
+                {canEdit && (
+                  <div className="flex items-center justify-between gap-2 pt-1">
+                    {onEditDay ? (
+                      <button
+                        type="button"
+                        onClick={() => onEditDay(day)}
+                        className="min-h-11 px-2 -ml-2 rounded-lg inline-flex items-center gap-1.5 text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+                      >
+                        <Pencil className="size-3.5" aria-hidden="true" /> Изменить день
+                      </button>
+                    ) : (
+                      <span />
+                    )}
+                    <DeleteDayButton dayId={day.id} dayNumber={day.dayNumber} />
+                  </div>
                 )}
               </div>
             </motion.div>
@@ -270,18 +304,22 @@ function SortablePlaces({
   onReorder,
   accentColor,
   currency,
+  hideTime,
+  china,
   onOpenPlace,
 }: {
   places: Place[];
   onReorder: (next: Place[]) => void;
   accentColor: string;
   currency?: string;
+  hideTime: boolean;
+  china: boolean;
   onOpenPlace: (p: Place) => void;
 }) {
   return (
     <Reorder.Group axis="y" values={places} onReorder={onReorder} className="space-y-1.5">
       {places.map((p) => (
-        <SortableRow key={p.id} place={p} accentColor={accentColor} currency={currency} onOpenPlace={onOpenPlace} />
+        <SortableRow key={p.id} place={p} accentColor={accentColor} currency={currency} hideTime={hideTime} china={china} onOpenPlace={onOpenPlace} />
       ))}
     </Reorder.Group>
   );
@@ -291,11 +329,15 @@ function SortableRow({
   place,
   accentColor,
   currency,
+  hideTime,
+  china,
   onOpenPlace,
 }: {
   place: Place;
   accentColor: string;
   currency?: string;
+  hideTime: boolean;
+  china: boolean;
   onOpenPlace: (p: Place) => void;
 }) {
   const controls = useDragControls();
@@ -304,18 +346,18 @@ function SortableRow({
       value={place}
       dragListener={false}
       dragControls={controls}
-      className="flex items-center gap-1"
+      className="flex items-center gap-0.5"
     >
       <button
         type="button"
         onPointerDown={(e) => controls.start(e)}
         aria-label={`Перетащить «${place.name}», чтобы изменить порядок`}
-        className="shrink-0 size-9 -ml-1.5 grid place-items-center rounded-lg text-muted-foreground/80 hover:text-muted-foreground hover:bg-accent/60 cursor-grab active:cursor-grabbing touch-none"
+        className="shrink-0 w-7 h-11 -ml-1.5 grid place-items-center rounded-lg text-muted-foreground/80 hover:text-muted-foreground hover:bg-accent/60 cursor-grab active:cursor-grabbing touch-none"
       >
-        <GripVertical className="size-4" />
+        <GripVertical className="size-4" aria-hidden="true" />
       </button>
       <div className="flex-1 min-w-0">
-        <PlaceRow place={place} accentColor={accentColor} currency={currency} onOpen={() => onOpenPlace(place)} />
+        <PlaceRow place={place} accentColor={accentColor} currency={currency} hideTime={hideTime} china={china} onOpen={() => onOpenPlace(place)} />
       </div>
     </Reorder.Item>
   );

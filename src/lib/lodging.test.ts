@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   addDaysKey,
   currentLodging,
+  dayUseLodging,
   daysBetween,
   findLodgingGaps,
   findOverlaps,
@@ -12,12 +13,16 @@ import {
   lodgingTouchesDay,
   MAX_LODGING_PRICE,
   nextLodging,
+  nightLodging,
   nightNumber,
   nightsOf,
+  normalizeBookingUrl,
+  parseLodgingPrice,
   phoneHref,
   pickLodgingInput,
   sortLodgings,
   toDateKey,
+  upcomingGaps,
 } from "./lodging";
 
 const L = (id: string, checkIn: string, checkOut: string) => ({
@@ -79,6 +84,21 @@ describe("фазы и текущее проживание", () => {
     expect(nextLodging(list, "2026-10-02")?.id).toBe("b");
   });
 
+  it("номер без ночёвки не считается ночёвкой и не перебивает настоящий отель", () => {
+    const hotel = L("hotel", "2026-10-10", "2026-10-13");
+    const dayRoom = L("room", "2026-10-10", "2026-10-10");
+    expect(currentLodging([hotel, dayRoom], "2026-10-10")?.id).toBe("hotel");
+    expect(currentLodging([dayRoom], "2026-10-10")).toBeUndefined();
+    expect(dayUseLodging([hotel, dayRoom], "2026-10-10")?.id).toBe("room");
+    expect(dayUseLodging([hotel, dayRoom], "2026-10-11")).toBeUndefined();
+  });
+
+  it("nightLodging: ночь дня внутри проживания, день выезда уже нет", () => {
+    const s = L("a", "2026-10-01", "2026-10-05");
+    expect(nightLodging([s], "2026-10-04")?.id).toBe("a");
+    expect(nightLodging([s], "2026-10-05")).toBeUndefined();
+  });
+
   it("lodgingTouchesDay: заезд, ночи и день выезда включены, соседние дни — нет", () => {
     const s = L("a", "2026-10-01", "2026-10-05");
     expect(lodgingTouchesDay(s, "2026-09-30")).toBe(false);
@@ -92,6 +112,41 @@ describe("фазы и текущее проживание", () => {
     expect(nightNumber(stay, "2026-10-03")).toBe(3);
     const sorted = sortLodgings([L("b", "2026-10-05", "2026-10-08"), L("a", "2026-10-01", "2026-10-05")]);
     expect(sorted.map((x) => x.id)).toEqual(["a", "b"]);
+  });
+});
+
+describe("дыры, номера без ночёвки и ввод формы", () => {
+  it("номер на день не закрывает ночь", () => {
+    const list = [L("a", "2026-10-08", "2026-10-09"), L("room", "2026-10-10", "2026-10-10"), L("b", "2026-10-11", "2026-10-12")];
+    expect(findLodgingGaps(list, "2026-10-08", "2026-10-12")).toEqual([{ fromKey: "2026-10-09", toKey: "2026-10-11", nights: 2 }]);
+  });
+
+  it("номер на день внутри проживания не двойная бронь", () => {
+    expect([...findOverlaps([L("a", "2026-10-08", "2026-10-12"), L("room", "2026-10-10", "2026-10-10")])]).toEqual([]);
+  });
+
+  it("прошедшие дыры больше не предупреждают, а идущая и будущие остаются", () => {
+    const gaps = [
+      { fromKey: "2026-10-02", toKey: "2026-10-03", nights: 1 },
+      { fromKey: "2026-10-05", toKey: "2026-10-07", nights: 2 },
+      { fromKey: "2026-10-09", toKey: "2026-10-10", nights: 1 },
+    ];
+    expect(upcomingGaps(gaps, "2026-10-06").map((g) => g.fromKey)).toEqual(["2026-10-05", "2026-10-09"]);
+    expect(upcomingGaps(gaps, "2026-10-20")).toEqual([]);
+  });
+
+  it("стоимость понимает пробелы и запятую", () => {
+    expect(parseLodgingPrice("1 200")).toBe(1200);
+    expect(parseLodgingPrice("1\u00a0200,50")).toBe(1200.5);
+    expect(parseLodgingPrice("  ")).toBeNull();
+    expect(parseLodgingPrice("дорого")).toBeNaN();
+  });
+
+  it("ссылка без протокола дополняется, чужой протокол не трогаем: его отсечёт проверка", () => {
+    expect(normalizeBookingUrl("booking.com/abc")).toBe("https://booking.com/abc");
+    expect(normalizeBookingUrl(" https://x.io ")).toBe("https://x.io");
+    expect(normalizeBookingUrl("javascript:alert(1)")).toBe("javascript:alert(1)");
+    expect(normalizeBookingUrl("")).toBe("");
   });
 });
 

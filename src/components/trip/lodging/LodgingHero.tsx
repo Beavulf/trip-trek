@@ -7,9 +7,11 @@
 
 import { motion, useReducedMotion } from "framer-motion";
 import { Moon } from "lucide-react";
-import { fmtMoney, plural } from "@/lib/utils";
+import { plural } from "@/lib/utils";
+import { moneyWhole } from "@/lib/budget/format";
 import {
   currentLodging,
+  dayUseLodging,
   daysBetween,
   formatDayMonth,
   formatStayRange,
@@ -25,16 +27,21 @@ interface LodgingHeroProps {
   lodgings: Lodging[];
   todayKey: string;
   currencySymbol: string;
-  /** Последний день поездки уже прошёл: «ночёвки позади» говорим только тогда */
-  tripEnded: boolean;
+  /** Ночёвки поездки закончились: с последнего дня не просим добавить жильё (та ночь обычно уже дома) */
+  nightsOver: boolean;
+  /** Поездка ещё не началась: «на эту ночь» говорить рано */
+  beforeTrip: boolean;
+  /** Для выбора карты в кнопке «Маршрут»: страна часто только в названии поездки */
+  tripTitle?: string;
   /** Добавить жильё на сегодня (нет у зрителя) — кнопка в состоянии «жилья на сегодня нет» */
   onAddToday?: () => void;
   onTaxi: (l: Lodging) => void;
 }
 
-export function LodgingHero({ lodgings, todayKey, currencySymbol, tripEnded, onAddToday, onTaxi }: LodgingHeroProps) {
+export function LodgingHero({ lodgings, todayKey, currencySymbol, nightsOver, beforeTrip, tripTitle, onAddToday, onTaxi }: LodgingHeroProps) {
   const reduceMotion = useReducedMotion();
   const now = currentLodging(lodgings, todayKey);
+  const dayRoom = now ? undefined : dayUseLodging(lodgings, todayKey);
   const next = nextLodging(lodgings, todayKey);
 
   let eyebrow: string;
@@ -54,6 +61,11 @@ export function LodgingHero({ lodgings, todayKey, currencySymbol, tripEnded, onA
         ? `Завтра выезд${now.checkOutTime ? ` до ${now.checkOutTime}` : ""}`
         : `До ${formatDayMonth(toDateKey(now.checkOut))}`,
     ].filter(Boolean);
+  } else if (dayRoom) {
+    focus = dayRoom;
+    eyebrow = "🛏 Сегодня, без ночёвки";
+    title = dayRoom.name;
+    lines = [dayRoom.city ?? ""].filter(Boolean);
   } else if (next) {
     focus = next;
     const inDays = daysBetween(todayKey, toDateKey(next.checkIn));
@@ -63,7 +75,11 @@ export function LodgingHero({ lodgings, todayKey, currencySymbol, tripEnded, onA
       inDays === 1 ? "Завтра" : `Через ${inDays} ${plural(inDays, "день", "дня", "дней")}`,
       [next.city, formatStayRange(next)].filter(Boolean).join(" · "),
     ];
-  } else if (!tripEnded) {
+  } else if (beforeTrip) {
+    eyebrow = "🧳 До поездки";
+    title = "Новых заселений пока нет";
+    lines = ["Добавьте жильё на даты поездки, и оно появится здесь"];
+  } else if (!nightsOver) {
     // Поездка идёт, а жильё на сегодня (и дальше) не указано — не «ночёвки позади»
     eyebrow = "🌙 Сегодня";
     title = "Жильё на эту ночь не указано";
@@ -75,7 +91,7 @@ export function LodgingHero({ lodgings, todayKey, currencySymbol, tripEnded, onA
     title = `${lodgings.length} ${plural(lodgings.length, "проживание", "проживания", "проживаний")}`;
     lines = [
       `${nights} ${plural(nights, "ночь", "ночи", "ночей")} в пути`,
-      total > 0 ? `На жильё ушло ${currencySymbol}${fmtMoney(total)}` : "",
+      total > 0 ? `На жильё ушло ${moneyWhole(currencySymbol, total)}` : "",
     ].filter(Boolean);
   }
 
@@ -84,26 +100,26 @@ export function LodgingHero({ lodgings, todayKey, currencySymbol, tripEnded, onA
       initial={reduceMotion ? false : { opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       aria-label="Где ночуем"
-      className="relative overflow-hidden rounded-3xl p-5 sm:p-6 text-white shadow-xl bg-gradient-to-br from-indigo-600 via-purple-700 to-stone-900"
+      className="relative overflow-hidden rounded-3xl p-4 sm:p-5 text-white shadow-xl bg-gradient-to-br from-indigo-700 via-purple-800 to-stone-900"
     >
       {/* Луна и мягкое пятно света — в духе героя обзора */}
       <Moon className="absolute -top-4 -right-3 size-32 opacity-10 rotate-12" aria-hidden />
       <div className="absolute -bottom-12 -left-8 size-40 rounded-full opacity-10 blur-2xl bg-white" aria-hidden />
 
-      <div className="relative space-y-4">
+      <div className="relative space-y-3">
         <div className="space-y-1">
-          <p className="text-xs font-medium text-white/75">{eyebrow}</p>
-          <h2 className="text-2xl sm:text-3xl font-bold leading-tight break-words">{title}</h2>
-          {focus?.nameLocal && <p className="text-sm text-white/70 break-words">{focus.nameLocal}</p>}
+          <p className="text-xs font-medium text-white/85">{eyebrow}</p>
+          <h2 className="text-xl sm:text-2xl font-bold leading-tight break-words line-clamp-2">{title}</h2>
+          {focus?.nameLocal && <p className="text-sm text-white/85 break-words">{focus.nameLocal}</p>}
           {lines.map((line) => (
             <p key={line} className="text-sm text-white/85">
               {line}
             </p>
           ))}
-          {focus?.address && <p className="text-xs text-white/65 break-words pt-1">{focus.address}</p>}
+          {focus?.address && <p className="text-xs text-white/85 break-words pt-1 line-clamp-2">{focus.address}</p>}
         </div>
-        {focus && <StayActions lodging={focus} tone="hero" onTaxi={() => onTaxi(focus)} />}
-        {!focus && !tripEnded && onAddToday && (
+        {focus && <StayActions lodging={focus} tone="hero" tripTitle={tripTitle} onTaxi={() => onTaxi(focus)} />}
+        {!focus && !nightsOver && !beforeTrip && onAddToday && (
           <button
             type="button"
             onClick={onAddToday}

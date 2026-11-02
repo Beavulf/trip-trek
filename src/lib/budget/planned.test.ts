@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { calculatePlannedRoute, calculateRoutePlanByExpenseCategory, EXPENSE_CATEGORY_BY_PLACE } from "./planned";
+import { calculateLodgingPlan, calculatePlannedRoute, calculateRoutePlanByExpenseCategory, EXPENSE_CATEGORY_BY_PLACE } from "./planned";
 import type { Day, Place } from "../types";
 
 const place = (over: Partial<Place>): Place => ({
@@ -75,7 +75,20 @@ describe("calculatePlannedRoute (план по маршрутным бюджет
   });
 });
 
-describe("calculateRoutePlanByExpenseCategory (план маршрута в группах План vs Факт)", () => {
+describe("цена жилья и места, перенесённые в «Жильё»", () => {
+  it("место с привязкой к жилью не считается второй раз, а в плане дня остаётся", () => {
+    const days = [day({ id: "d1", dayNumber: 1, places: [place({ budget: 177, category: "hotel", lodgingId: "l1" }), place({ budget: 40, category: "hotel" })] })];
+    expect(calculateRoutePlanByExpenseCategory(days)).toEqual({ accommodation: 40 });
+    expect(calculatePlannedRoute(days, 2).total).toBe(217);
+  });
+
+  it("calculateLodgingPlan складывает цены в центах и идёт в «Проживание»", () => {
+    expect(calculateLodgingPlan([{ price: 0.1 }, { price: 0.2 }, { price: null }])).toEqual({ accommodation: 0.3 });
+    expect(calculateLodgingPlan([{ price: null }])).toEqual({});
+  });
+});
+
+describe("calculateRoutePlanByExpenseCategory (план маршрута в группах категорий)", () => {
   it("категории мест маппятся в категории трат и суммируются", () => {
     const days = [
       day({ id: "d1", dayNumber: 1, places: [

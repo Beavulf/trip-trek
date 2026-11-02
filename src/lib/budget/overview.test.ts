@@ -48,6 +48,11 @@ describe("buildCategoryRows", () => {
     expect(row).toMatchObject({ manual: 100, fromRoute: 50, plan: 150 });
   });
 
+  it("цена жилья входит в план отдельным слагаемым", () => {
+    const [row] = buildCategoryRows(["accommodation"], {}, { accommodation: 100 }, { accommodation: 20 }, { accommodation: 300 });
+    expect(row).toMatchObject({ manual: 100, fromRoute: 20, fromLodging: 300, plan: 420 });
+  });
+
   it("категории без плана и трат скрыты", () => {
     const rows = buildCategoryRows(cats, { food: 10 }, {}, { casino: 700 });
     expect(rows.map((r) => r.key)).toEqual(["food", "casino"]);

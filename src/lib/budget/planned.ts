@@ -136,6 +136,8 @@ export function calculateRoutePlanByExpenseCategory(days: Day[]): Record<string,
   for (const d of days) {
     for (const p of d.places) {
       if (!hasBudget(p.budget)) continue;
+      // Отель перенесён в «Жильё»: его сумма теперь цена проживания, второй раз не считаем
+      if (p.lodgingId) continue;
       const cat = expenseCategoryOfPlace(p.category);
       byCents[cat] = (byCents[cat] ?? 0) + toCents(p.budget);
     }
@@ -143,4 +145,10 @@ export function calculateRoutePlanByExpenseCategory(days: Day[]): Record<string,
   return Object.fromEntries(
     Object.entries(byCents).map(([cat, cents]) => [cat, fromCents(cents)])
   );
+}
+
+/** Цена проживаний в плане категорий: всё жильё идёт в «Проживание» (`calculateRoutePlanByExpenseCategory` такие места пропускает) */
+export function calculateLodgingPlan(lodgings: { price: number | null }[]): Record<string, number> {
+  const cents = lodgings.reduce((s, l) => s + (l.price && l.price > 0 ? toCents(l.price) : 0), 0);
+  return cents > 0 ? { accommodation: fromCents(cents) } : {};
 }

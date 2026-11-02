@@ -3,6 +3,7 @@
 import { useQuery } from "@tanstack/react-query";
 import type { Day } from "@/lib/types";
 import { queryKeys } from "@/lib/query-keys";
+import { calculateCurrentDayNumber } from "@/lib/trip-days";
 import { useCurrentTripId } from "./trip-id";
 
 export interface RouteMeta {
@@ -23,7 +24,9 @@ export interface RouteReadModel {
 async function fetchRoute(tripId: string): Promise<RouteReadModel> {
   const r = await fetch(`/api/route?tripId=${tripId}`);
   if (!r.ok) throw new Error("fetch route failed");
-  return r.json();
+  const model: RouteReadModel = await r.json();
+  // Как в useTrip: день считает устройство, у сервера часы в UTC
+  return { ...model, meta: { ...model.meta, currentDayNumber: calculateCurrentDayNumber(model.meta.startDate, model.meta.totalDays) } };
 }
 
 /**

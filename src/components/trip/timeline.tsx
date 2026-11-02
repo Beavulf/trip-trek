@@ -1,19 +1,20 @@
 "use client";
 
-import { useTrip, useExpenses, usePhotos, useJournal, useCurrentTripId } from "@/hooks/use-trip";
+import { useTrip, useExpenses, usePhotos, useJournal, useLodgings, useCurrentTripId } from "@/hooks/use-trip";
 import { useRouteDays } from "@/hooks/trip/use-route";
 import { CATEGORY_META, EXPENSE_CATEGORIES, type Day, type Photo } from "@/lib/types";
 import { useTripStore, type TripTab } from "@/lib/trip-store";
-import { BookOpen, Camera, ChevronRight, Images, MapPin, Rss, Wallet } from "lucide-react";
+import { BedDouble, BookOpen, Camera, ChevronRight, Images, MapPin, Rss, Wallet } from "lucide-react";
 import { motion, useReducedMotion } from "framer-motion";
 import { useMemo, useState } from "react";
 import { cn, plural } from "@/lib/utils";
 import { currencySymbol as curSym } from "@/lib/currencies";
+import { localTodayKey, nightsOf, toDateKey } from "@/lib/lodging";
 import { MobileBottomSheet } from "./mobile-bottom-sheet";
 import { EmptyHero } from "./empty-hero";
 import { UserAvatar } from "./user-avatar";
 
-type EventType = "place" | "photo" | "expense" | "journal" | "member";
+type EventType = "place" | "photo" | "expense" | "journal" | "lodging" | "member";
 
 interface TimelineEvent {
   id: string;
@@ -50,6 +51,7 @@ const FILTERS: { key: EventType | "all"; label: string; emoji: string }[] = [
   { key: "photo", label: "Фото", emoji: "📸" },
   { key: "expense", label: "Траты", emoji: "💸" },
   { key: "journal", label: "Дневник", emoji: "📔" },
+  { key: "lodging", label: "Жильё", emoji: "🏨" },
 ];
 
 const TYPE_META: Record<EventType, { sheetTitle: string; cta: string; emptyTitle: string; emptyHint: string }> = {
@@ -76,6 +78,12 @@ const TYPE_META: Record<EventType, { sheetTitle: string; cta: string; emptyTitle
     cta: "Открыть дневник",
     emptyTitle: "Записей пока нет",
     emptyHint: "Оставьте заметку в дневнике — она появится в хронике",
+  },
+  lodging: {
+    sheetTitle: "Заселение",
+    cta: "Открыть жильё",
+    emptyTitle: "Заселений пока не было",
+    emptyHint: "Добавьте жильё: день заезда появится в хронике",
   },
   member: {
     sheetTitle: "Новый участник",
@@ -130,6 +138,7 @@ export function Timeline() {
   const { data: expenses, isLoading: expensesLoading } = useExpenses();
   const { data: photos, isLoading: photosLoading } = usePhotos();
   const { data: journals, isLoading: journalsLoading } = useJournal();
+  const { data: lodgings } = useLodgings();
   const { setActiveTab, openBudget, setSelectedDay } = useTripStore();
   const [filter, setFilter] = useState<EventType | "all">("all");
   const [showAll, setShowAll] = useState(false);
@@ -219,6 +228,26 @@ export function Timeline() {
       });
     });
 
+    // Лента — хроника: только заселения, которые уже случились
+    const todayKey = localTodayKey();
+    (lodgings ?? []).forEach((l) => {
+      if (toDateKey(l.checkIn) > todayKey) return;
+      const nights = nightsOf(l);
+      evts.push({
+        id: `lodging-${l.id}`,
+        type: "lodging",
+        timestamp: l.checkIn,
+        title: l.name,
+        subtitle: nights > 0 ? `${nights} ${plural(nights, "ночь", "ночи", "ночей")}` : "Без ночёвки",
+        meta: l.city ?? undefined,
+        icon: BedDouble,
+        color: "#6366f1",
+        emoji: "🏨",
+        targetTab: "lodging",
+        address: l.address,
+      });
+    });
+
     journalList.forEach((j) => {
       evts.push({
         id: `journal-${j.id}`,
@@ -266,7 +295,7 @@ export function Timeline() {
     });
 
     return evts;
-  }, [trip, expenses, photos, journals, currencySymbol]);
+  }, [trip, expenses, photos, journals, lodgings, currencySymbol]);
 
   const stats = useMemo(
     () => ({
@@ -274,6 +303,7 @@ export function Timeline() {
       photo: events.filter((e) => e.type === "photo").length,
       expense: events.filter((e) => e.type === "expense").length,
       journal: events.filter((e) => e.type === "journal").length,
+      lodging: events.filter((e) => e.type === "lodging").length,
     }),
     [events]
   );
@@ -309,7 +339,7 @@ export function Timeline() {
           dayNo: null,
           isToday: key === todayKey,
           isYesterday: key === yKey,
-          counts: { place: 0, photo: 0, expense: 0, journal: 0, member: 0 },
+          counts: { place: 0, photo: 0, expense: 0, journal: 0, lodging: 0, member: 0 },
           spent: 0,
           events: [],
         };
@@ -410,6 +440,7 @@ export function Timeline() {
     if (g.counts.photo) parts.push(`📸 ${g.counts.photo}`);
     if (g.spent) parts.push(`💸 ${currencySymbol}${g.spent.toFixed(g.spent % 1 === 0 ? 0 : 2)}`);
     if (g.counts.journal) parts.push(`📔 ${g.counts.journal}`);
+    if (g.counts.lodging) parts.push(`🏨 ${g.counts.lodging}`);
     if (g.counts.member) parts.push(`👋 ${g.counts.member}`);
     return parts.join(" · ");
   };
@@ -539,7 +570,7 @@ export function Timeline() {
                   if (ev) jump(ev);
                   else
                     setActiveTab(
-                      ({ place: "itinerary", photo: "gallery", expense: "budget", journal: "journal" } as Record<EventType, TripTab>)[
+                      ({ place: "itinerary", photo: "gallery", expense: "budget", journal: "journal", lodging: "lodging" } as Record<EventType, TripTab>)[
                         filter as EventType
                       ]
                     );

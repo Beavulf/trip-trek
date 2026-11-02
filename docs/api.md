@@ -69,7 +69,7 @@
 | `participants/leave` | POST | U | userRateLimit | выйти из поездки |
 | `participants/debts` | GET | M / M(owner для чужих) | 60/мин | незакрытые долги участника (`?userId=`, по умолчанию свои) — только для предупреждения в диалогах выхода/исключения/бана; не блокирует |
 | `participants/ban` | POST, GET, DELETE | M(owner) / U | userRateLimit | бан/разбан юзера в поездке (TripBan) |
-| `search` | GET | M | — | поиск по объектам поездки; сравнение строк в JS (кириллица/иероглифы) |
+| `search` | GET | M | — | поиск по объектам поездки, включая жильё; сравнение строк в JS (кириллица/иероглифы) |
 
 ## Контент поездки (все — M)
 
@@ -90,7 +90,8 @@
 | `journal` | GET, POST, PATCH, DELETE | `journal:added` | дневник (запись на день, mood) |
 | `checklist` | GET, POST, PATCH, DELETE | `checklist:updated` | чек-лист подготовки |
 | `info` | GET, POST, PATCH, DELETE | `info:updated` | справка (визы, сим-карты…) |
-| `lodgings` | GET, POST, PATCH, DELETE | `lodging:added` (POST), `lodging:updated` (PATCH/DELETE) | проживание: заезд/выезд, адрес на местном языке, бронь, телефон, цена. Вход нормализует `src/lib/lodging.ts` (`pickLodgingInput`), даты — ключи `ГГГГ-ММ-ДД`; чтение — участник, правка — редактор (не зритель); ≤200 записей на поездку |
+| `lodgings` | GET, POST, PATCH, DELETE | `lodging:added` (POST), `lodging:updated` (PATCH/DELETE), при DELETE ещё `place:updated` | проживание: заезд/выезд, адрес на местном языке, бронь, телефон, цена. Вход нормализует `src/lib/lodging.ts` (`pickLodgingInput`), даты — ключи `ГГГГ-ММ-ДД`; чтение — участник, правка — редактор (не зритель); ≤200 записей на поездку |
+| `lodgings/import` | POST | `lodging:added` (создано новое) или `lodging:updated`, плюс `place:updated` | перенос отелей из маршрута: `stays[]` с `placeIds` и полями нового жилья либо `lodgingId` существующего; всё одной транзакцией, чужое или уже привязанное место — 409 (гард E) |
 | `phrases` | GET, POST, PATCH, DELETE | `phrase:updated` | разговорник (ru/cn/pinyin, language) |
 | `foods` | GET, POST, PATCH, DELETE | `food:updated` | гастрогид (голоса wantedBy) |
 | `nearby` | GET | — | что рядом (внешние API через outbound) |

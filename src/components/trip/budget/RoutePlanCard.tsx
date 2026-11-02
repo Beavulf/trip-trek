@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { ChevronDown, Compass, Loader2 } from "lucide-react";
 import { useRouteDays, useTrip, useExpenses } from "@/hooks/use-trip";
-import { calculatePlannedRoute } from "@/lib/budget";
+import { calculatePlannedRoute, expenseSelectableParticipants } from "@/lib/budget";
 import { CATEGORY_META } from "@/lib/types";
 import { currencySymbol } from "@/lib/currencies";
 import { cn, plural } from "@/lib/utils";
@@ -26,7 +26,8 @@ export function RoutePlanCard() {
   const [expanded, setExpanded] = useState(false);
   const [mode, setMode] = useState<PlanMode>("days");
   const sym = currencySymbol(trip?.settings.currency);
-  const participantsCount = trip?.participants.length ?? 0;
+  // Делят расходы только участники: зритель в «на человека» не входит
+  const participantsCount = expenseSelectableParticipants(trip?.participants ?? []).length;
 
   const stats = useMemo(
     () => (days ? calculatePlannedRoute(days, participantsCount) : null),

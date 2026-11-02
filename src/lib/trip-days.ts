@@ -1,24 +1,41 @@
+import { addDaysKey, daysBetween, localTodayKey, toDateKey } from "./lodging";
+
 // Shared helper для вычисления текущего дня поездки.
 // P1 #6: раньше в api/trip/route.ts была формула floor+UTC,
 // а в api/ai-summary/route.ts — ceil+ms. Расхождение давало разные номера дней.
 // 0 = поездка ещё не началась: кламп в 1 рисовал «Сегодня» на первом дне
 // (и «Прошёл» на прошедших) задолго до старта — сессия 2026-09-19.
-export function calculateCurrentDayNumber(startDate: Date, totalDays: number): number {
-  const diffDays = tripDaysElapsed(startDate);
+export function calculateCurrentDayNumber(startDate: Date | string, totalDays: number, now?: Date): number {
+  const diffDays = tripDaysElapsed(startDate, now);
   if (diffDays < 0) return 0;
   return Math.min(totalDays, diffDays + 1);
 }
 
 /**
- * Сколько календарных суток (по UTC, без времени суток) прошло от старта поездки до сегодня:
- * <0 — поездка ещё не началась, ≥totalDays — уже закончилась. БЕЗ клампа — единая математика
- * для номера дня и «осталось дней» (раньше Budget.tsx держал свою копию формулы).
+ * Календарный день даты поездки или дня маршрута. В БД это полночь UTC выбранного дня (конец
+ * поездки — 23:59 UTC), поэтому день читается из самого значения, а не через пояс устройства:
+ * иначе конец поездки в Китае уезжал на следующие сутки, а старт в Америке — на предыдущие.
+ */
+export const tripDateKey = (v: Date | string): string => toDateKey(new Date(v));
+
+/**
+ * Сколько календарных суток прошло от старта поездки до сегодня: <0 — поездка ещё не началась,
+ * ≥totalDays — уже закончилась. БЕЗ клампа — единая математика для номера дня и «осталось дней».
+ * «Сегодня» — по часам устройства: со сравнением по UTC в Китае до 08:00 шёл вчерашний день.
+ * На сервере часы в UTC, поэтому клиент пересчитывает номер дня сам (см. hooks/trip/use-trip).
  */
 export function tripDaysElapsed(startDate: Date | string, now: Date = new Date()): number {
-  const nowUTC = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
-  const start = new Date(startDate);
-  const startUTC = Date.UTC(start.getUTCFullYear(), start.getUTCMonth(), start.getUTCDate());
-  return Math.floor((nowUTC - startUTC) / (1000 * 60 * 60 * 24));
+  return daysBetween(tripDateKey(startDate), localTodayKey(now));
+}
+
+/** Первый и последний календарные дни поездки */
+export function tripRangeKeys(s: {
+  startDate: Date | string;
+  endDate?: Date | string | null;
+  totalDays: number;
+}): { startKey: string; lastKey: string } {
+  const startKey = tripDateKey(s.startDate);
+  return { startKey, lastKey: s.endDate ? tripDateKey(s.endDate) : addDaysKey(startKey, Math.max(s.totalDays - 1, 0)) };
 }
 
 /**
@@ -87,9 +104,9 @@ export function dayIdForDate(
  * в totalDays, поэтому после финиша «текущим» навсегда остаётся последний день —
  * подписи «сегодня» на нём гасим этим флагом (сам кламп нужен формам как дефолтный день).
  */
-export function isTripOver(endDate: string | Date | null | undefined): boolean {
+export function isTripOver(endDate: string | Date | null | undefined, now: Date = new Date()): boolean {
   if (!endDate) return false;
-  return new Date(endDate).getTime() < Date.now();
+  return tripDateKey(endDate) < localTodayKey(now);
 }
 
 /**

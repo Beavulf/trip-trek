@@ -73,6 +73,16 @@ describe("buildRoutePdf", () => {
     expect(doc.getPageCount()).toBeGreaterThan(1);
   });
 
+  it("ночёвка в дне: кириллица, латиница и адрес с иероглифами не ломают сборку", async () => {
+    const days = [
+      { dayNumber: 1, date: "2026-10-10", city: "Гуанчжоу", title: "Прибытие", summary: null, accentColor: null, places: [], night: { name: "River Hotel", address: "广州市天河区" } },
+      { dayNumber: 2, date: "2026-10-11", city: "Гуанчжоу", title: "Город", summary: null, accentColor: null, places: [], night: { name: "Отель у реки", address: "ул. Речная, 5" } },
+      { dayNumber: 3, date: "2026-10-12", city: "Гуанчжоу", title: "Дорога", summary: null, accentColor: null, places: [], night: null },
+    ];
+    const bytes = await buildRoutePdf({ title: "Поездка", destination: "Китай", currency: "USD", startDate: "2026-10-10", endDate: null, generatedAt: new Date(), days });
+    expect(new TextDecoder("latin1").decode(bytes.slice(0, 5))).toBe("%PDF-");
+  });
+
   it("день без мест и пустые опциональные поля не падают", async () => {
     const bytes = await buildRoutePdf(
       input([

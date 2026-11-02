@@ -15,6 +15,8 @@ interface CategoryPlanSheetProps {
   manualBy: Record<string, number>;
   /** Часть из бюджетов мест маршрута: считается сама */
   routeBy: Record<string, number>;
+  /** Часть из цены проживаний: тоже считается сама */
+  lodgingBy: Record<string, number>;
   tripBudget: number;
   sym: string;
 }
@@ -40,7 +42,7 @@ export function CategoryPlanSheet({ open, onOpenChange, ...form }: CategoryPlanS
   );
 }
 
-function PlanForm({ manualBy, routeBy, tripBudget, sym, onClose }: Omit<CategoryPlanSheetProps, "open" | "onOpenChange"> & { onClose: () => void }) {
+function PlanForm({ manualBy, routeBy, lodgingBy, tripBudget, sym, onClose }: Omit<CategoryPlanSheetProps, "open" | "onOpenChange"> & { onClose: () => void }) {
   const update = useUpdateBudgetPlan();
   const [draft, setDraft] = useState<Record<string, string>>(() =>
     Object.fromEntries(KEYS.map((k) => [k, manualBy[k] ? String(manualBy[k]) : ""]))
@@ -49,9 +51,11 @@ function PlanForm({ manualBy, routeBy, tripBudget, sym, onClose }: Omit<Category
   const [confirmingReset, setConfirmingReset] = useState(false);
 
   const manualOf = (k: string) => Math.max(0, parseFloat(draft[k] ?? "") || 0);
-  const total = KEYS.reduce((s, k) => s + manualOf(k) + (routeBy[k] ?? 0), 0);
+  const autoOf = (k: string) => (routeBy[k] ?? 0) + (lodgingBy[k] ?? 0);
+  const total = KEYS.reduce((s, k) => s + manualOf(k) + autoOf(k), 0);
   const hasManual = KEYS.some((k) => (manualBy[k] ?? 0) > 0);
   const hasRoute = KEYS.some((k) => (routeBy[k] ?? 0) > 0);
+  const hasAuto = KEYS.some((k) => autoOf(k) > 0);
 
   const applyAll = async (next: (k: string) => number) => {
     const changed = KEYS.filter((k) => next(k) !== (manualBy[k] ?? 0));
@@ -70,8 +74,8 @@ function PlanForm({ manualBy, routeBy, tripBudget, sym, onClose }: Omit<Category
   return (
     <div className="space-y-3">
       <p className="text-xs text-pretty text-muted-foreground">
-        {hasRoute
-          ? "Суммы из мест маршрута считаются сами. Здесь задаётся то, что к ним добавить."
+        {hasAuto
+          ? "Суммы из маршрута и жилья считаются сами. Здесь задаётся то, что к ним добавить."
           : "Сколько планируете потратить на каждую категорию."}
       </p>
 
@@ -79,6 +83,7 @@ function PlanForm({ manualBy, routeBy, tripBudget, sym, onClose }: Omit<Category
         {KEYS.map((k) => {
           const meta = EXPENSE_CATEGORIES[k];
           const fromRoute = routeBy[k] ?? 0;
+          const fromLodging = lodgingBy[k] ?? 0;
           return (
             <li key={k} className="flex items-center gap-3 rounded-xl bg-muted/50 px-3 py-2">
               <span className="text-lg" aria-hidden="true">{meta.emoji}</span>
@@ -87,9 +92,10 @@ function PlanForm({ manualBy, routeBy, tripBudget, sym, onClose }: Omit<Category
                 {fromRoute > 0 && (
                   <div className="text-xs text-muted-foreground tabular-nums">из маршрута {moneyWhole(sym, fromRoute)}</div>
                 )}
+                {fromLodging > 0 && <div className="text-xs text-muted-foreground tabular-nums">из жилья {moneyWhole(sym, fromLodging)}</div>}
               </div>
               <span className="flex shrink-0 items-center gap-1">
-                <span className="text-sm text-muted-foreground">{fromRoute > 0 ? `+ ${sym}` : sym}</span>
+                <span className="text-sm text-muted-foreground">{fromRoute + fromLodging > 0 ? `+ ${sym}` : sym}</span>
                 <input
                   id={`plan-${k}`}
                   type="number"

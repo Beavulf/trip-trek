@@ -11,6 +11,8 @@ import {
   tripDaysElapsed,
   daysLeftInTrip,
   isBeforeTripStart,
+  tripDateKey,
+  tripRangeKeys,
 } from "./trip-days";
 
 afterEach(() => {
@@ -18,7 +20,7 @@ afterEach(() => {
 });
 
 describe("calculateCurrentDayNumber", () => {
-  // Функция сравнивает даты по UTC-полуночи, поэтому системное время задаём в UTC.
+  // Функция берёт день по часам устройства; тесты идут в UTC, поэтому время задано в UTC.
   const fakeNow = (iso: string) => vi.setSystemTime(new Date(iso));
 
   it("в первый день поездки возвращает 1", () => {
@@ -108,9 +110,15 @@ describe("dayIdForDate / isTripFinished", () => {
 
   it("isTripOver: гасит «сегодня» после финиша независимо от статуса", () => {
     vi.setSystemTime(new Date(2026, 9, 21, 12, 0));
-    expect(isTripOver(new Date(2026, 9, 20, 23, 59))).toBe(true);
-    expect(isTripOver(new Date(2026, 9, 25))).toBe(false);
+    expect(isTripOver("2026-10-20T23:59:59.999Z")).toBe(true);
+    expect(isTripOver("2026-10-25T23:59:59.999Z")).toBe(false);
     expect(isTripOver(null)).toBe(false);
+  });
+
+  it("isTripOver: последний день длится до полуночи устройства, а не до полуночи UTC", () => {
+    const end = "2026-10-20T23:59:59.999Z";
+    expect(isTripOver(end, new Date(2026, 9, 20, 23, 30))).toBe(false);
+    expect(isTripOver(end, new Date(2026, 9, 21, 0, 5))).toBe(true);
   });
 });
 
@@ -140,6 +148,35 @@ describe("daysLeftInTrip (единая формула с номером дня)"
   it("tripDaysElapsed: отрицательное до старта, без клампа после", () => {
     expect(tripDaysElapsed(start, at("2026-09-08T12:00:00Z"))).toBe(-2);
     expect(tripDaysElapsed(start, at("2026-10-01T12:00:00Z"))).toBe(21);
+  });
+});
+
+describe("день поездки считается по часам устройства", () => {
+  const start = "2026-10-08T00:00:00.000Z";
+
+  // Даты заданы локальными компонентами: тест верен в любом поясе и особенно важен при TZ=Asia/Shanghai
+  it("сразу после местной полуночи уже новый день", () => {
+    expect(calculateCurrentDayNumber(start, 13, new Date(2026, 9, 11, 0, 30))).toBe(4);
+    expect(calculateCurrentDayNumber(start, 13, new Date(2026, 9, 11, 7, 30))).toBe(4);
+    expect(calculateCurrentDayNumber(start, 13, new Date(2026, 9, 10, 23, 30))).toBe(3);
+  });
+
+  it("первый день начинается в местную полночь", () => {
+    expect(calculateCurrentDayNumber(start, 13, new Date(2026, 9, 7, 23, 59))).toBe(0);
+    expect(calculateCurrentDayNumber(start, 13, new Date(2026, 9, 8, 0, 1))).toBe(1);
+  });
+
+  it("tripRangeKeys читает дни из самих дат, а конец поездки не уезжает на сутки", () => {
+    expect(tripRangeKeys({ startDate: start, endDate: "2026-10-20T23:59:59.999Z", totalDays: 13 })).toEqual({
+      startKey: "2026-10-08",
+      lastKey: "2026-10-20",
+    });
+    expect(tripRangeKeys({ startDate: start, endDate: null, totalDays: 13 }).lastKey).toBe("2026-10-20");
+  });
+
+  it("tripDateKey не зависит от пояса устройства", () => {
+    expect(tripDateKey("2026-10-08T00:00:00.000Z")).toBe("2026-10-08");
+    expect(tripDateKey(new Date("2026-10-20T23:59:59.999Z"))).toBe("2026-10-20");
   });
 });
 

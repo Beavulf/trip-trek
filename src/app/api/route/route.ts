@@ -60,6 +60,7 @@ export async function GET(req: NextRequest) {
           status: true,
           budget: true,
           address: true,
+          lodgingId: true,
           rating: true,
           visitedAt: true,
           order: true,

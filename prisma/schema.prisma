@@ -298,15 +298,20 @@ model Place {
   rating      Int?
   visitedAt   DateTime?
   order       Int       @default(0)
+  // Отель перенесён в «Жильё»: сумма места теперь цена проживания и в план второй раз не идёт.
+  // Жильё удалили — связь снимается, и бюджет места снова считается в плане
+  lodgingId   String?
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
-  trip   Trip    @relation(fields: [tripId], references: [id], onDelete: Cascade)
-  day    Day     @relation(fields: [dayId], references: [id], onDelete: Cascade)
-  photos Photo[]
+  trip    Trip     @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  day     Day      @relation(fields: [dayId], references: [id], onDelete: Cascade)
+  lodging Lodging? @relation(fields: [lodgingId], references: [id], onDelete: SetNull)
+  photos  Photo[]
 
   @@index([tripId])
   @@index([dayId])
+  @@index([lodgingId])
 }
 
 // === Фото ===
@@ -458,7 +463,8 @@ model Lodging {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  trip Trip @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  trip   Trip    @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  places Place[]
 
   @@index([tripId])
 }

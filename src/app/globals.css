@@ -234,6 +234,10 @@
     scroll-snap-type: x mandatory;
     -webkit-overflow-scrolling: touch;
     padding-bottom: 0.25rem;
+    /* Маска гасит левые 10px: без этого сдвига она срезала край первого чипа и в покое */
+    padding-left: 10px;
+    margin-left: -10px;
+    scroll-padding-left: 10px;
     mask-image: linear-gradient(
       to right,
       transparent 0,

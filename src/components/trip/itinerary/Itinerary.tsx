@@ -2,16 +2,19 @@
 
 import { useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
-import { useRouteDays, useTrip, useCurrentTripId } from "@/hooks/use-trip";
+import { useLodgings, useRouteDays, useTrip, useCurrentTripId } from "@/hooks/use-trip";
 import { useTripStore } from "@/lib/trip-store";
 import { currencySymbol } from "@/lib/currencies";
-import { isTripOver } from "@/lib/trip-days";
+import { tripDateKey, tripRangeKeys } from "@/lib/trip-days";
 import { type Day, type Place } from "@/lib/types";
 import { resolveCityCoords, decodeCustomKey } from "@/lib/city-coords";
-import { CalendarPlus, Compass, FileDown, Loader2, Map as MapIcon, PartyPopper, Plane, Plus, Share2, Sparkles } from "lucide-react";
+import { expenseSelectableParticipants } from "@/lib/budget";
+import { isChinaTrip } from "@/lib/place-links";
+import { ChevronDown, FileDown, Loader2, Map as MapIcon, Plus, Share2, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import { cn, plural } from "@/lib/utils";
 import { useAuth } from "@/hooks/use-auth";
+import { useTodayKey } from "@/hooks/use-today-key";
 import { ShareTripSheet } from "../share-trip-sheet";
 import { AddPlaceSheet, type AddPlaceData } from "../add-place-sheet";
 import { EmptyHero } from "../empty-hero";
@@ -20,7 +23,7 @@ import { PlaceDialog } from "./PlaceDialog";
 import { DaySheet, AddDayButton } from "./DaySheet";
 import { PlannerWizard } from "./PlannerWizard";
 import { LodgingStrip } from "../lodging";
-import { localTodayKey } from "@/lib/lodging";
+import { daysBetween, nightLodging } from "@/lib/lodging";
 
 function dayCoords(day: {
   cityKey: string;
@@ -50,15 +53,25 @@ export function Itinerary() {
   const [plannerOpen, setPlannerOpen] = useState(false);
   const [pdfLoading, setPdfLoading] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
-  // Дата-статус считаем на клиенте (SSR показывает скелетон) и обновляем раз в минуту,
-  // чтобы «Старт через N дней» не зависал
-  const [now, setNow] = useState(() => Date.now());
+  const [showPast, setShowPast] = useState(false);
+  const { data: lodgings } = useLodgings();
+  // Живой «сегодня»: статус поездки и полка жилья не должны застывать на дне входа
+  const todayKey = useTodayKey();
   const urlDayApplied = useRef(false);
+  const railRef = useRef<HTMLDivElement>(null);
 
+  const range = trip ? tripRangeKeys(trip.settings) : null;
+  const inTrip = !!range && todayKey >= range.startKey && todayKey <= range.lastKey;
+  const focusChip = selectedDay ?? (inTrip ? trip?.currentDayNumber : null);
+
+  // Выбранный или сегодняшний день всегда виден на полосе: из 13 чипов он легко оказывался за краем
   useEffect(() => {
-    const t = setInterval(() => setNow(Date.now()), 60_000);
-    return () => clearInterval(t);
-  }, []);
+    const rail = railRef.current;
+    const chip = focusChip != null ? rail?.querySelector<HTMLElement>(`[data-day-chip="${focusChip}"]`) : null;
+    if (!rail || !chip) return;
+    const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    rail.scrollTo({ left: chip.offsetLeft - (rail.clientWidth - chip.offsetWidth) / 2, behavior: reduce ? "auto" : "smooth" });
+  }, [focusChip, days?.length]);
 
   // Deep-link ?day=N: применяем один раз, когда дни загрузились
   useEffect(() => {
@@ -118,10 +131,15 @@ export function Itinerary() {
   const currentDay = dayList.find((d) => d.dayNumber === trip.currentDayNumber);
   const targetDay = dayList.find((d) => d.dayNumber === selectedDay) ?? currentDay ?? dayList[0];
   const curSym = currencySymbol(trip.settings.currency);
-  const tripOver = isTripOver(trip.settings.endDate);
-  // Календарный день выбранного дня маршрута (локальный, как его видит пользователь)
+  const { startKey, lastKey } = range!;
+  const isBefore = todayKey < startKey;
+  const tripOver = todayKey > lastKey;
   const selectedDayDate = selectedDay ? dayList.find((d) => d.dayNumber === selectedDay)?.date : undefined;
-  const selectedDayKey = selectedDayDate ? localTodayKey(new Date(selectedDayDate)) : null;
+  const selectedDayKey = selectedDayDate ? tripDateKey(selectedDayDate) : null;
+  // Зритель только смотрит: кнопки правки вели к отказу сервера (API пускает лишь редакторов)
+  const me = session?.user as { id?: string } | undefined;
+  const myRole = trip.participants.find((p) => p.id === me?.id)?.role;
+  const canEdit = myRole !== "viewer";
 
   const openAddForDay = (day: (typeof dayList)[number]) => {
     const coords = dayCoords(day);
@@ -131,7 +149,8 @@ export function Itinerary() {
       });
       return;
     }
-    setAddData({ lat: coords.lat, lng: coords.lng, dayId: day.id });
+    // Координаты дня — лишь центр города: точку человек выбирает сам
+    setAddData({ lat: coords.lat, lng: coords.lng, dayId: day.id, approximate: true });
     setAddOpen(true);
   };
 
@@ -182,98 +201,98 @@ export function Itinerary() {
             Добавьте первый день — дальше легко.
           </p>
         </div>
-        <AddDayButton onClick={() => setDaySheetOpen(true)} />
+        {canEdit && <AddDayButton onClick={() => setDaySheetOpen(true)} />}
         <DaySheet open={daySheetOpen} onOpenChange={setDaySheetOpen} />
       </div>
     );
   }
 
-  // Статус поездки по датам — как в Обзоре
-  const startOf = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
-  const start = startOf(new Date(trip.settings.startDate));
-  const end = trip.settings.endDate ? startOf(new Date(trip.settings.endDate)) + 86_399_000 : null;
-  const isBefore = now < start;
-  const isAfter = end != null && now > end;
-  const daysUntilStart = Math.max(0, Math.ceil((start - now) / 86_400_000));
-  const daysLeft = Math.max(0, trip.currentDayNumber <= trip.settings.totalDays ? trip.settings.totalDays - trip.currentDayNumber + 1 : 0);
+  // Статус поездки считается по календарным дням: шапка, полка жилья и «сегодня» в списке согласованы
+  const daysUntilStart = daysBetween(todayKey, startKey);
+  const daysLeft = Math.max(0, trip.settings.totalDays - trip.currentDayNumber + 1);
 
   let heroTitle: string;
   let heroSubtitle: string;
-  let HeroIcon: typeof Plane;
   if (isBefore) {
-    HeroIcon = Compass;
     heroTitle = daysUntilStart <= 1 ? "Завтра в путь!" : `Старт через ${daysUntilStart} ${plural(daysUntilStart, "день", "дня", "дней")}`;
-    heroSubtitle = `${trip.settings.totalDays} ${plural(trip.settings.totalDays, "день", "дня", "дней")} · ${trip.totalPlaces} ${plural(trip.totalPlaces, "место", "места", "мест")} в маршруте`;
-  } else if (isAfter) {
-    HeroIcon = PartyPopper;
+    heroSubtitle = `${trip.settings.totalDays} ${plural(trip.settings.totalDays, "день", "дня", "дней")}, ${trip.totalPlaces} ${plural(trip.totalPlaces, "место", "места", "мест")} в маршруте`;
+  } else if (tripOver) {
     heroTitle = "Маршрут пройден";
-    heroSubtitle = `${trip.visitedPlaces} из ${trip.totalPlaces} ${plural(trip.totalPlaces, "места", "мест", "мест")} отмечено`;
+    heroSubtitle = `Отмечено ${trip.visitedPlaces} из ${trip.totalPlaces} ${plural(trip.totalPlaces, "места", "мест", "мест")}`;
   } else {
-    HeroIcon = Plane;
     heroTitle = `День ${trip.currentDayNumber} из ${trip.settings.totalDays}`;
     heroSubtitle = currentDay
-      ? `${currentDay.city}${currentDay.title && currentDay.title !== `День ${currentDay.dayNumber}` ? ` · ${currentDay.title}` : ""}${daysLeft > 0 ? ` · осталось ${plural(daysLeft, "день", "дня", "дней")}` : ""}`
+      ? `${currentDay.city}${currentDay.title && currentDay.title !== `День ${currentDay.dayNumber}` ? ` · ${currentDay.title}` : ""}${daysLeft > 0 ? ` · осталось ${daysLeft} ${plural(daysLeft, "день", "дня", "дней")}` : ""}`
       : "Город не указан";
   }
   const accent = currentDay?.accentColor ?? dayList[0]?.accentColor ?? "#f97316";
   // «Поделиться» — публичной ссылкой делятся все участники кроме зрителей,
   // управляет ею владелец (как в trip-info-sheet: роль из участников, не из токена)
-  const me = session?.user as { id?: string } | undefined;
-  const myRole = trip.participants.find((p) => p.id === me?.id)?.role;
   const isOwner = myRole === "owner";
   const canShare = !!myRole && myRole !== "viewer";
+  // Делят расходы только участники: зритель смотрит и в «на человека» не входит
+  const payers = expenseSelectableParticipants(trip.participants).length;
+  const china = isChinaTrip(`${trip.settings.title} ${dayList.map((d) => d.city).join(" ")}`);
+
+  // Идущая поездка: сверху то, что впереди, а не позавчерашний день
+  const pastDays = inTrip && !selectedDay ? filteredDays.filter((d) => d.dayNumber < trip.currentDayNumber) : [];
+  const shownDays = pastDays.length > 0 && !showPast ? filteredDays.filter((d) => d.dayNumber >= trip.currentDayNumber) : filteredDays;
+  const hasLodgings = (lodgings?.length ?? 0) > 0;
+  const nightOf = (day: Day) => {
+    if (!hasLodgings) return undefined;
+    const key = tripDateKey(day.date);
+    const stay = nightLodging(lodgings ?? [], key);
+    if (stay) return { name: stay.name };
+    // Ночь последнего дня обычно уже дома, а прошедшие ночи исправлять поздно
+    return key < lastKey && key >= todayKey ? ("missing" as const) : undefined;
+  };
+
+  const plannerButton = canEdit && !tripOver && (
+    <button
+      type="button"
+      onClick={() => setPlannerOpen(true)}
+      className="w-full min-h-11 rounded-2xl border-2 border-dashed border-[#d946ef]/40 bg-[#d946ef]/5 text-[13px] font-medium flex items-center justify-center gap-1.5 text-foreground/90 hover:bg-[#d946ef]/10 transition-colors"
+    >
+      <Sparkles className="size-4 text-[#d946ef]" aria-hidden />
+      Подобрать места с ИИ
+    </button>
+  );
 
   return (
     <div className="space-y-3 animate-fade-up pb-4 mx-auto w-full max-w-3xl">
       {/* max-w-3xl: нить дней — список для чтения, на 1280px строки
           растягивались в ~1200px с пустотой справа (аудит 2026-10-03) */}
-      {/* Компактный hero: где мы на маршруте и что дальше */}
+      {/* Компактная шапка: где мы на маршруте. Цвет дня приглушён: на жёлтом или бирюзовом
+          акценте белый текст иначе не читается */}
       <section
-        className="rounded-3xl p-4 sm:p-5 text-white shadow-lg relative overflow-hidden"
-        style={{ background: `linear-gradient(135deg, ${accent} 0%, #1c1917 100%)` }}
+        className="rounded-3xl p-4 text-white shadow-lg"
+        style={{ background: `linear-gradient(135deg, color-mix(in oklab, ${accent} 62%, black) 0%, #1c1917 100%)` }}
       >
-        <div className="absolute -bottom-10 -right-6 size-32 rounded-full opacity-10 blur-2xl bg-white" aria-hidden="true" />
-        <div className="relative">
-          <div className="flex items-center gap-1.5 text-white/70 text-[11px] font-medium uppercase tracking-wide">
-            <HeroIcon className="size-3.5" />
-            <span>Маршрут</span>
-            <span className="ml-auto normal-case tracking-normal tabular-nums">{trip.visitedPlaces}/{trip.totalPlaces} мест</span>
+        <div className="flex items-start gap-2">
+          <div className="min-w-0 flex-1">
+            <h1 className="text-xl font-bold leading-tight">{heroTitle}</h1>
+            <p className="text-white/90 text-sm mt-0.5 text-pretty">{heroSubtitle}</p>
           </div>
-          <h1 className="text-xl sm:text-2xl font-bold leading-tight mt-1">{heroTitle}</h1>
-          <p className="text-white/80 text-xs sm:text-sm mt-0.5">{heroSubtitle}</p>
-
-          <div className="mt-3 h-1.5 rounded-full bg-white/20 overflow-hidden">
-            <motion.div
-              initial={{ scaleX: 0 }}
-              animate={{ scaleX: Math.min(1, Math.max(0, trip.placeProgress / 100)) }}
-              transition={{ duration: 0.8, ease: "easeOut" }}
-              className="h-full w-full origin-left rounded-full bg-white"
-            />
-          </div>
-
-          <div className="mt-3 flex gap-2">
-            <button
-              type="button"
-              onClick={() => setDaySheetOpen(true)}
-              className="flex-1 min-h-11 rounded-xl bg-white/15 hover:bg-white/25 backdrop-blur px-3 flex items-center justify-center gap-1.5 text-xs font-medium transition-colors active:scale-[0.98]"
-            >
-              <CalendarPlus className="size-4" /> Добавить день
-            </button>
+          <div className="flex shrink-0 gap-1.5">
             {canShare ? (
               <button
                 type="button"
                 onClick={() => setShareOpen(true)}
-                className="flex-1 min-h-11 rounded-xl bg-white/15 hover:bg-white/25 backdrop-blur px-3 flex items-center justify-center gap-1.5 text-xs font-medium transition-colors active:scale-[0.98]"
+                aria-label="Поделиться"
+                title="Поделиться"
+                className="min-h-11 min-w-11 rounded-xl bg-white/15 hover:bg-white/25 px-3 flex items-center justify-center gap-1.5 text-xs font-medium transition-[background-color,transform] active:scale-95"
               >
-                <Share2 className="size-4" /> Поделиться
+                <Share2 className="size-4" aria-hidden="true" /> <span className="hidden sm:inline">Поделиться</span>
               </button>
             ) : (
               <button
                 type="button"
                 onClick={() => setActiveTab("map")}
-                className="flex-1 min-h-11 rounded-xl bg-white/15 hover:bg-white/25 backdrop-blur px-3 flex items-center justify-center gap-1.5 text-xs font-medium transition-colors active:scale-[0.98]"
+                aria-label="На карте"
+                title="На карте"
+                className="min-h-11 min-w-11 rounded-xl bg-white/15 hover:bg-white/25 px-3 flex items-center justify-center gap-1.5 text-xs font-medium transition-[background-color,transform] active:scale-95"
               >
-                <MapIcon className="size-4" /> На карте
+                <MapIcon className="size-4" aria-hidden="true" /> <span className="hidden sm:inline">На карте</span>
               </button>
             )}
             <button
@@ -282,11 +301,23 @@ export function Itinerary() {
               disabled={pdfLoading}
               aria-label="Скачать маршрут в PDF"
               title="Скачать маршрут в PDF"
-              className="size-11 shrink-0 rounded-xl bg-white/15 hover:bg-white/25 backdrop-blur grid place-items-center transition-colors active:scale-[0.98] disabled:opacity-60"
+              className="size-11 shrink-0 rounded-xl bg-white/15 hover:bg-white/25 grid place-items-center transition-[background-color,transform] active:scale-95 disabled:opacity-60"
             >
               {pdfLoading ? <Loader2 className="size-4 animate-spin" /> : <FileDown className="size-4" />}
             </button>
           </div>
+        </div>
+
+        <div className="mt-3 flex items-center gap-2.5">
+          <div className="h-1.5 flex-1 rounded-full bg-white/20 overflow-hidden">
+            <motion.div
+              initial={{ scaleX: 0 }}
+              animate={{ scaleX: Math.min(1, Math.max(0, trip.placeProgress / 100)) }}
+              transition={{ duration: 0.8, ease: "easeOut" }}
+              className="h-full w-full origin-left rounded-full bg-white"
+            />
+          </div>
+          <span className="shrink-0 text-xs text-white/90 tabular-nums">{trip.visitedPlaces} из {trip.totalPlaces} мест</span>
         </div>
       </section>
 
@@ -297,7 +328,7 @@ export function Itinerary() {
       <div className="sticky top-[calc(var(--header-h,102px))] z-20 -mx-1 px-1 py-1 bg-background/95 rounded-xl">
         <div className="flex items-center gap-2">
           <div className="relative flex-1 min-w-0">
-            <div className="chip-rail no-scrollbar gap-1.5">
+            <div ref={railRef} className="chip-rail no-scrollbar gap-1.5">
               <button
                 type="button"
                 onClick={() => selectDay(null)}
@@ -316,7 +347,9 @@ export function Itinerary() {
                   <button
                     key={d.id}
                     type="button"
-                    onClick={() => selectDay(d.dayNumber)}
+                    data-day-chip={d.dayNumber}
+                    // Повторное нажатие снимает выбор: «Все дни» к этому моменту обычно уже за краем полосы
+                    onClick={() => selectDay(selectedDay === d.dayNumber ? null : d.dayNumber)}
                     aria-pressed={selectedDay === d.dayNumber}
                     aria-label={`День ${d.dayNumber} ${visited}/${d.places.length}${isToday ? ", сегодня" : ""}`}
                     className={cn(
@@ -351,65 +384,84 @@ export function Itinerary() {
           </div>
           {/* Dashed, как «Добавить место» в карточке дня: сплошной оранжевый круг
               здесь клонировал глобальный FAB быстрого добавления */}
-          <button
-            type="button"
-            onClick={openAdd}
-            disabled={!targetDay}
-            className="shrink-0 size-11 rounded-full border-2 border-dashed border-border text-muted-foreground grid place-items-center hover:border-primary hover:text-primary active:scale-95 transition-colors disabled:opacity-50"
-            title={targetDay ? "Добавить место" : "Сначала добавьте день"}
-            aria-label="Добавить место"
-          >
-            <Plus className="size-4" />
-          </button>
+          {canEdit && (
+            <button
+              type="button"
+              onClick={openAdd}
+              disabled={!targetDay}
+              className="shrink-0 size-11 rounded-full border-2 border-dashed border-border text-muted-foreground grid place-items-center hover:border-primary hover:text-primary active:scale-95 transition-colors disabled:opacity-50"
+              title={targetDay ? "Добавить место" : "Сначала добавьте день"}
+              aria-label="Добавить место"
+            >
+              <Plus className="size-4" />
+            </button>
+          )}
         </div>
       </div>
 
-      {/* Жильё под рукой: адрес для такси, маршрут — из вкладки «Жильё» */}
-      <LodgingStrip selectedDayKey={selectedDayKey} tripOver={tripOver} />
+      {/* Жильё под рукой: одна строка про эту ночь, всё остальное на вкладке «Жильё» */}
+      <LodgingStrip selectedDayKey={selectedDayKey} todayKey={todayKey} startKey={startKey} lastKey={lastKey} canEdit={canEdit} />
 
-      {/* Планер: варианты мест от ИИ (не готовый маршрут), только для существующих дней */}
-      <button
-        type="button"
-        onClick={() => setPlannerOpen(true)}
-        className="w-full min-h-11 rounded-2xl border-2 border-dashed border-[#d946ef]/40 bg-[#d946ef]/5 text-[13px] font-medium flex items-center justify-center gap-1.5 text-foreground/90 hover:bg-[#d946ef]/10 transition-colors"
-      >
-        <Sparkles className="size-4 text-[#d946ef]" aria-hidden />
-        Подобрать места с ИИ
-      </button>
+      {/* Планер: варианты мест от ИИ (не готовый маршрут), только для существующих дней.
+          До старта он главный инструмент, а в поездке уступает верх сегодняшнему дню */}
+      {isBefore && plannerButton}
 
       {/* Нить маршрута: дни-станции на общей линии */}
       <div className="relative">
         <div className="absolute left-[11px] top-3 bottom-3 w-0.5 rounded-full bg-border" aria-hidden="true" />
         <div className="space-y-3">
-          {filteredDays.map((day) => {
+          {pastDays.length > 0 && (
+            <div className="relative pl-8">
+              <button
+                type="button"
+                onClick={() => setShowPast((v) => !v)}
+                aria-expanded={showPast}
+                className="w-full min-h-11 rounded-2xl border border-border bg-card/60 px-3.5 flex items-center justify-between gap-2 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors"
+              >
+                {showPast ? "Скрыть прошедшие дни" : `Прошедшие дни: ${pastDays.length}`}
+                <ChevronDown className={cn("size-4 transition-transform", showPast && "rotate-180")} aria-hidden="true" />
+              </button>
+            </div>
+          )}
+          {shownDays.map((day) => {
             const isDayCurrent = day.dayNumber === trip.currentDayNumber;
             return (
               <DayCard
-                key={day.id}
+                // Ключ с режимом: иначе выбранный день оставался свёрнутым, каким был в общем списке
+                key={selectedDay ? `${day.id}-selected` : day.id}
                 day={day}
                 currency={curSym}
-                participantsCount={trip.participants.length}
-                isCurrent={isDayCurrent && !tripOver}
+                participantsCount={payers}
+                isCurrent={isDayCurrent && inTrip}
                 isPast={day.dayNumber < trip.currentDayNumber || tripOver}
+                canEdit={canEdit}
+                china={china}
+                night={nightOf(day)}
                 defaultExpanded={
                   // По умолчанию раскрыт только сегодня (или первый день до старта),
                   // при фильтре по дню — сам выбранный. Остальные дни не монтируем:
                   // так вход на вкладку не фризит на длинном маршруте.
-                  selectedDay != null ? true : isDayCurrent || (!currentDay && day.id === dayList[0]?.id)
+                  selectedDay != null ? true : (isDayCurrent && inTrip) || (isBefore && day.id === dayList[0]?.id)
                 }
                 onOpenPlace={setOpenPlace}
-                onAddPlace={(dayId) => {
-                  const d = dayList.find((dd) => dd.id === dayId);
-                  if (d) openAddForDay(d);
-                }}
-                onEditDay={setEditDay}
+                onAddPlace={
+                  canEdit
+                    ? (dayId) => {
+                        const d = dayList.find((dd) => dd.id === dayId);
+                        if (d) openAddForDay(d);
+                      }
+                    : undefined
+                }
+                onEditDay={canEdit ? setEditDay : undefined}
+                onOpenLodging={() => setActiveTab("lodging")}
               />
             );
           })}
         </div>
       </div>
 
-      <AddDayButton onClick={() => setDaySheetOpen(true)} />
+      {!isBefore && plannerButton}
+      {canEdit && <AddDayButton onClick={() => setDaySheetOpen(true)} />}
 
       <PlaceDialog place={openPlace} currency={curSym} onClose={() => setOpenPlace(null)} />
       <AddPlaceSheet open={addOpen} onOpenChange={setAddOpen} initial={addData} />

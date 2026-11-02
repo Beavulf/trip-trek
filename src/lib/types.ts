@@ -35,6 +35,8 @@ export interface Place {
   rating: number | null;
   visitedAt: string | null;
   order: number;
+  /** Отель перенесён в «Жильё»: его сумма считается там (см. lib/lodging-import) */
+  lodgingId?: string | null;
 }
 
 export interface Day {

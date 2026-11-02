@@ -28,6 +28,8 @@ export interface RoutePdfDay {
   summary: string | null;
   accentColor: string | null;
   places: RoutePdfPlace[];
+  /** Где ночуем в этот день */
+  night?: { name: string; address: string | null } | null;
 }
 
 export interface RoutePdfInput {
@@ -147,6 +149,13 @@ function dayItems(day: RoutePdfDay, sym: string, font: PDFFont, fontBold: PDFFon
   }
   if (day.summary) {
     items.push({ lines: wrapText(day.summary, font, 10, W), font, size: 10, color: MUTED, x: 18, gapBefore: 2 });
+  }
+  if (day.night) {
+    // В DejaVu нет иероглифов: адрес на местном языке в PDF превратился бы в пустые квадраты
+    const chars = new Set(font.getCharacterSet());
+    const printable = (t: string) => [...t].every((c) => /\s/.test(c) || chars.has(c.codePointAt(0)!));
+    const place = day.night.address && printable(day.night.address) ? `${day.night.name}, ${day.night.address}` : day.night.name;
+    items.push({ lines: wrapText(`Ночуем: ${place}`, font, 10, W), font, size: 10, color: INK, x: 18, gapBefore: 2 });
   }
   if (day.places.length === 0) {
     items.push({ lines: ["Мест пока нет"], font, size: 10, color: MUTED, x: 18, gapBefore: 4 });

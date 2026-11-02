@@ -11,6 +11,7 @@ import {
   MapPin,
   Plus,
   Map as MapIcon,
+  AlertTriangle,
 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -26,6 +27,8 @@ export interface AddPlaceData {
   address?: string;
   dayId?: string;
   name?: string;
+  /** Координаты — центр города дня, а не выбранная точка: адрес по ним подставлять нельзя */
+  approximate?: boolean;
 }
 
 export function AddPlaceSheet({
@@ -89,9 +92,14 @@ function AddPlaceForm({
   // Адрес, введённый пользователем (или пришедший с пикера) — приоритетнее геокода
   const [addressOverride, setAddressOverride] = useState<string | null>(initial.address ?? null);
 
+  // Точка выбрана человеком (на карте или до открытия формы). Пока нет, координаты — центр города:
+  // место всё равно нужно куда-то поставить, но адрес этого центра ему не принадлежит
+  // (так аэропорт Гуанчжоу получил адрес с улицы в Минске)
+  const [pointChosen, setPointChosen] = useState(!initial.approximate);
+
   // Адрес по координатам: кэшируемый query (по координатам) вместо мутации
   // с ручной дедупликацией; пока грузится — показываем координаты
-  const { data: geo, isPending: geoPending } = useReverseGeocode(initial.lat, initial.lng, !initial.address);
+  const { data: geo, isPending: geoPending } = useReverseGeocode(initial.lat, initial.lng, pointChosen && !initial.address);
   const shownAddress = addressOverride ?? geo?.address ?? formatLatLng(draft.lat, draft.lng);
 
   const patchDraft = (patch: Partial<PlaceDraft>) => {
@@ -118,7 +126,7 @@ function AddPlaceForm({
         dayId: draft.dayId,
         timeOfDay: draft.timeOfDay || undefined,
         budget: parseBudget(draft.budget) ?? undefined,
-        address: shownAddress.trim() || undefined,
+        address: (pointChosen ? shownAddress.trim() : draft.address.trim()) || undefined,
       });
       toast.success("Место добавлено! 📍");
       onDone();
@@ -132,14 +140,21 @@ function AddPlaceForm({
   return (
     <div className="space-y-3">
       {/* координаты */}
-      <div className="rounded-lg bg-muted/50 px-3 py-2 text-[11px] text-muted-foreground flex items-center gap-1.5">
-        <MapPin className="size-3 shrink-0" />
-        {geoPending ? (
-          <span className="flex items-center gap-1"><Loader2 className="size-3 animate-spin" /> Определяем адрес…</span>
-        ) : (
-          <span className="truncate">{shownAddress}</span>
-        )}
-      </div>
+      {pointChosen ? (
+        <div className="rounded-lg bg-muted/50 px-3 py-2 text-[11px] text-muted-foreground flex items-center gap-1.5">
+          <MapPin className="size-3 shrink-0" />
+          {geoPending && !initial.address ? (
+            <span className="flex items-center gap-1"><Loader2 className="size-3 animate-spin" /> Определяем адрес…</span>
+          ) : (
+            <span className="truncate">{shownAddress}</span>
+          )}
+        </div>
+      ) : (
+        <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-800 dark:text-amber-300 flex items-start gap-1.5">
+          <AlertTriangle className="size-3.5 shrink-0 mt-px" aria-hidden="true" />
+          <span className="text-pretty">Точка не выбрана. Без неё место встанет в центр города дня, а маршрут до него будет неточным.</span>
+        </div>
+      )}
 
       <PlaceForm value={draft} onChange={patchDraft} />
 
@@ -194,6 +209,7 @@ function AddPlaceForm({
         initialLng={draft.lng}
         onPick={(r) => {
           patchDraft({ address: r.address, lat: r.lat, lng: r.lng });
+          setPointChosen(true);
         }}
       />
     </div>

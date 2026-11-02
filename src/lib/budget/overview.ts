@@ -69,6 +69,8 @@ export interface CategoryPlanRow {
   manual: number;
   /** Часть плана из бюджетов мест маршрута: считается сама, руками не правится */
   fromRoute: number;
+  /** Часть плана из цены проживаний: тоже считается сама */
+  fromLodging: number;
   plan: number;
   /** Доля категории в тратах, целый % */
   sharePct: number;
@@ -82,7 +84,8 @@ export function buildCategoryRows(
   categories: string[],
   spentBy: Record<string, number>,
   manualBy: Record<string, number>,
-  routeBy: Record<string, number>
+  routeBy: Record<string, number>,
+  lodgingBy: Record<string, number> = {}
 ): CategoryPlanRow[] {
   const totalSpent = categories.reduce((s, c) => s + (spentBy[c] ?? 0), 0);
   return categories
@@ -90,12 +93,14 @@ export function buildCategoryRows(
       const spent = spentBy[key] ?? 0;
       const manual = manualBy[key] ?? 0;
       const fromRoute = routeBy[key] ?? 0;
+      const fromLodging = lodgingBy[key] ?? 0;
       return {
         key,
         spent,
         manual,
         fromRoute,
-        plan: manual + fromRoute,
+        fromLodging,
+        plan: manual + fromRoute + fromLodging,
         sharePct: totalSpent > 0 ? Math.round((spent / totalSpent) * 100) : 0,
       };
     })

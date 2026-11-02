@@ -58,6 +58,7 @@ interface BackupV2 {
     rating?: number | null;
     visitedAt?: string | null;
     order?: number;
+    lodgingId?: string | null;
     createdAt?: string;
     updatedAt?: string;
   }>;
@@ -261,11 +262,13 @@ export async function POST(req: NextRequest) {
     if (d.id) dayIdMap.set(d.id, newDay.id);
   }
 
-  // 2) Места (placeId пока не сохраняем — нам важны координаты, день, имя)
+  // 2) Места (placeId пока не сохраняем — нам важны координаты, день, имя).
+  //    Связь с жильём запоминаем: само жильё создаётся позже, шагом 12
+  const placesByLodging = new Map<string, string[]>();
   for (const p of body.places || []) {
     const newDayId = p.dayId ? dayIdMap.get(p.dayId) : null;
     if (!newDayId) continue; // пропускаем места без привязки к дню
-    await tx.place.create({
+    const newPlace = await tx.place.create({
       data: {
         tripId: trip.id,
         dayId: newDayId,
@@ -284,6 +287,7 @@ export async function POST(req: NextRequest) {
         order: p.order ?? 0,
       },
     });
+    if (p.lodgingId) placesByLodging.set(p.lodgingId, [...(placesByLodging.get(p.lodgingId) ?? []), newPlace.id]);
   }
 
   // 3) Фото — url валиден только как внутренний /uploads/-путь этого
@@ -447,7 +451,10 @@ export async function POST(req: NextRequest) {
     );
     if (!parsed.ok || !parsed.data.name || !parsed.data.checkIn || !parsed.data.checkOut) continue;
     const { name, checkIn, checkOut, ...rest } = parsed.data;
-    await tx.lodging.create({ data: { ...rest, name, checkIn, checkOut, tripId: trip.id } });
+    const lodging = await tx.lodging.create({ data: { ...rest, name, checkIn, checkOut, tripId: trip.id } });
+    // Без связи сумма перенесённого отеля считалась бы дважды: и в месте, и в цене жилья
+    const linked = typeof l.id === "string" ? placesByLodging.get(l.id) : undefined;
+    if (linked) await tx.place.updateMany({ where: { id: { in: linked } }, data: { lodgingId: lodging.id } });
   }
 
 

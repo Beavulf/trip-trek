@@ -25,6 +25,7 @@ import {
   useUpdatePlace,
   useUploadPhoto,
   useDeletePlace,
+  useLodgings,
   useRouteDays,
   useTrip,
 } from "@/hooks/use-trip";
@@ -34,7 +35,7 @@ import { focusOnMap } from "@/lib/map-bus";
 import { CATEGORY_META, type Place, type Photo } from "@/lib/types";
 import { diffPlaceDraft, draftFromPlace, type PlaceDraft } from "@/lib/place-draft";
 import { flatRoutePlaces } from "@/lib/route-threads";
-import { googleDirectionsUrl } from "@/lib/place-links";
+import { directionsUrl, isChinaTrip } from "@/lib/place-links";
 import { useDialogA11y } from "@/hooks/use-dialog-a11y";
 import { MobileBottomSheet } from "../mobile-bottom-sheet";
 import { toast } from "sonner";
@@ -155,7 +156,13 @@ function PlaceDialogBody({
   const { data: session } = useAuth();
   const currentUserId = (session?.user as { id?: string } | undefined)?.id || "";
   const { data: tripCtx } = useTrip();
-  const isOwner = tripCtx?.participants?.find((p) => p.id === currentUserId)?.role === "owner";
+  const myRole = tripCtx?.participants?.find((p) => p.id === currentUserId)?.role;
+  const isOwner = myRole === "owner";
+  // Зритель только смотрит: API принимает правки лишь от редакторов
+  const canEdit = myRole !== "viewer";
+  const china = isChinaTrip(`${tripCtx?.settings.title ?? ""} ${(days ?? []).map((d) => d.city).join(" ")}`);
+  const { data: lodgings } = useLodgings();
+  const linkedLodging = fresh.lodgingId ? lodgings?.find((l) => l.id === fresh.lodgingId) : undefined;
 
   const togglePhotoFavorite = (p: Photo) => {
     updPhoto.mutate(
@@ -312,24 +319,40 @@ function PlaceDialogBody({
             <p className="text-sm text-muted-foreground leading-relaxed">{fresh.description}</p>
           )}
 
-          {/* Главные действия */}
-          <div className="grid grid-cols-2 gap-2">
+          {/* Отель перенесён в «Жильё»: сумма считается там, поэтому правка бюджета здесь на план не влияет */}
+          {linkedLodging && (
             <button
               type="button"
-              onClick={toggleVisited}
-              disabled={update.isPending}
-              className={cn(
-                "rounded-xl py-3 text-sm font-medium flex items-center justify-center gap-2 transition-colors min-h-11",
-                visited
-                  ? "bg-green-500/10 text-green-600 border border-green-500/30"
-                  : "bg-primary text-primary-foreground"
-              )}
+              onClick={() => {
+                onClose();
+                setActiveTab("lodging");
+              }}
+              className="w-full min-h-11 rounded-xl border border-border px-3 text-left text-xs text-muted-foreground hover:bg-accent/50 transition-colors"
             >
-              <CheckCircle2 className="size-4" />
-              {visited ? "Посещено" : "Отметить"}
+              Запись относится к жилью «{linkedLodging.name}», сумма считается там
             </button>
+          )}
+
+          {/* Главные действия */}
+          <div className="grid grid-cols-2 gap-2">
+            {canEdit && (
+              <button
+                type="button"
+                onClick={toggleVisited}
+                disabled={update.isPending}
+                className={cn(
+                  "rounded-xl py-3 text-sm font-medium flex items-center justify-center gap-2 transition-colors min-h-11",
+                  visited
+                    ? "bg-green-500/10 text-green-600 border border-green-500/30"
+                    : "bg-primary text-primary-foreground"
+                )}
+              >
+                <CheckCircle2 className="size-4" />
+                {visited ? "Посещено" : "Отметить"}
+              </button>
+            )}
             <a
-              href={googleDirectionsUrl(fresh.lat, fresh.lng)}
+              href={directionsUrl(fresh, china)}
               target="_blank"
               rel="noopener noreferrer"
               className="rounded-xl py-3 text-sm font-medium bg-primary text-primary-foreground flex items-center justify-center gap-2 min-h-11"
@@ -347,15 +370,17 @@ function PlaceDialogBody({
               <MapPin className="size-4" />
               На карте
             </button>
-            <button
-              type="button"
-              onClick={() => inputRef.current?.click()}
-              disabled={uploading}
-              className="rounded-xl py-3 text-sm font-medium bg-secondary text-secondary-foreground flex items-center justify-center gap-2 hover:bg-accent min-h-11 disabled:opacity-50"
-            >
-              {uploading ? <Loader2 className="size-4 animate-spin" /> : <Camera className="size-4" />}
-              Фото
-            </button>
+            {canEdit && (
+              <button
+                type="button"
+                onClick={() => inputRef.current?.click()}
+                disabled={uploading}
+                className="rounded-xl py-3 text-sm font-medium bg-secondary text-secondary-foreground flex items-center justify-center gap-2 hover:bg-accent min-h-11 disabled:opacity-50"
+              >
+                {uploading ? <Loader2 className="size-4 animate-spin" /> : <Camera className="size-4" />}
+                Фото
+              </button>
+            )}
             <input
               ref={inputRef}
               type="file"
@@ -400,6 +425,7 @@ function PlaceDialogBody({
           )}
 
           {/* Редактирование деталей — раскрывающийся блок */}
+          {canEdit && (
           <div className="rounded-xl border border-border overflow-hidden">
             <button
               type="button"
@@ -469,9 +495,10 @@ function PlaceDialogBody({
               )}
             </AnimatePresence>
           </div>
+          )}
 
           {/* Перенести на другой день */}
-          {days && days.length > 1 && (
+          {canEdit && days && days.length > 1 && (
             <div>
               <div className="text-xs text-muted-foreground mb-1.5">Перенести на день</div>
               <div className="chip-rail no-scrollbar gap-1.5 pb-1">
@@ -497,6 +524,12 @@ function PlaceDialogBody({
           )}
 
           {/* Оценка */}
+          {!canEdit && (fresh.rating ?? 0) > 0 && (
+            <div className="flex items-center gap-1.5 text-sm" aria-label={`Оценка ${fresh.rating} из 5`}>
+              <Star className="size-4 fill-amber-400 text-amber-400" aria-hidden="true" /> {fresh.rating} из 5
+            </div>
+          )}
+          {canEdit && (
           <div>
             <div className="text-xs text-muted-foreground mb-1.5">Оценка</div>
             <div className="flex gap-1">
@@ -528,8 +561,11 @@ function PlaceDialogBody({
               ))}
             </div>
           </div>
+          )}
 
           {/* Заметки */}
+          {!canEdit && fresh.notes && <p className="text-sm whitespace-pre-line">{fresh.notes}</p>}
+          {canEdit && (
           <div>
             <label htmlFor="place-notes" className="text-xs text-muted-foreground mb-1.5 flex items-center gap-1">
               <NotebookPen className="size-3" /> Заметки
@@ -554,6 +590,7 @@ function PlaceDialogBody({
               </button>
             )}
           </div>
+          )}
 
           {/* Фото */}
           <div>
@@ -582,7 +619,7 @@ function PlaceDialogBody({
             )}
           </div>
 
-          <DeletePlaceButton placeId={fresh.id} placeName={fresh.name} onDeleted={onClose} />
+          {canEdit && <DeletePlaceButton placeId={fresh.id} placeName={fresh.name} onDeleted={onClose} />}
       </div>
     </MobileBottomSheet>
 

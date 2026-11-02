@@ -14,22 +14,26 @@ import { useTripStore, type TripTab } from "@/lib/trip-store";
 import { focusOnMap } from "@/lib/map-bus";
 import { CATEGORY_META, type Place } from "@/lib/types";
 import { timeLabel } from "@/lib/time-of-day";
-import { googleDirectionsUrl } from "@/lib/place-links";
+import { directionsUrl } from "@/lib/place-links";
+import { moneyWhole } from "@/lib/budget/format";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-
-// Бюджет в человекочитаемом виде (1234.5 → «1 234,5»)
-const budgetFmt = new Intl.NumberFormat("ru-RU", { maximumFractionDigits: 2 });
 
 interface PlaceRowProps {
   place: Place;
   accentColor: string;
   /** Символ валюты поездки для отображения бюджета места */
   currency?: string;
+  /** Слот времени уже назван в заголовке секции дня */
+  hideTime?: boolean;
+  /** Зритель видит статус, но не меняет его */
+  canEdit?: boolean;
+  /** Поездка по Китаю: «Как добраться» ведёт в Amap */
+  china?: boolean;
   onOpen: () => void;
 }
 
-export function PlaceRow({ place, accentColor, currency, onOpen }: PlaceRowProps) {
+export function PlaceRow({ place, accentColor, currency, hideTime = false, canEdit = true, china = false, onOpen }: PlaceRowProps) {
   const update = useUpdatePlace();
   const { setActiveTab } = useTripStore();
   const meta = CATEGORY_META[place.category];
@@ -74,17 +78,24 @@ export function PlaceRow({ place, accentColor, currency, onOpen }: PlaceRowProps
         className="absolute left-0 top-0 bottom-0 w-1"
         style={{ background: visited ? "#22c55e" : isCurrent ? "#f97316" : meta?.color ?? accentColor }}
       />
-      <button
-        onClick={toggle}
-        className="shrink-0 ml-1 size-11 grid place-items-center rounded-xl transition-transform active:scale-90"
-        aria-label={visited ? "Отметить как запланированное" : "Отметить посещённым"}
-      >
-        {visited ? (
-          <CheckCircle2 className="size-6 text-green-500" />
-        ) : (
-          <Circle className={cn("size-6 transition-colors", isCurrent ? "text-orange-500" : "text-muted-foreground group-hover:text-primary")} />
-        )}
-      </button>
+      {canEdit ? (
+        <button
+          type="button"
+          onClick={toggle}
+          className="shrink-0 ml-0.5 size-11 grid place-items-center rounded-xl transition-transform active:scale-90"
+          aria-label={visited ? "Отметить как запланированное" : "Отметить посещённым"}
+        >
+          {visited ? (
+            <CheckCircle2 className="size-6 text-green-500" />
+          ) : (
+            <Circle className={cn("size-6 transition-colors", isCurrent ? "text-orange-500" : "text-muted-foreground group-hover:text-primary")} />
+          )}
+        </button>
+      ) : (
+        <span className="shrink-0 ml-1 size-8 grid place-items-center" aria-label={visited ? "Посещено" : "Запланировано"}>
+          {visited ? <CheckCircle2 className="size-5 text-green-500" /> : <Circle className="size-5 text-muted-foreground" />}
+        </span>
+      )}
       <div
         className="size-9 rounded-lg grid place-items-center text-lg shrink-0 transition-transform group-hover:scale-110"
         style={{ background: `${meta?.color}22` }}
@@ -92,11 +103,13 @@ export function PlaceRow({ place, accentColor, currency, onOpen }: PlaceRowProps
         {meta?.emoji}
       </div>
       <div className="min-w-0 flex-1">
-        <div className={cn("text-sm font-medium leading-tight break-words", visited && "line-through opacity-60")}>{place.name}</div>
+        {/* Без зачёркивания: в завершённой поездке зачёркнут почти весь маршрут, а его хочется читать.
+            Посещённое и так видно по зелёной отметке */}
+        <div className="text-sm font-medium leading-tight break-words">{place.name}</div>
         {/* Адрес */}
         {place.address && (
-          <div className="flex items-start gap-1 text-[10px] text-muted-foreground mt-0.5">
-            <MapPin className="size-2.5 mt-0.5 shrink-0" />
+          <div className="flex items-start gap-1 text-[11px] text-muted-foreground mt-0.5">
+            <MapPin className="size-3 mt-px shrink-0" aria-hidden="true" />
             <span className="line-clamp-1">{place.address}</span>
           </div>
         )}
@@ -110,34 +123,34 @@ export function PlaceRow({ place, accentColor, currency, onOpen }: PlaceRowProps
               Сейчас
             </span>
           )}
-          {place.timeOfDay && (
-            <span className="flex items-center gap-0.5"><Clock className="size-2.5" /> {timeLabel(place.timeOfDay)}</span>
+          {place.timeOfDay && !hideTime && (
+            <span className="flex items-center gap-0.5"><Clock className="size-3" aria-hidden="true" /> {timeLabel(place.timeOfDay)}</span>
           )}
           {place.budget ? (
-            <span className="tabular-nums">{currency ?? "$"}{budgetFmt.format(place.budget)}</span>
+            <span className="tabular-nums">{moneyWhole(currency ?? "$", place.budget)}</span>
           ) : null}
           {place.rating ? <span className="flex items-center gap-0.5 text-amber-500"><Star className="size-2.5 fill-current" /> {place.rating}</span> : null}
         </div>
         {/* Действия иконками, не текстом: на 390px текстовым ссылкам не хватает
-            колонки (аудит 2026-10-03) и они переносились в столбик; size-8 —
-            как «Изменить/Удалить день» в DayCard */}
-        <div className="flex items-center gap-1 mt-1 -ml-1">
+            колонки (аудит 2026-10-03) и они переносились в столбик */}
+        <div className="flex items-center gap-1 mt-0.5 -ml-2.5 -mb-1.5">
           <a
-            href={googleDirectionsUrl(place.lat, place.lng)}
+            href={directionsUrl(place, china)}
             target="_blank"
             rel="noopener noreferrer"
             onClick={(e) => e.stopPropagation()}
             title="Как добраться"
             aria-label="Как добраться"
-            className="size-8 rounded-lg grid place-items-center text-primary hover:bg-accent transition-colors"
+            className="size-10 rounded-lg grid place-items-center text-primary hover:bg-accent transition-colors"
           >
             <Navigation className="size-4" />
           </a>
           <button
+            type="button"
             onClick={showOnMap}
             title="Показать на карте поездки"
             aria-label="Показать на карте поездки"
-            className="size-8 rounded-lg grid place-items-center text-muted-foreground hover:text-primary hover:bg-accent transition-all active:scale-90"
+            className="size-10 rounded-lg grid place-items-center text-muted-foreground hover:text-primary hover:bg-accent transition-[color,background-color,transform] active:scale-90"
           >
             <MapPin className="size-4" />
           </button>

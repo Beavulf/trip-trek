@@ -2,7 +2,18 @@
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import type { TripSummary } from "@/lib/types";
+import { calculateCurrentDayNumber } from "@/lib/trip-days";
 import { getTripId, useCurrentTripId } from "./trip-id";
+
+/**
+ * Номер дня считаем на устройстве: на сервере часы в UTC, и в Китае до 08:00 приходил вчерашний день.
+ * Запрос повторяется при возврате в приложение, поэтому к утру номер обновится сам.
+ */
+function withDeviceDay(trip: TripSummary): TripSummary {
+  const currentDayNumber = calculateCurrentDayNumber(trip.settings.startDate, trip.settings.totalDays);
+  const dayProgress = trip.settings.totalDays > 0 ? Math.min(100, Math.round((currentDayNumber / trip.settings.totalDays) * 100)) : 0;
+  return { ...trip, currentDayNumber, dayProgress };
+}
 
 // Сводка поездки
 export function useTrip() {
@@ -13,7 +24,7 @@ export function useTrip() {
       if (!tripId) throw new Error("no trip selected");
       const r = await fetch(`/api/trip?tripId=${tripId}`);
       if (!r.ok) throw new Error("fetch trip");
-      return r.json();
+      return withDeviceDay(await r.json());
     },
     enabled: !!tripId,
     retry: 1,

@@ -37,7 +37,7 @@ export async function GET(req: NextRequest) {
 
   const results: Array<{
     id: string;
-    type: "city" | "place" | "phrase" | "food" | "expense" | "journal";
+    type: "city" | "place" | "phrase" | "food" | "expense" | "journal" | "lodging";
     title: string;
     subtitle: string;
     meta?: string;
@@ -46,13 +46,14 @@ export async function GET(req: NextRequest) {
     cityKey?: string | null;
   }> = [];
 
-  const [days, places, phrases, foods, expenses, journals] = await Promise.all([
+  const [days, places, phrases, foods, expenses, journals, lodgings] = await Promise.all([
     db.day.findMany({ where: { tripId }, orderBy: { dayNumber: "asc" } }),
     db.place.findMany({ where: { tripId } }),
     db.phrase.findMany({ where: { tripId } }),
     db.foodItem.findMany({ where: { tripId } }),
     db.expense.findMany({ where: { tripId } }),
     db.journalEntry.findMany({ where: { tripId } }),
+    db.lodging.findMany({ where: { tripId }, orderBy: { checkIn: "asc" } }),
   ]);
 
   const dayById = new Map(days.map((d) => [d.id, d]));
@@ -123,6 +124,18 @@ export async function GET(req: NextRequest) {
       subtitle: `${sym}${e.amount} · ${e.category}`,
       meta: "Трата",
       icon: "💸",
+    });
+  }
+
+  for (const l of lodgings) {
+    if (!matches([l.name, l.nameLocal, l.city, l.address, l.bookingRef, l.notes])) continue;
+    results.push({
+      id: `lodging-${l.id}`,
+      type: "lodging",
+      title: l.name,
+      subtitle: l.address?.slice(0, 80) || l.city || "",
+      meta: "Жильё",
+      icon: "🏨",
     });
   }
 

@@ -2,11 +2,12 @@
 
 // Карточка проживания на «нити» вкладки: статус и ночи сверху, название крупно,
 // подробности (время, бронь, телефон, цена, заметки) и действия — по раскрытию.
-// Текущее проживание раскрыто само, прошедшие — приглушены и свёрнуты.
+// Все карточки свёрнуты: действия текущего проживания и так стоят в герое. Прошедшие приглушены.
 
 import { motion, useReducedMotion } from "framer-motion";
 import { AlertTriangle, Check, ChevronDown, ExternalLink, Pencil, StickyNote, Ticket, Wallet, Clock } from "lucide-react";
-import { cn, fmtMoney, plural } from "@/lib/utils";
+import { cn, plural } from "@/lib/utils";
+import { moneyExact, moneyWhole } from "@/lib/budget/format";
 import {
   formatStayRange,
   nightNumber,
@@ -35,6 +36,12 @@ interface LodgingCardProps {
   currencySymbol: string;
   /** Даты пересекаются с другим проживанием */
   overlapping: boolean;
+  /** Те же кнопки уже стоят в герое */
+  hideActions?: boolean;
+  /** Проживание закончилось: приглушаем */
+  pastTone?: boolean;
+  /** Для выбора карты в кнопке «Маршрут» */
+  tripTitle?: string;
 }
 
 export function LodgingCard({
@@ -48,6 +55,9 @@ export function LodgingCard({
   onTaxi,
   currencySymbol,
   overlapping,
+  hideActions = false,
+  pastTone = false,
+  tripTitle,
 }: LodgingCardProps) {
   const reduceMotion = useReducedMotion();
   const phase = lodgingPhase(l, todayKey);
@@ -91,9 +101,8 @@ export function LodgingCard({
       icon: <Wallet className="size-3.5" />,
       node: (
         <>
-          {currencySymbol}
-          {fmtMoney(l.price)}
-          {nights > 0 && <span className="text-muted-foreground"> · {currencySymbol}{fmtMoney(l.price / nights)} / ночь</span>}
+          {moneyWhole(currencySymbol, l.price)}
+          {nights > 1 && <span className="text-muted-foreground"> · {moneyExact(currencySymbol, l.price / nights)} за ночь</span>}
         </>
       ),
     });
@@ -124,7 +133,7 @@ export function LodgingCard({
         className={cn(
           "rounded-2xl border bg-card overflow-hidden transition-colors",
           phase === "current" ? "border-emerald-500/40 shadow-lg shadow-emerald-500/5" : "border-border",
-          phase === "past" && !expanded && "opacity-80"
+          pastTone && !expanded && "opacity-80"
         )}
       >
         <button
@@ -170,7 +179,7 @@ export function LodgingCard({
                 ))}
               </ul>
             )}
-            <StayActions lodging={l} tone="card" onTaxi={onTaxi} />
+            {!hideActions && <StayActions lodging={l} tone="card" tripTitle={tripTitle} onTaxi={onTaxi} />}
             {canEdit && (
               <button
                 type="button"

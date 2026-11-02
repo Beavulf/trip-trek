@@ -20,10 +20,12 @@ interface TaxiShowCardProps {
   subtitle?: string | null;
   address: string | null;
   city: string | null;
+  /** Открыть правку жилья; без этого (зритель) подсказка остаётся без кнопки */
+  onAddAddress?: () => void;
   onClose: () => void;
 }
 
-export function TaxiShowCard({ name, subtitle, address, city, onClose }: TaxiShowCardProps) {
+export function TaxiShowCard({ name, subtitle, address, city, onAddAddress, onClose }: TaxiShowCardProps) {
   useBodyScrollLock(true);
   useBackDismiss(true, onClose);
 
@@ -44,6 +46,9 @@ export function TaxiShowCard({ name, subtitle, address, city, onClose }: TaxiSho
   };
 
   if (typeof document === "undefined") return null;
+
+  // Только наше название: водитель в другой стране этого не прочтёт, и экран это честно говорит
+  const nothingLocal = !subtitle && !address;
 
   return createPortal(
     <motion.div
@@ -79,6 +84,16 @@ export function TaxiShowCard({ name, subtitle, address, city, onClose }: TaxiSho
             <div className="mt-6 h-px w-16 bg-white/20" />
             <p className="mt-5 text-2xl leading-snug text-white/90 break-words">{address}</p>
           </>
+        )}
+        {nothingLocal && (
+          <div className="mt-8 max-w-xs rounded-2xl bg-white/10 p-4 text-sm text-white/85 text-pretty">
+            Водитель может не прочитать это название. Добавьте адрес или название на местном языке.
+            {onAddAddress && (
+              <button type="button" onClick={onAddAddress} className="mt-3 block w-full min-h-11 rounded-xl bg-white text-sm font-semibold text-indigo-950">
+                Добавить адрес
+              </button>
+            )}
+          </div>
         )}
       </div>
 

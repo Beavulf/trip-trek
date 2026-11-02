@@ -3,9 +3,9 @@
 import { useMemo, useState } from "react";
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, BarChart, Bar, XAxis, YAxis, CartesianGrid } from "recharts";
 import { Loader2, Pencil } from "lucide-react";
-import { useBudgetPlan, useRouteDays, useTrip } from "@/hooks/use-trip";
+import { useBudgetPlan, useLodgings, useRouteDays, useTrip } from "@/hooks/use-trip";
 import { EXPENSE_CATEGORIES, type Expense, type Participant } from "@/lib/types";
-import { calculatePersonalSpend, calculateRoutePlanByExpenseCategory } from "@/lib/budget";
+import { calculateLodgingPlan, calculatePersonalSpend, calculateRoutePlanByExpenseCategory } from "@/lib/budget";
 import { budgetMeter, buildCategoryRows, type CategoryPlanRow } from "@/lib/budget/overview";
 import { moneyWhole } from "@/lib/budget/format";
 import { currencySymbol } from "@/lib/currencies";
@@ -48,6 +48,7 @@ export function BudgetPlanTab({ expenses, people, currentUserId, canEdit }: Budg
   const { data: trip } = useTrip();
   const { data: plans, isLoading: plansLoading } = useBudgetPlan();
   const { data: days, isLoading: routeLoading } = useRouteDays();
+  const { data: lodgings } = useLodgings();
   // Скоуп: "all" — вся группа, "me" — текущий юзер, иначе userId участника
   const [scope, setScope] = useState("all");
   const [editOpen, setEditOpen] = useState(false);
@@ -55,6 +56,7 @@ export function BudgetPlanTab({ expenses, people, currentUserId, canEdit }: Budg
 
   const real = useMemo(() => expenses.filter((e) => e.category !== "settlement"), [expenses]);
   const routePlan = useMemo(() => calculateRoutePlanByExpenseCategory(days ?? []), [days]);
+  const lodgingPlan = useMemo(() => calculateLodgingPlan(lodgings ?? []), [lodgings]);
 
   // Мёртвый id (участник удалён, поездка сменилась) молча откатывается на «Все»
   const scopeUserId = useMemo(() => {
@@ -94,7 +96,7 @@ export function BudgetPlanTab({ expenses, people, currentUserId, canEdit }: Budg
 
   const manualBy = useMemo(() => Object.fromEntries((plans ?? []).map((p) => [p.category, p.amount])), [plans]);
   const isPersonal = !!scopeUserId;
-  const rows = buildCategoryRows(CATEGORY_KEYS, spentBy, isPersonal ? {} : manualBy, isPersonal ? {} : routePlan);
+  const rows = buildCategoryRows(CATEGORY_KEYS, spentBy, isPersonal ? {} : manualBy, isPersonal ? {} : routePlan, isPersonal ? {} : lodgingPlan);
   const slices = rows.filter((r) => r.spent > 0);
   const totalSpent = personal ? personal.total : real.reduce((s, e) => s + e.amount, 0);
   const totalPlan = rows.reduce((s, r) => s + r.plan, 0);
@@ -183,6 +185,7 @@ export function BudgetPlanTab({ expenses, people, currentUserId, canEdit }: Budg
           onOpenChange={setEditOpen}
           manualBy={manualBy}
           routeBy={routePlan}
+          lodgingBy={lodgingPlan}
           tripBudget={tripBudget}
           sym={sym}
         />

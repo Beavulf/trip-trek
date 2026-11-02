@@ -2,7 +2,8 @@
 
 // CSS Leaflet едет вместе с этим чанком (а не глобальным render-blocking <link> в layout)
 import "leaflet/dist/leaflet.css";
-import { useRoute, useCurrentTripId } from "@/hooks/use-trip";
+import { useLodgings, useRoute, useTrip, useCurrentTripId } from "@/hooks/use-trip";
+import { useAuth } from "@/hooks/use-auth";
 import { usePhotosGeo } from "@/hooks/trip/use-photos";
 import { useTripStore } from "@/lib/trip-store";
 import { CATEGORY_META, type Place, type Day, type Photo } from "@/lib/types";
@@ -37,6 +38,7 @@ import { FiltersSheet } from "./map/filters-sheet";
 import { useMapFilters } from "@/hooks/trip/use-map-filters";
 import { LayersSheet, type MapLayerKey } from "./map/layers-sheet";
 import { MAP_CREDIT } from "@/lib/map-layers";
+import { isChinaTrip } from "@/lib/place-links";
 import { isChillCategory } from "@/lib/chill-categories";
 import { resolveCityCoords, decodeCustomKey } from "@/lib/city-coords";
 import { peekMapFocus, ackMapFocus, subscribeMapFocus } from "@/lib/map-bus";
@@ -61,6 +63,11 @@ export default function TripMap({ active = true }: { active?: boolean }) {
   } = useMapFilters();
   const mapCityFilter = filters.cityFilter;
   const { setTripSwitcherOpen, setActiveTab } = useTripStore();
+  const { data: tripInfo } = useTrip();
+  const { data: session } = useAuth();
+  const { data: lodgings } = useLodgings();
+  // Зритель смотрит карту, а добавлять места может только редактор
+  const canEdit = tripInfo?.participants.find((p) => p.id === (session?.user as { id?: string } | undefined)?.id)?.role !== "viewer";
 
   const [addMode, setAddMode] = useState(false);
   const [addData, setAddData] = useState<AddPlaceData | null>(null);
@@ -136,11 +143,15 @@ export default function TripMap({ active = true }: { active?: boolean }) {
     [allPlaces]
   );
   const photoCount = geoPhotos?.length ?? 0;
+  const lodgingPins = useMemo(() => {
+    const linked = new Set(allPlaces.map(({ place }) => place.lodgingId).filter(Boolean));
+    return (lodgings ?? []).filter((l) => l.lat != null && l.lng != null && !linked.has(l.id));
+  }, [lodgings, allPlaces]);
 
-  const isChinaTrip = /china|китай|guangzhou|shenzhen|hongkong|macau|гуанчжоу|шэньчжэнь|гонконг|макао/i.test(
+  const chinaTrip = isChinaTrip(
     `${route?.meta.destination ?? ""} ${route?.meta.title ?? ""} ${(days || []).map((d) => d.city).join(" ")}`
   );
-  const mapNote = isChinaTrip
+  const mapNote = chinaTrip
     ? "В Китае OpenStreetMap может грузиться медленно без VPN. Для навигации на месте удобнее приложение Amap (高德地图) или Baidu Maps."
     : "Метки хранятся в поездке и видны всем участникам.";
 
@@ -420,6 +431,18 @@ export default function TripMap({ active = true }: { active?: boolean }) {
             />
           ))}
 
+          {/* Жильё с точкой на карте. Перенесённые из маршрута отели уже стоят метками мест */}
+          {!filters.onlyPhotos &&
+            lodgingPins.map((l) => (
+              <Marker
+                key={`lodging-${l.id}`}
+                position={[l.lat!, l.lng!]}
+                title={l.name}
+                icon={makeIcon("hotel", "planned", "🛏️")}
+                eventHandlers={{ click: () => setActiveTab("lodging") }}
+              />
+            ))}
+
           {/* Геолокация */}
           {myLoc && (
             <>
@@ -497,9 +520,11 @@ export default function TripMap({ active = true }: { active?: boolean }) {
             <MapFab label="Показать весь маршрут" onClick={fitAll}>
               <Scan className="size-4.5" />
             </MapFab>
-            <MapFab label="Добавить место" onClick={startAddMode} primary>
-              <Plus className="size-5" strokeWidth={2.5} />
-            </MapFab>
+            {canEdit && (
+              <MapFab label="Добавить место" onClick={startAddMode} primary>
+                <Plus className="size-5" strokeWidth={2.5} />
+              </MapFab>
+            )}
           </div>
         )}
 

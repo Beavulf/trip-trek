@@ -5,13 +5,18 @@
 // поля пустые по умолчанию: жильё можно завести за полминуты (название + даты),
 // а адрес на местном языке и телефон дописать позже.
 
-import { useState, type ReactNode } from "react";
-import { BedDouble, Check, Loader2, Trash2 } from "lucide-react";
+import { useMemo, useState, type ReactNode } from "react";
+import { BedDouble, Check, Loader2, MapPin, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { cn, plural } from "@/lib/utils";
 import { MobileBottomSheet } from "@/components/trip/mobile-bottom-sheet";
-import { useCreateLodging, useDeleteLodging, useUpdateLodging, type Lodging, type LodgingInput } from "@/hooks/use-trip";
-import { addDaysKey, daysBetween, MAX_LODGING_PRICE, toDateKey } from "@/lib/lodging";
+import { useCreateLodging, useCurrentTripId, useDeleteLodging, useUpdateLodging, type Lodging, type LodgingInput } from "@/hooks/use-trip";
+import { useAuth } from "@/hooks/use-auth";
+import { useFormDraft } from "@/hooks/use-form-draft";
+import { clearDraft, draftKey, readDraft } from "@/lib/form-draft";
+import { addDaysKey, daysBetween, MAX_LODGING_PRICE, normalizeBookingUrl, parseLodgingPrice, toDateKey } from "@/lib/lodging";
+import { DraftNotice } from "../quick-add/DraftNotice";
+import { MapPicker } from "../map-picker";
 
 export interface LodgingSheetProps {
   /** Редактируем это жильё; null — создаём новое */
@@ -19,8 +24,31 @@ export interface LodgingSheetProps {
   /** Подстановка для нового: даты (из «дыры» или после последнего выезда), город */
   defaults?: { checkIn: string; checkOut: string; city?: string };
   currencySymbol: string;
+  /** С чего начать выбор точки: у нового жилья своих координат ещё нет */
+  mapCenter?: { lat: number; lng: number };
   onClose: () => void;
 }
+
+/** Что переживает закрытие шторки: длинная форма не должна пропасть от случайного тапа по фону */
+interface LodgingDraft {
+  name: string;
+  nameLocal: string;
+  city: string;
+  address: string;
+  checkIn: string;
+  checkOut: string;
+  phone: string;
+  bookingRef: string;
+  bookingUrl: string;
+  price: string;
+  notes: string;
+}
+
+// Даты сами по себе не набор: они подставляются формой
+const isDraftEmpty = (d: LodgingDraft) =>
+  ![d.name, d.nameLocal, d.city, d.address, d.phone, d.bookingRef, d.bookingUrl, d.price, d.notes].some((v) => v.trim());
+
+const alwaysEmpty = () => true;
 
 const inputCls = "mt-1 w-full rounded-xl border border-input bg-card px-3 py-2.5 text-base";
 
@@ -45,34 +73,64 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
   );
 }
 
-export function LodgingSheet({ lodging, defaults, currencySymbol, onClose }: LodgingSheetProps) {
+export function LodgingSheet({ lodging, defaults, currencySymbol, mapCenter, onClose }: LodgingSheetProps) {
   const create = useCreateLodging();
   const update = useUpdateLodging();
   const remove = useDeleteLodging();
+  const tripId = useCurrentTripId();
+  const { data: session } = useAuth();
+  const userId = (session?.user as { id?: string } | undefined)?.id ?? "";
 
-  const [name, setName] = useState(lodging?.name ?? "");
-  const [nameLocal, setNameLocal] = useState(lodging?.nameLocal ?? "");
-  const [city, setCity] = useState(lodging?.city ?? defaults?.city ?? "");
-  const [address, setAddress] = useState(lodging?.address ?? "");
-  const [checkIn, setCheckIn] = useState(lodging ? toDateKey(lodging.checkIn) : defaults?.checkIn ?? "");
+  // Черновик только у нового жилья: при правке источник правды — сама запись
+  const storageKey = draftKey("lodging", tripId, userId);
+  const [draft] = useState(() => (lodging ? null : readDraft<LodgingDraft>(storageKey)));
+  const [restored, setRestored] = useState(() => !!draft && !isDraftEmpty(draft));
+
+  const [name, setName] = useState(lodging?.name ?? draft?.name ?? "");
+  const [nameLocal, setNameLocal] = useState(lodging?.nameLocal ?? draft?.nameLocal ?? "");
+  const [city, setCity] = useState(lodging?.city ?? draft?.city ?? defaults?.city ?? "");
+  const [address, setAddress] = useState(lodging?.address ?? draft?.address ?? "");
+  const [checkIn, setCheckIn] = useState(lodging ? toDateKey(lodging.checkIn) : draft?.checkIn ?? defaults?.checkIn ?? "");
   const [checkOut, setCheckOut] = useState(
-    lodging ? toDateKey(lodging.checkOut) : defaults?.checkOut ?? (defaults?.checkIn ? addDaysKey(defaults.checkIn, 1) : "")
+    lodging ? toDateKey(lodging.checkOut) : draft?.checkOut ?? defaults?.checkOut ?? (defaults?.checkIn ? addDaysKey(defaults.checkIn, 1) : "")
   );
   const [checkInTime, setCheckInTime] = useState(lodging?.checkInTime ?? "");
   const [checkOutTime, setCheckOutTime] = useState(lodging?.checkOutTime ?? "");
-  const [bookingRef, setBookingRef] = useState(lodging?.bookingRef ?? "");
-  const [bookingUrl, setBookingUrl] = useState(lodging?.bookingUrl ?? "");
-  const [phone, setPhone] = useState(lodging?.phone ?? "");
-  const [price, setPrice] = useState(lodging?.price != null ? String(lodging.price) : "");
-  const [notes, setNotes] = useState(lodging?.notes ?? "");
+  const [bookingRef, setBookingRef] = useState(lodging?.bookingRef ?? draft?.bookingRef ?? "");
+  const [bookingUrl, setBookingUrl] = useState(lodging?.bookingUrl ?? draft?.bookingUrl ?? "");
+  const [phone, setPhone] = useState(lodging?.phone ?? draft?.phone ?? "");
+  const [price, setPrice] = useState(lodging?.price != null ? String(lodging.price) : draft?.price ?? "");
+  const [notes, setNotes] = useState(lodging?.notes ?? draft?.notes ?? "");
+  const [point, setPoint] = useState<{ lat: number; lng: number } | null>(
+    lodging?.lat != null && lodging.lng != null ? { lat: lodging.lat, lng: lodging.lng } : null
+  );
+  const [mapOpen, setMapOpen] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+
+  const draftValue = useMemo<LodgingDraft>(
+    () => ({ name, nameLocal, city, address, checkIn, checkOut, phone, bookingRef, bookingUrl, price, notes }),
+    [name, nameLocal, city, address, checkIn, checkOut, phone, bookingRef, bookingUrl, price, notes]
+  );
+  // Пустой ключ у правки: её черновиком никто не пользуется
+  const { discard } = useFormDraft(lodging ? "" : storageKey, draftValue, lodging ? alwaysEmpty : isDraftEmpty);
 
   const nights = checkIn && checkOut ? daysBetween(checkIn, checkOut) : null;
   const datesOk = nights !== null && nights >= 0;
-  const priceNum = price.trim() === "" ? null : Number(price.replace(",", "."));
+  const priceNum = parseLodgingPrice(price);
   const priceOk = priceNum === null || (Number.isFinite(priceNum) && priceNum >= 0 && priceNum <= MAX_LODGING_PRICE);
-  const urlOk = !bookingUrl.trim() || /^https?:\/\//i.test(bookingUrl.trim());
-  const canSave = name.trim() !== "" && datesOk && priceOk && urlOk;
+  const cleanUrl = normalizeBookingUrl(bookingUrl);
+  const urlOk = !cleanUrl || /^https?:\/\//i.test(cleanUrl);
+  // Серая кнопка без объяснения выглядела поломкой: первая причина пишется под ней
+  const blocker = !name.trim()
+    ? "Укажите название"
+    : !datesOk
+      ? "Проверьте даты заезда и выезда"
+      : !priceOk
+        ? "Стоимость: только число, например 1200 или 1200,50"
+        : !urlOk
+          ? "Ссылка на бронь должна начинаться с https://"
+          : null;
+  const canSave = blocker === null;
   const busy = create.isPending || update.isPending || remove.isPending;
 
   const onCheckInChange = (v: string) => {
@@ -91,10 +149,12 @@ export function LodgingSheet({ lodging, defaults, currencySymbol, onClose }: Lod
     checkInTime: checkInTime || null,
     checkOutTime: checkOutTime || null,
     bookingRef: bookingRef.trim() || null,
-    bookingUrl: bookingUrl.trim() || null,
+    bookingUrl: cleanUrl || null,
     phone: phone.trim() || null,
     price: priceNum,
     notes: notes.trim() || null,
+    lat: point?.lat ?? null,
+    lng: point?.lng ?? null,
   });
 
   const save = async () => {
@@ -102,6 +162,7 @@ export function LodgingSheet({ lodging, defaults, currencySymbol, onClose }: Lod
     try {
       if (lodging) await update.mutateAsync({ id: lodging.id, ...payload() });
       else await create.mutateAsync(payload());
+      discard();
       toast.success(lodging ? "Жильё обновлено" : "Жильё добавлено 🏨");
       onClose();
     } catch (e) {
@@ -128,6 +189,25 @@ export function LodgingSheet({ lodging, defaults, currencySymbol, onClose }: Lod
       titleIcon={<BedDouble className="size-5 text-primary" />}
     >
       <div className="space-y-5">
+        {restored && (
+          <DraftNotice
+            onClear={() => {
+              clearDraft(storageKey);
+              setRestored(false);
+              setName("");
+              setNameLocal("");
+              setCity(defaults?.city ?? "");
+              setAddress("");
+              setCheckIn(defaults?.checkIn ?? "");
+              setCheckOut(defaults?.checkOut ?? "");
+              setPhone("");
+              setBookingRef("");
+              setBookingUrl("");
+              setPrice("");
+              setNotes("");
+            }}
+          />
+        )}
         <Section title="Где">
           <Field label="Название *" htmlFor="lg-name">
             <input id="lg-name" value={name} onChange={(e) => setName(e.target.value)} maxLength={200} placeholder="Как называется жильё" className={inputCls} />
@@ -150,6 +230,16 @@ export function LodgingSheet({ lodging, defaults, currencySymbol, onClose }: Lod
           <Field label="Адрес" htmlFor="lg-address" hint="Лучше на местном языке — его прочтёт водитель">
             <textarea id="lg-address" value={address} onChange={(e) => setAddress(e.target.value)} maxLength={400} rows={2} placeholder="Улица, дом, город — как в брони" className={cn(inputCls, "resize-none")} />
           </Field>
+          <div>
+            <button
+              type="button"
+              onClick={() => setMapOpen(true)}
+              className="w-full min-h-11 rounded-xl border border-input bg-card text-sm inline-flex items-center justify-center gap-1.5 hover:bg-muted transition-colors"
+            >
+              <MapPin className="size-4" aria-hidden="true" /> {point ? "Точка на карте выбрана, изменить" : "Точка на карте"}
+            </button>
+            <p className="mt-1 text-[11px] text-muted-foreground">С точкой жильё появится на карте поездки, а маршрут до него будет точным</p>
+          </div>
         </Section>
 
         <Section title="Когда">
@@ -204,6 +294,7 @@ export function LodgingSheet({ lodging, defaults, currencySymbol, onClose }: Lod
           {create.isPending || update.isPending ? <Loader2 className="size-4 animate-spin" /> : <Check className="size-4" />}
           {lodging ? "Сохранить" : "Добавить жильё"}
         </button>
+        {blocker && <p className="-mt-3 text-center text-xs text-muted-foreground">{blocker}</p>}
 
         {lodging &&
           (confirmDelete ? (
@@ -226,6 +317,18 @@ export function LodgingSheet({ lodging, defaults, currencySymbol, onClose }: Lod
             </button>
           ))}
       </div>
+
+      <MapPicker
+        open={mapOpen}
+        onOpenChange={setMapOpen}
+        initialLat={point?.lat ?? mapCenter?.lat ?? 0}
+        initialLng={point?.lng ?? mapCenter?.lng ?? 0}
+        onPick={(r) => {
+          setPoint({ lat: r.lat, lng: r.lng });
+          // Адрес брони точнее геокодера: подставляем, только если поле пустое
+          setAddress((a) => a || r.address);
+        }}
+      />
     </MobileBottomSheet>
   );
 }

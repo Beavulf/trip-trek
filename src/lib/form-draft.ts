@@ -22,7 +22,7 @@ function defaultStorage(): DraftStorage | null {
 }
 
 /** Черновик привязан к поездке и юзеру: на общем телефоне чужие наброски не всплывают. */
-export function draftKey(kind: "expense" | "journal", tripId: string, userId: string): string {
+export function draftKey(kind: "expense" | "journal" | "lodging", tripId: string, userId: string): string {
   return `${PREFIX}${kind}:${tripId}:${userId}`;
 }
 

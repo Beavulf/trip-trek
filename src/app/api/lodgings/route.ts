@@ -2,13 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { publish } from "@/lib/ws-bus";
 import { requireTripMember, requireTripEditor } from "@/lib/api-auth";
-import { pickLodgingInput } from "@/lib/lodging";
+import { MAX_LODGINGS_PER_TRIP, pickLodgingInput } from "@/lib/lodging";
 
 // Проживание поездки (модель Lodging): заезд/выезд, бронь, телефон, цена.
 // Поля и капы — через общий нормализатор lib/lodging (как place-fields для Place).
-
-// Потолок записей на поездку: реальных проживаний единицы, лимит страхует от мусора
-const MAX_PER_TRIP = 200;
 
 // GET /api/lodgings?tripId=... — все проживания поездки по порядку заезда
 export async function GET(req: NextRequest) {
@@ -18,7 +15,7 @@ export async function GET(req: NextRequest) {
   if (response) return response;
 
   const items = await db.lodging.findMany({
-    take: MAX_PER_TRIP,
+    take: MAX_LODGINGS_PER_TRIP,
     where: { tripId },
     orderBy: [{ checkIn: "asc" }, { checkOut: "asc" }],
   });
@@ -37,7 +34,7 @@ export async function POST(req: NextRequest) {
   const { name, checkIn, checkOut, ...rest } = parsed.data;
   if (!name || !checkIn || !checkOut) return NextResponse.json({ error: "invalid body" }, { status: 400 });
 
-  if ((await db.lodging.count({ where: { tripId } })) >= MAX_PER_TRIP) {
+  if ((await db.lodging.count({ where: { tripId } })) >= MAX_LODGINGS_PER_TRIP) {
     return NextResponse.json({ error: "Слишком много проживаний в поездке" }, { status: 400 });
   }
 
@@ -81,5 +78,7 @@ export async function DELETE(req: NextRequest) {
 
   await db.lodging.delete({ where: { id } });
   publish(existing.tripId, "lodging:updated", { lodgingId: id }, user!.id);
+  // Связь с местами снята (ON DELETE SET NULL): их бюджеты снова считаются в плане
+  publish(existing.tripId, "place:updated", {}, user!.id);
   return NextResponse.json({ ok: true });
 }

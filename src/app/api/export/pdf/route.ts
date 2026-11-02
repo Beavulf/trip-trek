@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { requireTripMember } from "@/lib/api-auth";
 import { logger } from "@/lib/logger";
 import { buildRoutePdf } from "@/lib/pdf/route-pdf";
+import { nightLodging, toDateKey } from "@/lib/lodging";
 
 // GET /api/export/pdf?tripId=... — маршрут поездки одним PDF (офлайн-просмотр).
 // В отличие от JSON-бэкапа /api/export доступен всем участникам: это те же данные,
@@ -43,6 +44,11 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "Маршрут пуст — добавь дни и места" }, { status: 400 });
   }
 
+  // В PDF смотрят офлайн в дороге: где ночуем, должно быть рядом с планом дня
+  const lodgings = (
+    await db.lodging.findMany({ where: { tripId }, select: { name: true, address: true, checkIn: true, checkOut: true } })
+  ).map((l) => ({ ...l, checkIn: l.checkIn.toISOString(), checkOut: l.checkOut.toISOString() }));
+
   try {
     const bytes = await buildRoutePdf({
       title: trip.title,
@@ -52,7 +58,7 @@ export async function GET(req: NextRequest) {
       endDate: trip.endDate ? trip.endDate.toISOString() : null,
       generatedAt: new Date(),
       // prisma отдаёт Date — контракту билдера нужны ISO-строки
-      days: days.map((d) => ({ ...d, date: d.date.toISOString().slice(0, 10) })),
+      days: days.map((d) => ({ ...d, date: d.date.toISOString().slice(0, 10), night: nightLodging(lodgings, toDateKey(d.date)) })),
     });
     // filename* (RFC 5987) даёт кириллическое имя, filename — ASCII-fallback.
     // Режем по кодпоинтам: slice(0, 40) по UTF-16-юнитам может разорвать

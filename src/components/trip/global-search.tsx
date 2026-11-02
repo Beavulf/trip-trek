@@ -13,7 +13,7 @@ import { useCurrentTripId } from "@/hooks/use-trip";
 
 interface SearchResult {
   id: string;
-  type: "city" | "place" | "phrase" | "food" | "expense" | "journal";
+  type: "city" | "place" | "phrase" | "food" | "expense" | "journal" | "lodging";
   title: string;
   subtitle: string;
   meta?: string;
@@ -29,6 +29,7 @@ const TYPE_LABELS: Record<string, string> = {
   food: "Блюдо",
   expense: "Трата",
   journal: "Дневник",
+  lodging: "Жильё",
 };
 
 const TYPE_COLORS: Record<string, string> = {
@@ -38,6 +39,7 @@ const TYPE_COLORS: Record<string, string> = {
   food: "#ef4444",
   expense: "#10b981",
   journal: "#8b5cf6",
+  lodging: "#6366f1",
 };
 
 const RECENTS_KEY = "triptrek:search-recents";
@@ -166,6 +168,9 @@ export function GlobalSearch({ open, onOpenChange }: { open: boolean; onOpenChan
           break;
         case "journal":
           setActiveTab("journal");
+          break;
+        case "lodging":
+          setActiveTab("lodging");
           break;
       }
     }

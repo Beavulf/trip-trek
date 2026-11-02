@@ -1,130 +1,88 @@
 "use client";
 
-// Полка жилья над маршрутом: «где ночуем» под рукой, пока смотришь, что делаем.
-// Данные — из вкладки «Жильё» (модель Lodging), а не из мест категории hotel: прежняя
-// полка собиралась из пунктов маршрута и не знала ни дат, ни выезда. «Сегодняшнее»
-// жильё идёт первым; у закончившейся поездки полка свёрнута и не сдвигает маршрут.
-// Нет жилья — полки нет совсем: пустую подсказку на каждом заходе не рисуем.
+// Строка жилья над маршрутом: «где ночуем» под рукой, пока смотришь, что делаем.
+// Одна строка про эту ночь, а не лента всех проживаний: полка из карточек съедала первый экран,
+// и прошедшие отели занимали столько же места, сколько сегодняшний. Всё остальное на вкладке «Жильё».
+// Выбран день в фильтре — строка говорит про него. Жилья в поездке нет — строки нет совсем.
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { AnimatePresence } from "framer-motion";
-import { BedDouble, ChevronDown, ChevronRight, Navigation } from "lucide-react";
+import { AlertTriangle, ChevronRight, Moon } from "lucide-react";
 import { useLodgings, type Lodging } from "@/hooks/use-trip";
 import { useTripStore } from "@/lib/trip-store";
-import { cn, plural } from "@/lib/utils";
-import {
-  currentLodging,
-  formatStayRange,
-  localTodayKey,
-  lodgingTouchesDay,
-  nightsOf,
-  sortLodgings,
-} from "@/lib/lodging";
-import { routeUrl } from "./stay-actions";
+import { plural } from "@/lib/utils";
+import { daysBetween, nextLodging, nightLodging, toDateKey } from "@/lib/lodging";
 import { TaxiShowCard } from "./TaxiShowCard";
 
 interface LodgingStripProps {
-  /** Выбранный в фильтре день маршрута (ключ ГГГГ-ММ-ДД) — показываем жильё этого дня */
+  /** Выбранный в фильтре день маршрута (ключ ГГГГ-ММ-ДД); null — смотрим поездку целиком */
   selectedDayKey: string | null;
-  /** Поездка закончилась: «ночуем сегодня» не говорим, полку сворачиваем */
-  tripOver: boolean;
+  todayKey: string;
+  startKey: string;
+  lastKey: string;
+  canEdit: boolean;
 }
 
-export function LodgingStrip({ selectedDayKey, tripOver }: LodgingStripProps) {
+export function LodgingStrip({ selectedDayKey, todayKey, startKey, lastKey, canEdit }: LodgingStripProps) {
   const { data: lodgings } = useLodgings();
   const { setActiveTab } = useTripStore();
-  const [expanded, setExpanded] = useState(!tripOver);
   const [taxi, setTaxi] = useState<Lodging | null>(null);
 
-  const { visible, tonight } = useMemo(() => {
-    const all = sortLodgings(lodgings ?? []);
-    const now = tripOver ? undefined : currentLodging(all, localTodayKey());
-    const shown = selectedDayKey ? all.filter((l) => lodgingTouchesDay(l, selectedDayKey)) : all;
-    // Жильё на эту ночь — первым: именно его ищут вечером, а не по порядку дат
-    const ordered = now && shown.includes(now) ? [now, ...shown.filter((l) => l !== now)] : shown;
-    return { visible: ordered, tonight: now };
-  }, [lodgings, selectedDayKey, tripOver]);
+  const list = lodgings ?? [];
+  const key = selectedDayKey ?? todayKey;
+  const tripOver = todayKey > lastKey;
+  if (list.length === 0 || (tripOver && !selectedDayKey)) return null;
 
-  if (visible.length === 0) return null;
+  const openTab = () => setActiveTab("lodging");
+  const stay = nightLodging(list, key);
+  const next = !stay && !selectedDayKey && todayKey < startKey ? nextLodging(list, key) : undefined;
+  const focus = stay ?? next;
+
+  if (!focus) {
+    // Ночь последнего дня обычно уже дома, а о прошлом предупреждать поздно
+    const missing = key < lastKey && key >= todayKey && key >= startKey;
+    if (!missing) return null;
+    return (
+      <section aria-label="Жильё" className="flex items-center gap-2 rounded-2xl border border-amber-500/40 bg-amber-500/10 p-2.5 pl-3">
+        <AlertTriangle className="size-4 shrink-0 text-amber-700 dark:text-amber-400" aria-hidden="true" />
+        <p className="min-w-0 flex-1 text-sm font-medium">{key === todayKey ? "На эту ночь жилья нет" : "На эту ночь жилья не указано"}</p>
+        {canEdit && (
+          <button type="button" onClick={openTab} className="min-h-11 shrink-0 rounded-xl border border-amber-500/50 px-3 text-xs font-semibold">
+            Добавить
+          </button>
+        )}
+      </section>
+    );
+  }
+
+  const inDays = next ? daysBetween(todayKey, toDateKey(next.checkIn)) : 0;
+  const label = next
+    ? `Заселение ${inDays === 1 ? "завтра" : `через ${inDays} ${plural(inDays, "день", "дня", "дней")}`}`
+    : key === todayKey
+      ? "Сегодня ночуем здесь"
+      : "Ночуем здесь";
 
   return (
-    <section aria-label="Жильё поездки" className="space-y-2">
-      <div className="flex items-center gap-1">
-        <button
-          type="button"
-          onClick={() => setExpanded((v) => !v)}
-          aria-expanded={expanded}
-          className="flex-1 min-h-11 flex items-center gap-1.5 text-xs font-semibold text-muted-foreground uppercase tracking-widest text-left"
-        >
-          <BedDouble className="size-3.5" /> Жильё
-          <span className="normal-case tracking-normal font-medium tabular-nums">· {visible.length}</span>
-          <ChevronDown className={cn("size-4 transition-transform", expanded && "rotate-180")} />
-        </button>
-        <button
-          type="button"
-          onClick={() => setActiveTab("lodging")}
-          className="min-h-11 px-2 text-xs font-medium text-primary inline-flex items-center gap-0.5 hover:underline"
-        >
-          Все <ChevronRight className="size-3.5" />
-        </button>
-      </div>
-
-      {expanded && (
-        <div className="flex gap-2 overflow-x-auto no-scrollbar pb-0.5 snap-x">
-          {visible.map((l) => {
-            const isTonight = l === tonight;
-            const nights = nightsOf(l);
-            const route = routeUrl(l);
-            return (
-              <div
-                key={l.id}
-                className={cn(
-                  "snap-start shrink-0 w-[240px] rounded-2xl border bg-card p-3 flex flex-col gap-2",
-                  isTonight ? "border-emerald-500/50" : "border-border"
-                )}
-              >
-                {isTonight && (
-                  <div className="inline-flex items-center rounded-full bg-emerald-500/15 px-2 py-0.5 text-[11px] font-semibold text-emerald-600 dark:text-emerald-400">
-                    🌙 Сегодня ночуем здесь
-                  </div>
-                )}
-                <div className="min-w-0">
-                  <div className="text-sm font-medium leading-tight line-clamp-2">{l.name}</div>
-                  <div className="text-[11px] text-muted-foreground mt-0.5">
-                    {[l.city, formatStayRange(l)].filter(Boolean).join(" · ")}
-                    {nights > 0 && ` · ${nights} ${plural(nights, "ночь", "ночи", "ночей")}`}
-                  </div>
-                </div>
-                {l.address && (
-                  <p className="text-[11px] text-muted-foreground leading-snug line-clamp-2" title={l.address}>
-                    {l.address}
-                  </p>
-                )}
-                {/* mt-auto: кнопки у карточек разной высоты стоят на одной линии внизу */}
-                <div className="flex gap-1.5 mt-auto">
-                  <button
-                    type="button"
-                    onClick={() => setTaxi(l)}
-                    className="flex-1 min-h-11 rounded-xl bg-primary text-primary-foreground text-xs font-semibold inline-flex items-center justify-center gap-1 active:scale-[0.97] transition-transform"
-                  >
-                    🚕 Таксисту
-                  </button>
-                  {route && (
-                    <a
-                      href={route}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex-1 min-h-11 rounded-xl border border-border text-xs font-medium inline-flex items-center justify-center gap-1 hover:bg-muted active:scale-[0.97] transition-transform"
-                    >
-                      <Navigation className="size-3.5" /> Маршрут
-                    </a>
-                  )}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      )}
+    <section aria-label="Жильё" className="flex items-center gap-1 rounded-2xl border border-border bg-card p-1.5">
+      <button type="button" onClick={openTab} className="flex min-h-12 min-w-0 flex-1 items-center gap-2.5 rounded-xl px-2 text-left hover:bg-accent/50 transition-colors">
+        <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-indigo-500/15 text-indigo-600 dark:text-indigo-300" aria-hidden="true">
+          <Moon className="size-4" />
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block text-xs text-muted-foreground">{label}</span>
+          <span className="block truncate text-sm font-medium">{focus.name}</span>
+        </span>
+        <ChevronRight className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+      </button>
+      <button
+        type="button"
+        onClick={() => setTaxi(focus)}
+        aria-label={`Показать таксисту: ${focus.name}`}
+        title="Показать таксисту"
+        className="grid size-11 shrink-0 place-items-center rounded-xl bg-primary text-lg active:scale-95 transition-transform"
+      >
+        <span aria-hidden="true">🚕</span>
+      </button>
 
       <AnimatePresence>
         {taxi && (
@@ -134,6 +92,14 @@ export function LodgingStrip({ selectedDayKey, tripOver }: LodgingStripProps) {
             subtitle={taxi.nameLocal ? taxi.name : null}
             address={taxi.address}
             city={taxi.city}
+            onAddAddress={
+              canEdit
+                ? () => {
+                    setTaxi(null);
+                    openTab();
+                  }
+                : undefined
+            }
             onClose={() => setTaxi(null)}
           />
         )}

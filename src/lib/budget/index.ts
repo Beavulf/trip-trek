@@ -1,7 +1,7 @@
 export { calculateBalances, calculateSettlements, calculateNetSpent, sharePerPerson, pairDebtCents } from "./balances";
 export { moneyParticipants, expenseUserIds, expenseSelectableParticipants } from "./people";
 export { toCents, fromCents, shareCents } from "./money";
-export { calculatePlannedRoute, calculateRoutePlanByExpenseCategory, EXPENSE_CATEGORY_BY_PLACE } from "./planned";
+export { calculatePlannedRoute, calculateRoutePlanByExpenseCategory, calculateLodgingPlan, EXPENSE_CATEGORY_BY_PLACE } from "./planned";
 export type { PlannedRouteStats, PlannedDayStat, PlannedCategoryStat } from "./planned";
 export type { Balance, Settlement } from "./balances";
 export { calculateSplit } from "./split";
