@@ -17,7 +17,7 @@ export async function GET(req: NextRequest) {
   const [settings, appConfig] = await Promise.all([
     db.appSettings.findUnique({
       where: { id: "app" },
-      select: { aiApiKey: true, aiBaseUrl: true, aiModel: true, selfUpgradeEnabled: true, demoTripToken: true, contactTelegram: true, donationAlertsUrl: true, webmoneyPurse: true, maintenanceMode: true, maintenanceMessage: true, announcement: true },
+      select: { aiApiKey: true, aiBaseUrl: true, aiModel: true, selfUpgradeEnabled: true, demoTripToken: true, contactTelegram: true, donationAlertsUrl: true, donationAlertsToken: true, webmoneyPurse: true, maintenanceMode: true, maintenanceMessage: true, announcement: true },
     }),
     getAppConfig(),
   ]);
@@ -30,6 +30,7 @@ export async function GET(req: NextRequest) {
     demoTripToken: settings?.demoTripToken ?? "",
     contactTelegram: settings?.contactTelegram ?? "",
     donationAlertsUrl: settings?.donationAlertsUrl ?? "",
+    donationTokenTail: settings?.donationAlertsToken ? maskKey(settings.donationAlertsToken) : null,
     webmoneyPurse: settings?.webmoneyPurse ?? "",
     maintenanceMode: settings?.maintenanceMode ?? false,
     maintenanceMessage: settings?.maintenanceMessage ?? "",
@@ -76,6 +77,7 @@ export async function PUT(req: NextRequest) {
     demoTripToken?: string | null;
     contactTelegram?: string | null;
     donationAlertsUrl?: string | null;
+    donationAlertsToken?: string | null;
     webmoneyPurse?: string | null;
     maintenanceMode?: boolean;
     maintenanceMessage?: string | null;
@@ -163,6 +165,8 @@ export async function PUT(req: NextRequest) {
   }
 
   // Поддержка проекта: реквизиты проверяем строго — они показываются всем пользователям внизу профиля
+  // Токен донатов — отдельный флаг/запись журнала: смена токена не «конфиг приложения»
+  let donationTokenTouched = false;
   {
     const body_ = body as Record<string, unknown>;
     const url = body_.donationAlertsUrl;
@@ -188,6 +192,17 @@ export async function PUT(req: NextRequest) {
       }
       data.webmoneyPurse = trimmed ? normalizeWmzPurse(trimmed) : null;
       appTouched = true;
+    }
+    // OAuth-токен DonationAlerts — секрет, как aiApiKey: наружу только маска, в журнал факт смены
+    const token = body_.donationAlertsToken;
+    if (token !== undefined) {
+      if (token !== null && typeof token !== "string") {
+        return NextResponse.json({ error: "donationAlertsToken: строка или null" }, { status: 400 });
+      }
+      const trimmed = typeof token === "string" ? token.trim() : "";
+      donationTokenTouched = true;
+      if (trimmed) data.donationAlertsToken = trimmed;
+      else data.donationAlertsToken = null;
     }
   }
 
@@ -243,6 +258,12 @@ export async function PUT(req: NextRequest) {
     });
   }
 
+  if (donationTokenTouched) {
+    await logAdmin(admin!.id, "settings.donations", { type: "settings", label: "Донаты" }, {
+      tokenSet: Boolean(settings.donationAlertsToken),
+    });
+  }
+
   if (maintenanceTouched) {
     resetMaintenanceState(); // гейт в server.ts подхватит режим со следующего запроса, а не через TTL
     await logAdmin(admin!.id, "settings.maintenance", { type: "settings", label: "Техработы" }, {
@@ -257,6 +278,7 @@ export async function PUT(req: NextRequest) {
     aiKeyTail: settings.aiApiKey ? maskKey(settings.aiApiKey) : null,
     aiBaseUrl: settings.aiBaseUrl ?? "",
     aiModel: settings.aiModel ?? "",
+    donationTokenTail: settings.donationAlertsToken ? maskKey(settings.donationAlertsToken) : null,
     appConfig: {
       registrationEnabled: settings.registrationEnabled ?? true,
       freeTripLimit: settings.freeTripLimit ?? 1,

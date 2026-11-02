@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import {
   CheckCircle2,
   HardDrive,
+  Heart,
   Loader2,
   PlugZap,
   ScanSearch,
@@ -65,6 +66,7 @@ interface SettingsData {
   demoTripToken: string;
   contactTelegram: string;
   donationAlertsUrl: string;
+  donationTokenTail: string | null;
   webmoneyPurse: string;
   maintenanceMode: boolean;
   maintenanceMessage: string;
@@ -151,6 +153,8 @@ export function SettingsTab() {
   const [demoToken, setDemoToken] = useState("");
   const [contactTg, setContactTg] = useState("");
   const [donationUrl, setDonationUrl] = useState("");
+  const [donationToken, setDonationToken] = useState("");
+  const [donationTokenTail, setDonationTokenTail] = useState<string | null>(null);
   const [wmzPurse, setWmzPurse] = useState("");
   const [freeTripLimit, setFreeTripLimit] = useState("1");
   const [freeMemberLimit, setFreeMemberLimit] = useState("5");
@@ -176,6 +180,7 @@ export function SettingsTab() {
         settings.demoTripToken,
         settings.contactTelegram,
         settings.donationAlertsUrl,
+        settings.donationTokenTail,
         settings.webmoneyPurse,
       ].join("|")
     : "";
@@ -189,6 +194,7 @@ export function SettingsTab() {
     setDemoToken(settings.demoTripToken ?? "");
     setContactTg(settings.contactTelegram ?? "");
     setDonationUrl(settings.donationAlertsUrl ?? "");
+    setDonationTokenTail(settings.donationTokenTail ?? null);
     setWmzPurse(settings.webmoneyPurse ?? "");
     setFreeTripLimit(String(settings.appConfig.freeTripLimit));
     setFreeMemberLimit(String(settings.appConfig.freeMemberLimit));
@@ -220,7 +226,7 @@ export function SettingsTab() {
   });
 
   const saveApp = useMutation({
-    mutationFn: async () => {
+    mutationFn: async (opts: { clearDonationToken?: boolean } = {}) => {
       const r = await fetch("/api/admin/settings", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
@@ -236,6 +242,8 @@ export function SettingsTab() {
           demoTripToken: demoToken,
           contactTelegram: contactTg,
           donationAlertsUrl: donationUrl,
+          // новый токен едет только если ввели; пустое поле токен не трогает (смена без перезаписи)
+          ...(opts?.clearDonationToken ? { donationAlertsToken: null } : donationToken.trim() ? { donationAlertsToken: donationToken.trim() } : {}),
           webmoneyPurse: wmzPurse,
         }),
       });
@@ -243,7 +251,9 @@ export function SettingsTab() {
       if (!r.ok) throw new Error(b.error || `Ошибка ${r.status}`);
       return b as SettingsData;
     },
-    onSuccess: () => {
+    onSuccess: (b) => {
+      setDonationTokenTail(b.donationTokenTail ?? null);
+      setDonationToken("");
       qc.invalidateQueries({ queryKey: ["admin-settings"] });
       qc.invalidateQueries({ queryKey: ["admin-journal"] });
       toast.success("Конфиг приложения сохранён");
@@ -305,6 +315,7 @@ export function SettingsTab() {
     demoToken !== (settings.demoTripToken ?? "") ||
     contactTg !== (settings.contactTelegram ?? "") ||
     donationUrl !== (settings.donationAlertsUrl ?? "") ||
+    donationToken.trim() !== "" ||
     wmzPurse !== (settings.webmoneyPurse ?? "") ||
     freeTripLimit !== String(settings.appConfig.freeTripLimit) ||
     freeMemberLimit !== String(settings.appConfig.freeMemberLimit) ||
@@ -525,6 +536,21 @@ export function SettingsTab() {
           <input value={donationUrl} onChange={(e) => setDonationUrl(e.target.value)} placeholder="https://www.donationalerts.com/r/…" className={inputCls} />
         </label>
         <label className="space-y-1 block">
+          <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider flex items-center gap-1">
+            <Heart className="size-3 text-rose-500" /> Поддержка: OAuth-токен DonationAlerts (приём донатов)
+          </span>
+          <input value={donationToken} onChange={(e) => setDonationToken(e.target.value)} placeholder={donationTokenTail ? `задан ${donationTokenTail} — введите новый для смены` : "eyJ0eXAiOiJKV1Qi…"} className={inputCls} />
+          <p className="text-[10px] text-muted-foreground">
+            Токен с правом чтения донатов (scope oauth-donation-index): создать приложение можно в кабинете DonationAlerts.
+            Нужен для вкладки «Донаты» и уведомлений о пожертвованиях. Секрет хранится на сервере, наружу — только маска.{" "}
+            {donationTokenTail && (
+              <button type="button" onClick={() => saveApp.mutate({ clearDonationToken: true })} className="underline hover:text-foreground">
+                Снять токен
+              </button>
+            )}
+          </p>
+        </label>
+        <label className="space-y-1 block">
           <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Поддержка: кошелёк WebMoney (WMZ)</span>
           <input value={wmzPurse} onChange={(e) => setWmzPurse(e.target.value)} placeholder="Z123456789012" className={inputCls} />
           <p className="text-[10px] text-muted-foreground">Оба поля необязательны. Пока не заполнено ни одно, блок «Поддержать» в профиле не показывается.</p>
@@ -533,7 +559,7 @@ export function SettingsTab() {
         <button
           type="button"
           disabled={!appDirty || saveApp.isPending}
-          onClick={() => saveApp.mutate()}
+          onClick={() => saveApp.mutate({})}
           className="w-full min-h-10 rounded-xl bg-primary text-primary-foreground text-sm font-semibold disabled:opacity-40 active:scale-[0.98] transition-all"
         >
           Сохранить конфиг приложения

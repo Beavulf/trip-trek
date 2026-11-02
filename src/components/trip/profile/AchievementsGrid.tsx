@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { motion } from "framer-motion";
-import { Crown, Lock, Stamp } from "lucide-react";
+import { Crown, Heart, Lock, Stamp } from "lucide-react";
 import { cn, plural } from "@/lib/utils";
 import { MobileBottomSheet } from "../mobile-bottom-sheet";
 import type { UserProfile } from "./types";
@@ -101,11 +101,13 @@ function StampMark({
 interface AchievementsGridProps {
   profile: UserProfile;
   onOpenPremium: () => void;
+  /** Донатерский штамп ведёт в карточку «Поддержать» внизу профиля */
+  onOpenSupport?: () => void;
 }
 
 type AchievementWithProgress = UserProfile["achievements"][number] & { progress: StampProgress | null };
 
-export function AchievementsGrid({ profile, onOpenPremium }: AchievementsGridProps) {
+export function AchievementsGrid({ profile, onOpenPremium, onOpenSupport }: AchievementsGridProps) {
   const [selected, setSelected] = useState<string | null>(null);
   const unlockedCount = profile.achievements.filter((a) => a.unlocked).length;
 
@@ -208,6 +210,7 @@ export function AchievementsGrid({ profile, onOpenPremium }: AchievementsGridPro
           data={selectedData}
           onClose={() => setSelected(null)}
           onOpenPremium={onOpenPremium}
+          onOpenSupport={onOpenSupport}
         />
       )}
     </motion.section>
@@ -218,10 +221,12 @@ function AchievementSheet({
   data,
   onClose,
   onOpenPremium,
+  onOpenSupport,
 }: {
   data: AchievementWithProgress;
   onClose: () => void;
   onOpenPremium: () => void;
+  onOpenSupport?: () => void;
 }) {
   return (
     <MobileBottomSheet open onOpenChange={onClose} title={data.label} titleIcon={<Stamp className="size-4 text-amber-500" />}>
@@ -283,6 +288,20 @@ function AchievementSheet({
             className="mt-4 min-h-11 px-5 rounded-2xl bg-gradient-to-r from-amber-500 to-orange-500 text-white font-semibold inline-flex items-center gap-2 shadow-lg shadow-amber-500/20 active:scale-[0.98] transition-transform"
           >
             <Crown className="size-4" /> Открыть Premium
+          </button>
+        )}
+
+        {/* Донатерский штамп ведёт в карточку «Поддержать» */}
+        {data.label === "Поддержал проект" && !data.unlocked && onOpenSupport && (
+          <button
+            type="button"
+            onClick={() => {
+              onClose();
+              onOpenSupport();
+            }}
+            className="mt-4 min-h-11 px-5 rounded-2xl bg-gradient-to-r from-rose-500 to-pink-500 text-white font-semibold inline-flex items-center gap-2 shadow-lg shadow-rose-500/20 active:scale-[0.98] transition-transform"
+          >
+            <Heart className="size-4" /> Поддержать проект
           </button>
         )}
       </div>

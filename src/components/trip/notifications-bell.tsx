@@ -10,6 +10,7 @@ import {
   Bot,
   CheckCheck,
   Crown,
+  Heart,
   KeyRound,
   Mail,
   MessageSquareReply,
@@ -72,6 +73,7 @@ const TYPE_ICON: Record<string, React.ReactNode> = {
   ai_spend_alert: <Bot className="size-4 text-amber-500" />,
   split_payment: <Wallet className="size-4 text-emerald-500" />,
   split_reminder: <BellRing className="size-4 text-amber-500" />,
+  donation: <Heart className="size-4 fill-rose-500 text-rose-500" />,
 };
 
 function fmtDateTime(ts: string): string {

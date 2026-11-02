@@ -8,6 +8,7 @@ import { useTheme } from "next-themes";
 import {
   Bot,
   ChevronLeft,
+  Heart,
   LayoutDashboard,
   Loader2,
   Map,
@@ -35,6 +36,7 @@ export const ADMIN_SECTIONS = [
   { href: "/admin/trips", label: "Поездки", icon: Map, key: "trips" },
   { href: "/admin/invites", label: "Инвайты", icon: Ticket, key: "invites" },
   { href: "/admin/ai", label: "ИИ", icon: Bot, key: "ai" },
+  { href: "/admin/donations", label: "Донаты", icon: Heart, key: "donations" },
   { href: "/admin/feedback", label: "Отзывы", icon: MessagesSquare, key: "feedback" },
   { href: "/admin/journal", label: "Журнал", icon: ScrollText, key: "journal" },
   { href: "/admin/settings", label: "Настройки", icon: Settings, key: "settings" },

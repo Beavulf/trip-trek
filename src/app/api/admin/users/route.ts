@@ -21,7 +21,7 @@ const SAFE_SELECT = {
   aiBlocked: true,
   aiApiKey: false,
   createdAt: true,
-  _count: { select: { memberships: true } },
+  _count: { select: { memberships: true, donations: true } },
 } as const;
 
 // GET /api/admin/users?q= — список (поиск по имени/email)
@@ -56,7 +56,12 @@ export async function GET(req: NextRequest) {
           },
           orderBy: { joinedAt: "desc" },
         },
-        _count: { select: { memberships: true, photos: true, expenses: true, journals: true, feedback: true } },
+        _count: { select: { memberships: true, photos: true, expenses: true, journals: true, feedback: true, donations: true } },
+        // Донаты юзера (ADR-0011): карточка «Поддержал» в шите юзера
+        donations: {
+          select: { id: true, amountCents: true, currency: true, donatedAt: true, donaterName: true, source: true, matchedBy: true },
+          orderBy: { donatedAt: "desc" },
+        },
       },
     });
     if (!user) return NextResponse.json({ error: "Пользователь не найден" }, { status: 404 });

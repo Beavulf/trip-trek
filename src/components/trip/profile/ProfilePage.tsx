@@ -202,7 +202,11 @@ function ProfileScreen() {
 
             <ProfileStats profile={profile} />
 
-            <AchievementsGrid profile={profile} onOpenPremium={() => setPremiumOpen(true)} />
+            <AchievementsGrid
+              profile={profile}
+              onOpenPremium={() => setPremiumOpen(true)}
+              onOpenSupport={() => document.getElementById("tt-support-card")?.scrollIntoView({ behavior: "smooth", block: "center" })}
+            />
 
             <TripsList
               profile={profile}
@@ -222,7 +226,7 @@ function ProfileScreen() {
             />
 
             {/* «Поддержать TripTrek»: появляется, только если админ задал реквизиты */}
-            <SupportCard onReportBug={() => setBugOpen(true)} />
+            <SupportCard onReportBug={() => setBugOpen(true)} userName={profile.name} />
 
             <motion.button
               type="button"

@@ -144,7 +144,8 @@ User ──< TripMember >── Trip ──< Day ──< Place ──< Photo
                InviteCode (бета-коды регистрации приложения),
                PushSubscription, UserNotification, PasswordResetToken, Feedback
                (──< FeedbackMessage: переписка обращения),
-               AiUsage (учёт вызовов ИИ: feature/keySource/токены, без промптов)
+               AiUsage (учёт вызовов ИИ: feature/keySource/токены, без промптов),
+               Donation (донаты DonationAlerts, ADR-0011)
 ```
 
 «Сочтёмся» — отдельный контур данных, не связанный с Trip (ADR-0009):
@@ -241,6 +242,12 @@ User ──< SplitMember >── SplitGroup ──< SplitExpense ──< SplitSh
   на нём держатся дефолтные дни в формах.
 - Бюджет места (`Place.budget`) принимается в диапазоне `0..MAX_PLACE_BUDGET`
   (`src/lib/place-fields.ts`), вне диапазона значение отбрасывается нормализатором.
+- **Donation** (ADR-0011): донаты из DonationAlerts пишет только фоновый WS-клиент
+  (`src/lib/donations-server.ts`, живёт в процессе `server.ts`) по `externalId` (уникальному id доната
+  DA) — вручную записи не создаются, дубли от реплеев сокета гасятся этим ключом. `matchedUserId` —
+  эвристическая сшивка с юзером (авто по нику / вручную в админке), штамп «Поддержал проект» считается
+  только по привязанным. Чистая логика приёма и сшивки — `src/lib/donations.ts`, токен — секрет
+  `AppSettings.donationAlertsToken` (наружу только маска).
 
 ## 6. Файлы и фото
 
@@ -404,6 +411,8 @@ TTL сутки (иначе web-push держит недоставленное 4 
 пробрасывается 4-м аргументом `publish()` (фолбэк — `payload.userId`), его же
 клиент использует, чтобы не показывать автору ws-тост (`use-websocket.ts`).
 Клиент: `use-push.ts`, `notifications-bell.tsx`.
+Вне поездочных событий так же уведомляют админов о новых донатах
+(`donation`, ADR-0011): админы резолвятся из БД по роли, как в `feedback-server.ts`.
 
 ## 10. Деплой
 

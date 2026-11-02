@@ -5,7 +5,9 @@ import {
   Bot,
   Crown,
   HardDrive,
+  Heart,
   KeyRound,
+  Link2,
   MessageSquare,
   Pencil,
   RefreshCw,
@@ -51,6 +53,7 @@ export const SECTION_COLOR = {
   trips: "#f59e0b",
   invites: "#14b8a6",
   ai: "#d946ef",
+  donations: "#e11d48",
   feedback: "#f43f5e",
   journal: "#10b981",
   settings: "#8b5cf6",
@@ -179,7 +182,12 @@ export const ACTION_META: Record<string, { label: string; icon: typeof Pencil; d
   "settings.ai": { label: "Настройки ИИ сохранены", icon: Sparkles },
   "settings.app": { label: "Конфиг приложения изменён", icon: SlidersHorizontal },
   "settings.maintenance": { label: "Техработы / объявление изменены", icon: Wrench },
+  "settings.donations": { label: "Токен донатов сохранён", icon: Heart },
+  "settings.donations_test": { label: "Проверка связи с DonationAlerts", icon: RefreshCw },
   "storage.purge": { label: "Чистка хранилища", icon: HardDrive },
+  "donation.link": { label: "Донат привязан к юзеру", icon: Link2 },
+  "donation.unlink": { label: "Донат отвязан от юзера", icon: Link2 },
+  "donation.delete": { label: "Донат удалён", icon: Trash2, danger: true },
 };
 
 export const TARGET_META: Record<string, { label: string; color: string }> = {
@@ -189,4 +197,5 @@ export const TARGET_META: Record<string, { label: string; color: string }> = {
   feedback: { label: "Отзывы", color: SECTION_COLOR.feedback },
   settings: { label: "Настройки", color: SECTION_COLOR.settings },
   storage: { label: "Хранилище", color: SECTION_COLOR.journal },
+  donation: { label: "Донаты", color: SECTION_COLOR.donations },
 };

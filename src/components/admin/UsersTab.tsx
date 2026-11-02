@@ -6,6 +6,7 @@ import { motion } from "framer-motion";
 import {
   ChevronRight,
   Crown,
+  Heart,
   KeyRound,
   Loader2,
   Pencil,
@@ -19,6 +20,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn, plural } from "@/lib/utils";
+import { formatCents } from "@/lib/split/money";
 import { Switch } from "@/components/ui/switch";
 import { UserAvatar } from "@/components/trip/user-avatar";
 import { MobileBottomSheet } from "@/components/trip/mobile-bottom-sheet";
@@ -46,7 +48,7 @@ export interface AdminUserRow {
   role: string;
   aiBlocked: boolean;
   createdAt: string;
-  _count: { memberships: number };
+  _count: { memberships: number; donations: number };
 }
 
 interface AdminUserDetail extends AdminUserRow {
@@ -64,7 +66,16 @@ interface AdminUserDetail extends AdminUserRow {
       _count: { members: number; expenses: number };
     };
   }[];
-  _count: { memberships: number; photos: number; expenses: number; journals: number; feedback: number };
+  _count: { memberships: number; photos: number; expenses: number; journals: number; feedback: number; donations: number };
+  donations: {
+    id: string;
+    amountCents: number;
+    currency: string;
+    donatedAt: string;
+    donaterName: string | null;
+    source: string;
+    matchedBy: string | null;
+  }[];
 }
 
 const DEMOTE_COLOR = "#ef4444";
@@ -72,6 +83,7 @@ const FILTERS = [
   { value: "all", label: "Все" },
   { value: "premium", label: "Premium" },
   { value: "admin", label: "Админы" },
+  { value: "donated", label: "Донатили" },
 ] as const;
 
 /** Стартовый ?q= из адресной строки (ссылки «новые аккаунты» с Обзора).
@@ -107,6 +119,7 @@ export function UsersTab({ selfId }: { selfId: string }) {
     if (!users) return [];
     if (filter === "premium") return users.filter((u) => u.plan === "premium");
     if (filter === "admin") return users.filter((u) => u.role === "admin");
+    if (filter === "donated") return users.filter((u) => u._count.donations > 0);
     return users;
   }, [users, filter]);
 
@@ -220,6 +233,12 @@ export function UsersTab({ selfId }: { selfId: string }) {
                   </div>
                 </div>
                 {u.plan === "premium" && <Crown className="size-4 text-amber-500 shrink-0" />}
+                {u._count.donations > 0 && (
+                  <span className="flex items-center gap-0.5 shrink-0 text-rose-500" title="Донатил проекту">
+                    <Heart className="size-4 fill-rose-500" />
+                    <span className="text-[10px] font-bold">{u._count.donations}</span>
+                  </span>
+                )}
                 <ChevronRight className="size-4 text-muted-foreground shrink-0" />
               </motion.button>
             ))}
@@ -257,6 +276,11 @@ export function UsersTab({ selfId }: { selfId: string }) {
                           <div className="font-medium truncate flex items-center gap-1.5">
                             <span className="truncate">{u.name}</span>
                             {u.role === "admin" && <Stamp label="Админ" color={DEMOTE_COLOR} />}
+                            {u._count.donations > 0 && (
+                              <span className="flex items-center gap-0.5 text-rose-500" title={`Донатил проекту (${u._count.donations})`}>
+                                <Heart className="size-3.5 fill-rose-500" />
+                              </span>
+                            )}
                           </div>
                           <div className="text-xs text-muted-foreground truncate">{u.email}</div>
                         </div>
@@ -390,6 +414,7 @@ function UserDetailSheet({
               <span className="truncate">{user.name}</span>
               {isAdmin && <Stamp label="Админ" color={DEMOTE_COLOR} />}
               {isPremium && <Crown className="size-4 text-amber-500 shrink-0" />}
+              {user._count.donations > 0 && <Heart className="size-4 fill-rose-500 text-rose-500 shrink-0" />}
             </div>
             <div className="text-sm text-muted-foreground truncate">{user.email}</div>
             <div className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground/70 mt-0.5">
@@ -417,6 +442,27 @@ function UserDetailSheet({
             </div>
           ))}
         </div>
+
+        {/* Донаты (ADR-0011): привязанные к юзеру пожертвования через DonationAlerts */}
+        {user._count.donations > 0 && (
+          <div>
+            <p className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground/70 mb-1.5 flex items-center gap-1">
+              <Heart className="size-3 fill-rose-500 text-rose-500" /> донаты
+            </p>
+            <div className="rounded-2xl border border-rose-500/20 divide-y divide-border overflow-hidden">
+              {user.donations.map((d) => (
+                <div key={d.id} className="px-3 py-2 flex items-center gap-2">
+                  <span className="text-sm font-bold text-rose-500 shrink-0">{formatCents(d.amountCents, d.currency)}</span>
+                  <span className="text-xs text-muted-foreground flex-1 min-w-0 truncate">
+                    {new Date(d.donatedAt).toLocaleDateString("ru-RU")}
+                    {d.donaterName ? ` · ${d.donaterName}` : ""}
+                    {d.source === "test" ? " · тест" : d.matchedBy === "auto" ? " · авто" : ""}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Поездки */}
         <div>

@@ -39,7 +39,7 @@ export async function GET(req: NextRequest) {
 
   if (!user) return NextResponse.json({ error: "user not found" }, { status: 404 });
 
-  const [photos, spent, journals, messages, visitedPlaces] = await Promise.all([
+  const [photos, spent, journals, messages, visitedPlaces, donations] = await Promise.all([
     db.photo.count({ where: { userId } }),
     // Переводы (settlement) — не траты: каждая отметка «Перевели» раньше накручивала «Потрачено» и
     // выдавала «Шопоголика»/«Тяжеловеса» (как и в /api/trip, итог трат считается без переводов).
@@ -53,6 +53,9 @@ export async function GET(req: NextRequest) {
         trip: { members: { some: { userId } } },
       },
     }),
+    // Бейдж «Поддержал проект»: только привязанные донаты (ADR-0011) — запрос ПОСЛЕДНИМ,
+    // в хвосте деструктуризации (перестановка в середине сдвигала visitedPlaces/donations)
+    db.donation.count({ where: { matchedUserId: userId } }),
   ]);
 
   const memberships = await db.tripMember.findMany({
@@ -125,6 +128,7 @@ export async function GET(req: NextRequest) {
   // По isPremiumUser, а не по голому plan: с истёкшим сроком штамп оставался «оттиснутым»,
   // хотя карточка рядом уже предлагала купить Premium
   if (isPremium) unlocked.push({ emoji: "👑", label: "Premium", unlocked: true });
+  if (donations > 0) unlocked.push({ emoji: "❤️", label: "Поддержал проект", unlocked: true });
 
   const allAchievements = [
     { emoji: "🌏", label: "Первое путешествие", req: "1 поездка" },
@@ -140,6 +144,7 @@ export async function GET(req: NextRequest) {
     { emoji: "📢", label: "Оратор", req: "50 сообщений" },
     { emoji: "📍", label: "Маршрут", req: "10 посещённых мест" },
     { emoji: "👑", label: "Premium", req: "Premium подписка" },
+    { emoji: "❤️", label: "Поддержал проект", req: "Донат через «Поддержать»" },
   ];
 
   const ownedTrips = trips.filter((t) => t.role === "owner").length;

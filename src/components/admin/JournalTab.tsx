@@ -24,6 +24,7 @@ const FILTERS = [
   { value: "user", label: "Юзеры" },
   { value: "trip", label: "Поездки" },
   { value: "feedback", label: "Отзывы" },
+  { value: "donation", label: "Донаты" },
   { value: "settings", label: "Настройки" },
   { value: "storage", label: "Хранилище" },
 ] as const;
@@ -44,6 +45,12 @@ function metaSummary(row: JournalRow): string {
   if (typeof m.registrationEnabled === "boolean") parts.push(m.registrationEnabled ? "регистрация открыта" : "регистрация закрыта");
   if (typeof m.freeTripLimit === "number") parts.push(`поездки: ${m.freeTripLimit}`);
   if (typeof m.freeMemberLimit === "number") parts.push(`участники: ${m.freeMemberLimit}`);
+  if (typeof m.toUser === "string") parts.push(`→ ${m.toUser}`);
+  if (typeof m.fromUser === "string") parts.push(`было: ${m.fromUser}`);
+  if (typeof m.amountCents === "number" && typeof m.currency === "string") {
+    parts.push(`${(m.amountCents / 100).toLocaleString("ru-RU")} ${m.currency}`);
+  }
+  if (typeof m.tokenSet === "boolean") parts.push(m.tokenSet ? "токен задан" : "токен снят");
   return parts.join(" · ");
 }
 

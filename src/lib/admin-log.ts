@@ -28,10 +28,15 @@ export type AdminAction =
   | "settings.ai"
   | "settings.app"
   | "settings.maintenance"
-  | "storage.purge";
+  | "settings.donations"
+  | "settings.donations_test"
+  | "storage.purge"
+  | "donation.link"
+  | "donation.unlink"
+  | "donation.delete";
 
 export interface AdminLogTarget {
-  type: "user" | "trip" | "feedback" | "settings" | "storage" | "invite";
+  type: "user" | "trip" | "feedback" | "settings" | "storage" | "invite" | "donation";
   id?: string;
   label?: string;
 }

@@ -72,6 +72,7 @@ model User {
   aiUsage       AiUsage[]
   inviteCode    InviteCode?  @relation("inviteCode", fields: [inviteCodeId], references: [id], onDelete: SetNull)
   splitMemberships SplitMember[]
+  donations     Donation[] // донаты, привязанные к юзеру (ручная или авто-сшивка)
 }
 
 // === Токены сброса пароля: одноразовые, TTL 60 минут. В БД — только sha256-хеш,
@@ -134,6 +135,9 @@ model AppSettings {
   // Поддержка проекта (блок «Поддержать» внизу профиля): оба поля необязательны, нет ни одного — блока нет
   donationAlertsUrl String? // https-страница DonationAlerts
   webmoneyPurse     String? // WMZ-кошелёк для перевода (Z + 12 цифр)
+  // OAuth-токен DonationAlerts (scope oauth-donation-index) для фонового приёма донатов
+  // (src/lib/donations-server.ts). Наружу API отдаёт только замаскированный хвост — как aiApiKey
+  donationAlertsToken String?
   // Техработы и объявление (см. src/lib/maintenance.ts). maintenanceMode: всем, кроме админов,
   // API и страницы отвечают 503, вход закрыт. announcement — баннер для всех, работает и без техработ
   maintenanceMode    Boolean @default(false)
@@ -832,4 +836,28 @@ model SplitReminder {
   group SplitGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
 
   @@index([groupId, fromId, toId, createdAt])
+}
+
+// === Донаты из DonationAlerts (ADR-0011): приём фоновым WS-клиентом в процессе сервера.
+// externalId — авторитетный ключ идемпотентности: реконнекты/реплеи Centrifugo не должны
+// дублировать запись и уведомления админам. Личности юзера DA не передаёт — matchedUserId
+// это сшивка на нашей стороне (авто по нику / вручную в админке), null = донат не размечен ===
+model Donation {
+  id           String   @id @default(cuid())
+  externalId   String   @unique // id доната в DonationAlerts
+  source       String   @default("donationalerts") // donationalerts / test (кнопка «Тестовый донат»)
+  donaterName  String? // имя, введённое на странице доната
+  daUsername   String? // юзернейм донатера в DA (если был залогинен; чаще null)
+  message      String? // сообщение доната — сюда просим писать ник
+  amountCents  Int // в валюте доната
+  currency     String // RUB / USD / …
+  donatedAt    DateTime // момент доната по данным DA
+  matchedUserId String?
+  matchedBy    String? // auto / manual; null — не привязан
+  createdAt    DateTime @default(now())
+
+  user User? @relation(fields: [matchedUserId], references: [id], onDelete: SetNull)
+
+  @@index([donatedAt])
+  @@index([matchedUserId])
 }

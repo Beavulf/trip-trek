@@ -21,7 +21,8 @@ export type NotificationType =
   | "ai_unblocked"
   | "ai_spend_alert"
   | "split_payment"
-  | "split_reminder";
+  | "split_reminder"
+  | "donation";
 
 export interface NotifyPayload {
   type: NotificationType;
