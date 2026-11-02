@@ -266,9 +266,9 @@ export async function ingestDonation(
     });
     if (!donation) return "duplicate";
 
-    // Автоматч по нику: список юзеров небольшой (сотни), грузим целиком — совпадение
-    // точное, запрос в БД «contains по имени» не выразить. Пересмотрим при росте.
-    const users = await db.user.findMany({ select: { id: true, name: true } });
+    // Автоматч по email: список юзеров небольшой (сотни), грузим целиком — совпадение
+    // точное (email @unique). По name не матчим: имя неуникально. Пересмотрим при росте.
+    const users = await db.user.findMany({ select: { id: true, email: true } });
     const matchedUserId = matchDonationToUser(parsed, users);
     if (matchedUserId) {
       await db.donation.update({ where: { id: donation.id }, data: { matchedUserId, matchedBy: "auto" } });

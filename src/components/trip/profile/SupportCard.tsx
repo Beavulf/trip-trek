@@ -52,7 +52,7 @@ const WHERE_MONEY_GOES = [
   { icon: Sparkles, text: "Время на новые функции и исправления" },
 ] as const;
 
-export function SupportCard({ onReportBug, userName }: { onReportBug: () => void; userName?: string }) {
+export function SupportCard({ onReportBug, userEmail }: { onReportBug: () => void; userEmail?: string }) {
   const { data } = useSupportOptions();
   const [open, setOpen] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -141,8 +141,8 @@ export function SupportCard({ onReportBug, userName }: { onReportBug: () => void
 
             {data.donationAlertsUrl && (
               <p className="text-xs text-muted-foreground leading-relaxed px-1">
-                Совет: напишите в сообщении доната свой ник{userName ? ` («для @${userName}»)` : ""} — тогда мы поймём, что это вы, и
-                в профиле зажжётся штамп «Поддержал проект».
+                Совет: напишите в сообщении доната email, на который вы зарегистрированы
+                {userEmail ? ` (${userEmail})` : ""} — тогда мы поймём, что это вы, и в профиле зажжётся штамп «Поддержал проект».
               </p>
             )}
             {data.donationAlertsUrl && (

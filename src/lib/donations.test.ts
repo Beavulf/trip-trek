@@ -1,16 +1,16 @@
 import { describe, expect, it } from "vitest";
 import {
-  extractNicks,
+  extractEmails,
   formatDonationLine,
   matchDonationToUser,
-  normalizeNick,
+  normalizeEmail,
   parseDonationEvent,
 } from "./donations";
 
 const USERS = [
-  { id: "u-leha", name: "Leha" },
-  { id: "u-you", name: "Настя" },
-  { id: "u-den", name: "den" },
+  { id: "u-leha", email: "leha@triptrek.com" },
+  { id: "u-you", email: "you@triptrek.com" },
+  { id: "u-den", email: "den@triptrek.com" },
 ];
 
 describe("parseDonationEvent", () => {
@@ -68,40 +68,38 @@ describe("parseDonationEvent", () => {
   });
 });
 
-describe("normalizeNick / extractNicks", () => {
-  it("ник нормализуется: регистр, края, @", () => {
-    expect(normalizeNick("  @Leha ")).toBe("leha");
-    expect(normalizeNick("@@den")).toBe("den");
-    expect(normalizeNick("Настя")).toBe("настя");
+describe("normalizeEmail / extractEmails", () => {
+  it("email нормализуется: регистр и края", () => {
+    expect(normalizeEmail("  Leha@TripTrek.COM ")).toBe("leha@triptrek.com");
   });
 
-  it("из сообщения достаются @ники без дублей", () => {
-    expect(extractNicks("для @leha и @Leha!")).toEqual(["leha"]);
-    expect(extractNicks("@den_2- ok, @x")).toEqual(["den_2-"]); // x короче 2 символов
-    expect(extractNicks("без ников")).toEqual([]);
+  it("из сообщения достаются адреса без дублей, в нижнем регистре", () => {
+    expect(extractEmails("для leha@triptrek.com и LEHA@TRIPTREK.COM!")).toEqual(["leha@triptrek.com"]);
+    expect(extractEmails("писал на you+trip@triptrek.com с плюсом")).toEqual(["you+trip@triptrek.com"]);
+    expect(extractEmails("без почты, только @ники")).toEqual([]);
+    expect(extractEmails("обрезанный@нет-домена")).toEqual([]);
   });
 });
 
 describe("matchDonationToUser", () => {
-  it("@ник из сообщения сильнее и точнее — даже если имя не совпало", () => {
+  it("email из сообщения связывает с юзером — даже если имя другое", () => {
     expect(
-      matchDonationToUser({ donaterName: "Аноним", message: "это @den, привет" }, USERS),
+      matchDonationToUser({ donaterName: "Аноним", message: "это den@triptrek.com, привет" }, USERS),
     ).toBe("u-den");
   });
 
-  it("имя донатера матчится на ник юзера без учёта регистра и @", () => {
-    expect(matchDonationToUser({ donaterName: "@leha", message: null }, USERS)).toBe("u-leha");
-    expect(matchDonationToUser({ donaterName: "настя", message: null }, USERS)).toBe("u-you");
+  it("имя донатера связывает, только если оно само email (без учёта регистра)", () => {
+    expect(matchDonationToUser({ donaterName: "Leha@Triptrek.com", message: null }, USERS)).toBe("u-leha");
   });
 
-  it("частичное совпадение имени — не повод связывать", () => {
-    expect(matchDonationToUser({ donaterName: "Леха", message: null }, USERS)).toBeNull();
-    expect(matchDonationToUser({ donaterName: "le", message: null }, USERS)).toBeNull();
+  it("обычное имя больше НЕ связывает: User.name неуникален, риск ложной привязки", () => {
+    expect(matchDonationToUser({ donaterName: "Leha", message: null }, USERS)).toBeNull();
+    expect(matchDonationToUser({ donaterName: "настя", message: "спасибо за @ники" }, USERS)).toBeNull();
   });
 
   it("пустой вход или пустой список юзеров — null", () => {
     expect(matchDonationToUser({ donaterName: null, message: null }, USERS)).toBeNull();
-    expect(matchDonationToUser({ donaterName: "Leha", message: null }, [])).toBeNull();
+    expect(matchDonationToUser({ donaterName: "leha@triptrek.com", message: null }, [])).toBeNull();
   });
 });
 

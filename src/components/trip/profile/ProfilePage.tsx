@@ -226,7 +226,7 @@ function ProfileScreen() {
             />
 
             {/* «Поддержать TripTrek»: появляется, только если админ задал реквизиты */}
-            <SupportCard onReportBug={() => setBugOpen(true)} userName={profile.name} />
+            <SupportCard onReportBug={() => setBugOpen(true)} userEmail={profile.email} />
 
             <motion.button
               type="button"

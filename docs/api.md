@@ -190,8 +190,8 @@
 
 - **DonationAlerts** (ADR-0011): постоянный WS-клиент Centrifugo в процессе `server.ts`
   (`src/lib/donations-server.ts`), токен — `AppSettings.donationAlertsToken`. Каждый донат →
-  `Donation` (идемпотентность по `externalId`), авто-сшивка с юзером по нику, колокольчик+пуш
-  `donation` всем админам.
+  `Donation` (идемпотентность по `externalId`), авто-сшивка с юзером по email из сообщения доната,
+  колокольчик+пуш `donation` всем админам.
 
 ## Rate limits (сводка)
 

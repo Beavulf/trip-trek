@@ -1,8 +1,9 @@
 // Донаты из DonationAlerts (ADR-0011): чистая логика приёма — защитный разбор payload
 // сокета и сшивка «донат → юзер TripTrek». Без БД и next/* — тесты рядом (donations.test.ts).
 // Серверная половина (WS-клиент Centrifugo, ingest, уведомления админам) — donations-server.ts.
-// Личности юзера DA не передаёт, поэтому сшивка эвристическая: @ник в сообщении доната
-// (человек написал сам — сильный сигнал) или точное совпадение имени донатера с ником юзера.
+// Личности юзера DA не передаёт, поэтому сшивка — по email: адрес из сообщения доната
+// (человек написал сам — сильный сигнал) или имя донатера, если оно само email.
+// По User.name не матчим — имя неуникально, неверная автопривязка хуже отсутствия.
 
 import { MAX_AMOUNT_CENTS, formatCents, toCents } from "./split/money";
 
@@ -70,45 +71,40 @@ export function parseDonationEvent(raw: unknown): ParsedDonation | null {
   };
 }
 
-/** Ник к сравнению: нижний регистр, края обрезаны, ведущие @ срезаны («@Leha» → «leha»). */
-export function normalizeNick(s: string): string {
-  return s
-    .trim()
-    .replace(/^@+/, "")
-    .toLowerCase();
+/** Email к сравнению: нижний регистр, края обрезаны. */
+export function normalizeEmail(s: string): string {
+  return s.trim().toLowerCase();
 }
 
-/** @ники из текста доната: слова после @ из букв/цифр/подчёркивания/дефиса (латиница+кириллица). */
-export function extractNicks(message: string): string[] {
+/** Email-адреса из текста доната (человек пишет «для you@triptrek.com»), без дублей, в нижнем регистре. */
+export function extractEmails(text: string): string[] {
   const out: string[] = [];
-  const re = /@([A-Za-zА-Яа-яЁё0-9_-]{2,32})/g;
-  for (const m of message.matchAll(re)) {
-    const nick = normalizeNick(m[1]);
-    if (nick && !out.includes(nick)) out.push(nick);
+  const re = /[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g;
+  for (const m of text.matchAll(re)) {
+    const email = normalizeEmail(m[0]);
+    if (email && !out.includes(email)) out.push(email);
   }
   return out;
 }
 
 /**
- * Сшивка доната с юзером: 1) @ник из сообщения совпал с ником юзера;
- * 2) имя донатера совпало с ником юзера (точное, без учёта регистра/@).
- * Не совпало — null: админ привяжет вручную, фолбэки «похожих» не предлагаем.
+ * Сшивка доната с юзером — ТОЛЬКО по email (User.name неуникально: два «Лёхи»
+ * связались бы с одним донатом, а неверная автопривязка хуже отсутствия):
+ * 1) email из сообщения доната (человек написал сам — сильный сигнал);
+ * 2) имя донатера, если оно само является email. Не совпало — null: админ привяжет вручную.
  */
 export function matchDonationToUser(
   d: { donaterName: string | null; message: string | null },
-  users: { id: string; name: string }[],
+  users: { id: string; email: string }[],
 ): string | null {
   if (users.length === 0) return null;
 
-  if (d.message) {
-    for (const nick of extractNicks(d.message)) {
-      const hit = users.find((u) => normalizeNick(u.name) === nick);
-      if (hit) return hit.id;
-    }
-  }
-  if (d.donaterName) {
-    const name = normalizeNick(d.donaterName);
-    const hit = users.find((u) => normalizeNick(u.name) === name);
+  const candidates = [
+    ...(d.message ? extractEmails(d.message) : []),
+    ...(d.donaterName ? [normalizeEmail(d.donaterName)] : []),
+  ];
+  for (const candidate of candidates) {
+    const hit = users.find((u) => normalizeEmail(u.email) === candidate);
     if (hit) return hit.id;
   }
   return null;
