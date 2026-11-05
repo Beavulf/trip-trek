@@ -105,6 +105,40 @@ interface OrphanRow {
   mtime: string;
 }
 
+type SettingsSection = "app" | "ai" | "support" | "system";
+
+const SETTINGS_SECTIONS: {
+  id: SettingsSection;
+  label: string;
+  description: string;
+  icon: React.ReactNode;
+}[] = [
+  {
+    id: "app",
+    label: "Приложение",
+    description: "Регистрация, лимиты и публичные контакты",
+    icon: <SlidersHorizontal className="size-4" />,
+  },
+  {
+    id: "ai",
+    label: "ИИ",
+    description: "Провайдер, модель и проверка подключения",
+    icon: <Sparkles className="size-4" />,
+  },
+  {
+    id: "support",
+    label: "Поддержка и оплата",
+    description: "DonationAlerts, WebMoney и пожертвования",
+    icon: <Heart className="size-4" />,
+  },
+  {
+    id: "system",
+    label: "Система",
+    description: "Технические работы, хранилище и состояние сервера",
+    icon: <HardDrive className="size-4" />,
+  },
+];
+
 function SectionCard({
   icon,
   title,
@@ -134,6 +168,7 @@ const inputCls =
 export function SettingsTab() {
   const qc = useQueryClient();
   const { data: stats } = useAdminStats(true);
+  const [activeSection, setActiveSection] = useState<SettingsSection>("app");
   useEffect(() => {
     const outcome = new URLSearchParams(window.location.search).get("donationAlerts");
     if (!outcome) return;
@@ -382,18 +417,79 @@ export function SettingsTab() {
 
   const usage = stats?.storage;
   const scanData = scan.data;
+  const activeSectionMeta = SETTINGS_SECTIONS.find((section) => section.id === activeSection)!;
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-5">
+      <header className="space-y-1">
+        <h1 className="text-xl font-bold tracking-tight">Настройки</h1>
+        <p className="text-sm text-muted-foreground">Параметры приложения, подключений и сервера</p>
+      </header>
+
+      <div role="tablist" aria-label="Разделы настроек" className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+        {SETTINGS_SECTIONS.map((section) => (
+          <button
+            key={section.id}
+            id={`settings-tab-${section.id}`}
+            type="button"
+            role="tab"
+            aria-selected={activeSection === section.id}
+            aria-controls="settings-panel"
+            onClick={() => setActiveSection(section.id)}
+            className={cn(
+              "flex min-h-11 items-center justify-center gap-2 rounded-xl border px-3 text-xs font-medium transition-colors sm:text-sm",
+              activeSection === section.id
+                ? "border-primary/40 bg-primary/10 text-foreground"
+                : "border-border bg-card/60 text-muted-foreground hover:bg-accent hover:text-foreground",
+            )}
+          >
+            {section.icon}
+            <span>{section.label}</span>
+          </button>
+        ))}
+      </div>
+
+      <div className="flex items-center justify-between gap-3 rounded-xl border border-border bg-card/50 px-3 py-2.5">
+        <div className="min-w-0">
+          <div className="text-sm font-semibold">{activeSectionMeta.label}</div>
+          <p className="text-xs text-muted-foreground">{activeSectionMeta.description}</p>
+        </div>
+        <div className="flex shrink-0 items-center gap-2">
+          <span className={cn("hidden text-[10px] sm:inline", appDirty ? "text-amber-600" : "text-muted-foreground")}>
+            {appDirty ? "Есть несохранённые изменения" : "Все сохранено"}
+          </span>
+          {appDirty && (
+            <button
+              type="button"
+              disabled={saveApp.isPending}
+              onClick={() => saveApp.mutate({})}
+              className="inline-flex min-h-9 shrink-0 items-center gap-1.5 rounded-lg bg-primary px-3 text-xs font-semibold text-primary-foreground disabled:opacity-50"
+            >
+              {saveApp.isPending && <Loader2 className="size-3 animate-spin" />}
+              Сохранить
+            </button>
+          )}
+        </div>
+      </div>
+
+      <div
+        id="settings-panel"
+        role="tabpanel"
+        aria-labelledby={`settings-tab-${activeSection}`}
+        className="space-y-4"
+      >
       {/* === Техработы и объявление === */}
-      <MaintenanceCard
-        key={`${settings.maintenanceMode}|${settings.maintenanceMessage}|${settings.announcement}`}
-        maintenanceMode={settings.maintenanceMode}
-        maintenanceMessage={settings.maintenanceMessage}
-        announcement={settings.announcement}
-      />
+      <div hidden={activeSection !== "system"}>
+        <MaintenanceCard
+          key={`${settings.maintenanceMode}|${settings.maintenanceMessage}|${settings.announcement}`}
+          maintenanceMode={settings.maintenanceMode}
+          maintenanceMessage={settings.maintenanceMessage}
+          announcement={settings.announcement}
+        />
+      </div>
 
       {/* === ИИ-провайдер === */}
+      <div hidden={activeSection !== "ai"}>
       <SectionCard
         icon={<Sparkles className="size-4 text-indigo-500" />}
         title="Общий ИИ"
@@ -504,8 +600,10 @@ export function SettingsTab() {
           </div>
         )}
       </SectionCard>
+      </div>
 
       {/* === Приложение === */}
+      <div hidden={activeSection !== "app"}>
       <SectionCard
         icon={<SlidersHorizontal className="size-4 text-violet-500" />}
         title="Приложение"
@@ -589,18 +687,26 @@ export function SettingsTab() {
           <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Телеграм для связи (лендинг и вход)</span>
           <input value={contactTg} onChange={(e) => setContactTg(e.target.value)} placeholder="@username" className={inputCls} />
         </label>
+      </SectionCard>
+      </div>
+
+      <div hidden={activeSection !== "support"}>
+      <SectionCard
+        icon={<Heart className="size-4 text-rose-500" />}
+        title="Поддержка и оплата"
+        hint="Настройте страницу донатов и способы поддержки проекта."
+      >
         <label className="space-y-1 block">
-          <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Поддержка: ссылка DonationAlerts</span>
+          <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Ссылка DonationAlerts</span>
           <input value={donationUrl} onChange={(e) => setDonationUrl(e.target.value)} placeholder="https://www.donationalerts.com/r/…" className={inputCls} />
         </label>
         <label className="space-y-1 block">
           <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider flex items-center gap-1">
-            <Heart className="size-3 text-rose-500" /> Поддержка: OAuth-токен DonationAlerts (приём донатов)
+            <Heart className="size-3 text-rose-500" /> Access token DonationAlerts (ручная настройка)
           </span>
           <input value={donationToken} onChange={(e) => setDonationToken(e.target.value)} placeholder={donationTokenTail ? `задан ${donationTokenTail} — введите новый для смены` : "eyJ0eXAiOiJKV1Qi…"} className={inputCls} />
           <p className="text-[10px] text-muted-foreground">
-            Можно вставить готовый access token вручную. Для автоматического подключения настройте OAuth ниже.
-            Токен хранится на сервере, наружу — только маска.{" "}
+            Обычно подключайте аккаунт через OAuth ниже. Это поле нужно только для ручной замены токена.{" "}
             {donationTokenTail && (
               <button type="button" onClick={() => saveApp.mutate({ clearDonationToken: true })} className="underline hover:text-foreground">
                 Снять токен
@@ -726,17 +832,11 @@ export function SettingsTab() {
           </p>
         </label>
 
-        <button
-          type="button"
-          disabled={!appDirty || saveApp.isPending}
-          onClick={() => saveApp.mutate({})}
-          className="w-full min-h-10 rounded-xl bg-primary text-primary-foreground text-sm font-semibold disabled:opacity-40 active:scale-[0.98] transition-all"
-        >
-          Сохранить конфиг приложения
-        </button>
       </SectionCard>
+      </div>
 
       {/* === Хранилище === */}
+      <div hidden={activeSection !== "system"} className="space-y-4">
       <SectionCard
         icon={<HardDrive className="size-4 text-emerald-500" />}
         title="Хранилище"
@@ -867,6 +967,8 @@ export function SettingsTab() {
           </div>
         </SectionCard>
       )}
+    </div>
+    </div>
     </div>
   );
 }
