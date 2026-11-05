@@ -183,6 +183,7 @@ export const ACTION_META: Record<string, { label: string; icon: typeof Pencil; d
   "settings.app": { label: "Конфиг приложения изменён", icon: SlidersHorizontal },
   "settings.maintenance": { label: "Техработы / объявление изменены", icon: Wrench },
   "settings.donations": { label: "Токен донатов сохранён", icon: Heart },
+  "settings.webmoney": { label: "Секреты WebMoney Merchant изменены", icon: Heart },
   "settings.donations_test": { label: "Проверка связи с DonationAlerts", icon: RefreshCw },
   "storage.purge": { label: "Чистка хранилища", icon: HardDrive },
   "donation.link": { label: "Донат привязан к юзеру", icon: Link2 },

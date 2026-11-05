@@ -310,6 +310,7 @@ export function DonationsTab() {
                       {formatCents(d.amountCents, d.currency)}
                     </span>
                     <span className="text-sm font-medium truncate">{d.donaterName || "Аноним"}</span>
+                    {d.source === "webmoney" && <Stamp label="WebMoney" color="#0ea5e9" />}
                     {d.source === "test" && <Stamp label="тест" color="#94a3b8" />}
                     {d.matchedBy === "auto" && <Stamp label="авто" color="#10b981" />}
                   </div>

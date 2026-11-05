@@ -73,6 +73,7 @@ model User {
   inviteCode    InviteCode?  @relation("inviteCode", fields: [inviteCodeId], references: [id], onDelete: SetNull)
   splitMemberships SplitMember[]
   donations     Donation[] // донаты, привязанные к юзеру (ручная или авто-сшивка)
+  webmoneyPayments WebMoneyPayment[]
 }
 
 // === Токены сброса пароля: одноразовые, TTL 60 минут. В БД — только sha256-хеш,
@@ -138,6 +139,9 @@ model AppSettings {
   // OAuth-токен DonationAlerts (scope oauth-donation-index) для фонового приёма донатов
   // (src/lib/donations-server.ts). Наружу API отдаёт только замаскированный хвост — как aiApiKey
   donationAlertsToken String?
+  // WebMoney Merchant secrets: Secret Key проверяет Result URL, Secret Key X20 подписывает форму оплаты
+  webmoneyMerchantSecret    String?
+  webmoneyMerchantSecretX20 String?
   // Техработы и объявление (см. src/lib/maintenance.ts). maintenanceMode: всем, кроме админов,
   // API и страницы отвечают 503, вход закрыт. announcement — баннер для всех, работает и без техработ
   maintenanceMode    Boolean @default(false)
@@ -838,14 +842,12 @@ model SplitReminder {
   @@index([groupId, fromId, toId, createdAt])
 }
 
-// === Донаты из DonationAlerts (ADR-0011): приём фоновым WS-клиентом в процессе сервера.
-// externalId — авторитетный ключ идемпотентности: реконнекты/реплеи Centrifugo не должны
-// дублировать запись и уведомления админам. Личности юзера DA не передаёт — matchedUserId
-// это сшивка на нашей стороне (авто по нику / вручную в админке), null = донат не размечен ===
+// === Донаты из DonationAlerts, WebMoney Merchant и тестовые записи ===
+// externalId — уникальный идентификатор внешнего доната или платежа, для идемпотентной записи.
 model Donation {
   id           String   @id @default(cuid())
-  externalId   String   @unique // id доната в DonationAlerts
-  source       String   @default("donationalerts") // donationalerts / test (кнопка «Тестовый донат»)
+  externalId   String   @unique // id доната в сервисе или номер платежа Merchant
+  source       String   @default("donationalerts") // donationalerts / webmoney / test
   donaterName  String? // имя, введённое на странице доната
   daUsername   String? // юзернейм донатера в DA (если был залогинен; чаще null)
   message      String? // сообщение доната — сюда просим писать ник
@@ -853,11 +855,31 @@ model Donation {
   currency     String // RUB / USD / …
   donatedAt    DateTime // момент доната по данным DA
   matchedUserId String?
-  matchedBy    String? // auto / manual; null — не привязан
+  matchedBy    String? // auto / manual / webmoney; null — не привязан
   createdAt    DateTime @default(now())
 
   user User? @relation(fields: [matchedUserId], references: [id], onDelete: SetNull)
+  webMoneyPayment WebMoneyPayment?
 
   @@index([donatedAt])
   @@index([matchedUserId])
+}
+
+// === Заказ WebMoney Merchant: доверяем только подписанному Result URL, не редиректу браузера ===
+model WebMoneyPayment {
+  id          String    @id @default(cuid())
+  paymentNo   String    @unique
+  userId      String?
+  amountCents Int
+  status      String    @default("pending") // pending / paid
+  sysTransNo  String?   @unique
+  donationId  String?   @unique
+  createdAt   DateTime  @default(now())
+  paidAt      DateTime?
+
+  user     User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+  donation Donation? @relation(fields: [donationId], references: [id], onDelete: SetNull)
+
+  @@index([userId, createdAt])
+  @@index([status, createdAt])
 }

@@ -7,6 +7,8 @@ export interface SupportOptions {
   donationAlertsUrl: string | null;
   /** WMZ-кошелёк WebMoney (Z + 12 цифр) или null */
   webmoneyPurse: string | null;
+  /** Merchant включён только при наличии кошелька и обоих секретов */
+  webmoneyMerchantEnabled: boolean;
 }
 
 /** Ссылка на страницу доната: только https и разумной длины; иначе null (кнопка не показывается). */
@@ -28,5 +30,5 @@ export function normalizeWmzPurse(raw: string | null | undefined): string | null
 }
 
 export function hasSupportOptions(o: SupportOptions | null | undefined): o is SupportOptions {
-  return !!o && (!!o.donationAlertsUrl || !!o.webmoneyPurse);
+  return !!o && (!!o.donationAlertsUrl || !!o.webmoneyPurse || o.webmoneyMerchantEnabled);
 }

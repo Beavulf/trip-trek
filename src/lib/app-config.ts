@@ -94,11 +94,20 @@ export interface PublicShowcase {
 export async function getSupportOptions(): Promise<SupportOptions> {
   const row = await db.appSettings.findUnique({
     where: { id: "app" },
-    select: { donationAlertsUrl: true, webmoneyPurse: true },
+    select: {
+      donationAlertsUrl: true,
+      webmoneyPurse: true,
+      webmoneyMerchantSecret: true,
+      webmoneyMerchantSecretX20: true,
+    },
   });
+  const webmoneyPurse = normalizeWmzPurse(row?.webmoneyPurse);
   return {
     donationAlertsUrl: normalizeDonationUrl(row?.donationAlertsUrl),
-    webmoneyPurse: normalizeWmzPurse(row?.webmoneyPurse),
+    webmoneyPurse,
+    webmoneyMerchantEnabled: Boolean(
+      webmoneyPurse && row?.webmoneyMerchantSecret?.trim() && row.webmoneyMerchantSecretX20?.trim(),
+    ),
   };
 }
 

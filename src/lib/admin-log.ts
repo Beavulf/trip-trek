@@ -29,6 +29,7 @@ export type AdminAction =
   | "settings.app"
   | "settings.maintenance"
   | "settings.donations"
+  | "settings.webmoney"
   | "settings.donations_test"
   | "storage.purge"
   | "donation.link"

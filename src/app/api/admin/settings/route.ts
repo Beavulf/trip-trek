@@ -17,10 +17,27 @@ export async function GET(req: NextRequest) {
   const [settings, appConfig] = await Promise.all([
     db.appSettings.findUnique({
       where: { id: "app" },
-      select: { aiApiKey: true, aiBaseUrl: true, aiModel: true, selfUpgradeEnabled: true, demoTripToken: true, contactTelegram: true, donationAlertsUrl: true, donationAlertsToken: true, webmoneyPurse: true, maintenanceMode: true, maintenanceMessage: true, announcement: true },
+      select: {
+        aiApiKey: true, aiBaseUrl: true, aiModel: true, selfUpgradeEnabled: true,
+        demoTripToken: true, contactTelegram: true, donationAlertsUrl: true, donationAlertsToken: true,
+        webmoneyPurse: true, webmoneyMerchantSecret: true, webmoneyMerchantSecretX20: true,
+        maintenanceMode: true, maintenanceMessage: true, announcement: true,
+      },
     }),
     getAppConfig(),
   ]);
+
+  let webmoneyMerchantResultUrl: string | null = null;
+  let webmoneyMerchantSuccessUrl: string | null = null;
+  if (process.env.NEXTAUTH_URL) {
+    try {
+      webmoneyMerchantResultUrl = new URL("/api/payments/webmoney/result", process.env.NEXTAUTH_URL).toString();
+      webmoneyMerchantSuccessUrl = new URL("/profile", process.env.NEXTAUTH_URL).toString();
+    } catch {
+      webmoneyMerchantResultUrl = null;
+      webmoneyMerchantSuccessUrl = null;
+    }
+  }
 
   return NextResponse.json({
     aiKeyTail: settings?.aiApiKey ? maskKey(settings.aiApiKey) : null,
@@ -32,6 +49,10 @@ export async function GET(req: NextRequest) {
     donationAlertsUrl: settings?.donationAlertsUrl ?? "",
     donationTokenTail: settings?.donationAlertsToken ? maskKey(settings.donationAlertsToken) : null,
     webmoneyPurse: settings?.webmoneyPurse ?? "",
+    webmoneyMerchantSecretTail: settings?.webmoneyMerchantSecret ? maskKey(settings.webmoneyMerchantSecret) : null,
+    webmoneyMerchantSecretX20Tail: settings?.webmoneyMerchantSecretX20 ? maskKey(settings.webmoneyMerchantSecretX20) : null,
+    webmoneyMerchantResultUrl,
+    webmoneyMerchantSuccessUrl,
     maintenanceMode: settings?.maintenanceMode ?? false,
     maintenanceMessage: settings?.maintenanceMessage ?? "",
     announcement: settings?.announcement ?? "",
@@ -79,6 +100,8 @@ export async function PUT(req: NextRequest) {
     donationAlertsUrl?: string | null;
     donationAlertsToken?: string | null;
     webmoneyPurse?: string | null;
+    webmoneyMerchantSecret?: string | null;
+    webmoneyMerchantSecretX20?: string | null;
     maintenanceMode?: boolean;
     maintenanceMessage?: string | null;
     announcement?: string | null;
@@ -167,6 +190,7 @@ export async function PUT(req: NextRequest) {
   // Поддержка проекта: реквизиты проверяем строго — они показываются всем пользователям внизу профиля
   // Токен донатов — отдельный флаг/запись журнала: смена токена не «конфиг приложения»
   let donationTokenTouched = false;
+  let webmoneySecretsTouched = false;
   {
     const body_ = body as Record<string, unknown>;
     const url = body_.donationAlertsUrl;
@@ -203,6 +227,19 @@ export async function PUT(req: NextRequest) {
       donationTokenTouched = true;
       if (trimmed) data.donationAlertsToken = trimmed;
       else data.donationAlertsToken = null;
+    }
+    for (const field of ["webmoneyMerchantSecret", "webmoneyMerchantSecretX20"] as const) {
+      const value = body_[field];
+      if (value === undefined) continue;
+      if (value !== null && typeof value !== "string") {
+        return NextResponse.json({ error: `${field}: строка или null` }, { status: 400 });
+      }
+      const secret = typeof value === "string" ? value : "";
+      if (secret.length > 50) {
+        return NextResponse.json({ error: `${field}: максимум 50 символов` }, { status: 400 });
+      }
+      data[field] = secret.trim() ? secret : null;
+      webmoneySecretsTouched = true;
     }
   }
 
@@ -263,6 +300,12 @@ export async function PUT(req: NextRequest) {
       tokenSet: Boolean(settings.donationAlertsToken),
     });
   }
+  if (webmoneySecretsTouched) {
+    await logAdmin(admin!.id, "settings.webmoney", { type: "settings", label: "WebMoney Merchant" }, {
+      secretSet: Boolean(settings.webmoneyMerchantSecret),
+      secretX20Set: Boolean(settings.webmoneyMerchantSecretX20),
+    });
+  }
 
   if (maintenanceTouched) {
     resetMaintenanceState(); // гейт в server.ts подхватит режим со следующего запроса, а не через TTL
@@ -279,6 +322,8 @@ export async function PUT(req: NextRequest) {
     aiBaseUrl: settings.aiBaseUrl ?? "",
     aiModel: settings.aiModel ?? "",
     donationTokenTail: settings.donationAlertsToken ? maskKey(settings.donationAlertsToken) : null,
+    webmoneyMerchantSecretTail: settings.webmoneyMerchantSecret ? maskKey(settings.webmoneyMerchantSecret) : null,
+    webmoneyMerchantSecretX20Tail: settings.webmoneyMerchantSecretX20 ? maskKey(settings.webmoneyMerchantSecretX20) : null,
     appConfig: {
       registrationEnabled: settings.registrationEnabled ?? true,
       freeTripLimit: settings.freeTripLimit ?? 1,

@@ -30,8 +30,9 @@ describe("normalizeWmzPurse", () => {
 describe("hasSupportOptions", () => {
   it("нужен хотя бы один способ", () => {
     expect(hasSupportOptions(null)).toBe(false);
-    expect(hasSupportOptions({ donationAlertsUrl: null, webmoneyPurse: null })).toBe(false);
-    expect(hasSupportOptions({ donationAlertsUrl: "https://a.b/c", webmoneyPurse: null })).toBe(true);
-    expect(hasSupportOptions({ donationAlertsUrl: null, webmoneyPurse: "Z123456789012" })).toBe(true);
+    expect(hasSupportOptions({ donationAlertsUrl: null, webmoneyPurse: null, webmoneyMerchantEnabled: false })).toBe(false);
+    expect(hasSupportOptions({ donationAlertsUrl: "https://a.b/c", webmoneyPurse: null, webmoneyMerchantEnabled: false })).toBe(true);
+    expect(hasSupportOptions({ donationAlertsUrl: null, webmoneyPurse: "Z123456789012", webmoneyMerchantEnabled: false })).toBe(true);
+    expect(hasSupportOptions({ donationAlertsUrl: null, webmoneyPurse: null, webmoneyMerchantEnabled: true })).toBe(true);
   });
 });

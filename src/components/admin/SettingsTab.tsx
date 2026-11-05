@@ -68,6 +68,10 @@ interface SettingsData {
   donationAlertsUrl: string;
   donationTokenTail: string | null;
   webmoneyPurse: string;
+  webmoneyMerchantSecretTail: string | null;
+  webmoneyMerchantSecretX20Tail: string | null;
+  webmoneyMerchantResultUrl: string | null;
+  webmoneyMerchantSuccessUrl: string | null;
   maintenanceMode: boolean;
   maintenanceMessage: string;
   announcement: string;
@@ -156,6 +160,10 @@ export function SettingsTab() {
   const [donationToken, setDonationToken] = useState("");
   const [donationTokenTail, setDonationTokenTail] = useState<string | null>(null);
   const [wmzPurse, setWmzPurse] = useState("");
+  const [webmoneyMerchantSecret, setWebmoneyMerchantSecret] = useState("");
+  const [webmoneyMerchantSecretX20, setWebmoneyMerchantSecretX20] = useState("");
+  const [webmoneyMerchantSecretTail, setWebmoneyMerchantSecretTail] = useState<string | null>(null);
+  const [webmoneyMerchantSecretX20Tail, setWebmoneyMerchantSecretX20Tail] = useState<string | null>(null);
   const [freeTripLimit, setFreeTripLimit] = useState("1");
   const [freeMemberLimit, setFreeMemberLimit] = useState("5");
   const [aiAlertCalls, setAiAlertCalls] = useState("0");
@@ -182,6 +190,8 @@ export function SettingsTab() {
         settings.donationAlertsUrl,
         settings.donationTokenTail,
         settings.webmoneyPurse,
+        settings.webmoneyMerchantSecretTail,
+        settings.webmoneyMerchantSecretX20Tail,
       ].join("|")
     : "";
   if (settings && settingsKey !== syncKey) {
@@ -196,6 +206,8 @@ export function SettingsTab() {
     setDonationUrl(settings.donationAlertsUrl ?? "");
     setDonationTokenTail(settings.donationTokenTail ?? null);
     setWmzPurse(settings.webmoneyPurse ?? "");
+    setWebmoneyMerchantSecretTail(settings.webmoneyMerchantSecretTail ?? null);
+    setWebmoneyMerchantSecretX20Tail(settings.webmoneyMerchantSecretX20Tail ?? null);
     setFreeTripLimit(String(settings.appConfig.freeTripLimit));
     setFreeMemberLimit(String(settings.appConfig.freeMemberLimit));
     setAiAlertCalls(String(settings.appConfig.aiAlertCallsPerDay));
@@ -226,7 +238,11 @@ export function SettingsTab() {
   });
 
   const saveApp = useMutation({
-    mutationFn: async (opts: { clearDonationToken?: boolean } = {}) => {
+    mutationFn: async (opts: {
+      clearDonationToken?: boolean;
+      clearWebMoneySecret?: boolean;
+      clearWebMoneySecretX20?: boolean;
+    } = {}) => {
       const r = await fetch("/api/admin/settings", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
@@ -245,6 +261,8 @@ export function SettingsTab() {
           // новый токен едет только если ввели; пустое поле токен не трогает (смена без перезаписи)
           ...(opts?.clearDonationToken ? { donationAlertsToken: null } : donationToken.trim() ? { donationAlertsToken: donationToken.trim() } : {}),
           webmoneyPurse: wmzPurse,
+          ...(opts.clearWebMoneySecret ? { webmoneyMerchantSecret: null } : webmoneyMerchantSecret.trim() ? { webmoneyMerchantSecret: webmoneyMerchantSecret.trim() } : {}),
+          ...(opts.clearWebMoneySecretX20 ? { webmoneyMerchantSecretX20: null } : webmoneyMerchantSecretX20.trim() ? { webmoneyMerchantSecretX20: webmoneyMerchantSecretX20.trim() } : {}),
         }),
       });
       const b = await r.json().catch(() => ({}));
@@ -254,6 +272,10 @@ export function SettingsTab() {
     onSuccess: (b) => {
       setDonationTokenTail(b.donationTokenTail ?? null);
       setDonationToken("");
+      setWebmoneyMerchantSecretTail(b.webmoneyMerchantSecretTail ?? null);
+      setWebmoneyMerchantSecretX20Tail(b.webmoneyMerchantSecretX20Tail ?? null);
+      setWebmoneyMerchantSecret("");
+      setWebmoneyMerchantSecretX20("");
       qc.invalidateQueries({ queryKey: ["admin-settings"] });
       qc.invalidateQueries({ queryKey: ["admin-journal"] });
       toast.success("Конфиг приложения сохранён");
@@ -317,6 +339,8 @@ export function SettingsTab() {
     donationUrl !== (settings.donationAlertsUrl ?? "") ||
     donationToken.trim() !== "" ||
     wmzPurse !== (settings.webmoneyPurse ?? "") ||
+    webmoneyMerchantSecret.trim() !== "" ||
+    webmoneyMerchantSecretX20.trim() !== "" ||
     freeTripLimit !== String(settings.appConfig.freeTripLimit) ||
     freeMemberLimit !== String(settings.appConfig.freeMemberLimit) ||
     aiAlertCalls !== String(settings.appConfig.aiAlertCallsPerDay) ||
@@ -553,7 +577,51 @@ export function SettingsTab() {
         <label className="space-y-1 block">
           <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Поддержка: кошелёк WebMoney (WMZ)</span>
           <input value={wmzPurse} onChange={(e) => setWmzPurse(e.target.value)} placeholder="Z123456789012" className={inputCls} />
-          <p className="text-[10px] text-muted-foreground">Оба поля необязательны. Пока не заполнено ни одно, блок «Поддержать» в профиле не показывается.</p>
+          <p className="text-[10px] text-muted-foreground">Кошелёк также используется для WebMoney Merchant. Перевод вручную остаётся доступен.</p>
+        </label>
+        <label className="space-y-1 block">
+          <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">WebMoney Merchant: Secret Key</span>
+          <input
+            type="password"
+            autoComplete="new-password"
+            maxLength={50}
+            value={webmoneyMerchantSecret}
+            onChange={(e) => setWebmoneyMerchantSecret(e.target.value)}
+            placeholder={webmoneyMerchantSecretTail ? `задан ${webmoneyMerchantSecretTail} — введите новый для смены` : "Секрет из настроек Merchant"}
+            className={inputCls}
+          />
+          <p className="text-[10px] text-muted-foreground">
+            Используется для проверки Result URL; секрет хранится на сервере и не возвращается клиенту.{" "}
+            {webmoneyMerchantSecretTail && (
+              <button type="button" onClick={() => saveApp.mutate({ clearWebMoneySecret: true })} className="underline hover:text-foreground">
+                Снять Secret Key
+              </button>
+            )}
+          </p>
+        </label>
+        <label className="space-y-1 block">
+          <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">WebMoney Merchant: Secret Key X20</span>
+          <input
+            type="password"
+            autoComplete="new-password"
+            maxLength={50}
+            value={webmoneyMerchantSecretX20}
+            onChange={(e) => setWebmoneyMerchantSecretX20(e.target.value)}
+            placeholder={webmoneyMerchantSecretX20Tail ? `задан ${webmoneyMerchantSecretX20Tail} — введите новый для смены` : "Секрет X20 из настроек Merchant"}
+            className={inputCls}
+          />
+          <p className="text-[10px] text-muted-foreground">
+            Merchant → настройки кошелька: задайте оба ключа, выберите SHA256 и включите обязательную подпись платёжной формы.
+            Result URL укажите как <code>{settings.webmoneyMerchantResultUrl ?? "NEXTAUTH_URL/api/payments/webmoney/result"}</code>;
+            включите передачу параметров предварительного запроса, отключите переопределение URL из формы и задайте Success URL
+            <code> {settings.webmoneyMerchantSuccessUrl ?? "NEXTAUTH_URL/profile"}</code>.
+            Секреты можно очистить независимо друг от друга. Merchant-оплата включится только после сохранения кошелька и обоих ключей.
+            {" "}{webmoneyMerchantSecretX20Tail && (
+              <button type="button" onClick={() => saveApp.mutate({ clearWebMoneySecretX20: true })} className="underline hover:text-foreground">
+                Снять Secret Key X20
+              </button>
+            )}
+          </p>
         </label>
 
         <button

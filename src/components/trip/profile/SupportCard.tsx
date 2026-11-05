@@ -52,10 +52,24 @@ const WHERE_MONEY_GOES = [
   { icon: Sparkles, text: "Время на новые функции и исправления" },
 ] as const;
 
+interface WebMoneyCheckoutForm {
+  action: string;
+  fields: Record<string, string>;
+}
+
+function isWebMoneyCheckoutForm(value: unknown): value is WebMoneyCheckoutForm {
+  if (typeof value !== "object" || value === null) return false;
+  const record = value as Record<string, unknown>;
+  if (typeof record.action !== "string" || typeof record.fields !== "object" || record.fields === null) return false;
+  return Object.values(record.fields).every((field) => typeof field === "string");
+}
+
 export function SupportCard({ onReportBug, userEmail }: { onReportBug: () => void; userEmail?: string }) {
   const { data } = useSupportOptions();
   const [open, setOpen] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [merchantAmount, setMerchantAmount] = useState("5");
+  const [startingPayment, setStartingPayment] = useState(false);
   const reduceMotion = useReducedMotion();
 
   // Не заданы реквизиты (или ещё грузятся) — ничего не рисуем, чтобы не мигать пустым блоком
@@ -69,6 +83,47 @@ export function SupportCard({ onReportBug, userEmail }: { onReportBug: () => voi
       setTimeout(() => setCopied(false), 2000);
     } else {
       toast.error("Не удалось скопировать", { description: "Выделите номер кошелька и скопируйте вручную" });
+    }
+  };
+
+  const startMerchantPayment = async () => {
+    setStartingPayment(true);
+    try {
+      const response = await fetch("/api/payments/webmoney/checkout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ amount: merchantAmount }),
+      });
+      const result: unknown = await response.json().catch(() => null);
+      if (!response.ok) {
+        const message =
+          typeof result === "object" && result !== null && "error" in result && typeof result.error === "string"
+            ? result.error
+            : "Не удалось создать платёж";
+        throw new Error(message);
+      }
+      if (!isWebMoneyCheckoutForm(result)) {
+        throw new Error("Сервер вернул некорректную форму WebMoney");
+      }
+
+      const form = document.createElement("form");
+      form.method = "POST";
+      form.action = result.action;
+      form.acceptCharset = "UTF-8";
+      for (const [name, value] of Object.entries(result.fields)) {
+        const input = document.createElement("input");
+        input.type = "hidden";
+        input.name = name;
+        input.value = value;
+        form.appendChild(input);
+      }
+      document.body.appendChild(form);
+      form.submit();
+    } catch (error) {
+      toast.error("Не удалось начать оплату", {
+        description: error instanceof Error ? error.message : "Попробуйте ещё раз",
+      });
+      setStartingPayment(false);
     }
   };
 
@@ -141,8 +196,9 @@ export function SupportCard({ onReportBug, userEmail }: { onReportBug: () => voi
 
             {data.donationAlertsUrl && (
               <p className="text-xs text-muted-foreground leading-relaxed px-1">
-                Совет: напишите в сообщении доната email, на который вы зарегистрированы
-                {userEmail ? ` (${userEmail})` : ""} — тогда мы поймём, что это вы, и в профиле зажжётся штамп «Поддержал проект».
+                Для сопоставления укажите в сообщении email аккаунта
+                {userEmail ? ` (${userEmail})` : ""}: приложение попробует найти совпадение и выдать бейдж. Это не подтверждает владение адресом;
+                если привязка не сработала, напишите владельцу проекта.
               </p>
             )}
             {data.donationAlertsUrl && (
@@ -164,14 +220,18 @@ export function SupportCard({ onReportBug, userEmail }: { onReportBug: () => voi
             )}
 
             {data.webmoneyPurse && (
-              <div className="rounded-2xl border border-border bg-card p-3.5 space-y-2.5">
+              <div className="rounded-2xl border border-border bg-card p-3.5 space-y-3">
                 <div className="flex items-center gap-3">
                   <span className="size-10 shrink-0 rounded-xl bg-sky-500/15 text-sky-500 grid place-items-center" aria-hidden="true">
                     <Wallet className="size-5" />
                   </span>
                   <span className="min-w-0 flex-1">
                     <span className="block text-sm font-semibold">WebMoney</span>
-                    <span className="block text-xs text-muted-foreground">Перевод на кошелёк WMZ (доллары)</span>
+                    <span className="block text-xs text-muted-foreground">
+                      {data.webmoneyMerchantEnabled
+                        ? "Перевод вручную или оплата с автоматической привязкой"
+                        : "Перевод на кошелёк WMZ (доллары)"}
+                    </span>
                   </span>
                 </div>
                 <div className="flex items-stretch gap-2">
@@ -187,13 +247,50 @@ export function SupportCard({ onReportBug, userEmail }: { onReportBug: () => voi
                     {copied ? "Готово" : "Копировать"}
                   </button>
                 </div>
+                {data.webmoneyMerchantEnabled && (
+                  <p className="text-[11px] text-muted-foreground">
+                    Обычный перевод на кошелёк не подтвердится в приложении автоматически; для записи доната используйте оплату Merchant.
+                  </p>
+                )}
+                {data.webmoneyMerchantEnabled && (
+                  <>
+                    <div className="flex items-center gap-2">
+                      <label htmlFor="webmoney-support-amount" className="text-xs text-muted-foreground">
+                        Сумма, USD
+                      </label>
+                      <input
+                        id="webmoney-support-amount"
+                        type="number"
+                        inputMode="decimal"
+                        min="1"
+                        max="200"
+                        step="0.01"
+                        value={merchantAmount}
+                        onChange={(event) => setMerchantAmount(event.target.value)}
+                        className="min-h-11 w-28 rounded-xl border border-input bg-background px-3 text-sm tabular-nums"
+                      />
+                      <span className="text-[11px] text-muted-foreground">от $1 до $200</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={startMerchantPayment}
+                      disabled={startingPayment}
+                      className="w-full min-h-11 rounded-xl bg-primary px-4 text-sm font-semibold text-primary-foreground disabled:opacity-50"
+                    >
+                      {startingPayment ? "Переходим к WebMoney…" : "Оплатить через WebMoney"}
+                    </button>
+                    <p className="text-[11px] text-muted-foreground">
+                      Merchant автоматически подтвердит оплату и привяжет её к вашему аккаунту — email и комментарий не нужны.
+                    </p>
+                  </>
+                )}
               </div>
             )}
           </div>
 
           <div className="rounded-2xl bg-muted/60 px-3.5 py-3 text-xs text-muted-foreground leading-relaxed space-y-1.5">
             <p>Это добровольно: ничего не закроется и не исчезнет, если вы не поддержите. Взамен ничего не обещаю, кроме искренней благодарности.</p>
-            <p>Платёж проходит напрямую через сервис, который вы выберете. TripTrek ваших платёжных данных не видит и не хранит.</p>
+            <p>Данные карты и кошелька обрабатывает платёжный сервис. TripTrek получает сумму и подтверждение оплаты, но не платёжные реквизиты.</p>
           </div>
 
           <button
