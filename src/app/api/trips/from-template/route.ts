@@ -50,6 +50,7 @@ export async function POST(req: NextRequest) {
       const trip = await tx.trip.create({
       data: {
       title: customTitle || template.title,
+      creationSource: "template",
       destination: template.destination,
       startDate,
       endDate,

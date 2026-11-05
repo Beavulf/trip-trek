@@ -4,6 +4,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { getTripId } from "./trip-id";
 import { invalidateRouteData } from "@/lib/query-keys";
 import type { PlannerDayDraft } from "@/lib/planner";
+import { trackFirstUserPlaceAdded } from "@/lib/trip-analytics";
 
 // Хуки ИИ-путешествий: планер маршрута, OSM-рестораны, прогулка рядом и
 // батч-создание мест из черновиков. Ошибки сервера всплывают с текстом роута
@@ -113,7 +114,7 @@ export interface BatchPlaceInput {
 /** Черновики → места одним батчем (одна WS-публикация, одна инвалидация). */
 export function useCreatePlacesBatch() {
   const qc = useQueryClient();
-  return useMutation<{ created: number }, Error, BatchPlaceInput[]>({
+  return useMutation<{ created: number; firstUserPlaceAdded?: boolean }, Error, BatchPlaceInput[]>({
     mutationFn: async (places) => {
       const r = await fetch("/api/places/batch", {
         method: "POST",
@@ -124,6 +125,9 @@ export function useCreatePlacesBatch() {
       if (!r.ok) throw new Error(b.error || `Ошибка ${r.status}`);
       return b;
     },
-    onSuccess: () => invalidateRouteData(qc),
+    onSuccess: (data) => {
+      if (data.firstUserPlaceAdded) trackFirstUserPlaceAdded();
+      invalidateRouteData(qc);
+    },
   });
 }

@@ -31,6 +31,7 @@ import { useTripStore } from "@/lib/trip-store";
 import { useBackDismiss } from "@/hooks/use-back-dismiss";
 import { useBodyScrollLock } from "@/hooks/use-body-scroll-lock";
 import { calculateCurrentDayNumber, formatTripDate, tripDaysElapsed, tripRangeKeys } from "@/lib/trip-days";
+import { trackTripCreated } from "@/lib/trip-analytics";
 
 /** Фаза поездки по датам: ещё не началась / идёт / закончилась */
 function tripPhase(startDate: string | Date, totalDays: number): "upcoming" | "active" | "done" {
@@ -192,6 +193,7 @@ export function TripSwitcher() {
       }
     },
     onSuccess: (data) => {
+      trackTripCreated("blank");
       setPendingTripId(data.id);
       setTripId(data.id);
       qc.invalidateQueries({ queryKey: ["trips"] });

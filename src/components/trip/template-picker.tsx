@@ -12,6 +12,7 @@ import { TRIP_TEMPLATES } from "@/lib/trip-templates";
 import { useTripStore } from "@/lib/trip-store";
 import { cn } from "@/lib/utils";
 import { useBodyScrollLock } from "@/hooks/use-body-scroll-lock";
+import { trackTripCreated } from "@/lib/trip-analytics";
 
 interface TemplatePickerProps {
   open: boolean;
@@ -57,6 +58,7 @@ export function TemplatePicker({ open, onOpenChange }: TemplatePickerProps) {
       }
     },
     onSuccess: (data) => {
+      trackTripCreated("template");
       useTripStore.getState().setPendingTripId(data.id);
       setTripId(data.id);
       qc.invalidateQueries({ queryKey: ["trips"] });

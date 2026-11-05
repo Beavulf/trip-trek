@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { publish } from "@/lib/ws-bus";
 import { requireTripEditor } from "@/lib/api-auth";
 import { pickPatchablePlace } from "@/lib/place-fields";
+import { claimFirstUserPlaceAdded } from "@/lib/trip-activation";
 
 // POST /api/places — создать место. Поля и капы — через общий контракт place-fields.
 export async function POST(req: NextRequest) {
@@ -20,33 +21,41 @@ export async function POST(req: NextRequest) {
   if (!day) {
     return NextResponse.json({ error: "day не принадлежит этой поездке" }, { status: 400 });
   }
+  const placeName = input.name;
+  const dayId = input.dayId;
+  const lat = input.lat;
+  const lng = input.lng;
 
   // order — серверное поле; явное число из тела разрешено только здесь (создание)
-  const maxOrder = await db.place.aggregate({ where: { dayId: input.dayId }, _max: { order: true } });
+  const maxOrder = await db.place.aggregate({ where: { dayId }, _max: { order: true } });
   const order =
     typeof body.order === "number" && Number.isFinite(body.order)
       ? body.order
       : (maxOrder._max.order ?? -1) + 1;
 
-  const place = await db.place.create({
-    data: {
-      name: input.name,
-      description: input.description ?? null,
-      category: input.category ?? "sight",
-      lat: input.lat,
-      lng: input.lng,
-      dayId: input.dayId,
-      tripId,
-      timeOfDay: input.timeOfDay ?? null,
-      budget: input.budget ?? null,
-      address: input.address ?? null,
-      order,
-      status: "planned",
-    },
+  const { place, firstUserPlaceAdded } = await db.$transaction(async (tx) => {
+    const place = await tx.place.create({
+      data: {
+        name: placeName,
+        description: input.description ?? null,
+        category: input.category ?? "sight",
+        lat,
+        lng,
+        dayId,
+        tripId,
+        timeOfDay: input.timeOfDay ?? null,
+        budget: input.budget ?? null,
+        address: input.address ?? null,
+        order,
+        status: "planned",
+      },
+    });
+    const firstUserPlaceAdded = await claimFirstUserPlaceAdded(tx, tripId);
+    return { place, firstUserPlaceAdded };
   });
   // Имя автора — с сервера, а не из тела запроса: иначе участник подписывал бы тосты и пуши чужим именем.
   // Из БД, а не из JWT: после переименования в токене остаётся старое имя до перелогина
   const author = await db.user.findUnique({ where: { id: user!.id }, select: { name: true } });
   publish(tripId, "place:created", { placeName: place.name, userName: author?.name || "Кто-то" }, user!.id);
-  return NextResponse.json(place);
+  return NextResponse.json({ ...place, firstUserPlaceAdded });
 }

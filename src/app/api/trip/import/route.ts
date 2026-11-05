@@ -220,6 +220,7 @@ export async function POST(req: NextRequest) {
   const trip = await tx.trip.create({
     data: {
       title: body.trip.title,
+      creationSource: "import",
       destination: body.trip.destination || "Unknown",
       startDate: new Date(body.trip.startDate),
       endDate: body.trip.endDate ? new Date(body.trip.endDate) : null,

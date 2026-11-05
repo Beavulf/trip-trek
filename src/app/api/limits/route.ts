@@ -85,6 +85,7 @@ export async function POST(req: NextRequest) {
   const trip = await db.trip.create({
     data: {
       title,
+      creationSource: "blank",
       destination: destination || "Unknown",
       startDate: new Date(startDate || Date.now()),
       totalDays: totalDays || 12,

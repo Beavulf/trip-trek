@@ -9,6 +9,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { setTripId } from "@/hooks/use-trip";
 import { useQueryClient } from "@tanstack/react-query";
 import { formatTripDate } from "@/lib/trip-days";
+import { trackInviteAccepted } from "@/lib/trip-analytics";
 
 function memberLabel(n: number) {
   const mod10 = n % 10;
@@ -97,6 +98,7 @@ function JoinPageContent() {
       const data = await res.json();
       if (data.error) throw new Error(data.error);
 
+      if (!data.alreadyMember) trackInviteAccepted();
       setTripId(data.tripId);
       qc.invalidateQueries({ queryKey: ["trips"] });
       qc.invalidateQueries({ queryKey: ["trip"] });

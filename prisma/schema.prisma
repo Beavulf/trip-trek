@@ -237,6 +237,9 @@ model Trip {
   // Срок действия публичной ссылки: после этого момента страница, порции фото, ZIP и
   // сердечко закрыты, токен остаётся (продлил — тот же адрес). null — бессрочно
   shareExpiresAt     DateTime?
+  // Источник создания нужен для аналитики активации; legacy — поездки до включения трекинга
+  creationSource            String    @default("legacy")
+  firstUserPlaceAddedAt     DateTime?
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 

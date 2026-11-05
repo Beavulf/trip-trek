@@ -4,6 +4,7 @@ import { publish } from "@/lib/ws-bus";
 import { requireTripEditor } from "@/lib/api-auth";
 import { pickPatchablePlace } from "@/lib/place-fields";
 import { sanitizeUserText } from "@/lib/planner";
+import { claimFirstUserPlaceAdded } from "@/lib/trip-activation";
 
 // POST /api/places/batch — создать несколько мест одним запросом
 // (черновики планера/ресторанов/прогулки). Контракт полей — тот же
@@ -84,13 +85,17 @@ export async function POST(req: NextRequest) {
       r.order = next;
     }
 
-    const created = await db.$transaction(rows.map((r) => db.place.create({ data: r })));
+    const { created, firstUserPlaceAdded } = await db.$transaction(async (tx) => {
+      const created = await Promise.all(rows.map((r) => tx.place.create({ data: r })));
+      const firstUserPlaceAdded = await claimFirstUserPlaceAdded(tx, tripId);
+      return { created, firstUserPlaceAdded };
+    });
     publish(tripId, "place:created", {
       count: created.length,
       userName: sanitizeUserText(body.userName || user.name || "Кто-то", 60),
     }, user.id);
 
-    return NextResponse.json({ created: created.length, places: created });
+    return NextResponse.json({ created: created.length, places: created, firstUserPlaceAdded });
   } catch (e) {
     console.error("[places/batch] failed:", e);
     return NextResponse.json({ error: "Не удалось добавить места" }, { status: 500 });

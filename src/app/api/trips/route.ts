@@ -73,6 +73,7 @@ export async function POST(req: NextRequest) {
   const trip = await db.trip.create({
     data: {
       title: String(title).slice(0, 100),
+      creationSource: "custom",
       destination: (destination || "Unknown").slice(0, 100),
       startDate: start,
       // Конец поездки — конец последнего дня маршрута (как в POST /api/days), если клиент не задал свой

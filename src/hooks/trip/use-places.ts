@@ -4,6 +4,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { getTripId } from "./trip-id";
 import { invalidateRouteData } from "@/lib/query-keys";
 import type { PlacePatch, PlaceCreateInput } from "@/lib/place-fields";
+import { trackFirstUserPlaceAdded } from "@/lib/trip-analytics";
 
 export function useUpdatePlace() {
   const qc = useQueryClient();
@@ -19,9 +20,12 @@ export function useUpdatePlace() {
         const err = await r.json().catch(() => ({}));
         throw new Error(err.error || "update place failed");
       }
-      return r.json();
+      return r.json() as Promise<{ firstUserPlaceAdded?: boolean }>;
     },
-    onSuccess: () => invalidateRouteData(qc),
+    onSuccess: (data) => {
+      if (data.firstUserPlaceAdded) trackFirstUserPlaceAdded();
+      invalidateRouteData(qc);
+    },
   });
 }
 
