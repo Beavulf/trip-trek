@@ -2,7 +2,7 @@ window.STATE =
 {
   "version": 2,
   "slug": "team-system",
-  "dir": "2026-11-05-team-system--wip",
+  "dir": "2026-11-05-team-system",
   "title": "Система-команда для TripTrek",
   "mode": "interview",
   "depth": "deep",
@@ -11,10 +11,10 @@ window.STATE =
   "memoryFile": "AGENTS.md",
   "memoryOwner": "user",
   "skillDir": "C:/Users/world/.agents/skills/autopilot",
-  "baseCommit": null,
+  "baseCommit": "0e2417f",
   "startedAt": "2026-11-05T18:59:21+03:00",
-  "updatedAt": "2026-11-05T19:41:32+03:00",
-  "finishedAt": null,
+  "updatedAt": "2026-11-05T20:34:39+03:00",
+  "finishedAt": "2026-11-05T20:34:39+03:00",
   "stages": [
     {
       "id": "preflight",
@@ -42,26 +42,33 @@ window.STATE =
     },
     {
       "id": "plan",
-      "status": "active",
-      "startedAt": "2026-11-05T19:38:58+03:00"
+      "status": "done",
+      "startedAt": "2026-11-05T19:38:58+03:00",
+      "finishedAt": "2026-11-05T19:42:51+03:00"
     },
     {
       "id": "build",
-      "status": "pending"
+      "status": "done",
+      "startedAt": "2026-11-05T19:42:51+03:00",
+      "finishedAt": "2026-11-05T20:17:03+03:00"
     },
     {
       "id": "review",
-      "status": "pending"
+      "status": "done",
+      "startedAt": "2026-11-05T20:17:03+03:00",
+      "finishedAt": "2026-11-05T20:22:05+03:00"
     },
     {
       "id": "final",
-      "status": "pending"
+      "status": "done",
+      "startedAt": "2026-11-05T20:22:05+03:00",
+      "finishedAt": "2026-11-05T20:34:39+03:00"
     }
   ],
   "requirements": {
     "total": 16,
-    "done": 0,
-    "inTicket": 16,
+    "done": 16,
+    "inTicket": 0,
     "inSpec": 0,
     "placeholder": 0,
     "deferred": 0,
@@ -100,9 +107,19 @@ window.STATE =
       ],
       "review": "да — фундамент",
       "model": "сильная",
-      "status": "pending",
+      "status": "done",
       "retries": 0,
-      "repairs": 0
+      "repairs": 1,
+      "startedAt": "2026-11-05T19:42:52+03:00",
+      "finishedAt": "2026-11-05T20:17:02+03:00",
+      "tests": {
+        "passed": 0,
+        "failed": 0
+      },
+      "commit": "9b56570",
+      "repairFindings": [
+        "docs/ai-team/ не удалён из HEAD — перенос не доехал в коммит"
+      ]
     },
     {
       "id": "02",
@@ -122,9 +139,16 @@ window.STATE =
       ],
       "review": "нет",
       "model": "обычная",
-      "status": "pending",
+      "status": "done",
       "retries": 0,
-      "repairs": 0
+      "repairs": 0,
+      "startedAt": "2026-11-05T19:54:57+03:00",
+      "finishedAt": "2026-11-05T20:14:02+03:00",
+      "tests": {
+        "passed": 0,
+        "failed": 0
+      },
+      "commit": "544ed92"
     },
     {
       "id": "03",
@@ -146,12 +170,22 @@ window.STATE =
       ],
       "review": "нет",
       "model": "обычная",
-      "status": "pending",
+      "status": "done",
       "retries": 0,
-      "repairs": 0
+      "repairs": 0,
+      "startedAt": "2026-11-05T19:54:57+03:00",
+      "finishedAt": "2026-11-05T20:15:00+03:00",
+      "tests": {
+        "passed": 0,
+        "failed": 0
+      },
+      "commit": "a830cfd"
     }
   ],
-  "tests": null,
+  "tests": {
+    "passed": 0,
+    "failed": 0
+  },
   "debt": {
     "placeholders": [],
     "assumptions": [],
@@ -166,8 +200,16 @@ window.STATE =
       "R10 — «и остальне»: владелец не раскрыл, что имелось в виду; записано в манифесте, система расширяема, уйдёт в отчёт"
     ]
   },
-  "concerns": [],
-  "blind": null,
+  "concerns": [
+    "AGENTS.md владельца ссылается на docs/ai-team/README.md — после архивации ссылка ведёт в архив; предложить правку в memory-proposal",
+    "bun нет в PATH Git Bash этой машины — скрипты гонялись через %APPDATA%\\npm\\bun; runbook учитывает",
+    "T03: ветка «есть отзывы» проверена на подменённом ответе ssh — живых отзывов на проде пока нет"
+  ],
+  "blind": {
+    "checked": 16,
+    "matched": 16,
+    "mismatches": []
+  },
   "beats": [
     "2026-11-05T18:59:21+03:00",
     "2026-11-05T19:01:09+03:00",
@@ -179,9 +221,25 @@ window.STATE =
     "2026-11-05T19:38:57+03:00",
     "2026-11-05T19:38:58+03:00",
     "2026-11-05T19:40:14+03:00",
-    "2026-11-05T19:41:32+03:00"
+    "2026-11-05T19:41:32+03:00",
+    "2026-11-05T19:42:24+03:00",
+    "2026-11-05T19:42:51+03:00",
+    "2026-11-05T19:42:52+03:00",
+    "2026-11-05T19:54:56+03:00",
+    "2026-11-05T19:54:57+03:00",
+    "2026-11-05T19:54:58+03:00",
+    "2026-11-05T20:12:37+03:00",
+    "2026-11-05T20:14:02+03:00",
+    "2026-11-05T20:15:00+03:00",
+    "2026-11-05T20:17:02+03:00",
+    "2026-11-05T20:17:03+03:00",
+    "2026-11-05T20:22:04+03:00",
+    "2026-11-05T20:22:05+03:00",
+    "2026-11-05T20:29:29+03:00",
+    "2026-11-05T20:33:53+03:00",
+    "2026-11-05T20:34:39+03:00"
   ],
-  "rev": 13,
+  "rev": 31,
   "waiting": null,
   "waits": [
     {
@@ -269,88 +327,225 @@ window.STATE =
       "g": "G3",
       "ok": true,
       "problems": 0
+    },
+    {
+      "t": "2026-11-05T19:42:51+03:00",
+      "k": "stage",
+      "id": "build",
+      "act": "start"
+    },
+    {
+      "t": "2026-11-05T19:42:52+03:00",
+      "k": "ticket",
+      "ids": [
+        "01"
+      ],
+      "act": "start"
+    },
+    {
+      "t": "2026-11-05T19:54:56+03:00",
+      "k": "ticket",
+      "ids": [
+        "01"
+      ],
+      "act": "done",
+      "tests": {
+        "passed": 0,
+        "failed": 0
+      }
+    },
+    {
+      "t": "2026-11-05T19:54:56+03:00",
+      "k": "ticket",
+      "ids": [
+        "01"
+      ],
+      "act": "review"
+    },
+    {
+      "t": "2026-11-05T19:54:57+03:00",
+      "k": "ticket",
+      "ids": [
+        "02",
+        "03"
+      ],
+      "act": "start"
+    },
+    {
+      "t": "2026-11-05T19:54:58+03:00",
+      "k": "add",
+      "key": "concerns",
+      "n": 1
+    },
+    {
+      "t": "2026-11-05T20:12:37+03:00",
+      "k": "ticket",
+      "ids": [
+        "01"
+      ],
+      "act": "repair",
+      "note": "docs/ai-team/ не удалён из HEAD — перенос не доехал в коммит"
+    },
+    {
+      "t": "2026-11-05T20:14:02+03:00",
+      "k": "ticket",
+      "ids": [
+        "02"
+      ],
+      "act": "done",
+      "tests": {
+        "passed": 0,
+        "failed": 0
+      }
+    },
+    {
+      "t": "2026-11-05T20:15:00+03:00",
+      "k": "ticket",
+      "ids": [
+        "03"
+      ],
+      "act": "done",
+      "tests": {
+        "passed": 0,
+        "failed": 0
+      }
+    },
+    {
+      "t": "2026-11-05T20:15:00+03:00",
+      "k": "add",
+      "key": "concerns",
+      "n": 2
+    },
+    {
+      "t": "2026-11-05T20:17:02+03:00",
+      "k": "ticket",
+      "ids": [
+        "01"
+      ],
+      "act": "done",
+      "tests": {
+        "passed": 0,
+        "failed": 0
+      }
+    },
+    {
+      "t": "2026-11-05T20:17:03+03:00",
+      "k": "stage",
+      "id": "review",
+      "act": "start"
+    },
+    {
+      "t": "2026-11-05T20:22:04+03:00",
+      "k": "add",
+      "key": "report",
+      "n": 3
+    },
+    {
+      "t": "2026-11-05T20:22:05+03:00",
+      "k": "stage",
+      "id": "final",
+      "act": "start"
+    },
+    {
+      "t": "2026-11-05T20:29:29+03:00",
+      "k": "gate",
+      "g": "G4",
+      "ok": true,
+      "checked": 16,
+      "matched": 16
+    },
+    {
+      "t": "2026-11-05T20:33:53+03:00",
+      "k": "tests",
+      "passed": 0,
+      "failed": 0
+    },
+    {
+      "t": "2026-11-05T20:34:39+03:00",
+      "k": "finish",
+      "result": "Система-команда team/: 6 ролей, синк в 3 платформы, 3 джобы (выключены), v1 в архиве; 16/16"
     }
   ],
   "reqList": [
     {
       "id": "R01",
       "text": "«систему, архитектуру для работы с проектом трип трек»",
-      "status": "in-ticket"
+      "status": "done"
     },
     {
       "id": "R02",
       "text": "«попутно уточняя у меня важно[е]» · «надо что то конкретное спрашивай»",
-      "status": "in-ticket"
+      "status": "done"
     },
     {
       "id": "R03",
       "text": "«полный пайплан, от идеи… обговорим, выявим сильные слабые стороны»",
-      "status": "in-ticket"
+      "status": "done"
     },
     {
       "id": "R04",
       "text": "«план, спека и так далее»",
-      "status": "in-ticket"
+      "status": "done"
     },
     {
       "id": "R05",
       "text": "«до самой релаизации»",
-      "status": "in-ticket"
+      "status": "done"
     },
     {
       "id": "R06",
       "text": "«маркетинг, придумывания стратегии продвижения»",
-      "status": "in-ticket"
+      "status": "done"
     },
     {
       "id": "R07",
       "text": "«проверки кода»",
-      "status": "in-ticket"
+      "status": "done"
     },
     {
       "id": "R08",
       "text": "«проверка и ответы на обратный отзывыв пользователей в приложении»",
-      "status": "in-ticket"
+      "status": "done"
     },
     {
       "id": "R09",
       "text": "«проверку слабых мест»",
-      "status": "in-ticket"
+      "status": "done"
     },
     {
       "id": "R10",
       "text": "«аналитика текстов и остальне[е]»",
-      "status": "in-ticket"
+      "status": "done"
     },
     {
       "id": "R11",
       "text": "«превратить меня и мой проект в некую такую команду по разработки и поддержки на всех этапах»",
-      "status": "in-ticket"
+      "status": "done"
     },
     {
       "id": "R12",
       "text": "«данные можешь собирать с прода, но только читать»",
-      "status": "in-ticket"
+      "status": "done"
     },
     {
       "id": "R13",
       "text": "«по итогу я мог также писать задачу, её подхватыл агент отдельный со своей ролью и делал»",
-      "status": "in-ticket"
+      "status": "done"
     },
     {
       "id": "R14i",
       "text": "(подразумевается) где эта система живёт",
-      "status": "in-ticket"
+      "status": "done"
     },
     {
       "id": "R15i",
       "text": "(подразумевается) кто и как запускает агентов",
-      "status": "in-ticket"
+      "status": "done"
     },
     {
       "id": "R16i",
       "text": "(подразумевается) судьба существующей «AI team» v1",
-      "status": "in-ticket"
+      "status": "done"
     }
   ],
   "gates": {
@@ -371,7 +566,19 @@ window.STATE =
       "ok": true,
       "at": "2026-11-05T19:41:32+03:00",
       "problems": 0
+    },
+    "G4": {
+      "ok": true,
+      "at": "2026-11-05T20:29:29+03:00",
+      "checked": 16,
+      "matched": 16
     }
   },
-  "result": null
+  "result": "Система-команда team/: 6 ролей, синк в 3 платформы, 3 джобы (выключены), v1 в архиве; 16/16",
+  "report": [
+    "AGENTS.md владельца ссылается на docs/ai-team/README.md и скилл /triptrek-team — после архивации ссылки мертвы; правка предложена в memory-proposal",
+    "Ветка «есть отзывы» в fetch-feedback.mjs проверена на подменённом ответе ssh — живых отзывов на проде пока не было; первый боевой прогон подтвердит",
+    "Архив v1 внутри ссылается на старые пути (docs/ai-team/…) — это исторический слепок; читать с оговоркой"
+  ],
+  "blindRounds": 1
 }
