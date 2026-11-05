@@ -98,7 +98,6 @@ brag-output/work/
 
 # Бэкапы поездок из «Данные → Экспорт»: настоящие люди и деньги, в репозиторий не попадают
 triptrek-backup-*.json
-<<<<<<< HEAD
 
 # Промо-видео для TikTok/Shorts: тяжёлые артефакты — только локально
 marketing/work/
@@ -109,6 +108,7 @@ marketing/tiktok/*.mp4
 
 # Артефакты шаринга агентов (случайные коммиты чужого проекта): не коммитить
 .zcode-share/
-=======
 .autopilot/serve.*
->>>>>>> 19ca38f (chore: .autopilot/serve.* в gitignore — файлы сервера дашборда автопилота)
+
+# Сырые выгрузки отзывов (email, имена) — только локально, в git не попадают
+team/inbox/feedback/raw/
