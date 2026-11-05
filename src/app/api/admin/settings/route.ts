@@ -7,6 +7,7 @@ import { maskKey, validateAiBaseUrl } from "@/lib/ai-key";
 import { getAppConfig } from "@/lib/app-config";
 import { normalizeNotice } from "@/lib/maintenance";
 import { resetMaintenanceState } from "@/lib/maintenance-state";
+import { donationAlertsRedirectUri } from "@/lib/donationalerts-oauth";
 
 // GET /api/admin/settings — глобальные настройки. Ключ наружу не отдаётся,
 // только замаскированный хвост; base URL, модель и конфиг приложения — не секреты
@@ -20,6 +21,7 @@ export async function GET(req: NextRequest) {
       select: {
         aiApiKey: true, aiBaseUrl: true, aiModel: true, selfUpgradeEnabled: true,
         demoTripToken: true, contactTelegram: true, donationAlertsUrl: true, donationAlertsToken: true,
+        donationAlertsClientId: true, donationAlertsClientSecret: true,
         webmoneyPurse: true, webmoneyMerchantSecret: true, webmoneyMerchantSecretX20: true,
         maintenanceMode: true, maintenanceMessage: true, announcement: true,
       },
@@ -29,10 +31,12 @@ export async function GET(req: NextRequest) {
 
   let webmoneyMerchantResultUrl: string | null = null;
   let webmoneyMerchantSuccessUrl: string | null = null;
+  let donationOAuthRedirectUrl: string | null = null;
   if (process.env.NEXTAUTH_URL) {
     try {
       webmoneyMerchantResultUrl = new URL("/api/payments/webmoney/result", process.env.NEXTAUTH_URL).toString();
       webmoneyMerchantSuccessUrl = new URL("/profile", process.env.NEXTAUTH_URL).toString();
+      donationOAuthRedirectUrl = donationAlertsRedirectUri(process.env.NEXTAUTH_URL);
     } catch {
       webmoneyMerchantResultUrl = null;
       webmoneyMerchantSuccessUrl = null;
@@ -48,6 +52,11 @@ export async function GET(req: NextRequest) {
     contactTelegram: settings?.contactTelegram ?? "",
     donationAlertsUrl: settings?.donationAlertsUrl ?? "",
     donationTokenTail: settings?.donationAlertsToken ? maskKey(settings.donationAlertsToken) : null,
+    donationOAuthClientId: settings?.donationAlertsClientId ?? "",
+    donationOAuthClientSecretTail: settings?.donationAlertsClientSecret
+      ? maskKey(settings.donationAlertsClientSecret)
+      : null,
+    donationOAuthRedirectUrl,
     webmoneyPurse: settings?.webmoneyPurse ?? "",
     webmoneyMerchantSecretTail: settings?.webmoneyMerchantSecret ? maskKey(settings.webmoneyMerchantSecret) : null,
     webmoneyMerchantSecretX20Tail: settings?.webmoneyMerchantSecretX20 ? maskKey(settings.webmoneyMerchantSecretX20) : null,
@@ -99,6 +108,10 @@ export async function PUT(req: NextRequest) {
     contactTelegram?: string | null;
     donationAlertsUrl?: string | null;
     donationAlertsToken?: string | null;
+    donationAlertsRefreshToken?: string | null;
+    donationAlertsTokenExpiresAt?: Date | null;
+    donationAlertsClientId?: string | null;
+    donationAlertsClientSecret?: string | null;
     webmoneyPurse?: string | null;
     webmoneyMerchantSecret?: string | null;
     webmoneyMerchantSecretX20?: string | null;
@@ -190,6 +203,7 @@ export async function PUT(req: NextRequest) {
   // Поддержка проекта: реквизиты проверяем строго — они показываются всем пользователям внизу профиля
   // Токен донатов — отдельный флаг/запись журнала: смена токена не «конфиг приложения»
   let donationTokenTouched = false;
+  let donationOAuthTouched = false;
   let webmoneySecretsTouched = false;
   {
     const body_ = body as Record<string, unknown>;
@@ -225,8 +239,33 @@ export async function PUT(req: NextRequest) {
       }
       const trimmed = typeof token === "string" ? token.trim() : "";
       donationTokenTouched = true;
-      if (trimmed) data.donationAlertsToken = trimmed;
-      else data.donationAlertsToken = null;
+      data.donationAlertsToken = trimmed || null;
+      data.donationAlertsRefreshToken = null;
+      data.donationAlertsTokenExpiresAt = null;
+    }
+    const clientId = body_.donationAlertsClientId;
+    if (clientId !== undefined) {
+      if (clientId !== null && typeof clientId !== "string") {
+        return NextResponse.json({ error: "donationAlertsClientId: строка или null" }, { status: 400 });
+      }
+      const trimmed = typeof clientId === "string" ? clientId.trim() : "";
+      if (trimmed && !/^\d{1,32}$/.test(trimmed)) {
+        return NextResponse.json({ error: "DonationAlerts Client ID должен содержать только цифры" }, { status: 400 });
+      }
+      data.donationAlertsClientId = trimmed || null;
+      donationOAuthTouched = true;
+    }
+    const clientSecret = body_.donationAlertsClientSecret;
+    if (clientSecret !== undefined) {
+      if (clientSecret !== null && typeof clientSecret !== "string") {
+        return NextResponse.json({ error: "donationAlertsClientSecret: строка или null" }, { status: 400 });
+      }
+      const trimmed = typeof clientSecret === "string" ? clientSecret.trim() : "";
+      if (trimmed.length > 500) {
+        return NextResponse.json({ error: "DonationAlerts Client Secret слишком длинный" }, { status: 400 });
+      }
+      data.donationAlertsClientSecret = trimmed || null;
+      donationOAuthTouched = true;
     }
     for (const field of ["webmoneyMerchantSecret", "webmoneyMerchantSecretX20"] as const) {
       const value = body_[field];
@@ -300,6 +339,12 @@ export async function PUT(req: NextRequest) {
       tokenSet: Boolean(settings.donationAlertsToken),
     });
   }
+  if (donationOAuthTouched) {
+    await logAdmin(admin!.id, "settings.donations_oauth_config", { type: "settings", label: "DonationAlerts OAuth" }, {
+      clientIdSet: Boolean(settings.donationAlertsClientId),
+      clientSecretSet: Boolean(settings.donationAlertsClientSecret),
+    });
+  }
   if (webmoneySecretsTouched) {
     await logAdmin(admin!.id, "settings.webmoney", { type: "settings", label: "WebMoney Merchant" }, {
       secretSet: Boolean(settings.webmoneyMerchantSecret),
@@ -322,6 +367,10 @@ export async function PUT(req: NextRequest) {
     aiBaseUrl: settings.aiBaseUrl ?? "",
     aiModel: settings.aiModel ?? "",
     donationTokenTail: settings.donationAlertsToken ? maskKey(settings.donationAlertsToken) : null,
+    donationOAuthClientId: settings.donationAlertsClientId ?? "",
+    donationOAuthClientSecretTail: settings.donationAlertsClientSecret
+      ? maskKey(settings.donationAlertsClientSecret)
+      : null,
     webmoneyMerchantSecretTail: settings.webmoneyMerchantSecret ? maskKey(settings.webmoneyMerchantSecret) : null,
     webmoneyMerchantSecretX20Tail: settings.webmoneyMerchantSecretX20 ? maskKey(settings.webmoneyMerchantSecretX20) : null,
     appConfig: {

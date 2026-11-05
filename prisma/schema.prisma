@@ -136,9 +136,13 @@ model AppSettings {
   // Поддержка проекта (блок «Поддержать» внизу профиля): оба поля необязательны, нет ни одного — блока нет
   donationAlertsUrl String? // https-страница DonationAlerts
   webmoneyPurse     String? // WMZ-кошелёк для перевода (Z + 12 цифр)
-  // OAuth-токен DonationAlerts (scope oauth-donation-index) для фонового приёма донатов
+  // OAuth-токен DonationAlerts (scopes oauth-user-show + oauth-donation-subscribe) для фонового приёма донатов
   // (src/lib/donations-server.ts). Наружу API отдаёт только замаскированный хвост — как aiApiKey
-  donationAlertsToken String?
+  donationAlertsToken             String?
+  donationAlertsRefreshToken      String?
+  donationAlertsTokenExpiresAt    DateTime?
+  donationAlertsClientId          String?
+  donationAlertsClientSecret      String?
   // WebMoney Merchant secrets: Secret Key проверяет Result URL, Secret Key X20 подписывает форму оплаты
   webmoneyMerchantSecret    String?
   webmoneyMerchantSecretX20 String?

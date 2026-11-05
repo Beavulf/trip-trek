@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
@@ -67,6 +67,9 @@ interface SettingsData {
   contactTelegram: string;
   donationAlertsUrl: string;
   donationTokenTail: string | null;
+  donationOAuthClientId: string;
+  donationOAuthClientSecretTail: string | null;
+  donationOAuthRedirectUrl: string | null;
   webmoneyPurse: string;
   webmoneyMerchantSecretTail: string | null;
   webmoneyMerchantSecretX20Tail: string | null;
@@ -131,6 +134,17 @@ const inputCls =
 export function SettingsTab() {
   const qc = useQueryClient();
   const { data: stats } = useAdminStats(true);
+  useEffect(() => {
+    const outcome = new URLSearchParams(window.location.search).get("donationAlerts");
+    if (!outcome) return;
+    if (outcome === "connected") toast.success("DonationAlerts подключён через OAuth");
+    else if (outcome === "denied") toast.error("Авторизация DonationAlerts отменена");
+    else if (outcome === "invalid_state") toast.error("Не удалось проверить OAuth-состояние. Начните подключение заново");
+    else if (outcome === "missing_credentials") toast.error("Сначала сохраните Client ID и Client Secret");
+    else if (outcome === "token_rejected") toast.error("DonationAlerts выдал токен, но проверка доступа не прошла");
+    else toast.error("Не удалось подключить DonationAlerts через OAuth");
+    window.history.replaceState(null, "", window.location.pathname);
+  }, []);
 
   const { data: settings, isLoading } = useQuery<SettingsData>({
     queryKey: ["admin-settings"],
@@ -159,6 +173,9 @@ export function SettingsTab() {
   const [donationUrl, setDonationUrl] = useState("");
   const [donationToken, setDonationToken] = useState("");
   const [donationTokenTail, setDonationTokenTail] = useState<string | null>(null);
+  const [donationOAuthClientId, setDonationOAuthClientId] = useState("");
+  const [donationOAuthClientSecret, setDonationOAuthClientSecret] = useState("");
+  const [donationOAuthClientSecretTail, setDonationOAuthClientSecretTail] = useState<string | null>(null);
   const [wmzPurse, setWmzPurse] = useState("");
   const [webmoneyMerchantSecret, setWebmoneyMerchantSecret] = useState("");
   const [webmoneyMerchantSecretX20, setWebmoneyMerchantSecretX20] = useState("");
@@ -189,6 +206,8 @@ export function SettingsTab() {
         settings.contactTelegram,
         settings.donationAlertsUrl,
         settings.donationTokenTail,
+        settings.donationOAuthClientId,
+        settings.donationOAuthClientSecretTail,
         settings.webmoneyPurse,
         settings.webmoneyMerchantSecretTail,
         settings.webmoneyMerchantSecretX20Tail,
@@ -205,6 +224,8 @@ export function SettingsTab() {
     setContactTg(settings.contactTelegram ?? "");
     setDonationUrl(settings.donationAlertsUrl ?? "");
     setDonationTokenTail(settings.donationTokenTail ?? null);
+    setDonationOAuthClientId(settings.donationOAuthClientId ?? "");
+    setDonationOAuthClientSecretTail(settings.donationOAuthClientSecretTail ?? null);
     setWmzPurse(settings.webmoneyPurse ?? "");
     setWebmoneyMerchantSecretTail(settings.webmoneyMerchantSecretTail ?? null);
     setWebmoneyMerchantSecretX20Tail(settings.webmoneyMerchantSecretX20Tail ?? null);
@@ -240,6 +261,7 @@ export function SettingsTab() {
   const saveApp = useMutation({
     mutationFn: async (opts: {
       clearDonationToken?: boolean;
+      clearDonationOAuthSecret?: boolean;
       clearWebMoneySecret?: boolean;
       clearWebMoneySecretX20?: boolean;
     } = {}) => {
@@ -258,6 +280,14 @@ export function SettingsTab() {
           demoTripToken: demoToken,
           contactTelegram: contactTg,
           donationAlertsUrl: donationUrl,
+          ...(donationOAuthClientId !== (settings?.donationOAuthClientId ?? "")
+            ? { donationAlertsClientId: donationOAuthClientId }
+            : {}),
+          ...(opts.clearDonationOAuthSecret
+            ? { donationAlertsClientSecret: null }
+            : donationOAuthClientSecret.trim()
+              ? { donationAlertsClientSecret: donationOAuthClientSecret.trim() }
+              : {}),
           // новый токен едет только если ввели; пустое поле токен не трогает (смена без перезаписи)
           ...(opts?.clearDonationToken ? { donationAlertsToken: null } : donationToken.trim() ? { donationAlertsToken: donationToken.trim() } : {}),
           webmoneyPurse: wmzPurse,
@@ -272,6 +302,8 @@ export function SettingsTab() {
     onSuccess: (b) => {
       setDonationTokenTail(b.donationTokenTail ?? null);
       setDonationToken("");
+      setDonationOAuthClientSecretTail(b.donationOAuthClientSecretTail ?? null);
+      setDonationOAuthClientSecret("");
       setWebmoneyMerchantSecretTail(b.webmoneyMerchantSecretTail ?? null);
       setWebmoneyMerchantSecretX20Tail(b.webmoneyMerchantSecretX20Tail ?? null);
       setWebmoneyMerchantSecret("");
@@ -338,6 +370,8 @@ export function SettingsTab() {
     contactTg !== (settings.contactTelegram ?? "") ||
     donationUrl !== (settings.donationAlertsUrl ?? "") ||
     donationToken.trim() !== "" ||
+    donationOAuthClientId !== (settings.donationOAuthClientId ?? "") ||
+    donationOAuthClientSecret.trim() !== "" ||
     wmzPurse !== (settings.webmoneyPurse ?? "") ||
     webmoneyMerchantSecret.trim() !== "" ||
     webmoneyMerchantSecretX20.trim() !== "" ||
@@ -565,8 +599,8 @@ export function SettingsTab() {
           </span>
           <input value={donationToken} onChange={(e) => setDonationToken(e.target.value)} placeholder={donationTokenTail ? `задан ${donationTokenTail} — введите новый для смены` : "eyJ0eXAiOiJKV1Qi…"} className={inputCls} />
           <p className="text-[10px] text-muted-foreground">
-            Токен с правом чтения донатов (scope oauth-donation-index): создать приложение можно в кабинете DonationAlerts.
-            Нужен для вкладки «Донаты» и уведомлений о пожертвованиях. Секрет хранится на сервере, наружу — только маска.{" "}
+            Можно вставить готовый access token вручную. Для автоматического подключения настройте OAuth ниже.
+            Токен хранится на сервере, наружу — только маска.{" "}
             {donationTokenTail && (
               <button type="button" onClick={() => saveApp.mutate({ clearDonationToken: true })} className="underline hover:text-foreground">
                 Снять токен
@@ -574,6 +608,74 @@ export function SettingsTab() {
             )}
           </p>
         </label>
+        <div className="rounded-xl border border-border p-3 space-y-2.5">
+          <div className="text-xs font-semibold">DonationAlerts OAuth</div>
+          <p className="text-[10px] text-muted-foreground">
+            В кабинете DonationAlerts создайте OAuth-приложение и укажите показанный URL перенаправления.
+            Сохраните Client ID и Client Secret здесь, затем нажмите «Подключить». TripTrek запросит доступ к профилю для подключения и к новым оповещениям о донатах.
+          </p>
+          <label className="space-y-1 block">
+            <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">URL перенаправления (вставить в DonationAlerts)</span>
+            <input
+              readOnly
+              value={settings.donationOAuthRedirectUrl ?? ""}
+              placeholder="Задайте NEXTAUTH_URL на сервере"
+              onFocus={(event) => event.currentTarget.select()}
+              className={inputCls}
+            />
+          </label>
+          <label className="space-y-1 block">
+            <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Client ID</span>
+            <input
+              value={donationOAuthClientId}
+              onChange={(event) => setDonationOAuthClientId(event.target.value)}
+              placeholder="Цифровой ID OAuth-приложения"
+              inputMode="numeric"
+              autoComplete="off"
+              className={inputCls}
+            />
+          </label>
+          <label className="space-y-1 block">
+            <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Client Secret</span>
+            <input
+              type="password"
+              value={donationOAuthClientSecret}
+              onChange={(event) => setDonationOAuthClientSecret(event.target.value)}
+              placeholder={donationOAuthClientSecretTail ? `задан ${donationOAuthClientSecretTail} — введите новый для смены` : "Секрет OAuth-приложения"}
+              autoComplete="new-password"
+              className={inputCls}
+            />
+            {donationOAuthClientSecretTail && (
+              <button
+                type="button"
+                onClick={() => saveApp.mutate({ clearDonationOAuthSecret: true })}
+                className="text-[10px] underline hover:text-foreground"
+              >
+                Снять Client Secret
+              </button>
+            )}
+          </label>
+          <a
+            href="/api/admin/donations/oauth/start"
+            onClick={(event) => {
+              if (!donationOAuthClientId || !donationOAuthClientSecretTail || !settings.donationOAuthRedirectUrl) {
+                event.preventDefault();
+                toast.error("Сначала сохраните Client ID и Client Secret");
+              } else if (appDirty) {
+                event.preventDefault();
+                toast.error("Сначала сохраните конфиг приложения");
+              }
+            }}
+            className={cn(
+              "inline-flex min-h-10 items-center justify-center rounded-lg px-4 text-xs font-medium",
+              donationOAuthClientId && donationOAuthClientSecretTail && settings.donationOAuthRedirectUrl
+                ? "bg-secondary border border-border"
+                : "bg-secondary/50 text-muted-foreground",
+            )}
+          >
+            Подключить аккаунт DonationAlerts
+          </a>
+        </div>
         <label className="space-y-1 block">
           <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Поддержка: кошелёк WebMoney (WMZ)</span>
           <input value={wmzPurse} onChange={(e) => setWmzPurse(e.target.value)} placeholder="Z123456789012" className={inputCls} />

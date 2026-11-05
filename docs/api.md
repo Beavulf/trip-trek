@@ -175,7 +175,7 @@
 | `admin/users` | GET, PATCH, DELETE | юзеры: premium, роль, блок ИИ (`aiBlocked`), пароль, удаление (AdminLog + уведомление); GET `?id=` включает донаты юзера |
 | `admin/trips` | GET, PATCH, DELETE | все поездки |
 | `admin/trips/members` | GET, POST, DELETE | участники любой поездки |
-| `admin/settings` | GET, PUT | `AppSettings`: ключ/база/модель ИИ, регистрация и бета-гейт `inviteRequired`, лимиты free, пороги алертов трат ИИ, витрина лендинга (`demoTripToken`, `contactTelegram`), реквизиты поддержки (`donationAlertsUrl`, `webmoneyPurse`), OAuth-токен донатов `donationAlertsToken` (секрет — наружу только маска `donationTokenTail`) |
+| `admin/settings` | GET, PUT | `AppSettings`: ключ/база/модель ИИ, регистрация и бета-гейт `inviteRequired`, лимиты free, пороги алертов трат ИИ, витрина лендинга (`demoTripToken`, `contactTelegram`), реквизиты поддержки, DonationAlerts OAuth credentials (секрет — только маска), callback URL и OAuth-токен (секрет — только маска) |
 | `admin/invites` | GET | инвайт-коды беты: список, новые сверху (до 500) |
 | `admin/invites` | POST | генерация пачки `{ count ≤ 100, maxUses ≤ 1000, expiresAt?, note? }` → `{ codes }` (AdminLog: invite.create) |
 | `admin/invites/[id]` | PATCH | вкл/выкл кода `{ deactivatedAt: boolean }` → `{ code }` (AdminLog: invite.deactivate) |
@@ -187,6 +187,8 @@
 | `admin/feedback/[id]` | GET | обращение целиком: переписка, автор, контекст устройства, поездка |
 | `admin/feedback/[id]/messages` | POST | ответ админа `{body,status?}`: автору — колокольчик/пуш `feedback_reply` со ссылкой `/?feedback=<id>`, гостю — письмо на `contactEmail` (ответ `emailed`: `false`, если почта не настроена) |
 | `admin/donations` | GET, PATCH, POST, DELETE | донаты DonationAlerts (ADR-0011): GET — лента (200) + итоги по валютам + число непривязанных + статус WS-клиента; PATCH `{id, userId\|null}` — привязка/отвязка юзера (AdminLog); POST `{action:"test-connection"\|"simulate"}` — проверка токена / тестовый донат; DELETE `?id=` |
+| `admin/donations/oauth/start` | GET | A | — | создаёт CSRF `state` cookie и перенаправляет в DonationAlerts OAuth; требует сохранённых Client ID/Secret |
+| `admin/donations/oauth/callback` | GET | A | — | проверяет `state`, обменивает OAuth code на токены, проверяет доступ и сохраняет их серверно |
 
 ## Фоновые источники (не HTTP)
 

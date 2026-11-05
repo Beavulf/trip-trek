@@ -6,17 +6,23 @@
 Блок «Поддержать» в профиле — исходящая ссылка на DonationAlerts: деньги уходят напрямую в сторонний сервис,
 и приложение не знает, кто и сколько задонатил. Владельцу хочется видеть ленту пожертвований, получать
 уведомление о новом донате и отмечать донатеров штампом. У DonationAlerts есть официальный API:
-OAuth-токен (scope `oauth-donation-index`) → `GET /api/v1/user/current` (отдаёт `socket_connection_token`) →
+OAuth-токен (scopes `oauth-user-show` и `oauth-donation-subscribe`) → `GET /api/v1/user/oauth` (отдаёт `socket_connection_token`) →
 Centrifugo-сокет `wss://centrifugo.donationalerts.com/connection/websocket` → приватный канал
 `$alerts:donation_<daUserId>` (токен подписки выдаёт `POST /api/v1/centrifuge/subscribe`). REST-списка донатов
 нет — сокет и есть канал поставки. Главное ограничение: **DA ничего не знает о юзерах TripTrek** — в донате
 приходят только имя, сумма, валюта и сообщение.
 
+OAuth-приложение регистрируется в кабинете DonationAlerts. Для него задаются Client ID/Secret и точный
+Redirect URI `NEXTAUTH_URL/api/admin/donations/oauth/callback` (URI показан в админке). Админ запускает
+авторизацию из `/admin/settings`; сервер проверяет OAuth `state`, меняет одноразовый код на токены и хранит
+access/refresh tokens. `client_secret` и refresh token не выдаются из API.
+
 ## Решение
 1. **Приём — постоянный WS-клиент в процессе сервера** (`src/lib/donations-server.ts`, старт из `server.ts`
    рядом с `startSplitReminderJob`). Один процесс (ADR-0001) — второй инстанс задвоил бы донаты, шов
-   осознанный. Цикл: токен из `AppSettings.donationAlertsToken` (каждый реконнект — смена токена в админке
-   подхватывается без рестарта) → проверка через `/user/current` → соединение → подписка. Реконнект с
+   осознанный. Цикл: access token из `AppSettings.donationAlertsToken` (истекающий токен автоматически
+   обновляется через сохранённый refresh token; новый OAuth токен подхватывается без рестарта) →
+   проверка через `/user/oauth` → соединение → подписка. Реконнект с
    бэкоффом 5с→60с; молчание >2 минут — рвём сами (самолечение от непонятых пингов протокола). Весь код
    «не бросает»: `uncaughtException` в server.ts убивает процесс.
 2. **Идемпотентность** — `Donation.externalId` (id доната в DA) с `@unique`: реплеи/реконнекты Centrifugo
@@ -31,8 +37,9 @@ Centrifugo-сокет `wss://centrifugo.donationalerts.com/connection/websocket`
 4. **Уведомление админам** — колокольчик через `notifyUser` (запись `UserNotification` + web-push), тип
    `donation`; админы резолвятся из БД по роли — паттерн `notifyAdminsOfFeedback`. Realtime-канала на
    конкретного юзера в socket.io нет (только trip/group-комнаты) — бейдж обновляется штатным поллингом.
-5. **Секрет** — `AppSettings.donationAlertsToken`, наружу API отдаёт только маску хвоста (`maskKey`),
-   в журнал — факт смены (`settings.donations`, `tokenSet`), как у `aiApiKey`.
+5. **Секреты** — `AppSettings.donationAlertsToken`, `donationAlertsRefreshToken` и `donationAlertsClientSecret`;
+   API возвращает только маски для секретов. Client ID и callback URL видимы админу. В журнал пишутся
+   только факты настройки/подключения без секретных значений.
 6. **Тестовый путь** — «Тестовый донат» (`POST /api/admin/donations {action:"simulate"}`, source `test`)
    проходит весь путь приёма для живой проверки колокольчика и ленты; удаляется там же.
 

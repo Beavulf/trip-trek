@@ -2,7 +2,12 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { requireAdmin } from "@/lib/api-auth";
 import { logAdmin } from "@/lib/admin-log";
-import { simulateDonation, checkDonationToken, getDonationClientStatus } from "@/lib/donations-server";
+import {
+  simulateDonation,
+  checkDonationToken,
+  getDonationAccessToken,
+  getDonationClientStatus,
+} from "@/lib/donations-server";
 
 // Донаты из DonationAlerts (ADR-0011) — вкладка «Донаты» админки.
 // Список/итоги/статус клиента, ручная привязка к юзеру, тестовый донат и удаление.
@@ -101,8 +106,7 @@ export async function POST(req: NextRequest) {
   if (body?.action === "test-connection") {
     let token = typeof body.token === "string" ? body.token.trim() : "";
     if (!token) {
-      const row = await db.appSettings.findUnique({ where: { id: "app" }, select: { donationAlertsToken: true } });
-      token = row?.donationAlertsToken?.trim() ?? "";
+      token = (await getDonationAccessToken()) ?? "";
     }
     if (!token) return NextResponse.json({ ok: false, error: "Токен не задан" });
     const result = await checkDonationToken(token);

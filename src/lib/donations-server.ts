@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { logger } from "@/lib/logger";
 import { notifyUser } from "@/lib/notify";
 import { fetchJson } from "@/lib/outbound";
+import { refreshDonationAlertsToken } from "@/lib/donationalerts-oauth";
 import {
   formatDonationLine,
   matchDonationToUser,
@@ -13,8 +14,8 @@ import {
 // Серверная часть донатов (ADR-0011): постоянный WS-клиент к DonationAlerts (Centrifugo),
 // живёт в процессе сервера рядом с остальными джобами. Запускается из server.ts после listen.
 //
-// Протокол DA: OAuth-токен (AppSettings.donationAlertsToken, scope oauth-donation-index) →
-// GET /api/v1/user/current → socket_connection_token → WS wss://centrifugo.donationalerts.com/
+// Протокол DA: OAuth-токен (oauth-user-show + oauth-donation-subscribe) →
+// GET /api/v1/user/oauth → socket_connection_token → WS wss://centrifugo.donationalerts.com/
 // connection/websocket c фреймом {"params":{token},"id":1} → получаем client →
 // POST /api/v1/centrifuge/subscribe {client, channels} → токен подписки →
 // {"id":2,"method":1,"params":{channel, token}} → пушы донатов на канал $alerts:donation_<daId>.
@@ -43,6 +44,7 @@ export interface DonationClientStatus {
 const status: DonationClientStatus = { state: "off" };
 let started = false;
 let ws: WebSocket | null = null;
+let wakeLoop: (() => void) | null = null;
 
 export function getDonationClientStatus(): DonationClientStatus {
   return { ...status };
@@ -52,19 +54,81 @@ function setStatus(patch: Partial<DonationClientStatus>): void {
   Object.assign(status, patch);
 }
 
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+const sleep = (ms: number) =>
+  new Promise<void>((resolve) => {
+    const timer = setTimeout(() => {
+      wakeLoop = null;
+      resolve();
+    }, ms);
+    wakeLoop = () => {
+      clearTimeout(timer);
+      wakeLoop = null;
+      resolve();
+    };
+  });
 
 async function readToken(): Promise<string | null> {
-  const row = await db.appSettings.findUnique({ where: { id: "app" }, select: { donationAlertsToken: true } });
-  const token = row?.donationAlertsToken?.trim();
-  return token || null;
+  const row = await db.appSettings.findUnique({
+    where: { id: "app" },
+    select: {
+      donationAlertsToken: true,
+      donationAlertsRefreshToken: true,
+      donationAlertsTokenExpiresAt: true,
+      donationAlertsClientId: true,
+      donationAlertsClientSecret: true,
+    },
+  });
+  if (!row?.donationAlertsToken) return null;
+  const token = row.donationAlertsToken.trim();
+  if (!token) return null;
+
+  if (
+    !row.donationAlertsTokenExpiresAt ||
+    row.donationAlertsTokenExpiresAt.getTime() > Date.now() + 60_000
+  ) {
+    return token;
+  }
+  if (!row.donationAlertsRefreshToken || !row.donationAlertsClientId || !row.donationAlertsClientSecret) {
+    logger.error("donations: OAuth token expired without refresh credentials");
+    return token;
+  }
+
+  try {
+    const refreshed = await refreshDonationAlertsToken({
+      clientId: row.donationAlertsClientId,
+      clientSecret: row.donationAlertsClientSecret,
+      refreshToken: row.donationAlertsRefreshToken,
+    });
+    await db.appSettings.update({
+      where: { id: "app" },
+      data: {
+        donationAlertsToken: refreshed.accessToken,
+        donationAlertsRefreshToken: refreshed.refreshToken ?? row.donationAlertsRefreshToken,
+        donationAlertsTokenExpiresAt: refreshed.expiresAt,
+      },
+    });
+    logger.info("donations: OAuth access token refreshed");
+    return refreshed.accessToken;
+  } catch (error) {
+    logger.error("donations: OAuth access token refresh failed", { error: String(error) });
+    return token;
+  }
+}
+
+export async function getDonationAccessToken(): Promise<string | null> {
+  return readToken();
+}
+
+export function refreshDonationAlertsConnection(): void {
+  wakeLoop?.();
+  ws?.close();
 }
 
 /** Проверка токена через DA: используется и кнопкой «Проверить связь» в админке. */
 export async function checkDonationToken(
   token: string,
 ): Promise<{ ok: true; account: string } | { ok: false; error: string }> {
-  const r = await fetchJson<{ data?: { id?: number; name?: string } }>(`${DA_API}/user/current`, {
+  const r = await fetchJson<{ data?: { id?: number; name?: string } }>(`${DA_API}/user/oauth`, {
     headers: { Authorization: `Bearer ${token}` },
     timeoutMs: 10_000,
     retries: 0, // 401/403 ретраить бессмысленно
@@ -350,15 +414,15 @@ async function runLoop(): Promise<void> {
       }
       setStatus({ daAccount: me.account });
 
-      // socket_connection_token достаём тем же запросом — проверочный выше его не вернул
+      // Загружаем официальный OAuth-профиль с Centrifugo connection token.
       const cur = await fetchJson<{ data?: { id?: number; socket_connection_token?: string } }>(
-        `${DA_API}/user/current`,
+        `${DA_API}/user/oauth`,
         { headers: { Authorization: `Bearer ${oauthToken}` }, timeoutMs: 10_000, retries: 0 },
       );
       const socketToken = cur?.data?.socket_connection_token;
       const daUserId = cur?.data?.id;
       if (!socketToken || !daUserId) {
-        setStatus({ state: "error", lastError: "DA не отдал socket_connection_token (нужен scope oauth-donation-index?)" });
+        setStatus({ state: "error", lastError: "DA не отдал socket_connection_token (проверьте OAuth scopes)" });
         await sleep(backoffMs);
         backoffMs = Math.min(backoffMs * 2, RECONNECT_MAX_MS);
         continue;
