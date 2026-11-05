@@ -73,4 +73,4 @@ team/
 
 ## Построено готовыми тасками
 
-*(заполняется по мере разработки)*
+- **T01** — `team/`: README.md, lifecycle.md, strategy.md (каркас для роли growth); роли `team/roles/<role>.md` с frontmatter `{name: triptrek-<role>, description, tools: "Read, Grep, Glob"}`; шаблоны `team/templates/{idea-brief,spec,ticket,release,feedback-analysis}.md`; политики `team/policies/{data-access,prod-readonly}.md`; ADR `docs/adr/0013-team-system.md`; v1 — в `docs/archive/ai-team-v1/`. Роли ссылаются на `team/jobs/{fetch-feedback.mjs,audit-checklist.md,README.md}` и `team/inbox/{ideas,feedback,audit,content}/` — эти пути обязан создать T03.
