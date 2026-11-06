@@ -181,7 +181,7 @@ export function SettingsTab() {
     window.history.replaceState(null, "", window.location.pathname);
   }, []);
 
-  const { data: settings, isLoading } = useQuery<SettingsData>({
+  const { data: settings, isLoading, isError, refetch } = useQuery<SettingsData>({
     queryKey: ["admin-settings"],
     queryFn: async () => {
       const r = await fetch("/api/admin/settings");
@@ -390,6 +390,21 @@ export function SettingsTab() {
     onError: (e: Error) => toast.error(e.message),
   });
 
+  if (!settings && isError) {
+    return (
+      <div role="alert" className="py-16 text-center space-y-3">
+        <div className="text-4xl">🤔</div>
+        <p className="text-sm font-medium">Не удалось загрузить настройки</p>
+        <button
+          type="button"
+          onClick={() => refetch()}
+          className="inline-flex min-h-11 items-center justify-center rounded-xl bg-primary px-4 text-sm font-medium text-primary-foreground"
+        >
+          Повторить
+        </button>
+      </div>
+    );
+  }
   if (isLoading || !settings) {
     return (
       <div className="flex justify-center py-20">
@@ -456,7 +471,7 @@ export function SettingsTab() {
         </div>
         <div className="flex shrink-0 items-center gap-2">
           <span className={cn("hidden text-[10px] sm:inline", appDirty ? "text-amber-600" : "text-muted-foreground")}>
-            {appDirty ? "Есть несохранённые изменения" : "Все сохранено"}
+            {appDirty ? "Не сохранены общие настройки" : "У ИИ и техработ — отдельное сохранение"}
           </span>
           {appDirty && (
             <button
