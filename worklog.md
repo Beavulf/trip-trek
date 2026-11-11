@@ -3615,3 +3615,47 @@ Server was crashing with "Failed to load external module @prisma/client-2c3a283f
 - Рабочее дерево содержит новый `docs/archive/`, `.gitignore`, `docker-compose.dev.yml` (комментарии npm→bun) и этот файл — смотрите `git status`.
 - Кодовые решения, которые НЕ делал без владельца: переключение TLS в боевом `docker-deploy/docker-compose.yml` (комментарий-пояснение добавлен; `profiles: ["tls"]` не вводил), `participants` PATCH остаётся no-op заглушкой, `place:visited` просто удалён (тост «посетил» можно добавить отдельно).
 - Прод-выкат целей воронки (`trip_created`, `first_user_place_added`, `invite_accepted`, `first_day_added`) — production-миграции `acquisition_analytics` и `first_day_added` должны одобрить отдельно.
+
+## 2026-11-11 — Чистка диска на боевом VPS (87%→33%): кэш сборок Docker; авточистка кроном
+
+### Задача
+Владелец попросил посмотреть, что занимает место на проде, и почистить. Диск 79G был занят на 66G (87%).
+
+### Что нашлось
+- Главный потребитель — **build cache Docker: 46 GB** в `/var/lib/containerd` (хост работает через containerd-хранилище, `Storage Driver: overlayfs`, io.containerd.snapshotter.v1). Кэш копился после каждого `up -d --build`; `docker builder du` показывал 43.8 GB reclaimable из 46.05. Сами образы (11.4 GB) и контейнеры почти не reclaimable.
+- Мелочь: journal 349M, apt-кэш ~330M, вторая (устаревшая) копия `.vscode-server` 658M (активная определяется по `lru.json`).
+- Попутно: **крон бэкапа на хосте не установлен вовсе** (DEPLOY.md §4 обещает `0 4 * * * backup.sh`, но crontab пуст, `/var/log/triptrek-backup.log` нет) — сам `backup.sh` на месте в `/opt/trip-trek/docker-deploy/`. Репозиторий на хосте лежит в `/opt/trip-trek`, не в `/root/trip-trek` из примеров DEPLOY.md. Требует решения владельца: настроить rclone-remote и повесить крон.
+
+### Changes
+- Чистка: `docker builder prune -f --keep-storage 5G` (снял только private, 5 GB) → `docker builder prune --all -f` (38.7 GB shared-scope записей; образы/контейнеры не тронуты), удалена устаревшая копия vscode-server, `journalctl --vacuum-size=100M` (260M), `apt-get clean && autoremove`. Итог: 25G занято, 51G свободно (33%).
+- На хосте заведён root-crontab (был пуст): еженедельно пн 05:00 `docker builder prune -a -f --reserved-space 5G` и `docker image prune -f`, лог `/var/log/triptrek-docker-prune.log`. Флаг `--keep-storage` на этом docker устарел → `--reserved-space`.
+- DEPLOY.md: §3 — подраздел «Гигиена диска: кэш сборок Docker» (почему кэш в containerd, крон, `docker builder du`); §4 — пометка про фактический путь `/opt/trip-trek` и что крон бэкапа не был установлен.
+
+### Verification
+- Команды prune прогнаны вручную (второй прогон: 0B — чисто); после чистки все 12 контейнеров Up/healthy, `https://triptrek.app/api/health` → `{"status":"ok","db":"up"}`.
+- `df -h /`: 79G/25G/51G (33%) до и после тестового прогона крона.
+
+### На заметку
+- Следующий деплой соберётся без кэша — дольше обычного (установки через npmmirror, как обычно).
+- Не тронуты: том `triptrek-uploads` (фото), `triptrek-pgdata`, `/root/guild-ledger` (живой репозиторий второго проекта).
+
+## 2026-11-11 — Ночные бэкапы включены: Supabase Storage (free) через rclone
+
+### Задача
+На проде не работали бэкапы: крона не было вовсе (найдено при чистке диска утром), rclone не установлен. Владелец выбрал облачный Supabase (free, 1GB) вместо R2/Pro.
+
+### Что сделано (хост)
+- `apt-get install rclone` (1.60.1). Remote `triptrek-backup` (s3, provider=Other, endpoint `https://iihlbkllnncmbrtzppmt.supabase.co/storage/v1/s3`, `force_path_style=true`, `no_check_bucket=true`, acl=private), конфиг chmod 600.
+- **Регион проекта — `eu-north-1`** (Стокгольм, неочевидно; у владельца в General не смотрели — найден перебором: неверный регион = `403 Forbidden`).
+- Bucket'ы созданы REST'ом (`POST /storage/v1/bucket` с ключом `sb_secret_…`, `public:false`): **`postgres` и `uploads`** — имена диктует backup.sh: в rclone `remote:путь` первая часть пути = имя bucket'а, поэтому «один bucket triptrek-backup» не работает (это же объяснило «NoSuchBucket при правильных ключах»: проверка bucket'а идёт до проверки подписи).
+- backup.sh: ротация bucket'а 30d→7d (влезает в free 1GB при ~140MB/день) и uploads-архив режется `split -b 40m` на части — free-тариф ограничивает размер ОДНОГО файла (137MB целиком = 413 EntityTooLarge). Хост-копия синхронизирована scp'ом (содержание = репо).
+- Crontab: `0 4 * * * /opt/trip-trek/docker-deploy/backup.sh >> /var/log/triptrek-backup.log 2>&1`.
+
+### Verification
+- Пробный прогон: `postgres/db-…sql.gz` (131K) и 4 части `uploads-…part-aa..ad` (40+40+40+17MB) в bucket'ах; локальная ротация на месте.
+- Целостность: `cat parts | tar tzf -` читает архив целиком (в контейнере 1610 файлов) — учения §4 в миниатюре.
+- Полный CRUD rclone в обе bucket'ы прогнан до этого тестовыми файлами.
+
+### На заметку
+- DEPLOY.md §4 переписан: два bucket'а, регион, грабли (403 vs NoSuchBucket), REST-создание bucket'ов, restore через `cat .part-* | tar xzf -`.
+- Незакрытое: (1) репо-изменения (backup.sh, DEPLOY.md, worklog) ждут коммита/пуша владельца, потом на хосте `git checkout -- docker-deploy/backup.sh && git pull`; (2) `sb_secret_…` светился в чате — ротация безопасна, rclone его не использует; S3-ключи тоже светились — ротировать и обновить `rclone config update` (rclone.conf chmod 600).

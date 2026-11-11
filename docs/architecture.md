@@ -187,6 +187,13 @@ User ──< SplitMember >── SplitGroup ──< SplitExpense ──< SplitSh
   период — в `skippedPeriods`). Группа удаляется ТОЛЬКО через `deleteSplitGroup` (`src/lib/split/server.ts`): каскад Postgres
   ломается об FK на участников. Права — любой активный участник правит траты (всё в `SplitActivity`); владелец — валюта,
   исключение, удаление.
+- **Аналитика активации** — `Trip.creationSource` (`blank`/`custom`/`template`/`import`;
+  `legacy` — поездки до включения трекинга) и nullable-метки первых шагов
+  `firstUserPlaceAddedAt`/`firstDayAddedAt` (воронка acquisition, спека
+  `docs/ai-team/specs/2026-11-05-acquisition-funnel.md`). Цель срабатывает ровно один
+  раз на поездку — атомарный claim `updateMany` по `creationSource:"blank"` + флаг `null`
+  в транзакции самой мутации (`src/lib/trip-activation.ts`); цель в Метрику шлёт клиент
+  из ответа мутации (`src/lib/trip-analytics.ts`). Только для поездок, созданных с нуля.
 - **Lodging** — жильё как отдельная сущность, а не `Place` категории hotel: маршрут
   описывает «что делаем», жильё — «где ночуем». `checkIn`/`checkOut` — КАЛЕНДАРНЫЕ дни
   без пояса: в БД полдень UTC выбранного дня (так день не прыгает между поясами

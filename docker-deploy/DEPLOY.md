@@ -132,6 +132,24 @@ upstream `triptrek-app:3000` по имени). Поэтому app обязан �
 контейнера 200, а снаружи 502 и в логах Caddy `lookup triptrek-app: i/o timeout`.
 Лечение разово: `docker network connect supabase-network triptrek-app`.
 
+### Гигиена диска: кэш сборок Docker
+
+Каждый `up -d --build` дописывает записи в build cache; на этом хосте Docker работает
+через containerd-хранилище, поэтому кэш лежит в `/var/lib/containerd`, а не в
+`/var/lib/docker`. Авточистки у Docker на Linux-сервере нет — раз в неделю её делает
+крон на хосте (инцидент 2026-11-11: кэш дорос до 46 GB из 66 занятых, почистили до 25):
+
+```bash
+crontab -e
+0 5 * * 1 docker builder prune -a -f --reserved-space 5G >> /var/log/triptrek-docker-prune.log 2>&1
+0 5 * * 1 docker image prune -f >> /var/log/triptrek-docker-prune.log 2>&1
+```
+
+`--reserved-space 5G` оставляет кэш последней сборки, остальное сносит; образы,
+контейнеры и тома prune не трогает — единственный эффект, следующий деплой собирается
+с нуля (дольше). Проверить вручную, сколько занято и сколько можно освободить:
+`docker builder du` (строки Reclaimable/Total).
+
 ### Техработы: предупредить, закрыть вход, выкатить
 
 Всё из админки (Админка → Настройки → «Техработы и объявление»), без правок на сервере:
@@ -193,9 +211,34 @@ docker exec triptrek-db psql -U triptrek -d triptrek -c "UPDATE \"AppSettings\" 
 ## 4. Бэкапы
 
 `backup.sh` сохраняет дамп Postgres + архив uploads и отправляет наружу через
-rclone; локальные копии живут 7 дней, в bucket 30 дней. Читает env `BACKUP_DIR`
+rclone; копии (локальные и в bucket) живут 7 дней — размер подобран под free-тариф
+Supabase Storage (1 GB, ~150 МБ/день). Читает env `BACKUP_DIR`
 (дефолт `/var/backups/triptrek`) и `RCLONE_REMOTE` (дефолт `triptrek-backup`) —
 задаются на хосте при необходимости другого пути/remote.
+
+Remote `triptrek-backup` — облачный Supabase Storage, S3-совместимый endpoint (выбран
+2026-11; self-hosted MinIO на том же VPS не годится — тот же диск и та же точка отказа).
+В rclone `remote:путь` первая часть пути — имя bucket'а, поэтому `backup.sh` ждёт
+ДВА приватных bucket'а с точными именами `postgres` и `uploads` (а не один общий):
+
+```bash
+# В Supabase: Storage → New bucket → `postgres` (Private) и `uploads` (Private);
+# Storage → Settings → S3 access keys → создать пару ключей. Затем на хосте:
+rclone config create triptrek-backup s3 \
+  provider=Other \
+  endpoint=https://<PROJECT_REF>.supabase.co/storage/v1/s3 \
+  region=<РЕГИОН_ПРОЕКТА> \
+  access_key_id=<KEY> secret_access_key=<SECRET> \
+  force_path_style=true no_check_bucket=true acl=private
+chmod 600 /root/.config/rclone/rclone.conf
+```
+
+Регион — регион проекта из Project Settings → General (у этого проекта он оказался
+неочевидный `eu-north-1`, Стокгольм): с неверным регионом шлюз отвечает
+`403 Forbidden`. Отдельный грабль: `NoSuchBucket` — нет bucket'а с таким именем;
+проверка bucket'а идёт ДО проверки подписи, поэтому NoSuchBucket не означает,
+что ключи или регион правильные. Bucket'ы можно создавать и без дашборда,
+REST'ом с ключом `sb_secret_…`: `POST /storage/v1/bucket` с `{"name":…,"public":false}`.
 
 Cron на хосте (ночь, 04:00):
 
@@ -203,6 +246,12 @@ Cron на хосте (ночь, 04:00):
 crontab -e
 0 4 * * * /root/trip-trek/docker-deploy/backup.sh >> /var/log/triptrek-backup.log 2>&1
 ```
+
+Путь к клону на боевом хосте другой: `/opt/trip-trek` (проверка: `docker inspect
+triptrek-app --format '{{index .Config.Labels "com.docker.compose.project.working_dir"}}'`)
+— в cron подставляйте фактический путь. 2026-11-11: на боевом хосте крон бэкапа не был
+установлен вовсе (backup.sh на месте, лога `/var/log/triptrek-backup.log` нет) — после
+настройки rclone-remote не забудьте добавить строку в crontab.
 
 ### Учения по восстановлению (провести один раз и после любых крупных изменений схемы)
 
@@ -217,8 +266,9 @@ gunzip -c /var/backups/triptrek/db-<СТАМП>.sql.gz | docker exec -i restore-
 # 3. проверить счётчики
 docker exec restore-drill psql -U postgres -d triptrek -c "SELECT (SELECT count(*) FROM \"User\") users, (SELECT count(*) FROM \"Trip\") trips, (SELECT count(*) FROM \"Photo\") photos"
 
-# 4. распаковать uploads-архив и убедиться, что имена файлов совпадают с url в БД
-tar tzf /var/backups/triptrek/uploads-<СТАМП>.tar.gz | head
+# 4. распаковать uploads-архив (лежит частями .part-aa, .part-ab, … — лимит файла
+#    на free-тарифе Supabase) и убедиться, что имена файлов совпадают с url в БД
+cat /var/backups/triptrek/uploads-<СТАМП>.tar.gz.part-* | tar tzf - | head
 
 docker rm -f restore-drill
 ```
