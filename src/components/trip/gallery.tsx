@@ -6,7 +6,7 @@ import { useTripStore } from "@/lib/trip-store";
 import { focusOnMap } from "@/lib/map-bus";
 import { useAuth } from "@/hooks/use-auth";
 import { motion, useReducedMotion } from "framer-motion";
-import { Camera, Columns3, EyeOff, LayoutGrid, Share2, Star } from "lucide-react";
+import { ArrowDownWideNarrow, ArrowUpNarrowWide, Camera, Columns3, EyeOff, LayoutGrid, Share2, Star } from "lucide-react";
 import dynamic from "next/dynamic";
 import { useState, useMemo } from "react";
 import { toast } from "sonner";
@@ -33,6 +33,20 @@ const ANIMATED_TILES = 10;
 
 type Dimension = "day" | "city" | "person";
 type LayoutMode = "masonry" | "compact";
+type SortOrder = "new" | "old";
+
+// Запомненный порядок ленты — настройка вида, не по-поездочная
+const SORT_STORAGE_KEY = "triptrek-gallery-sort";
+
+function readStoredSortOrder(): SortOrder {
+  if (typeof window === "undefined") return "new";
+  try {
+    return localStorage.getItem(SORT_STORAGE_KEY) === "old" ? "old" : "new";
+  } catch {
+    // приватный режим браузера — работаем с умолчанием
+    return "new";
+  }
+}
 
 const DIMENSIONS: { key: Dimension; label: string }[] = [
   { key: "day", label: "Дни" },
@@ -74,6 +88,8 @@ export function Gallery() {
   // Фильтр «скрыто от гостей»: быстро увидеть, что не попадёт на публичную страницу
   const [hiddenOnly, setHiddenOnly] = useState(false);
   const [layout, setLayout] = useState<LayoutMode>("masonry");
+  // Порядок ленты: «сначала новые» (как отдаёт API) или «сначала старые» — просмотр с начала дня/поездки
+  const [sortOrder, setSortOrder] = useState<SortOrder>(readStoredSortOrder);
   const [addOpen, setAddOpen] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
   // Порционный рендер (аудит 2026-09-13): сотни motion-плиток на мобильном
@@ -81,7 +97,9 @@ export function Gallery() {
   // Лимит привязан к ключу фильтра: смена чипа/режима сама возвращает первую порцию, иначе
   // после нескольких «Показать ещё» новый чип тащил бы в DOM сотни плиток разом. Без эффекта
   // с setState — лишнего рендера с прежним лимитом нет.
-  const filterKey = `${dimension}|${chipValue}|${favOnly}|${hiddenOnly}`;
+  // Порядок в ключе: смена сортировки сама возвращает первую порцию — иначе после
+  // нескольких «Показать ещё» реверс тащит в DOM сотни плиток разом
+  const filterKey = `${dimension}|${chipValue}|${favOnly}|${hiddenOnly}|${sortOrder}`;
   const [limit, setLimit] = useState({ key: filterKey, count: PAGE_SIZE });
   const visibleCount = limit.key === filterKey ? limit.count : PAGE_SIZE;
 
@@ -153,7 +171,14 @@ export function Gallery() {
   }, [all]);
 
   const strip = useMemo(() => filtered.slice(0, 12), [filtered]);
-  const shown = filtered.slice(0, visibleCount);
+  // Лента сетки и лайтбокса — в выбранном порядке; API всегда отдаёт «сначала новые»,
+  // поэтому «сначала старые» — просто разворот (компаратора по takenAt не нужно).
+  // «Недавние кадры» в шапке остаются от свежих при любом порядке.
+  const ordered = useMemo(
+    () => (sortOrder === "new" ? filtered : [...filtered].reverse()),
+    [filtered, sortOrder],
+  );
+  const shown = ordered.slice(0, visibleCount);
   const hasActiveFilters = favOnly || hiddenOnly || !!chipValue;
 
   const accent = useMemo(() => {
@@ -255,6 +280,18 @@ export function Gallery() {
     }
   };
 
+  const toggleSortOrder = () => {
+    const next = sortOrder === "new" ? "old" : "new";
+    setSortOrder(next);
+    // Контент ленты сменился — как при смене чипа, лайтбокс закрываем
+    setLightbox(null);
+    try {
+      localStorage.setItem(SORT_STORAGE_KEY, next);
+    } catch {
+      // приватный режим — просто не запоминаем
+    }
+  };
+
   const onMapClick = (photo: Photo) => {
     let lat = photo.lat;
     let lng = photo.lng;
@@ -352,7 +389,7 @@ export function Gallery() {
                     <button
                       key={p.id}
                       type="button"
-                      onClick={() => setLightbox(i)}
+                      onClick={() => setLightbox(ordered.findIndex((q) => q.id === p.id))}
                       className="relative h-14 w-20 shrink-0 rounded-md overflow-hidden ring-1 ring-white/25 active:scale-95 transition-transform focus-visible:ring-2 focus-visible:ring-white/70"
                       aria-label={p.caption || `Фото ${i + 1}`}
                     >
@@ -444,6 +481,17 @@ export function Gallery() {
         </div>
 
         <div className="chip-rail no-scrollbar gap-1.5">
+          {/* Порядок ленты: подпись показывает текущее состояние, тап разворачивает */}
+          <Chip active={sortOrder === "old"} pressed={sortOrder === "old"} onClick={toggleSortOrder}>
+            <span className="inline-flex items-center gap-1">
+              {sortOrder === "old" ? (
+                <ArrowUpNarrowWide className="size-3" aria-hidden="true" />
+              ) : (
+                <ArrowDownWideNarrow className="size-3" aria-hidden="true" />
+              )}
+              {sortOrder === "old" ? "Сначала старые" : "Сначала новые"}
+            </span>
+          </Chip>
           <Chip
             active={!chipValue}
             onClick={() => {
@@ -589,7 +637,7 @@ export function Gallery() {
       <PhotoLightbox
         open={lightbox !== null}
         index={lightbox ?? 0}
-        photos={filtered}
+        photos={ordered}
         onIndexChange={(i) => setLightbox(i)}
         onClose={() => setLightbox(null)}
         onMapClick={onMapClick}
@@ -610,15 +658,19 @@ function Chip({
   active,
   onClick,
   children,
+  pressed,
 }: {
   active: boolean;
   onClick: () => void;
   children: React.ReactNode;
+  /** aria-pressed для чипов-переключателей (сортировка); у фильтр-чипов не ставится */
+  pressed?: boolean;
 }) {
   return (
     <button
       type="button"
       onClick={onClick}
+      aria-pressed={pressed}
       className={cn(
         "rounded-full px-3 py-1.5 text-xs font-medium min-h-11 active:scale-95 transition-transform whitespace-nowrap",
         active
