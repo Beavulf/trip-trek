@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { trackFirstUserPlaceAdded, trackInviteAccepted, trackTripCreated } from "./trip-analytics";
+import { trackFirstDayAdded, trackFirstUserPlaceAdded, trackInviteAccepted, trackTripCreated } from "./trip-analytics";
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -31,5 +31,14 @@ describe("acquisition analytics", () => {
     trackInviteAccepted();
 
     expect(ym).toHaveBeenCalledWith(123, "reachGoal", "invite_accepted", {}, expect.any(Function));
+  });
+
+  it("tracks the first user-added day without personal or trip data", () => {
+    const ym = vi.fn();
+    vi.stubGlobal("window", { ym, ymCounterId: 123 });
+
+    trackFirstDayAdded();
+
+    expect(ym).toHaveBeenCalledWith(123, "reachGoal", "first_day_added", {}, expect.any(Function));
   });
 });

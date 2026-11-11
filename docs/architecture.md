@@ -105,10 +105,12 @@ return NextResponse.json(result);
 сетевой паузы (аудит перфоманса 2026-09-13).
 
 События (полный актуальный список — `grep -rn "publish(" src/app/api`):
-`trip:updated`, `place:created|updated|deleted`, `photo:added|deleted`,
+`trip:updated`, `place:created|updated|deleted`, `photo:added|deleted|updated`,
 `expense:added|deleted`, `budget:updated`, `board:added|pinned|updated|deleted`,
 `journal:added|updated|deleted`, `checklist:updated`, `info:updated`,
-`food:updated`, `phrase:updated`, `member:joined`. Для событий из
+`food:updated`, `phrase:updated`, `lodging:added|updated`, `member:joined`.
+Дополнительно сервер→клиент: `board:typing` (ретрансляция «печатает…»),
+`trip:error` (отказ членства при `trip:join`). Для событий из
 `NOTIFICATION_MAP` `ws-bus.ts` попутно издаёт в комнату мета-событие
 `notification` (тост) и web-push (§9); остальные события — тихая инвалидация.
 
@@ -392,7 +394,7 @@ S3» — ADR-0003.
   отмеченное юзером (`POST /api/places/batch`, одна WS-публикация).
 - Премиум: `isPremiumUser` (`plan=premium`, `planExpiry` не истёк). Выдача —
   вручную админом (`admin/users`) или `user/upgrade` (заглушка/ручной сценарий —
-  известная дыра продакшена, см. `docs/PRODUCTION_PLAN.md`). Лимиты free читаются
+  известная дыра продакшена, см. `docs/archive/PRODUCTION_PLAN.md`). Лимиты free читаются
   из `AppSettings`. Шов премиум-гейта ИИ — поле `access` в `AI_FEATURES`
   (`"all"` у всех; `"premium-or-byok"` включит гейт без правок оркестратора).
 

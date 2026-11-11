@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { requireTripEditor } from "@/lib/api-auth";
 import { dayDateFor, dayEndFor } from "@/lib/trip-days";
+import { publish } from "@/lib/ws-bus";
+import { claimFirstDayAdded } from "@/lib/trip-activation";
 
 // GET удалён (аудит перфоманса 2026-09-13): модель чтения дней+мест —
 // GET /api/route (useRoute/useRouteDays). Здесь остались только мутации.
@@ -11,7 +13,7 @@ export async function POST(req: NextRequest) {
   const body = await req.json();
   const { tripId, city, cityKey, title, summary, accentColor } = body;
 
-  const { response } = await requireTripEditor(req, tripId);
+  const { user, response } = await requireTripEditor(req, tripId);
   if (response) return response;
 
   if (!tripId) return NextResponse.json({ error: "tripId required" }, { status: 400 });
@@ -31,30 +33,38 @@ export async function POST(req: NextRequest) {
   // а новые дни не наследуют сдвинутые даты соседей.
   const newDate = dayDateFor(new Date(trip.startDate), newDayNumber);
 
-  const day = await db.day.create({
-    data: {
-      tripId,
-      dayNumber: newDayNumber,
-      date: newDate,
-      city: city || "Новый город",
-      cityKey: cityKey || "custom",
-      title: title || `День ${newDayNumber}`,
-      summary: summary || "",
-      accentColor: accentColor || "#f97316",
-    },
+  // create+trip.update+claim атомарно — как places: claim «первый день blank-поездки»
+  // — единственный способ показать цель first_day_added ровно один раз на поездку
+  const { day, firstDayAdded } = await db.$transaction(async (tx) => {
+    const day = await tx.day.create({
+      data: {
+        tripId,
+        dayNumber: newDayNumber,
+        date: newDate,
+        city: city || "Новый город",
+        cityKey: cityKey || "custom",
+        title: title || `День ${newDayNumber}`,
+        summary: summary || "",
+        accentColor: accentColor || "#f97316",
+      },
+    });
+    // Обновим totalDays и endDate в поездке: endDate = конец последнего дня маршрута
+    const endDate = dayEndFor(new Date(trip.startDate), newDayNumber);
+    await tx.trip.update({
+      where: { id: tripId },
+      data: {
+        totalDays: newDayNumber,
+        endDate,
+      },
+    });
+    const firstDayAdded = await claimFirstDayAdded(tx, tripId);
+    return { day, firstDayAdded };
   });
 
-  // Обновим totalDays и endDate в поездке: endDate = конец последнего дня маршрута
-  const endDate = dayEndFor(new Date(trip.startDate), newDayNumber);
-  await db.trip.update({
-    where: { id: tripId },
-    data: {
-      totalDays: newDayNumber,
-      endDate,
-    },
-  });
-
-  return NextResponse.json(day);
+  // Молчаливая инвалидация (place:updated не входит в NOTIFICATION_MAP) —
+  // чужие участники рефетчат маршрут и поездку
+  publish(tripId, "place:updated", { dayId: day.id }, user?.id);
+  return NextResponse.json({ ...day, firstDayAdded });
 }
 
 // DELETE /api/days?id=... — удалить день
@@ -66,7 +76,7 @@ export async function DELETE(req: NextRequest) {
   const day = await db.day.findUnique({ where: { id }, select: { tripId: true, dayNumber: true } });
   if (!day) return NextResponse.json({ error: "day not found" }, { status: 404 });
 
-  const { response } = await requireTripEditor(req, day.tripId);
+  const { user, response } = await requireTripEditor(req, day.tripId);
   if (response) return response;
 
   // Не даём удалить если это единственный день
@@ -99,6 +109,7 @@ export async function DELETE(req: NextRequest) {
     data: { totalDays: remaining.length, endDate: dayEndFor(new Date(tripRow!.startDate), remaining.length) },
   });
 
+  publish(day.tripId, "place:updated", { dayId: id }, user?.id);
   return NextResponse.json({ ok: true });
 }
 
@@ -112,7 +123,7 @@ export async function PATCH(req: NextRequest) {
   // Lookup tripId from existing day for auth
   const existing = await db.day.findUnique({ where: { id }, select: { tripId: true } });
   if (!existing) return NextResponse.json({ error: "day not found" }, { status: 404 });
-  const { response } = await requireTripEditor(req, existing.tripId);
+  const { user, response } = await requireTripEditor(req, existing.tripId);
   if (response) return response;
 
   const data: Record<string, unknown> = {};
@@ -127,5 +138,6 @@ export async function PATCH(req: NextRequest) {
   }
 
   const day = await db.day.update({ where: { id }, data });
+  publish(existing.tripId, "place:updated", { dayId: id }, user?.id);
   return NextResponse.json(day);
 }

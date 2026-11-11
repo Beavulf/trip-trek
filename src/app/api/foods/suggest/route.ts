@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { requireTripMember } from "@/lib/api-auth";
+import { requireTripEditor } from "@/lib/api-auth";
 import { currencySymbol } from "@/lib/currencies";
 import { runAi, aiFailResponse } from "@/lib/ai";
 import { sanitizeUserText, extractJsonLoose } from "@/lib/planner";
@@ -64,7 +64,7 @@ export async function POST(req: NextRequest) {
     }
     // Пакетный режим: сколько блюд просим (дефолт 4 — прежний контракт)
     const want = Math.min(Math.max(Math.round(count ?? 4) || 4, 4), 10);
-    const { user, response } = await requireTripMember(req, tripId);
+    const { user, response } = await requireTripEditor(req, tripId);
     if (response) return response;
 
     const [trip, foods] = await Promise.all([

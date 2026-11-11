@@ -8,9 +8,9 @@ env-переменные, первый деплой, обновление, ми�
 
 | Сервис | Контейнер | Что |
 |---|---|---|
-| `app` | `triptrek-app` | `bun server.ts`: Next.js 16 (standalone, **webpack**-сборка, не Turbopack) + socket.io + раздача `/uploads` |
+| `app` | `triptrek-app` | `bun server.ts`: Next.js 16 (webpack-сборка; standalone-раскладка не используется — запуск через `server.ts`) + socket.io + раздача `/uploads` |
 | `db` | `triptrek-db` | **PostgreSQL 16** (не SQLite), данные в volume `triptrek-pgdata` |
-| `caddy` | `triptrek-caddy` | TLS Let's Encrypt, порты 80/443 |
+| `caddy` | `triptrek-caddy` | TLS Let's Encrypt, порты 80/443 (один из двух вариантов TLS — второй: общий `guild-ledger` Caddy, см. DEPLOY.md §1/§3) |
 
 - Фото/аватары — volume `triptrek-uploads`, раздаются мимо Next
   (`server/static-uploads.ts`: том докера не попадает в standalone-сборку).
@@ -35,4 +35,5 @@ env-переменные, первый деплой, обновление, ми�
 | `Caddyfile` | TLS и проксирование на `app:3000` |
 | `.env.example` | шаблон секретов (NEXTAUTH_SECRET, POSTGRES_PASSWORD, DOMAIN, ACME_EMAIL, VAPID_\*, SMTP_\*…) |
 | `backup.sh` | pg_dump + tar uploads → rclone оффсайт, ретеншн 7 дней |
-| `compose.smoke.yml`, `docker-compose.local.yml` | smoke-проверка и локальные вариации стека |
+| `compose.smoke.yml` | smoke-проверка (caddy за `profiles: ["tls"]`, порт только на 127.0.0.1) |
+| `docker-compose.local.yml` | локальная вариация стека — **не в git** (local-only, см. .gitignore) |

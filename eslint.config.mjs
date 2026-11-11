@@ -51,7 +51,9 @@ const eslintConfig = [...nextCoreWebVitals, ...nextTypescript, {
     "no-useless-escape": "off",
   },
 }, {
-  ignores: ["node_modules/**", ".next/**", "out/**", "build/**", "next-env.d.ts", "examples/**", "skills"]
+  ignores: ["node_modules/**", ".next/**", "out/**", "build/**", "next-env.d.ts", "examples/**", "skills",
+    // Untracked scratch/artifact dirs (also in .gitignore) — not app code, не должны красить lint
+    "marketing/**", "brag-output/**", ".zcode-share/**", ".superpowers/**", ".idea/**"]
 }];
 
 export default eslintConfig;

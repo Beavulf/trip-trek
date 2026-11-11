@@ -771,7 +771,7 @@ Stop here. Do not commit unless explicitly asked. List anything observed during 
 
 ## Self-Review
 
-**1. Spec coverage** (against `docs/superpowers/specs/2026-09-06-gallery-viewer-polish-design.md`):
+**1. Spec coverage** (against `docs/archive/superpowers/specs/2026-09-06-gallery-viewer-polish-design.md`):
 
 | Spec item | Covered by |
 |---|---|

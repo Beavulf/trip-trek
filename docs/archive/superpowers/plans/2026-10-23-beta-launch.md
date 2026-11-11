@@ -8,7 +8,7 @@
 
 **Tech Stack:** Next.js 16 App Router (custom `server.ts` под Bun), Prisma 6 + PostgreSQL, TanStack Query 5, Tailwind 4, vitest.
 
-**Spec:** `docs/superpowers/specs/2026-10-23-beta-launch-design.md`. Одно осознанное расширение спеки: `GET /api/auth/register-options` возвращает и `contactTelegram` (он и так публичен на лендинге) — чтобы футер `/login` обошёлся без второго эндпоинта.
+**Spec:** `docs/archive/superpowers/specs/2026-10-23-beta-launch-design.md`. Одно осознанное расширение спеки: `GET /api/auth/register-options` возвращает и `contactTelegram` (он и так публичен на лендинге) — чтобы футер `/login` обошёлся без второго эндпоинта.
 
 ## Global Constraints
 

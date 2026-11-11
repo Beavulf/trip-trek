@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { publish } from "@/lib/ws-bus";
 import { requireTripEditor } from "@/lib/api-auth";
+import { userRateLimit } from "@/lib/rate-limit";
 
 // Базовые фразы для каждого языка (50+ фраз)
 // Ключ — код языка (zh, ja, ko, fr, de, en, etc.)
@@ -139,8 +140,11 @@ export async function POST(req: NextRequest) {
   }
 
   // P0 #2: auth + membership
-  const { response } = await requireTripEditor(req, tripId);
+  const { user, response } = await requireTripEditor(req, tripId);
   if (response) return response;
+  // Статичный пак — дёшево, но без лимита кнопку можно жать бесконечно (вставки в БД)
+  const limited = userRateLimit(req, user!.id, "phrases-generate", 20, 60_000);
+  if (limited) return limited;
 
   const phrases = PHRASES_BY_LANGUAGE[language];
   if (!phrases) {

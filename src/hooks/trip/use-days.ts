@@ -3,6 +3,7 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { getTripId } from "./trip-id";
 import { invalidateRouteData } from "@/lib/query-keys";
+import { trackFirstDayAdded } from "@/lib/trip-analytics";
 
 export function useAddDay() {
   const qc = useQueryClient();
@@ -16,7 +17,11 @@ export function useAddDay() {
       if (!r.ok) throw new Error("add day failed");
       return r.json();
     },
-    onSuccess: () => invalidateRouteData(qc),
+    onSuccess: (data) => {
+      // Срабатывает один раз на поездку (серверный claim) только для blank-created поездок
+      if (data?.firstDayAdded) trackFirstDayAdded();
+      invalidateRouteData(qc);
+    },
   });
 }
 

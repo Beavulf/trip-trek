@@ -12,4 +12,4 @@
 6. Map filters collapse on phone + dvh map height  
 7. Budget delete/confirm + amount fields; PlaceRow check ≥44px  
 
-See `PATCHNOTES.md`.
+See `docs/archive/PATCHNOTES.md`.

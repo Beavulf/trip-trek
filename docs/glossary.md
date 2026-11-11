@@ -63,7 +63,7 @@
 | **TripMember** (участник) | связь User↔Trip; роль `owner` (владелец) или `member`; свой `displayName`/emoji/цвет в рамках поездки |
 | **Day** (день) | день поездки: `dayNumber`, город, `cityKey` (ключ города для погоды/координат) |
 | **Place** (место) | точка маршрута: координаты, категория, `timeOfDay`, статус (`planned`→посещено, `visitedAt`), порядок `order` |
-| **Expense** (трата) | `amount` в валюте поездки; введённое юзером — `originalAmount/`+`originalCurrency`; делёж `splitWith` (csv userId, пусто = личная) + `excludeSelf` |
+| **Expense** (трата) | `amount` — всегда в базовой валюте поездки (на практике всегда USD: `BASE_CURRENCY` форсит USD); введённое юзером — `originalAmount`/`originalCurrency`; делёж `splitWith` (csv userId, пусто = личная) + `excludeSelf` |
 | **Долг / settlement** | расчёт «кто кому сколько должен» (`src/lib/budget/`: split → balances → settle); переводы идемпотентны по `settlementKey`; считается по «участникам денег» (`people.ts`): вышедший/исключённый остаётся в долгах с пометкой «вышел», зритель вне денег (пока не фигурирует в тратах) |
 | **BudgetPlan** | плановый бюджет по категории (уникален tripId+category) — не путать с расходами |
 | **BoardMessage** | сообщение чата: реакции (JSON `{"👍":[userId]}`), ответы (`replyToId`), закрепление |
@@ -97,7 +97,7 @@
 | **role** | `user` / `admin`; админ-роль всегда проверяется чтением из БД, не из токена |
 | **AdminLog** | журнал действий админов (кто/что/когда; ключи и пароли в meta запрещены) |
 | **Feedback** | обращение из приложения (баг/идея/вопрос/жалоба/отзыв) или гостя с `/login` (`userId=null`, `contactEmail`). Первое сообщение — `Feedback.message`, дальше переписка в `FeedbackMessage` (`author` user/admin). Статус = чья очередь: `new` — ждёт админа (новое или автор дописал, даже из закрытого), `in_progress`, `resolved`. `lastActivityAt` — сортировка очереди, `userSeenAt` — «непрочитанный ответ» у автора. Колонки `adminReply`/`repliedAt` устарели (миграция перенесла их в `FeedbackMessage`). Правила — `lib/feedback.ts` |
-| **UserNotification** | колокольчик в шапке; типы: premium, password, member_removed, member_banned, trip_deleted, feedback_reply (ответ админа; ссылка `/?feedback=<id>` открывает окно), feedback_new (админам: новое обращение/реплика), split_payment, split_reminder («Сочтёмся»), admin_message, ownership |
+| **UserNotification** | колокольчик в шапке; типы: premium, password, member_removed, member_unbanned, member_left, member_banned, trip_deleted, feedback_reply (ответ админа; ссылка `/?feedback=<id>` открывает окно), feedback_new (админам: новое обращение/реплика), split_payment, split_reminder («Сочтёмся»), admin_message, ownership, ai_blocked, ai_unblocked, ai_spend_alert, donation |
 | **PasswordResetToken** | одноразовый токен сброса; в БД только sha256-хеш, TTL 60 мин |
 | **Обучение** | знакомство (по ролям: владелец / участник / зритель) + тур у каждой из 16 вкладок + «Сочтёмся» (хаб и группа); шаги с анимированными мини-макетами интерфейса и кнопкой «Попробовать»; список «Первые шаги» на Обзоре (отмечается сам по данным поездки); выход через панель «Закрыть обучение?» (продолжить / напомнить позже / пропустить тур / не показывать подсказки); кнопка «?» в шапке (на телефоне — «Ещё») открывает тур раздела; Центр обучения в Профиле (статусы, продолжить, сброс); прогресс на аккаунте — `User.onboardingState` (`src/components/trip/onboarding/`, `src/lib/onboarding*.ts`) |
 | **Обновления** | «Что нового»: вторая вкладка окна колокольчика («Уведомления \| Обновления»); запись — карточка со списком, открывается с демо-макетом (шаги листаются руками), пунктами, кнопкой «Попробовать» и ссылкой на тур; непрочитанные — точка и счётчик на колокольчике, «прочитано» на аккаунте; записи — `src/lib/updates-content.ts`, компоненты `src/components/trip/updates/` |
@@ -112,12 +112,12 @@
 | **Очередь загрузки (upload queue)** | клиентская фоновая очередь фото: подготовленные кадры лежат в IndexedDB, отправляются по 3, ретраятся, ставятся на паузу при офлайне/429/401 и дошлются после перезапуска приложения; «черновик пачки» — выбор, который юзер ещё не отправил |
 | **uploads / UPLOADS_ROOT** | файловое хранилище на диске (фото/аватары); в проде — докер-том `triptrek-uploads`; раздаётся мимо Next (`server/static-uploads.ts`) |
 | **storage пайплайн** | `src/lib/storage/`: sharp-сжатие, превью, лимиты — единственный способ сохранять файлы |
-| **outbound.ts** | обёртка внешних HTTP (таймаут+ретрай+кэш): Nominatim, Open-Meteo, курсы, LLM |
+| **outbound.ts** | обёртка внешних HTTP (таймаут+ретрай+кэш): Nominatim, Open-Meteo, курсы. LLM — не через него: все вызовы идут через `runAi` (`src/lib/ai.ts`) |
 | **rate limits** | in-memory (`rate-limit.ts`): login 20/15мин/IP + 8 неудач/15мин/email, register 20/ч/IP, ИИ 10/ч/user+trip; обнуляются рестартом |
 | **VAPID / web-push** | серверные пуши в браузер; ключи в env `VAPID_*` |
 | **mailer** | nodemailer через постфикс-релей; `rejectUnauthorized: false` — только для самоподписанного серта локального релея |
-| **Caddy** | обратный прокси на VPS: TLS Let's Encrypt, 80/443 → app:3000 |
+| **Caddy** | обратный прокси на VPS: TLS 80/443 → app:3000 (два варианта — встроенный в compose или общий guild-ledger; см. DEPLOY.md §1/§3, «два источника TLS») |
 | **standalone** | режим сборки Next (`output: "standalone"`); рантайм-файлы (uploads) в неё не попадают |
 | **back-stack / useBackDismiss** | «назад» на телефоне закрывает верхний оверлей (шит/диалог/лайтбокс), а не сворачивает PWA: `src/lib/back-stack.ts` держит запись в history, пока оверлей открыт, popstate закрывает верхний; пустой стек — «назад» выходит из приложения как обычно |
-| **ADR** | `docs/adr/0001–0008` — архитектурные решения и их мотивы |
+| **ADR** | `docs/adr/0001–0012` — архитектурные решения и их мотивы |
 | **worklog.md** | журнал сессий разработки: что менялось и зачем (история — искать здесь) |

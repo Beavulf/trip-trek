@@ -9,10 +9,6 @@ export interface NotificationConfig {
 }
 
 export const NOTIFICATION_MAP: Record<string, NotificationConfig> = {
-  "place:visited": {
-    emoji: "📍",
-    message: (d) => `${d.userName || "Кто-то"} отметил(а) место посещённым: ${d.placeName}`,
-  },
   "place:created": {
     emoji: "📍",
     message: (d) => `${d.userName || "Кто-то"} добавил(а) место: ${d.placeName}`,

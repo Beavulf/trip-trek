@@ -240,6 +240,9 @@ model Trip {
   // Источник создания нужен для аналитики активации; legacy — поездки до включения трекинга
   creationSource            String    @default("legacy")
   firstUserPlaceAddedAt     DateTime?
+  // Аналитика активации: первая самостоятельно добавленная ПОЛЬЗОВАТЕЛЕМ дата первого дня;
+  // срабатывает один раз на поездку только для creationSource:"blank" (см. trip-activation.ts)
+  firstDayAddedAt           DateTime?
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 

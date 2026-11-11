@@ -10,6 +10,9 @@
 - VPS: 2 vCPU / 4 GB RAM / 40+ GB диска (Ubuntu 22.04+), root-доступ по SSH-ключу.
 - Домен с A-записью → IP сервера (пока DNS-only / серое облако, если Cloudflare).
 - На хосте: `docker`, `docker compose`, `rclone` (для бэкапов), `curl`.
+- (Опционально, для писем сброса пароля): постфикс-релей на хосте, слушает :25 —
+  compose добавляет `host.docker.internal` через `extra_hosts`. Без него приложение
+  работает, но сброс пароля письмом (§1/§6) не отправится.
 - Клон репозитория: `git clone https://github.com/Beavulf/trip-trek.git && cd trip-trek`.
 
 Firewall (только 22/80/443 наружу; app и db не светим):
@@ -31,6 +34,7 @@ cd docker-deploy
 cp .env.example .env
 # заполнить: NEXTAUTH_SECRET (openssl rand -hex 32), POSTGRES_PASSWORD (openssl rand -hex 16),
 #            DOMAIN, ACME_EMAIL, NEXTAUTH_URL=https://<домен>, WS_ALLOWED_ORIGINS=https://<домен>,
+#            SMTP_* (для сброса пароля письмом — см. §0 и .env.example), LANDING_REDIRECT (опц.),
 #            (опц.) VAPID_* (npx web-push generate-vapid-keys), OPENAI_API_KEY,
 #            NEXT_PUBLIC_YANDEX_METRIKA_ID (номер счётчика Метрики; без переменной
 #            метрика не подключается). Читается в рантайме серверными компонентами
@@ -41,6 +45,19 @@ cp .env.example .env
 docker compose up -d --build
 ```
 
+**Два варианта TLS — определитесь ДО первого деплоя, не смешивайте:**
+
+- **Встроенный `caddy` из этого compose** — путь по умолчанию: сам получает сертификат
+  Let's Encrypt и слушает 80/443. `DOMAIN` и `ACME_EMAIL` обязательны именно для него.
+- **Общий Caddy `guild-ledger`** (`/root/guild-ledger/Caddyfile`, upstream `triptrek-app:3000`)
+  — как устроен боевой хост этого проекта (см. §3): TLS обслуживает общий прокси, app обязан
+  сидеть в сети `supabase-network` (закреплено в compose). Встроенный caddy при этом лишний:
+  порт 80/443 занят общим Caddy, и caddy-контейнер будет падать в restart-loop на биндинге —
+  это ожидаемо, его можно игнорировать, пока TLS держит общий Caddy. Если ставите с нуля и
+  хотите именно общий Caddy — поднимайте `app` и `db` без ожидания `caddy`
+  (`docker compose up -d --build app db`) либо добавьте в свой compose `profiles` для сервиса
+  caddy (в прод-файл не коммитим — это локальная поправка хоста).
+
 Что происходит: поднимается Postgres → app ждёт БД, применяет миграции
 (`prisma migrate deploy`), стартует bun-сервер → Caddy получает сертификат и
 пускает трафик `https://<домен>` → app:3000.
@@ -50,7 +67,7 @@ docker compose up -d --build
 ```bash
 curl -fsS https://<домен>/api/health        # {"status":"ok","db":"up"}
 docker compose ps                           # все Up (healthy)
-docker compose logs app --tail=50           # нет ошибок, есть "migrate deploy"
+docker compose logs app --tail=50           # нет ошибок, есть "[triptrek] applying migrations…"
 ```
 
 Затем в браузере: регистрация → создание поездки → загрузка фото → (с второго
@@ -68,7 +85,7 @@ docker compose logs app --tail=50           # нет ошибок, есть "mig
 tar czf triptrek-data.tgz prisma/db/dev.db public/uploads
 
 # на VPS (в корне клона репозитория)
-scp triptrek-data.tag user@vps:~/     # с машины разработки
+scp triptrek-data.tgz user@vps:~/     # с машины разработки
 
 cd ~/trip-trek && tar xzf ~/triptrek-data.tgz
 docker compose -f docker-deploy/docker-compose.yml cp ~/triptrek/prisma/db/dev.db app:/app/dev.db 2>/dev/null || \
@@ -176,7 +193,9 @@ docker exec triptrek-db psql -U triptrek -d triptrek -c "UPDATE \"AppSettings\" 
 ## 4. Бэкапы
 
 `backup.sh` сохраняет дамп Postgres + архив uploads и отправляет наружу через
-rclone; локальные копии живут 7 дней, в bucket 30 дней.
+rclone; локальные копии живут 7 дней, в bucket 30 дней. Читает env `BACKUP_DIR`
+(дефолт `/var/backups/triptrek`) и `RCLONE_REMOTE` (дефолт `triptrek-backup`) —
+задаются на хосте при необходимости другого пути/remote.
 
 Cron на хосте (ночь, 04:00):
 
@@ -217,9 +236,9 @@ curl -s https://<домен>/api/health                                # db up/d
 ```
 
 - БД упала → app отвечает 503 на /api/health, Caddy отдаёт 502/503 — чинить
-  `docker compose logs db`, поднять `docker compose up -d db`.
+  `docker compose -f docker-deploy/docker-compose.yml logs db`, поднять `docker compose -f docker-deploy/docker-compose.yml up -d db`.
 - Забыли NEXTAUTH_SECRET → app не стартует с явным FATAL в логах.
-- Миграция не применяется → `docker compose logs app | grep prisma`, чинить
+- Миграция не применяется → `docker compose -f docker-deploy/docker-compose.yml logs app | grep prisma`, чинить
   migration, повторный `up -d` перезапустит entrypoint.
 - `bun install` в билде падает `Fail extracting tarball for "next"` →
   прямой registry.npmjs.org с VPS рвётся в bun на длинных загрузках (curl
@@ -235,12 +254,13 @@ curl -s https://<домен>/api/health                                # db up/d
 
 ## 6. Известные ограничения (осознанные решения)
 
-- Сброс пароля — вручную владельцем (UPDATE user через psql; ADR-0007).
+- Сброс пароля — самосервис по письму: `/api/auth/forgot-password` (sha256-хеш в БД, TTL 60 мин), отправка через nodemailer → постфикс-релей на хосте (compose прокидывает `host.docker.internal`). ADR-0007 с поправкой 2026-10-22. Ручной SQL-сброс (`UPDATE "User"` в psql) — только когда почта не настроена.
 - Push без VAPID-ключей молча отключён.
 - Один инстанс: in-memory rate-limit и WS-комнат достаточно до ~500 юзеров;
   горизонтальное масштабирование потребует Redis (швы оставлены).
-- Фото живут на диске VPS: следить за `df -h`; лимиты загрузок (20 фото/час)
-  сдерживают рост.
+- Фото живут на диске VPS: следить за `df -h`; лимиты загрузок (500 фото / ч / user
+  в `src/app/api/photos/route.ts`, плюс потолок `PHOTO_LIMIT_PER_TRIP` = 1500 и
+  20MB на файл) сдерживают рост.
 
 ## 7. Гарантии безопасности деплоя (hardening 2026-09-12)
 
@@ -248,8 +268,8 @@ curl -s https://<домен>/api/health                                # db up/d
   `X-Forwarded-For`, который перезаписывает только Caddy; прямой доступ к app
   делает IP-лимиты (логин 20/15мин) обходными. compose.smoke публикует порт только
   на `127.0.0.1`. Firewall: только 22/80/443 (ufw).
-- **NEXTAUTH_SECRET** — только `openssl rand -base64 32` (start.sh без openssl
-  падает, фолбэков нет); entrypoint не стартует с префиксами
+- **NEXTAUTH_SECRET** — `openssl rand -base64 32` или `openssl rand -hex 32` (оба 256 бит;
+  start.sh падает без openssl, фолбэков нет); entrypoint не стартует с префиксами
   `change-this-*`/`change-me-*` и `fallback-dev-secret`.
 - **WS_ALLOWED_ORIGINS=https://<домен>** рекомендуется (с 2026-10-02 дефолт в
   коде — origin из NEXTAUTH_URL, явный `*` остался ручным выбором; реальную

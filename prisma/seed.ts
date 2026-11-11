@@ -9,7 +9,7 @@ import { db } from "../src/lib/db";
 // - удаляется ТОЛЬКО демо-поездка (каскад чистит её дни/места/траты/фото/участников).
 //   Никаких глобальных deleteMany — данные других поездок не трогаются.
 //
-// Запуск: bun prisma/seed.ts (или npm run db:seed) с DATABASE_URL.
+// Запуск: bun prisma/seed.ts (или bun run db:seed) с DATABASE_URL.
 
 const DEMO_TRIP_ID = "trip-demo-china";
 const DEMO_PASSWORD = "1234";

@@ -2,7 +2,7 @@
 
 > **Исторический бриф** (аудит до релиза): фича давно реализована; актуальное описание — в [glossary.md](glossary.md) («Фичи главного экрана»), код — в `src/components/trip/`. Чеклист ниже не поддерживается — не принимай его за план.
 
-> Для ИИ-агента: **только вкладка Фразы**. Mobile-first. Русский UI. Связано: `FIX-BRIEF.md` фаза C; `docs/audit-itinerary-marshrut.md` (ложный промис generate при Add Day).
+> Для ИИ-агента: **только вкладка Фразы**. Mobile-first. Русский UI. Связано: `FIX-BRIEF.md` фаза C; `docs/archive/audit-itinerary-marshrut.md` (ложный промис generate при Add Day).
 
 **Файлы:**
 - UI: `src/components/trip/phrasebook.tsx`

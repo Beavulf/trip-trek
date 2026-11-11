@@ -2,7 +2,7 @@
 
 **Date:** 2026-09-06
 **Scope:** Улучшение просмотра фото, сетки и фильтров на вкладке «Галерея».
-**Out of scope:** безопасность, EXIF, realtime (`photo:deleted`), upload, server-side миниатюры — отдельные тикеты из `docs/audit-gallery-galereya.md`.
+**Out of scope:** безопасность, EXIF, realtime (`photo:deleted`), upload, server-side миниатюры — отдельные тикеты из `docs/archive/audit-gallery-galereya.md`.
 
 ---
 

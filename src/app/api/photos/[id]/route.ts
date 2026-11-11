@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { requireTripEditor } from "@/lib/api-auth";
+import { publish } from "@/lib/ws-bus";
 
 const PHOTO_INCLUDE = {
   place: true,
@@ -60,5 +61,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   }
 
   const photo = await db.photo.update({ where: { id }, data, include: PHOTO_INCLUDE });
+  // Молчаливая синхронизация правки (как board:updated): клиенты рефетчат галерею
+  publish(existing.tripId, "photo:updated", { photoId: id }, user?.id);
   return NextResponse.json(photo);
 }

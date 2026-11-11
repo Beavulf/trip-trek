@@ -13,3 +13,7 @@ export function trackFirstUserPlaceAdded(): void {
 export function trackInviteAccepted(): void {
   reachGoal("invite_accepted");
 }
+
+export function trackFirstDayAdded(): void {
+  reachGoal("first_day_added");
+}

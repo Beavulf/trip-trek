@@ -109,6 +109,11 @@ export function useWebSocket(tripId: string) {
       if (data.tripId === tripId) invalidateDebounced(["photos"], ["photos-geo"], ["route"], ["trip"]);
     });
 
+    // Правка подписи/дня/избранного/видимости — тихая синхронизация, без тостов и пушей
+    socket.on("photo:updated", (data: { tripId: string }) => {
+      if (data.tripId === tripId) invalidateDebounced(["photos"], ["photos-geo"]);
+    });
+
     socket.on("expense:added", (data: { tripId: string }) => {
       if (data.tripId === tripId) invalidateDebounced(["expenses"], ["trip"]);
     });

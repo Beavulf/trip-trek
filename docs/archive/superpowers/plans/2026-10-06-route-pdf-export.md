@@ -4,7 +4,7 @@
 
 **Goal:** кнопка на вкладке «Маршрут» скачивает PDF-файл с маршрутом поездки для офлайн-просмотра.
 
-**Architecture:** серверный роут `GET /api/export/pdf?tripId=…` (гард «участник», выборка зеркалит `GET /api/route`) → чистая функция `buildRoutePdf()` из `pdf-lib` со вшитыми DejaVu-шрифтами (кириллица) → blob-скачивание на клиенте. Спека: `docs/superpowers/specs/2026-10-06-route-pdf-export-design.md`.
+**Architecture:** серверный роут `GET /api/export/pdf?tripId=…` (гард «участник», выборка зеркалит `GET /api/route`) → чистая функция `buildRoutePdf()` из `pdf-lib` со вшитыми DejaVu-шрифтами (кириллица) → blob-скачивание на клиенте. Спека: `docs/archive/superpowers/specs/2026-10-06-route-pdf-export-design.md`.
 
 **Tech Stack:** pdf-lib + @pdf-lib/fontkit (чистый JS, работает под Bun), vitest (node-env), date-fns.
 
@@ -28,7 +28,7 @@
 - Modify: `src/lib/time-of-day.ts:62-87` (обобщаем `DaySection`/`daySections`)
 - Create: `src/lib/pdf/route-pdf.ts`
 - Test: `src/lib/pdf/route-pdf.test.ts`
-- Modify: `docs/superpowers/specs/2026-10-06-route-pdf-export-design.md` (уточнение контракта — узкий тип места)
+- Modify: `docs/archive/superpowers/specs/2026-10-06-route-pdf-export-design.md` (уточнение контракта — узкий тип места)
 
 **Interfaces:**
 - Consumes: `daySections()` из `src/lib/time-of-day.ts` (после обобщения принимает `{ timeOfDay: string | null }[]`), `CATEGORY_SHORT` из `src/lib/types.ts`, `currencySymbol(code)` из `src/lib/currencies.ts`.
@@ -454,7 +454,7 @@ Expected: PASS (3 теста).
 
 - [ ] **Step 9: Уточнить контракт в спеке (честность доков)**
 
-В `docs/superpowers/specs/2026-10-06-route-pdf-export-design.md` в блоке «Контракт билдера» заменить комментарий `places: Place[];    // поля из select'а /api/route` на:
+В `docs/archive/superpowers/specs/2026-10-06-route-pdf-export-design.md` в блоке «Контракт билдера» заменить комментарий `places: Place[];    // поля из select'а /api/route` на:
 
 ```ts
   places: RoutePdfPlace[]; // узкий структурный тип (name/category/timeOfDay/address/budget/description/notes);
@@ -466,7 +466,7 @@ Expected: PASS (3 теста).
 
 ```bash
 bun run lint
-git add package.json bun.lock src/lib/pdf src/lib/time-of-day.ts docs/superpowers/specs/2026-10-06-route-pdf-export-design.md
+git add package.json bun.lock src/lib/pdf src/lib/time-of-day.ts docs/archive/superpowers/specs/2026-10-06-route-pdf-export-design.md
 git commit -m "feat(pdf): чистый билдер маршрута в PDF (pdf-lib, DejaVu, кириллица)"
 ```
 

@@ -12,7 +12,7 @@
 - Еда: `useFoods` / `FoodItem.tried`; чеклист: `useChecklist` / `info-panel`
 - Profile (другое): `api/user` + `profile/page.tsx` — другие пороги
 - China-seed bias: `seed-foods.ts` (16), `seed-all` checklist (15) = хардкоды UI
-- Follow-up: `docs/audit-food-eda.md` §13
+- Follow-up: `docs/archive/audit-food-eda.md` §13
 - Empty-эталон: `dashboard.tsx`
 - Вкладка: `page.tsx` (`achievements`), `app-shell` «Награды»
 

@@ -1,0 +1,2 @@
+ALTER TABLE "Trip"
+ADD COLUMN "firstDayAddedAt" TIMESTAMP(3);

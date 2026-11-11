@@ -359,7 +359,7 @@
 - `src/components/trip/itinerary/Itinerary.tsx` — у владельца кнопка «Поделиться» (Share2) вместо «На карте» (ярлык карты не теряется — вкладка есть в таб-баре); `isOwner` как в trip-info-sheet (роль из `trip.participants` × `useAuth`).
 - `src/components/trip/gallery.tsx` — та же кнопка «Поделиться» рядом с «Добавить фото» в hero галереи (`isOwner` там уже считался; шит общий).
 - `src/lib/share-action.ts` + тест — чистый `resolveShareAction(nav)` («native» | «clipboard»).
-- Спека: `docs/superpowers/specs/2026-10-23-share-button-itinerary-design.md`. API, схема и realtime не менялись.
+- Спека: `docs/archive/superpowers/specs/2026-10-23-share-button-itinerary-design.md`. API, схема и realtime не менялись.
 
 ### Verification
 - `bunx tsc --noEmit` — 0; `bun run test` — 455/455 (новые 3 — share-action); eslint по изменённым файлам — 0.
@@ -777,7 +777,7 @@ vitest 87/87 (21 новый), tsc чисто, lint без новых замеч�
 
 ## Session 2026-09-13 (3) — Перформанс-фиксы по аудиту (payload, штормы, бандл)
 
-**Задача**: починить находки аудита производительности (`docs/audit-performance.md`): инвалидационные штормы, двойной read-model, PII-утечку email, тяжёлые списки на мобильных, лишний первичный бандл. Полный список находок и цифры «до» — в аудите.
+**Задача**: починить находки аудита производительности (`docs/archive/audit-performance.md`): инвалидационные штормы, двойной read-model, PII-утечку email, тяжёлые списки на мобильных, лишний первичный бандл. Полный список находок и цифры «до» — в аудите.
 
 ### Сервер
 
@@ -806,7 +806,7 @@ vitest 87/87 (21 новый), tsc чисто, lint без новых замеч�
 
 ### Доки
 
-- `docs/api.md` (строки `trip`, `route`, `days`, `photos`, `photos/geo`), `docs/architecture.md` §4 (дебаунс + reconnect), `docs/audit-performance.md` (статус фиксов).
+- `docs/api.md` (строки `trip`, `route`, `days`, `photos`, `photos/geo`), `docs/architecture.md` §4 (дебаунс + reconnect), `docs/archive/audit-performance.md` (статус фиксов).
 
 ### Проверено
 
@@ -852,7 +852,7 @@ vitest 87/87 (21 новый), tsc чисто, lint без новых замеч�
 
 ## Session 2026-09-13 — Углубление карты и маршрутов (фазы 0–6 плана)
 
-**План**: docs/plans/2026-09-12-map-routes-deepening-plan.md (аудит кандидатов №1–7). Всё выполнено и запушено.
+**План**: docs/archive/2026-09-12-map-routes-deepening-plan.md (аудит кандидатов №1–7). Всё выполнено и запушено.
 
 ### Что сделано (коммиты)
 
@@ -888,7 +888,7 @@ vitest 87/87 (21 новый), tsc чисто, lint без новых замеч�
 
 ---
 
-## Session: Security Hardening (аудит 2026-09-12, план docs/superpowers/plans/2026-09-12-security-hardening.md)
+## Session: Security Hardening (аудит 2026-09-12, план docs/archive/superpowers/plans/2026-09-12-security-hardening.md)
 
 Формальный аудит (security-audit skill, source-only): 31 юнит покрытия, 27 находок
 needs_validation + 1 rejected. Все фиксы — отдельными коммитами 734e945…54add6c:
@@ -3077,7 +3077,7 @@ Server was crashing with "Failed to load external module @prisma/client-2c3a283f
 ### Status Before
 - Список WS-событий в api.md и architecture §4 отставал от кода на 8 событий (`photo:deleted`, `expense:deleted`, `board:pinned/updated/deleted`, `journal:updated/deleted`, `member:joined`); мета-событие `notification` из ws-bus не было описано нигде
 - Карта AGENTS.md не упоминала `push-send.ts`, `logger.ts`, `admin-log.ts`, `trip-join.ts`, подмодули `budget/` (money/personal/planned были только в glossary) и подпапки компонентов `rest-chill/`, `profile/`, `quick-add/`, `onboarding/`
-- 14 брифов `docs/audit-*.md` висели с незакрытыми чекбоксами (фичи давно в проде), план deepening не был закрыт, `docker-deploy/README.md` описывал SQLite + Turbopack + `prisma db push` — всё давно не так
+- 14 брифов `docs/archive/audit-*.md` висели с незакрытыми чекбоксами (фичи давно в проде), план deepening не был закрыт, `docker-deploy/README.md` описывал SQLite + Turbopack + `prisma db push` — всё давно не так
 - Корневого README не было вовсе; скрипты `db:deploy`/`db:reset` не были описаны в AGENTS.md
 
 ### Changes
@@ -3085,7 +3085,7 @@ Server was crashing with "Failed to load external module @prisma/client-2c3a283f
 - `AGENTS.md` — карта: +`push-send.ts`, `logger.ts`, `admin-log.ts`, `trip-join.ts`, распакован `budget/`; компоненты: +`rest-chill/`, `profile/`, `quick-add/`, `onboarding/`; docs-строка помечает audit-*.md историческими; «Команды»: +`db:deploy` (прод-миграции), `db:reset` (с предупреждением)
 - `docs/architecture.md` §2 — +`quick-add/`, `onboarding/`; §5 — budget-модули money/personal/planned
 - `docker-deploy/README.md` — переписан честно: Postgres 16, webpack, `migrate deploy` из entrypoint, карта файлов папки, отсылка к DEPLOY.md как к runbook
-- 14 брифов `docs/audit-*.md` + `audit-performance.md` — баннер «исторический, актуальное описание в glossary»; `docs/plans/2026-09-12-map-routes-deepening-plan.md` — закрыт (фазы в коде, CONTEXT.md заменён glossary)
+- 14 брифов `docs/archive/audit-*.md` + `audit-performance.md` — баннер «исторический, актуальное описание в glossary»; `docs/archive/2026-09-12-map-routes-deepening-plan.md` — закрыт (фазы в коде, CONTEXT.md заменён glossary)
 - `README.md` (новый) — для людей: что это, стек, dev-старт с .env, карта доков
 - Правки только доков, код не трогали; роуты/схема не менялись
 
@@ -3438,7 +3438,7 @@ Server was crashing with "Failed to load external module @prisma/client-2c3a283f
 - **`Photo.width/height` никогда не писались** (поля были в схеме, плитка галереи на них уже опиралась — `aspectRatio` от `photo.width && photo.height` всегда был false). Без пропорций masonry считает каждую плитку заглушкой 120px: стенд (Chromium, 390×844 DPR3, 60 плиток) — 29 картинок/622 КБ при открытии против 16/339 КБ с пропорциями, высота страницы по мере загрузки прыгает 5566→6829px (+23%) против стабильных 6762px.
 - **Публичная страница `/p/<token>`**: все до 500 фото в DOM разом, на каждое свой framer-motion `Reveal`, без пропорций; слайды лайтбокса пересобирались на каждый свайп вместе с перерисовкой всей страницы.
 - **Галерея/лайтбокс (CPU)**: плитки не мемоизированы — тап по фото и каждый свайп (смена index) перерисовывали все 60+ `motion.button`; слайды на ВСЕ фото списка (до 1000 JSX-описаний) пересобирались на каждый рендер; предзагрузка ±1 полноразмерных кадров даже на 2G/3G/экономии трафика.
-- **Старые снимки без миниатюр** (`thumbUrl = url` — в репозитории лежат оригиналы по 4,3 МБ): плитка тянет оригинал. Давно висело в `docs/audit-performance.md` как «backfill миниатюр не делался».
+- **Старые снимки без миниатюр** (`thumbUrl = url` — в репозитории лежат оригиналы по 4,3 МБ): плитка тянет оригинал. Давно висело в `docs/archive/audit-performance.md` как «backfill миниатюр не делался».
 - Проверено и в порядке: серверный пайплайн (sharp: 1600px q80 mozjpeg + миниатюра 480px, в среднем 127 КБ/21 КБ), `/uploads` с `immutable` на год, нативный `loading="lazy"`, порционный рендер 60, debounce WS-инвалидаций.
 
 ### Changes
@@ -3579,3 +3579,25 @@ Server was crashing with "Failed to load external module @prisma/client-2c3a283f
 ### Дополнение (там же): редирект ведёт на заданную ссылку
 - Раньше код и `utm_*` доезжали на лендинг только если уже были в ссылке гостя; человек, открывший просто сайт, получал голый `/landing`. Теперь `LANDING_REDIRECT` может быть готовой ссылкой (`/landing?code=…&utm_source=tiktok&utm_medium=profile&utm_campaign=bio`): все новички идут на неё, регистрация получает код сама; параметры из ссылки гостя перекрывают заданные. Принимается только путь `/landing` (чужой адрес/`//host` — не включает редирект). `1` работает как раньше.
 - Порядок выката: сначала код, потом смена значения в `.env` — старая версия не знает формат-ссылку и сочла бы значение «выключено».
+## 2026-11-11 — Глубокая сверка документации с кодом; архив релизных доков; мелкие дефекты, найденные аудитом
+
+### Задача
+Владелец попросил проверить документацию на актуальность и мусор. Оказалось: релизные аудиты и выполненные планы лежат в рабочем дереве, часть живых доков разошлась с кодом (api.md врут про доступы и лимиты, ADR-0006/0007 не отменены после fact-изменений, architecture.md неполный список WS-событий, два правдивых «источника TLS» в деплой-доках).
+
+### Changes
+- Исторические доки перенесены в `docs/archive/` (`git mv`): 15 `audit-*.md`, выполненные планы `docs/superpowers/` и `docs/plans/2026-09-12-…`, `PRODUCTION_PLAN.md`, `REMAINING-GAPS-FIXED.md`, корневые `PATCHNOTES.md`/`SUMMARY-OF-FIXES.md`; новый `docs/archive/README.md` объясняет, что это архив (Phase 6 из PRODUCTION_PLAN так и не выкачена). Ссылки из worklog.md переписаны; api.md/architecture.md обновлены.
+- `.zcode-share/` (чужой проект «Система войск», случайно закоммичен) убран из трекинга; `.idea/` и `.zcode-share/` в .gitignore.
+- ADR приведены к факту (аддендумы, не переписывание): **0006** (фото бэкапятся вместе с pg_dump в `triptrek-backup`, ретеншн 7/30д), **0007** (SMTP-сброс реализован 2026-10-22, NextAuth удалён), 0003 (опечатка), 0005 (путь к архивному плану).
+- api.md: ИИ-роуты/`trip/budget` «M»→«E»; `participants` PATCH честно описан как no-op; `participants/[id]` точные гарды (роль — владелец); добавлены недокументированные `GET /api/app-status` и `POST /api/admin/settings/test`; лимиты `search`/`trip/import`/`nearby`/`foods`/`user/password`/participants-*/push/subscribe/city-search/currency/support/admin-*/`phrases/generate`; WS-ячейки исправлены (`days` не публиковал вовсе, `photos/[id]` — то же), в списки добавлены `board:typing`, `trip:error`, `photo:updated`.
+- Дефекты в коде, найденные тем же аудитом: `days` POST/PATCH/DELETE теперь публикуют `place:updated` (тихий, без тоста) — участники рефетчат маршрут; `photos/[id]` PATCH — новое молчаливое событие `photo:updated` (обрабатывается клиентом, инвалидирует галерею); `foods/suggest` — `requireTripEditor` (зритель жёг ИИ-лимит поездки); `phrases/generate` — лимит 20/мин/user (был без лимита); мёртвая запись `place:visited` убрана из `server/notification-map.ts`.
+- Удалён пробел SPEC↔код: цель **`first_day_added`** (спека acquisition-funnel) теперь реализована — `trackFirstDayAdded` (`src/lib/trip-analytics.ts`), серверный claim `claimFirstDayAdded` в `POST /api/days` (creationSource="blank", один раз на поездку), миграция `20261111120000_first_day_added` (nullable-колонка, additive). Клиент: `useAddDay` шлёт цель при `firstDayAdded` в ответе.
+- Деплой: DEPLOY.md — явный блок «два варианта TLS» (встроенный compose-caddy vs общий guild-ledger), postfix-предусловие писем сброса пароля, 500 фото/ч вместо вымышленных 20, `-tag`→`-tgz`, строка лога миграции, env `LANDING_REDIRECT`/`BACKUP_DIR`/`RCLONE_REMOTE`/`UPLOADS_DIR`; `.env.example` — то же; `AGENTS.md`/`docs/glossary.md`/`docker-deploy/README.md` — в тон (standalone, Caddy, ADR 0012, docs/archive, `test:watch`).
+
+### Verification
+- `bunx tsc --noEmit` — чисто; `bunx vitest run src/lib/trip-analytics` — 4/4; `prisma generate` ок. Миграцию `first_day_added` применит entrypoint при следующем деплое (`prisma migrate deploy`) или `bun run db:migrate` в dev.
+- `bun run lint` — 0 ошибок (16 известных warning'ов set-state-in-effect). В `eslint.config.mjs` добавлены ignores untracked scratch-каталогов (`marketing/**`, `brag-output/**`, `.zcode-share/**`, `.superpowers/**`, `.idea/**`) — их 39 ошибок `no-require-imports` не про приложение и не должны красить гейт.
+
+### На заметку
+- Рабочее дерево содержит новый `docs/archive/`, `.gitignore`, `docker-compose.dev.yml` (комментарии npm→bun) и этот файл — смотрите `git status`.
+- Кодовые решения, которые НЕ делал без владельца: переключение TLS в боевом `docker-deploy/docker-compose.yml` (комментарий-пояснение добавлен; `profiles: ["tls"]` не вводил), `participants` PATCH остаётся no-op заглушкой, `place:visited` просто удалён (тост «посетил» можно добавить отдельно).
+- Прод-выкат целей воронки (`trip_created`, `first_user_place_added`, `invite_accepted`, `first_day_added`) — production-миграции `acquisition_analytics` и `first_day_added` должны одобрить отдельно.
