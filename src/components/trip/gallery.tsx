@@ -478,20 +478,29 @@ export function Gallery() {
           >
             {layout === "masonry" ? <Columns3 className="size-4" /> : <LayoutGrid className="size-4" />}
           </button>
+          {/* Порядок ленты: иконка-кнопка рядом с «сеткой»; подпись состояния — в aria-label/title */}
+          <button
+            type="button"
+            aria-pressed={sortOrder === "old"}
+            aria-label={sortOrder === "old" ? "Сначала старые" : "Сначала новые"}
+            title={sortOrder === "old" ? "Сначала старые" : "Сначала новые"}
+            onClick={toggleSortOrder}
+            className={cn(
+              "size-11 shrink-0 rounded-xl border grid place-items-center active:scale-95 transition-all",
+              sortOrder === "old"
+                ? "bg-primary/10 border-primary/50 text-primary"
+                : "bg-card border-border text-muted-foreground",
+            )}
+          >
+            {sortOrder === "old" ? (
+              <ArrowUpNarrowWide className="size-4" aria-hidden="true" />
+            ) : (
+              <ArrowDownWideNarrow className="size-4" aria-hidden="true" />
+            )}
+          </button>
         </div>
 
         <div className="chip-rail no-scrollbar gap-1.5">
-          {/* Порядок ленты: подпись показывает текущее состояние, тап разворачивает */}
-          <Chip active={sortOrder === "old"} pressed={sortOrder === "old"} onClick={toggleSortOrder}>
-            <span className="inline-flex items-center gap-1">
-              {sortOrder === "old" ? (
-                <ArrowUpNarrowWide className="size-3" aria-hidden="true" />
-              ) : (
-                <ArrowDownWideNarrow className="size-3" aria-hidden="true" />
-              )}
-              {sortOrder === "old" ? "Сначала старые" : "Сначала новые"}
-            </span>
-          </Chip>
           <Chip
             active={!chipValue}
             onClick={() => {
@@ -658,19 +667,15 @@ function Chip({
   active,
   onClick,
   children,
-  pressed,
 }: {
   active: boolean;
   onClick: () => void;
   children: React.ReactNode;
-  /** aria-pressed для чипов-переключателей (сортировка); у фильтр-чипов не ставится */
-  pressed?: boolean;
 }) {
   return (
     <button
       type="button"
       onClick={onClick}
-      aria-pressed={pressed}
       className={cn(
         "rounded-full px-3 py-1.5 text-xs font-medium min-h-11 active:scale-95 transition-transform whitespace-nowrap",
         active
