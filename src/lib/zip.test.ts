@@ -228,7 +228,9 @@ describe("zip64", () => {
     expect(lv.getUint32(16, true)).toBe(1);
   });
 
-  it("архив из 66 000 записей получает zip64-каталог", async () => {
+  // На медленной машине сборка 66 000 записей не влезает в дефолтные 5000 ms (worklog 2026-10-29);
+  // сама проверка при этом не ослабляется
+  it("архив из 66 000 записей получает zip64-каталог", { timeout: 60_000 }, async () => {
     const entries: ZipEntry[] = Array.from({ length: 66_000 }, (_, i) => ({
       name: `f${String(i).padStart(5, "0")}.txt`,
       data: new TextEncoder().encode(`data-${i}`),

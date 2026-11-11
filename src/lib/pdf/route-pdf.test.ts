@@ -53,7 +53,8 @@ describe("buildRoutePdf", () => {
     expect(doc.getPageCount()).toBeGreaterThanOrEqual(1);
   });
 
-  it("длинный маршрут даёт больше одной страницы", async () => {
+  // 45 дней + встроенные шрифты — тяжелее дефолтного 5000 ms лимита под параллельными воркерами
+  it("длинный маршрут даёт больше одной страницы", { timeout: 60_000 }, async () => {
     const days = Array.from({ length: 45 }, (_, i) =>
       day({
         dayNumber: i + 1,
