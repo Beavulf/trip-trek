@@ -703,7 +703,6 @@ function DeletePlaceButton({
         onClick={async () => {
           try {
             await del.mutateAsync(placeId);
-            toast.success("Место удалено");
             onDeleted();
           } catch (err) {
             toast.error(err instanceof Error ? err.message : "Не удалось удалить");

@@ -78,7 +78,11 @@ export function useDeletePlace() {
       // sonner не дисейблит action — защита от двойного POST (как в use-expenses)
       let restoring = false;
       toast.success("Место удалено", {
-        description: "Фото места не привяжутся обратно",
+        // POST /api/places восстанавливает место как «в планах» (status/visitedAt не принимает) — честно предупреждаем
+        description:
+          removed.status === "visited"
+            ? "Фото не привяжутся обратно, статус станет «в планах»"
+            : "Фото места не привяжутся обратно",
         duration: 8000,
         action: {
           label: "Вернуть",
@@ -94,7 +98,11 @@ export function useDeletePlace() {
                 if (!r.ok) throw new Error((await r.json().catch(() => ({})))?.error || `Ошибка ${r.status}`);
                 toast.success("Место возвращено");
               })
-              .catch((e) => toast.error("Не удалось вернуть", { description: e instanceof Error ? e.message : undefined }))
+              .catch((e) => {
+                // сброс гарда: без него повторный клик по «Вернуть» ничего не делает до конца тоста
+                restoring = false;
+                toast.error("Не удалось вернуть", { description: e instanceof Error ? e.message : undefined });
+              })
               .finally(() => invalidateRouteData(qc));
           },
         },
