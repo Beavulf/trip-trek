@@ -63,8 +63,12 @@ describe("pickBadgePresentation", () => {
   });
 
   it("до трёх — карточки списком, больше — счётчик", () => {
-    expect(pickBadgePresentation([badge("a")]).mode).toBe("list");
-    expect(pickBadgePresentation([badge("a"), badge("b"), badge("c")]).mode).toBe("list");
-    expect(pickBadgePresentation([badge("a"), badge("b"), badge("c"), badge("d")]).mode).toBe("count");
+    const one = pickBadgePresentation([badge("a")]);
+    const three = pickBadgePresentation([badge("a"), badge("b"), badge("c")]);
+    const four = pickBadgePresentation([badge("a"), badge("b"), badge("c"), badge("d")]);
+    // до трёх — карточки списком, больше — счётчик; null невозможен для непустого набора
+    expect(one?.mode).toBe("list");
+    expect(three?.mode).toBe("list");
+    expect(four?.mode).toBe("count");
   });
 });
