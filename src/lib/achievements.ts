@@ -217,7 +217,9 @@ export function computeBadges(ctx: AchievementContext): Badge[] {
 }
 
 /** Описание с валютой для денежных бейджей (badge.target — уже в валюте поездки) */
-export function describeBadge(a: AchievementDef & { target?: number }, sym: string): string {
+// Минимальный структурный тип: у CelebratedBadge из lib/celebrations нет icon/check/cta,
+// а функции нужны только id/description/target
+export function describeBadge(a: { id: string; description: string; target?: number }, sym: string): string {
   if (a.id !== "big-spender") return a.description;
   const target = a.target && a.target > 0 ? a.target : BIG_SPENDER_TARGET_USD;
   return `Потратить ${sym}${target.toLocaleString("ru-RU")}`;

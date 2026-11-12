@@ -16,7 +16,9 @@ import {
   BIG_SPENDER_TARGET_USD,
   type Badge,
 } from "@/lib/achievements";
+import { pickBadgePresentation, type BadgeCelebration } from "@/lib/celebrations";
 import { MobileBottomSheet } from "./mobile-bottom-sheet";
+import { CelebrationOverlay } from "./celebration-overlay";
 
 /* ---------- утилиты ---------- */
 
@@ -126,6 +128,7 @@ export function Achievements() {
   const [filter, setFilter] = useState<Filter>("all");
   const [sheetId, setSheetId] = useState<string | null>(null);
   const [freshIds, setFreshIds] = useState<string[]>([]);
+  const [celebration, setCelebration] = useState<BadgeCelebration | null>(null);
 
   const ready = Boolean(tripId && trip && !tripLoading && !expensesLoading && !foodsLoading && !checklistLoading);
 
@@ -173,7 +176,7 @@ export function Achievements() {
 
   const sheetBadge = useMemo(() => badges.find((b) => b.id === sheetId) ?? null, [badges, sheetId]);
 
-  /* Празднование: бейдж получен с прошлого визита → toast + вибро + подсветка карточки.
+  /* Празднование: бейдж получен с прошлого визита → оверлей-праздник + вибро + подсветка карточки.
      Первый визит без сохранённого набора — просто запоминаем, без фейерверка. */
   const badgesRef = useRef(badges);
   badgesRef.current = badges;
@@ -196,16 +199,12 @@ export function Achievements() {
     saveSeen(tripId, unlockedIds);
     setFreshIds(fresh);
     buzz([30, 40, 30]);
-    if (fresh.length <= 3) {
-      fresh.forEach((id) => {
-        const b = list.find((x) => x.id === id);
-        if (b) toast.success(`🎉 Новая награда: ${b.title}`, { description: describeBadge(b, sym) });
-      });
-    } else {
-      toast.success(`🎉 Новых наград: ${fresh.length}`, {
-        description: fresh.slice(0, 5).map((id) => list.find((x) => x.id === id)?.title).filter(Boolean).join(" · "),
-      });
-    }
+    // Тосты заменены оверлеем-праздником: подача выше, тексты и seen-логика те же
+    const freshBadges = fresh
+      .map((id) => list.find((x) => x.id === id))
+      .filter((b): b is Badge => !!b)
+      .map(({ id, title, emoji, description }) => ({ id, title, emoji, description }));
+    setCelebration(pickBadgePresentation(freshBadges));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tripId, ready, unlockedKey]);
 
@@ -384,6 +383,42 @@ export function Achievements() {
           setSheetId(null);
           goToTab(tab);
         }}
+      />
+
+      {/* Праздник новых наград: один оверлей вместо пачки тостов */}
+      <CelebrationOverlay
+        open={celebration !== null}
+        onOpenChange={(v) => {
+          if (!v) setCelebration(null);
+        }}
+        emoji={celebration?.badges[0]?.emoji ?? "🏅"}
+        title={celebration?.mode === "count" ? `Новых наград: ${celebration.badges.length}` : "Новая награда!"}
+        items={
+          celebration?.mode === "list"
+            ? celebration.badges.map((b) => ({ id: b.id, emoji: b.emoji, title: b.title, note: describeBadge(b, sym) }))
+            : celebration?.mode === "count"
+              ? celebration.badges.slice(0, 5).map((b) => ({ id: b.id, emoji: b.emoji, title: b.title }))
+              : undefined
+        }
+        actions={[
+          {
+            label: "Поделиться",
+            onClick: () => {
+              if (!celebration) return;
+              const title = trip?.settings.title;
+              const lines =
+                celebration.mode === "count"
+                  ? [`🏅 Новых наград${title ? ` «${title}»` : ""}: ${celebration.badges.length}`, ...celebration.badges.slice(0, 5).map((b) => `✓ ${b.title}`)]
+                  : [
+                      `🏅 Награда${title ? ` «${title}»` : ""}!`,
+                      ...celebration.badges.map((b) => `${b.emoji} ${b.title} — ${describeBadge(b, sym)}`),
+                    ];
+              void shareText(lines.join("\n"), "Награды поездки");
+              setCelebration(null);
+            },
+          },
+          { label: "Круто!", onClick: () => setCelebration(null) },
+        ]}
       />
     </div>
   );
