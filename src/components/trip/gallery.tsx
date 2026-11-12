@@ -6,7 +6,7 @@ import { useTripStore } from "@/lib/trip-store";
 import { focusOnMap } from "@/lib/map-bus";
 import { useAuth } from "@/hooks/use-auth";
 import { motion, useReducedMotion } from "framer-motion";
-import { ArrowDownWideNarrow, ArrowUpNarrowWide, Camera, Columns3, EyeOff, LayoutGrid, Share2, SquareCheck, Star } from "lucide-react";
+import { ArrowDownWideNarrow, ArrowUpNarrowWide, Camera, Columns3, Download, EyeOff, LayoutGrid, Share2, SquareCheck, Star } from "lucide-react";
 import dynamic from "next/dynamic";
 import { useState, useMemo, useCallback } from "react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -436,7 +436,8 @@ export function Gallery() {
           <h1 className="text-2xl font-bold leading-tight">{heroTitle}</h1>
           {statLine && total > 0 && <p className="text-xs text-white/70 mt-1">{statLine}</p>}
 
-          <div className="mt-3 flex items-center gap-2">
+          {/* flex-wrap: три кнопки на 360px не влезают в один ряд */}
+          <div className="mt-3 flex flex-wrap items-center gap-2">
             <button
               type="button"
               onClick={() => setAddOpen(true)}
@@ -453,6 +454,16 @@ export function Gallery() {
               >
                 <Share2 className="size-4" /> Поделиться
               </button>
+            )}
+            {/* ZIP всех фото для участников (в т.ч. зрителей) — скрывается на пустой галерее */}
+            {total > 0 && (
+              <a
+                href={`/api/photos/zip?tripId=${tripId}`}
+                className="inline-flex items-center gap-1.5 rounded-xl bg-white/15 hover:bg-white/25 px-4 min-h-11 text-sm font-medium active:scale-95 transition-transform"
+                aria-label="Скачать все фото архивом"
+              >
+                <Download className="size-4" /> Скачать всё
+              </a>
             )}
           </div>
 
