@@ -5,7 +5,7 @@ import { CheckCircle2, Circle, ListChecks, MapPin, Navigation } from "lucide-rea
 import { useUpdatePlace } from "@/hooks/use-trip";
 import { CATEGORY_META, type Day, type Place, type TripSummary } from "@/lib/types";
 import { toast } from "sonner";
-import { cn, fmtMoney } from "@/lib/utils";
+import { cn, fmtMoney, haptic } from "@/lib/utils";
 import { useTripStore } from "@/lib/trip-store";
 import { timeLabel } from "@/lib/time-of-day";
 import { googleDirectionsUrl } from "@/lib/place-links";
@@ -110,6 +110,7 @@ function TodayRow({
     e.stopPropagation();
     try {
       await update.mutateAsync({ id: place.id, status: visited ? "planned" : "visited" });
+      haptic();
       toast(visited ? "Отмечено как запланировано" : "Посещено! 🎉", {
         description: place.name,
       });

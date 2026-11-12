@@ -17,7 +17,7 @@ import { timeLabel } from "@/lib/time-of-day";
 import { directionsUrl } from "@/lib/place-links";
 import { moneyWhole } from "@/lib/budget/format";
 import { toast } from "sonner";
-import { cn } from "@/lib/utils";
+import { cn, haptic } from "@/lib/utils";
 
 interface PlaceRowProps {
   place: Place;
@@ -42,6 +42,7 @@ export function PlaceRow({ place, accentColor, currency, hideTime = false, canEd
     e.stopPropagation();
     try {
       await update.mutateAsync({ id: place.id, status: visited ? "planned" : "visited" });
+      haptic();
       toast(visited ? "Отмечено как запланировано" : "Посещено! 🎉", {
         description: place.name,
       });

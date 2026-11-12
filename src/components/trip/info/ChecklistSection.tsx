@@ -8,7 +8,7 @@ import { checklistProgress, groupChecklist, type ChecklistGroup } from "@/lib/in
 import { daysBetween } from "@/lib/lodging";
 import { tripRangeKeys } from "@/lib/trip-days";
 import type { TripSummary } from "@/lib/types";
-import { cn, plural } from "@/lib/utils";
+import { cn, plural, haptic } from "@/lib/utils";
 import { ChecklistItemSheet, type ChecklistSheetTarget } from "./ChecklistItemSheet";
 import { ChecklistTemplatesSheet } from "./ChecklistTemplatesSheet";
 
@@ -217,7 +217,10 @@ function ChecklistRow({ item, canEdit, onEdit }: { item: ChecklistItem; canEdit:
           onClick={() =>
             toggle.mutate(
               { id: item.id, done: !item.done },
-              { onError: (e) => toast.error("Не удалось обновить", { description: e instanceof Error ? e.message : "" }) }
+              {
+                onSuccess: () => haptic(),
+                onError: (e) => toast.error("Не удалось обновить", { description: e instanceof Error ? e.message : "" }),
+              }
             )
           }
           role="checkbox"

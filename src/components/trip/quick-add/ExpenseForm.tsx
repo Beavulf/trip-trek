@@ -16,7 +16,7 @@ import { CategoryField } from "../budget/CategoryField";
 import { getSavedCurrency, saveCurrency } from "@/lib/currency-pref";
 import { Check, Loader2, Users } from "lucide-react";
 import { toast } from "sonner";
-import { cn, fmtMoney } from "@/lib/utils";
+import { cn, fmtMoney, haptic } from "@/lib/utils";
 import { DayPicker } from "./DayPicker";
 import { DraftNotice } from "./DraftNotice";
 import { StickySubmit } from "./StickySubmit";
@@ -175,6 +175,7 @@ export function ExpenseForm({ userId, onDone }: ExpenseFormProps) {
     addExpense
       .mutateAsync(payload)
       .then(() => {
+        haptic();
         saveCurrency(tripId, currency);
         if (splitWithArr.length > 0) {
           const splitCount = excludeSelf ? splitWithArr.length : splitWithArr.length + 1;

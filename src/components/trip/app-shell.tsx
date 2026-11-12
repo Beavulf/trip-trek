@@ -3,7 +3,7 @@
 import { useTrip } from "@/hooks/use-trip";
 import { useHideOnScroll } from "@/hooks/use-hide-on-scroll";
 import { useTripStore } from "@/lib/trip-store";
-import { cn } from "@/lib/utils";
+import { cn, haptic } from "@/lib/utils";
 import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 import {
   LayoutDashboard,
@@ -419,7 +419,12 @@ export function AppShell({ children }: { children: ReactNode }) {
                 <button
                   type="button"
                   data-tab={t.key}
-                  onClick={() => setActiveTab(t.key)}
+                  onClick={() => {
+                    if (activeTab !== t.key) {
+                      haptic(10);
+                      setActiveTab(t.key);
+                    }
+                  }}
                   className={cn(
                     // transition-colors, не transition-all: чипы скроллятся в рейке,
                     // и all тянет за собой layout-свойства — дешевле красить цвет,

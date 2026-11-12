@@ -8,7 +8,7 @@ import { isValidMood } from "@/lib/moods";
 import { useTripStore } from "@/lib/trip-store";
 import { Check, Loader2 } from "lucide-react";
 import { toast } from "sonner";
-import { cn } from "@/lib/utils";
+import { cn, haptic } from "@/lib/utils";
 import { DayPicker } from "./DayPicker";
 import { DraftNotice } from "./DraftNotice";
 import { StickySubmit } from "./StickySubmit";
@@ -85,7 +85,10 @@ export function JournalForm({ userId, onDone }: JournalFormProps) {
     onDone();
     addJournal
       .mutateAsync({ dayId, content: trimmed, mood, userId })
-      .then(() => toast.success("Запись добавлена в дневник 📔"))
+      .then(() => {
+        haptic();
+        toast.success("Запись добавлена в дневник 📔");
+      })
       .catch((err) => {
         writeDraft(storageKey, snapshot);
         toast.error("Запись не сохранилась", {

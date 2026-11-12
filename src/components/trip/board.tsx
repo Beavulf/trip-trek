@@ -17,7 +17,7 @@ import {
   X,
 } from "lucide-react";
 import { toast } from "sonner";
-import { cn, plural } from "@/lib/utils";
+import { cn, plural, haptic } from "@/lib/utils";
 import { useTripStore } from "@/lib/trip-store";
 import {
   useBoard,
@@ -915,7 +915,10 @@ function ChatDock({
           togglePin.mutate(
             { id: menuMsg.id, pinned: !menuMsg.pinned },
             {
-              onSuccess: () => toast.success(menuMsg.pinned ? "Откреплено" : "Закреплено 📌"),
+              onSuccess: () => {
+                haptic();
+                toast.success(menuMsg.pinned ? "Откреплено" : "Закреплено 📌");
+              },
               onError: (err) =>
                 toast.error("Не удалось изменить закрепление", {
                   description: err instanceof Error ? err.message : "Попробуйте ещё раз",
