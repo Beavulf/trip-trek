@@ -414,8 +414,10 @@ export function Gallery() {
           Без backdrop-blur: бар висит над masonry-фото, blur поверх картинок —
           самый дорогой композитинг на мобильных (аудит 2026-10-02) */}
       <div className="sticky sticky-under-shell z-20 bg-background/95 rounded-2xl border border-border p-2 space-y-2 shadow-sm">
-        <div className="flex items-center gap-2">
-          <div className="flex-1 grid grid-cols-3 gap-0.5 rounded-xl bg-muted p-0.5" role="group" aria-label="Размер фильтра">
+        {/* flex-wrap: на 360px четыре иконки не влезают рядом с переключателем —
+            кластер иконок переносится на второй ряд, переключатель не сминается */}
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="min-w-fit flex-1 grid grid-cols-3 gap-0.5 rounded-xl bg-muted p-0.5" role="group" aria-label="Размер фильтра">
             {DIMENSIONS.map((d) => {
               const active = dimension === d.key;
               return (
@@ -437,6 +439,9 @@ export function Gallery() {
               );
             })}
           </div>
+          {/* Кластер иконок переносится на второй ряд ЦЕЛИКОМ (ml-auto — прижать вправо),
+              чтобы сортировка не оставалась одна на третьей строке */}
+          <div className="ml-auto flex items-center gap-2">
           <button
             type="button"
             aria-pressed={favOnly}
@@ -462,7 +467,7 @@ export function Gallery() {
               }}
               className={cn(
                 "size-11 shrink-0 rounded-xl border grid place-items-center active:scale-95 transition-all",
-                hiddenOnly ? "bg-sky-400/15 border-sky-400/50 text-sky-500" : "bg-card border-border text-muted-foreground",
+                hiddenOnly ? "bg-primary/10 border-primary/50 text-primary" : "bg-card border-border text-muted-foreground",
               )}
             >
               <EyeOff className="size-4" />
@@ -474,7 +479,12 @@ export function Gallery() {
             aria-label={layout === "masonry" ? "Компактная сетка" : "Плитки"}
             title={layout === "masonry" ? "Компактная сетка" : "Плитки"}
             onClick={() => setLayout((v) => (v === "masonry" ? "compact" : "masonry"))}
-            className="size-11 shrink-0 rounded-xl border border-border bg-card text-muted-foreground grid place-items-center active:scale-95 transition-transform"
+            className={cn(
+              "size-11 shrink-0 rounded-xl border grid place-items-center active:scale-95 transition-all",
+              layout === "compact"
+                ? "bg-primary/10 border-primary/50 text-primary"
+                : "bg-card border-border text-muted-foreground",
+            )}
           >
             {layout === "masonry" ? <Columns3 className="size-4" /> : <LayoutGrid className="size-4" />}
           </button>
@@ -498,6 +508,7 @@ export function Gallery() {
               <ArrowDownWideNarrow className="size-4" aria-hidden="true" />
             )}
           </button>
+          </div>
         </div>
 
         <div className="chip-rail no-scrollbar gap-1.5">
@@ -520,7 +531,10 @@ export function Gallery() {
               }}
             >
               {o.label}
-              <span className="ml-1 tabular-nums opacity-60">{o.count}</span>
+              {/* Счётчик — бейджем: голая цифра читалась как продолжение названия («День 12») */}
+              <span className="ml-1.5 rounded-full bg-foreground/10 px-1.5 text-[10px] leading-4 tabular-nums">
+                {o.count}
+              </span>
             </Chip>
           ))}
         </div>
