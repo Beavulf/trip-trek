@@ -13,7 +13,7 @@ import { DashboardSkeleton } from "./DashboardSkeleton";
 import { DailyTip } from "./DashboardWidgets";
 import { RouteRail } from "./RouteRail";
 import { TodayList } from "./TodayList";
-import { TripFinishedBanner } from "./TripFinishedBanner";
+import { TripFinale } from "./trip-finale";
 import { daysBetween, localTodayKey } from "@/lib/lodging";
 import { tripRangeKeys } from "@/lib/trip-days";
 
@@ -102,7 +102,7 @@ export function Dashboard() {
 
   return (
     <div className="space-y-4 animate-fade-up">
-      <TripFinishedBanner />
+      <TripFinale />
 
       <DashboardHero
         trip={trip}

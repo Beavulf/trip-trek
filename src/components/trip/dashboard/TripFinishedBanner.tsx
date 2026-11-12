@@ -16,8 +16,9 @@ import { fmtMoney } from "@/lib/utils";
 // статуса completed нет (ретро-кейс 2026-10: Китай, хвост $32 никто не увидел).
 // Показываем один раз сверху Обзора: сколько должны + куда идти закрывать +
 // владельцу — архивирование. Баннер исчезает, когда статус стал completed.
+// Праздничная ветка (долгов нет) даёт кнопку «Смотреть итоги» — RecapSheet рендерит TripFinale.
 
-export function TripFinishedBanner() {
+export function TripFinishedBanner({ onShowRecap }: { onShowRecap?: () => void }) {
   const { data: trip } = useTrip();
   const { data: expenses } = useExpenses();
   const { data: session } = useAuth();
@@ -82,9 +83,23 @@ export function TripFinishedBanner() {
               </button>
             </>
           ) : (
-            <p className="text-xs text-muted-foreground">
-              {hadSpending ? "Все долги закрыты — поездка удалась ✨" : "Поездка позади. Долгов нет — осталось собрать воспоминания ✨"}
-            </p>
+            <>
+              <p className="text-xs text-muted-foreground">
+                {hadSpending
+                  ? "Поездка состоялась — все долги закрыты 🎉"
+                  : "Поездка позади. Долгов нет — осталось собрать воспоминания ✨"}
+              </p>
+              {/* Финальный момент: итоги поездки поверх готовой открытки summary */}
+              {hadSpending && onShowRecap && (
+                <button
+                  type="button"
+                  onClick={onShowRecap}
+                  className="inline-flex min-h-11 items-center gap-1.5 rounded-xl bg-gradient-to-r from-orange-500 to-rose-500 px-4 text-xs font-semibold text-white transition-transform active:scale-[0.98]"
+                >
+                  Смотреть итоги →
+                </button>
+              )}
+            </>
           )}
 
           {isOwner &&
