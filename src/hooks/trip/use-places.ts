@@ -1,10 +1,15 @@
 "use client";
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 import { getTripId } from "./trip-id";
-import { invalidateRouteData } from "@/lib/query-keys";
+import { invalidateRouteData, queryKeys } from "@/lib/query-keys";
 import type { PlacePatch, PlaceCreateInput } from "@/lib/place-fields";
+import { placeRestorePayload } from "@/lib/place-undo";
 import { trackFirstUserPlaceAdded } from "@/lib/trip-analytics";
+
+// Запись места в read-модели маршрута (кэш ["route"]) — нас интересует только поиск по id
+type PlaceLike = Record<string, unknown>;
 
 export function useUpdatePlace() {
   const qc = useQueryClient();
@@ -58,7 +63,43 @@ export function useDeletePlace() {
         throw new Error(err.error || "delete place failed");
       }
     },
-    onSuccess: () => invalidateRouteData(qc),
+    // Снапшот read-модели маршрута: из неё собирается payload восстановления
+    onMutate: async (id) => {
+      const key = queryKeys.route(getTripId());
+      await qc.cancelQueries({ queryKey: key });
+      const data = qc.getQueryData<{ days: { places: PlaceLike[] }[] }>(key);
+      const removed = data?.days.flatMap((d) => d.places).find((p) => p.id === id) ?? null;
+      return { removed };
+    },
+    onSuccess: (_res, _id, ctx) => {
+      invalidateRouteData(qc);
+      const removed = ctx?.removed;
+      if (!removed) return;
+      // sonner не дисейблит action — защита от двойного POST (как в use-expenses)
+      let restoring = false;
+      toast.success("Место удалено", {
+        description: "Фото места не привяжутся обратно",
+        duration: 8000,
+        action: {
+          label: "Вернуть",
+          onClick: () => {
+            if (restoring) return;
+            restoring = true;
+            fetch("/api/places", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ ...placeRestorePayload(removed), tripId: getTripId() }),
+            })
+              .then(async (r) => {
+                if (!r.ok) throw new Error((await r.json().catch(() => ({})))?.error || `Ошибка ${r.status}`);
+                toast.success("Место возвращено");
+              })
+              .catch((e) => toast.error("Не удалось вернуть", { description: e instanceof Error ? e.message : undefined }))
+              .finally(() => invalidateRouteData(qc));
+          },
+        },
+      });
+    },
   });
 }
 
