@@ -39,7 +39,7 @@ import {
   CircleHelp,
   GraduationCap,
 } from "lucide-react";
-import { Fragment, useState, useEffect, useRef, type ReactNode } from "react";
+import { Fragment, useState, useEffect, useRef, useCallback, type ReactNode } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { createPortal } from "react-dom";
@@ -62,6 +62,9 @@ import { startUploadQueue } from "@/lib/upload-queue/browser";
 import { FabUploadRing, UploadTray } from "./upload/UploadTray";
 import { formatTripDate } from "@/lib/trip-days";
 import { useReportTimeZone } from "@/hooks/use-report-time-zone";
+import { usePullToRefresh } from "@/hooks/use-pull-to-refresh";
+import { invalidateRouteData } from "@/lib/query-keys";
+import { PullRefreshIndicator } from "./pull-refresh-indicator";
 
 // Оверлеи, открываемые действием юзера, грузим по требованию — в первичном
 // бандле им делать нечего (аудит 2026-09-13: qrcode/react в InviteFriends,
@@ -107,6 +110,15 @@ export function AppShell({ children }: { children: ReactNode }) {
   const openFeedback = useTripStore((s) => s.openFeedback);
   const setFeedbackOpen = useTripStore((s) => s.setFeedbackOpen);
   const qc = useQueryClient();
+  // Pull-to-refresh: тянешь вниз от верхнего края — перечитываем данные обзора
+  // (маршрут/поездка, траты, фото); неактивные вкладки помечаются устаревшими
+  // и сами перечитаются при заходе
+  const refreshOnPull = useCallback(async () => {
+    invalidateRouteData(qc);
+    await qc.invalidateQueries({ queryKey: ["expenses"] });
+    await qc.invalidateQueries({ queryKey: ["photos"] });
+  }, [qc]);
+  const { phase, distance } = usePullToRefresh(refreshOnPull);
   const [searchOpen, setSearchOpen] = useState(false);
   const [inviteOpen, setInviteOpen] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
@@ -485,6 +497,9 @@ export function AppShell({ children }: { children: ReactNode }) {
           )}
         </nav>
       </header>
+
+      {/* PTR-пилюля: между шапкой и контентом, поверх — fixed и pointer-events-none */}
+      <PullRefreshIndicator phase={phase} distance={distance} />
 
       <main className="flex-1 mx-auto w-full max-w-7xl px-3 sm:px-4 py-4 pb-28 sm:pb-10 relative z-0 safe-bottom">
         {children}

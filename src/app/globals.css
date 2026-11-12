@@ -142,6 +142,9 @@
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     overflow-x: hidden;
+    /* Глушит нативный pull-to-refresh браузера: в standalone PWA нативного нет,
+       наш (use-pull-to-refresh) единственный — иначе двойной отскок на Android */
+    overscroll-behavior-y: contain;
   }
   /* Выделение текста */
   ::selection {
