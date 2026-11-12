@@ -1,7 +1,9 @@
 "use client";
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 import type { Expense, Participant, TripSummary } from "@/lib/types";
+import { expenseRestorePayload } from "@/lib/budget/expense-undo";
 import { getTripId, useCurrentTripId } from "./trip-id";
 
 /** Временный id записи, показанной до ответа сервера: удалить такую строку нельзя, пока она не сохранилась. */
@@ -116,6 +118,38 @@ export function useDeleteExpense() {
     },
     onError: (_err, _id, ctx) => {
       if (ctx?.prev) qc.setQueryData(ctx.key, ctx.prev);
+    },
+    onSuccess: (_res, id, ctx) => {
+      const removed = ctx?.prev?.find((e) => e.id === id);
+      if (!removed) return;
+      // sonner не дисейблит action — защита от двойного POST (как в journal.tsx)
+      let restoring = false;
+      toast.success("Трата удалена", {
+        description: "Можно вернуть, пока не закрылся тост",
+        duration: 8000,
+        action: {
+          label: "Вернуть",
+          onClick: () => {
+            if (restoring) return;
+            restoring = true;
+            const payload = expenseRestorePayload(removed, getTripId(), `${Date.now()}`);
+            fetch("/api/expenses", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(payload),
+            })
+              .then(async (r) => {
+                if (!r.ok) throw new Error((await r.json().catch(() => ({})))?.error || `Ошибка ${r.status}`);
+                toast.success("Трата возвращена");
+              })
+              .catch((e) => toast.error("Не удалось вернуть", { description: e instanceof Error ? e.message : undefined }))
+              .finally(() => {
+                qc.invalidateQueries({ queryKey: ["expenses"] });
+                qc.invalidateQueries({ queryKey: ["trip"] });
+              });
+          },
+        },
+      });
     },
     onSettled: () => {
       qc.invalidateQueries({ queryKey: ["expenses"] });

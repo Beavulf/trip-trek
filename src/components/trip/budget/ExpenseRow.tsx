@@ -72,7 +72,6 @@ export function ExpenseRow({ expense, participants }: ExpenseRowProps) {
   const handleDelete = async () => {
     try {
       await del.mutateAsync(expense.id);
-      toast.success("Удалено");
       setConfirming(false);
     } catch (err) {
       toast.error("Не удалось удалить", {
