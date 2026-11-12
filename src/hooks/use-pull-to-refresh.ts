@@ -7,10 +7,16 @@
 // тоже не мы. Машина — чистая (lib/pull-refresh), хук только про события и
 // вызов onRefresh.
 //
-// Про passive: touchmove вешается всегда НЕ-passive — preventDefault разрешён
-// только так, иначе Chrome проскроллит мимо нас. Переключать passive на лету
-// нельзя, поэтому гасим нативный скролл точечно: preventDefault только когда
-// жест наш и дистанция > 0, обычный скролл не страдает.
+// Про passive: preventDefault допустим только из НЕ-passive touchmove, иначе
+// Chrome проскроллит мимо нас. Но постоянный НЕ-passive touchmove на window
+// душил бы компоузиторный скролл на каждом жесте страницы (Android Chrome).
+// Поэтому слушатели живут ровно один жест: постоянным остаётся только passive
+// touchstart — когда гейты пропустили жест, к нему на лету цепляются
+// НЕ-passive touchmove и touchend/touchcancel/resize, а на end/cancel/отказе
+// снимаются. Слушатель, добавленный внутри обработки touchstart, получает все
+// последующие move этого жеста. Инвариант: между жестами на window нет ни
+// одного НЕ-passive touchmove. preventDefault — точечно: только когда жест
+// наш и дистанция > 0.
 //
 // scroll-behavior: smooth (globals.css) тут не мешает: scrollTop мы никогда
 // не сбрасываем — preventDefault держит окно на месте весь жест, окно и так
@@ -80,23 +86,24 @@ export function usePullToRefresh(onRefresh: () => Promise<void> | void): {
       denied.current = false;
     };
 
-    const onTouchStart = (e: TouchEvent) => {
-      if (e.touches.length > 1) {
-        // Второй палец — пинч, не наш
-        resetGesture();
-        denied.current = true;
-        return;
-      }
-      // scrollY > 0 или открыт шит (scroll-lock на body) — жест не наш вовсе
-      if (window.scrollY > 0 || document.body.style.overflow === "hidden") {
-        resetGesture();
-        denied.current = true;
-        return;
-      }
-      startY.current = e.touches[0].clientY;
-      startX.current = e.touches[0].clientX;
-      claimed.current = false;
-      denied.current = false;
+    // Снять per-жестовые слушатели. Idempotent — любой путь завершения жеста
+    // может звать не задумываясь. (Ссылки на хендлеры валидны в момент вызова:
+    // все они объявлены ниже и снимаются только после того, как успели
+    // повеситься в onTouchStart.)
+    const detachGesture = () => {
+      window.removeEventListener("touchmove", onTouchMove);
+      window.removeEventListener("touchend", onTouchEnd);
+      window.removeEventListener("touchcancel", onTouchCancel);
+      window.removeEventListener("resize", onResize);
+    };
+
+    // Жест отдан нативному скроллу/свайпу (решение в первых пикселях move).
+    // До claim'а preventDefault ни разу не звали — нативе ничего не должны,
+    // снимаем слушатели и жест живёт дальше без нас
+    const denyGesture = () => {
+      resetGesture();
+      denied.current = true;
+      detachGesture();
     };
 
     const onTouchMove = (e: TouchEvent) => {
@@ -108,12 +115,12 @@ export function usePullToRefresh(onRefresh: () => Promise<void> | void): {
         // Первые пиксели жеста решают судьбу: горизонтальная доминанта —
         // это chip-rail или свайп, вертикаль вверх — обычный скролл
         if (Math.abs(dx) > Math.abs(dy)) {
-          denied.current = true;
+          denyGesture();
           return;
         }
         if (dy <= 0) return;
         if (gestureBelongsToInnerScroll(e.target)) {
-          denied.current = true;
+          denyGesture();
           return;
         }
         claimed.current = true;
@@ -123,7 +130,10 @@ export function usePullToRefresh(onRefresh: () => Promise<void> | void): {
       phaseRef.current = res.phase;
       setPhase(res.phase);
       if (res.tick) haptic(15); // тик пересечения порога — один на пересечение
-      setDistance(d);
+      // refreshing: дистанцию не обновляем (остаётся 0), иначе прижатый
+      // палец «шатает» пиллу со спиннером; машине не трогаем — она и так
+      // в refreshing ничего не меняет
+      if (phaseRef.current !== "refreshing") setDistance(d);
       if (d > 0) e.preventDefault(); // тянем — нативному скроллу говорим «нет»
     };
 
@@ -131,6 +141,7 @@ export function usePullToRefresh(onRefresh: () => Promise<void> | void): {
       if (startY.current === null) return;
       const next = pullOnRelease(phaseRef.current);
       resetGesture();
+      detachGesture();
       phaseRef.current = next;
       setPhase(next);
       setDistance(0);
@@ -145,25 +156,54 @@ export function usePullToRefresh(onRefresh: () => Promise<void> | void): {
       });
     };
 
-    // touchcancel (система забрала жест, входящий звонок, пинч) — откат в idle
-    // без обновления: пользователь ничего не «отпускал»
-    const onTouchCancel = () => {
-      if (phaseRef.current === "refreshing") return; // обновление живёт своей жизнью
+    // Откат жеста без обновления — touchcancel (система забрала жест:
+    // входящий звонок, пинч) и resize (поворот экрана посреди pull'а —
+    // startY больше не сопоставим с пальцем). Обновление в полёте не трогаем:
+    // оно живёт своим циклом и погасится в .finally
+    const abortGesture = () => {
+      const refreshing = phaseRef.current === "refreshing";
       resetGesture();
+      detachGesture();
+      if (refreshing) return;
       phaseRef.current = "idle";
       setPhase("idle");
       setDistance(0);
     };
 
+    const onTouchCancel = abortGesture;
+    const onResize = abortGesture;
+
+    const onTouchStart = (e: TouchEvent) => {
+      if (e.touches.length > 1) {
+        // Второй палец — пинч, не наш; если он пришёл посреди нашего pull'а —
+        // это откат как touchcancel (abortGesture снимет per-жестовые слушатели)
+        abortGesture();
+        denied.current = true;
+        return;
+      }
+      // scrollY > 0 или открыт шит (scroll-lock на body) — жест не наш вовсе
+      if (window.scrollY > 0 || document.body.style.overflow === "hidden") {
+        abortGesture();
+        denied.current = true;
+        return;
+      }
+      startY.current = e.touches[0].clientY;
+      startX.current = e.touches[0].clientX;
+      claimed.current = false;
+      denied.current = false;
+      // Per-жестовое цепление: НЕ-passive touchmove живёт только пока жест
+      // наш — постоянный listener отключил бы компоузиторный скролл всей
+      // странице между жестами
+      window.addEventListener("touchmove", onTouchMove, { passive: false });
+      window.addEventListener("touchend", onTouchEnd, { passive: true });
+      window.addEventListener("touchcancel", onTouchCancel, { passive: true });
+      window.addEventListener("resize", onResize, { passive: true });
+    };
+
     window.addEventListener("touchstart", onTouchStart, { passive: true });
-    window.addEventListener("touchmove", onTouchMove, { passive: false });
-    window.addEventListener("touchend", onTouchEnd, { passive: true });
-    window.addEventListener("touchcancel", onTouchCancel, { passive: true });
     return () => {
       window.removeEventListener("touchstart", onTouchStart);
-      window.removeEventListener("touchmove", onTouchMove);
-      window.removeEventListener("touchend", onTouchEnd);
-      window.removeEventListener("touchcancel", onTouchCancel);
+      detachGesture(); // размонтирование посреди жеста — снять per-жестовые
     };
   }, [coarse]);
 
