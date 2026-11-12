@@ -30,7 +30,7 @@
 - Consumes: ничего.
 - Produces (Task 3): `PULL_THRESHOLD = 72`; `pullDistance(raw: number): number`; `pullOnMove(phase: PullPhase, distance: number): { phase: PullPhase; tick: boolean }`; `pullOnRelease(phase: PullPhase): PullPhase`; тип `PullPhase = "idle" | "pulling" | "armed" | "refreshing"`.
 
-- [ ] **Step 1: Падающий тест** `src/lib/pull-refresh.test.ts`:
+- [x] **Step 1: Падающий тест** `src/lib/pull-refresh.test.ts`:
 
 ```ts
 import { describe, expect, it } from "vitest";
@@ -77,8 +77,8 @@ describe("pullOnRelease", () => {
 });
 ```
 
-- [ ] **Step 2: Падает** (`bunx vitest run src/lib/pull-refresh.test.ts`)
-- [ ] **Step 3: Реализация** `src/lib/pull-refresh.ts`:
+- [x] **Step 2: Падает** (`bunx vitest run src/lib/pull-refresh.test.ts`)
+- [x] **Step 3: Реализация** `src/lib/pull-refresh.ts`:
 
 ```ts
 // Pull-to-refresh: чистая машина состояний. Touch-хук (use-pull-to-refresh)
@@ -112,8 +112,8 @@ export function pullOnRelease(phase: PullPhase): PullPhase {
 }
 ```
 
-- [ ] **Step 4: Зелёный.**
-- [ ] **Step 5: Коммит** `git add src/lib/pull-refresh.ts src/lib/pull-refresh.test.ts && git commit -m "feat: чистая машина pull-to-refresh (порог, гистерезис, сопротивление)"`
+- [x] **Step 4: Зелёный.**
+- [x] **Step 5: Коммит** `git add src/lib/pull-refresh.ts src/lib/pull-refresh.test.ts && git commit -m "feat: чистая машина pull-to-refresh (порог, гистерезис, сопротивление)"`
 
 ---
 
@@ -127,9 +127,9 @@ export function pullOnRelease(phase: PullPhase): PullPhase {
 
 **Interfaces:** Consumes: `haptic()` из `@/lib/utils`.
 
-- [ ] **Step 1: Расставить** `haptic()` в onSuccess успешных мутаций/отправок (точки из спеки §1). `board.tsx`: если у отправки/пина уже есть локальный `vibrate()` — не дублировать; если нет — добавить `haptic()` (локальный `vibrate` файла оставить как есть — унификация вне скоупа). Rail: `onClick={() => { haptic(10); setActiveTab(t.key); }}` — только при смене вкладки (`activeTab !== t.key`).
-- [ ] **Step 2: Верификация** lint / tsc / suite.
-- [ ] **Step 3: Коммит** `git commit -m "feat: хаптика на успешных действиях (quick-add, чек-лист, посещённое, вкладка)"`
+- [x] **Step 1: Расставить** `haptic()` в onSuccess успешных мутаций/отправок (точки из спеки §1). `board.tsx`: если у отправки/пина уже есть локальный `vibrate()` — не дублировать; если нет — добавить `haptic()` (локальный `vibrate` файла оставить как есть — унификация вне скоупа). Rail: `onClick={() => { haptic(10); setActiveTab(t.key); }}` — только при смене вкладки (`activeTab !== t.key`).
+- [x] **Step 2: Верификация** lint / tsc / suite.
+- [x] **Step 3: Коммит** `git commit -m "feat: хаптика на успешных действиях (quick-add, чек-лист, посещённое, вкладка)"`
 
 ---
 
@@ -143,7 +143,7 @@ export function pullOnRelease(phase: PullPhase): PullPhase {
 - Consumes: Task 1 машина; `invalidateRouteData` из `@/lib/query-keys`; `useQueryClient`; `haptic`.
 - Produces: `usePullToRefresh(onRefresh: () => Promise<void> | void): { phase: PullPhase; distance: number }`.
 
-- [ ] **Step 1: Хук** — touch-события на window (passive: true кроме active-фазы), гейты:
+- [x] **Step 1: Хук** — touch-события на window (passive: true кроме active-фазы), гейты:
   - `matchMedia("(pointer: coarse)")` — только тач-устройства (подписка на change);
   - `window.scrollY <= 0` при старте касания;
   - `document.body.style.overflow === "hidden"` (scroll-lock шитов, `useBodyScrollLock`) — пропускаем движение;
@@ -151,21 +151,21 @@ export function pullOnRelease(phase: PullPhase): PullPhase {
   OnRefresh → await invalidateRouteData(qc) + qc.invalidateQueries(["expenses"]) + ["photos"]; завершение → idle + `haptic(10)`.
   Точный состав гейтов согласовать с фактом `useBodyScrollLock` (`src/hooks/use-body-scroll-lock.ts`) — посмотреть, что он делает с body.
 
-- [ ] **Step 2: Индикатор** — `pull-refresh-indicator.tsx`: fixed под шапкой (`top` с учётом safe-area), pill со спиннером; фазы pulling/armed — прогресс-подсказка («Тяни ещё» / «Отпусти»), refreshing — спиннер; reduced-motion без пружины.
+- [x] **Step 2: Индикатор** — `pull-refresh-indicator.tsx`: fixed под шапкой (`top` с учётом safe-area), pill со спиннером; фазы pulling/armed — прогресс-подсказка («Тяни ещё» / «Отпусти»), refreshing — спиннер; reduced-motion без пружины.
 
-- [ ] **Step 3: Проводка** — app-shell: `const { phase, distance } = usePullToRefresh(onRefresh)` (onRefresh через `useCallback`, qc из `useQueryClient`); рендер индикатора рядом с `<main>`. globals.css: в блок body добавить `overscroll-behavior-y: contain;` с комментом-почему.
+- [x] **Step 3: Проводка** — app-shell: `const { phase, distance } = usePullToRefresh(onRefresh)` (onRefresh через `useCallback`, qc из `useQueryClient`); рендер индикатора рядом с `<main>`. globals.css: в блок body добавить `overscroll-behavior-y: contain;` с комментом-почему.
 
-- [ ] **Step 4: Верификация** — lint / tsc / suite. **Живой прогон в браузере делает КОНТРОЛЛЕР** (суб-агентам браузер недоступен): DevTools touch-emulation на localhost:3000 — тянуть на Обзоре (должен armed+тик+refresh), в чате (не мешает скроллу), в открытом шите (не срабатывает).
+- [x] **Step 4: Верификация** — lint / tsc / suite. **Живой прогон в браузере делает КОНТРОЛЛЕР** (суб-агентам браузер недоступен): DevTools touch-emulation на localhost:3000 — тянуть на Обзоре (должен armed+тик+refresh), в чате (не мешает скроллу), в открытом шите (не срабатывает).
 
-- [ ] **Step 5: Коммит** `git commit -m "feat: pull-to-refresh — тянешь вниз, приложение перечитывает данные"`
+- [x] **Step 5: Коммит** `git commit -m "feat: pull-to-refresh — тянешь вниз, приложение перечитывает данные"`
 
 ---
 
 ### Task 4: Доки
 
-- [ ] `AGENTS.md`: в карту репозитория — `src/lib/` строка: `` `pull-refresh.ts` (машина pull-to-refresh: порог/гистерезис/сопротивление; тесты рядом) ``; строку хука вписать туда же или в примыкающую (найти, где в карте живут `src/hooks/*` корневые).
-- [ ] `worklog.md`: запись сверху (Волна 2: хаптика на действиях + pull-to-refresh; почему: карта delights, тактильность; ссылки на спеку/план).
-- [ ] Верификация lint/tsc/suite; коммит `git commit -m "docs: волна 2 в карту репозитория, worklog"`.
+- [x] `AGENTS.md`: в карту репозитория — `src/lib/` строка: `` `pull-refresh.ts` (машина pull-to-refresh: порог/гистерезис/сопротивление; тесты рядом) ``; строку хука вписать туда же или в примыкающую (найти, где в карте живут `src/hooks/*` корневые).
+- [x] `worklog.md`: запись сверху (Волна 2: хаптика на действиях + pull-to-refresh; почему: карта delights, тактильность; ссылки на спеку/план).
+- [x] Верификация lint/tsc/suite; коммит `git commit -m "docs: волна 2 в карту репозитория, worklog"`.
 
 ---
 

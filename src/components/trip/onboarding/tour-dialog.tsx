@@ -14,6 +14,7 @@ import { ChevronLeft } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useBackDismiss } from "@/hooks/use-back-dismiss";
+import { useBodyScrollLock } from "@/hooks/use-body-scroll-lock";
 import type { TourDef, TourStepDef } from "@/lib/onboarding-content";
 import type { TourExit } from "@/lib/onboarding";
 import { cn } from "@/lib/utils";
@@ -50,6 +51,11 @@ export function TourDialog({
   useBackDismiss(!confirming, () => setConfirming(true));
   useBackDismiss(confirming, () => setConfirming(false));
 
+  // Фон не скроллится под туром. Компонент монтируется только с открытым туром
+  // (tour-host рендерит его условно), поэтому «open» здесь — сам факт маунта.
+  // Общий хук вместо инлайна заодно компенсирует скроллбар на десктопе
+  useBodyScrollLock(true);
+
   // Esc: то же, что «назад»
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -57,15 +63,6 @@ export function TourDialog({
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, []);
-
-  // Фон не скроллится под туром
-  useEffect(() => {
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => {
-      document.body.style.overflow = prev;
-    };
   }, []);
 
   // Фокус: в основную кнопку; при смене панели — в её первую кнопку

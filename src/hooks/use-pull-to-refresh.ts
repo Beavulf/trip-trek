@@ -1,7 +1,8 @@
 "use client";
 // Pull-to-refresh: пальцем от верхнего края тянем данные к себе.
-// Только coarse-pointer; только при scrollY===0; пока открыт шит (scroll-lock
-// на body) жест не наш; горизонтальная доминанта на старте — это chip-rail,
+// Только coarse-pointer; только при scrollY===0; пока body залочен от скролла
+// (computed overflowY: hidden — и инлайн-лок шитов, и stylesheet-лок Radix)
+// жест не наш; горизонтальная доминанта на старте — это chip-rail,
 // не мы; если под пальцем внутренний скроллер (чат-док, список) ещё прокручен
 // или элемент живёт своей жестовой жизнью (touch-action: none — карта Leaflet),
 // тоже не мы. Машина — чистая (lib/pull-refresh), хук только про события и
@@ -33,7 +34,9 @@ import { pullDistance, pullOnMove, pullOnRelease, type PullPhase } from "@/lib/p
  */
 function gestureBelongsToInnerScroll(target: EventTarget | null): boolean {
   if (!(target instanceof Element)) return false;
-  let el = target.parentElement;
+  // Цель тоже проверяем: тач может лечь ровно на скроллер (паддинг списка чата) —
+  // тогда parentElement его пропустил бы
+  let el: Element | null = target;
   while (el && el !== document.body) {
     const style = window.getComputedStyle(el);
     if (style.touchAction === "none") return true;
@@ -118,7 +121,13 @@ export function usePullToRefresh(onRefresh: () => Promise<void> | void): {
           denyGesture();
           return;
         }
-        if (dy <= 0) return;
+        if (dy <= 0) {
+          // Палец пошёл вверх: PTR требует старта строго с верха, так что это
+          // уже доказанная прокрутка — отпускаем жест нативе (как при
+          // горизонтальном отказе), не таскаем НЕ-passive слушатели до конца скролла
+          if (dy < -10) denyGesture();
+          return;
+        }
         if (gestureBelongsToInnerScroll(e.target)) {
           denyGesture();
           return;
@@ -146,14 +155,19 @@ export function usePullToRefresh(onRefresh: () => Promise<void> | void): {
       setPhase(next);
       setDistance(0);
       if (next !== "refreshing" || busy.current) return;
+      // Через микротаск: onRefresh, кидающий синхронно, не оставит busy навсегда —
+      // throw превратится в rejection и погасится ниже
       busy.current = true;
-      void Promise.resolve(refreshRef.current()).finally(() => {
-        busy.current = false;
-        phaseRef.current = "idle";
-        setPhase("idle");
-        setDistance(0);
-        haptic(8); // короткий тик «готово»
-      });
+      Promise.resolve()
+        .then(() => refreshRef.current())
+        .catch(() => {}) // сбои обновления не ломают жест; данные перечитает WS/следующий pull
+        .finally(() => {
+          busy.current = false;
+          phaseRef.current = "idle";
+          setPhase("idle");
+          setDistance(0);
+          haptic(8); // короткий тик «готово»
+        });
     };
 
     // Откат жеста без обновления — touchcancel (система забрала жест:
@@ -181,8 +195,12 @@ export function usePullToRefresh(onRefresh: () => Promise<void> | void): {
         denied.current = true;
         return;
       }
-      // scrollY > 0 или открыт шит (scroll-lock на body) — жест не наш вовсе
-      if (window.scrollY > 0 || document.body.style.overflow === "hidden") {
+      // scrollY > 0 или body залочен — жест не наш вовсе. Компьютед-стиль, а не
+      // инлайн: шиты на ui-kit лочат body инлайном, но Radix-оверлеи (Dialog/Sheet/
+      // AlertDialog) — инжектированным стилем `body[data-scroll-locked] { overflow:
+      // hidden !important }`, инлайн при этом пуст. В покое overflowY === "auto"
+      // (спрятан только overflow-x), так что гейт срабатывает именно на лок
+      if (window.scrollY > 0 || getComputedStyle(document.body).overflowY === "hidden") {
         abortGesture();
         denied.current = true;
         return;

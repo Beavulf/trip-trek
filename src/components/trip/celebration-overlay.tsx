@@ -4,6 +4,7 @@ import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { useEffect, useMemo } from "react";
 import { createPortal } from "react-dom";
 import { useBackDismiss } from "@/hooks/use-back-dismiss";
+import { useBodyScrollLock } from "@/hooks/use-body-scroll-lock";
 import { haptic } from "@/lib/utils";
 
 export interface CelebrationItem {
@@ -80,6 +81,9 @@ export function CelebrationOverlay({
   const reduce = useReducedMotion();
   // «назад» на телефоне закрывает праздник, а не сворачивает PWA (правило репо)
   useBackDismiss(open, () => onOpenChange(false));
+  // Оверлей на весь экран — залочим body: удержанный pull позади праздника
+  // не должен забирать жест себе
+  useBodyScrollLock(open);
 
   // Хаптика — только на реальном открытии; паттерн как у разблокировки наград
   useEffect(() => {
