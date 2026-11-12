@@ -16,15 +16,15 @@ import { RecapSheet } from "./recap-sheet";
 import { TripFinishedBanner } from "./TripFinishedBanner";
 
 // Оркестратор финала поездки: баннер + авто-моменты «долги закрыты» и «Итоги».
-// Все пороги — чистые правила lib/celebrations; здесь только данные и очередь:
-// один момент за раз, «Итоги» открываются после закрытия праздника долгов.
+// Все пороги — чистые правила lib/celebrations; здесь только данные: один момент за раз,
+// автопоказ «Итогов» ждёт закрытия праздника, а кнопкой «Итоги поездки» они открываются всегда.
 export function TripFinale() {
   const tripId = useCurrentTripId();
   const { data: trip } = useTrip();
   const { data: expenses } = useExpenses();
   const [debtsClearOpen, setDebtsClearOpen] = useState(false);
   const [recapOpen, setRecapOpen] = useState(false);
-  // Праздник долгов открыт и/или recap в очереди: ref, чтобы эффект не зависел от UI-состояния
+  // «Итоги» поставлены в очередь после праздника: ref, чтобы эффекты не зависели от UI-состояния
   const queueBusy = useRef(false);
 
   const ready = !!tripId && !!trip && !!expenses;
@@ -76,15 +76,24 @@ export function TripFinale() {
     }
   }, [ready, finished, tripId, hasDebts, hadSpending]);
 
-  const closeDebtsClear = (openRecap: boolean) => {
+  const closeDebtsClear = () => {
     setDebtsClearOpen(false);
-    if (openRecap && queueBusy.current) {
-      queueBusy.current = false;
-      setTimeout(() => setRecapOpen(true), 350);
-    } else {
-      queueBusy.current = false;
-    }
   };
+
+  // «Итоги поездки» — открыть сразу; флаг очереди гасим, чтобы эффект ниже не переоткрыл лист через 350мс
+  const closeDebtsOpenRecap = () => {
+    queueBusy.current = false;
+    closeDebtsClear();
+    setRecapOpen(true);
+  };
+
+  // Праздник закрылся (любым путём) — если «Итоги» были в очереди, открыть их следом
+  useEffect(() => {
+    if (debtsClearOpen || !queueBusy.current) return;
+    queueBusy.current = false;
+    const t = setTimeout(() => setRecapOpen(true), 350);
+    return () => clearTimeout(t);
+  }, [debtsClearOpen]);
 
   return (
     <>
@@ -92,14 +101,14 @@ export function TripFinale() {
       <CelebrationOverlay
         open={debtsClearOpen}
         onOpenChange={(v) => {
-          if (!v) closeDebtsClear(true);
+          if (!v) closeDebtsClear();
         }}
         emoji="🤝"
         title="Все долги закрыты!"
         subtitle="Ни одного хвоста — поездка завершена красиво."
         actions={[
-          { label: "Итоги поездки", onClick: () => closeDebtsClear(true) },
-          { label: "Понятно", onClick: () => closeDebtsClear(false) },
+          { label: "Итоги поездки", onClick: closeDebtsOpenRecap },
+          { label: "Понятно", onClick: () => closeDebtsClear() },
         ]}
       />
       <RecapSheet open={recapOpen} onOpenChange={setRecapOpen} />
