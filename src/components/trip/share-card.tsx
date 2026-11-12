@@ -22,7 +22,18 @@ const GIF_SCALE = 0.5;
 // при этом рендер карточки каждый кадр остаётся дешёвым
 const PREVIEW_WIDTH = 720;
 
-export function ShareCard({ open, onOpenChange }: { open: boolean; onOpenChange: (v: boolean) => void }) {
+export function ShareCard({
+  open,
+  onOpenChange,
+  // С какого варианта начать: «Итоги» RecapSheet'а открывает сразу summary.
+  // ShareCard монтируется только при открытом шите (app-shell: {shareOpen && ...}),
+  // поэтому начального значения достаточно — pickVariant и дальше рулит сменой.
+  initialVariant = "story",
+}: {
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  initialVariant?: CardVariantId;
+}) {
   useBodyScrollLock(open);
   const tripId = useCurrentTripId();
   const { data: trip } = useTrip();
@@ -31,7 +42,7 @@ export function ShareCard({ open, onOpenChange }: { open: boolean; onOpenChange:
   const rafRef = useRef<number>(0);
   const phaseRef = useRef(0); // текущая фаза анимации [0..1)
   const startRef = useRef(0); // timestamp начала цикла для склейки фазы после паузы
-  const [variantId, setVariantId] = useState<CardVariantId>("story");
+  const [variantId, setVariantId] = useState<CardVariantId>(initialVariant);
   const [ready, setReady] = useState(false);
   const [playing, setPlaying] = useState(false);
   const [manualT, setManualT] = useState<number | null>(null); // фаза при скраббере/паузе
