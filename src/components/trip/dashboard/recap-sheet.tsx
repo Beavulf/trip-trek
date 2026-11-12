@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { useTrip } from "@/hooks/use-trip";
 import { currencySymbol } from "@/lib/currencies";
@@ -15,6 +15,12 @@ import { ShareCard } from "../share-card";
 export function RecapSheet({ open, onOpenChange }: { open: boolean; onOpenChange: (v: boolean) => void }) {
   const { data: trip } = useTrip();
   const [cardOpen, setCardOpen] = useState(false);
+  // Лист монтируется постоянно (TripFinale держит его смонтированным): если шит
+  // закрыли «назад»/свайпом, пока открыта открытка, — закрыть и открытку,
+  // иначе она осиротеет поверх приложения
+  useEffect(() => {
+    if (!open) setCardOpen(false);
+  }, [open]);
   if (!trip) return null;
   const sym = currencySymbol(trip.settings.currency);
 
