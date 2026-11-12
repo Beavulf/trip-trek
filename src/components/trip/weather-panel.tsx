@@ -8,7 +8,6 @@ import {
   Wind,
   Droplets,
   CloudRain,
-  Loader2,
   MapPin,
   AlertCircle,
   RotateCw,
@@ -22,6 +21,7 @@ import { useState, useMemo, useEffect } from "react";
 import { cn } from "@/lib/utils";
 import { useTripStore } from "@/lib/trip-store";
 import { tripDateKey } from "@/lib/trip-days";
+import { Skeleton } from "@/components/ui/skeleton";
 
 const WEEKDAYS = ["Вс", "Пн", "Вт", "Ср", "Чт", "Пт", "Сб"];
 const MONTHS = ["янв", "фев", "мар", "апр", "мая", "июн", "июл", "авг", "сен", "окт", "ноя", "дек"];
@@ -447,8 +447,12 @@ export function WeatherPanel() {
           </div>
 
           {isLoading ? (
-            <div className="flex items-center gap-2 py-8">
-              <Loader2 className="size-5 animate-spin" /> <span className="text-sm text-white/80">Загрузка…</span>
+            // Скелет героя держит высоту карточки на время запроса (смена города, первый заход);
+            // белый полупрозрачный — чтобы пульс читался частью градиента, а не серым пятном
+            <div className="mt-4 space-y-3" aria-busy="true">
+              <Skeleton className="h-14 w-36 bg-white/25 motion-reduce:animate-none" />
+              <Skeleton className="h-4 w-48 bg-white/25 motion-reduce:animate-none" />
+              <Skeleton className="h-4 w-full max-w-56 bg-white/25 motion-reduce:animate-none" />
             </div>
           ) : error ? (
             <div className="py-4">

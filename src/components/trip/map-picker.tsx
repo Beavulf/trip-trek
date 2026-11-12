@@ -8,15 +8,14 @@ import { useBodyScrollLock } from "@/hooks/use-body-scroll-lock";
 import { fetchGeocode } from "@/hooks/trip/use-geocode";
 import { formatLatLng } from "@/lib/utils";
 import dynamic from "next/dynamic";
+import { Skeleton } from "@/components/ui/skeleton";
 
 // Загружаем react-leaflet только на клиенте, чтобы избежать SSR-краша
 const PickerClient = dynamic(() => import("./map-picker-client"), {
   ssr: false,
-  loading: () => (
-    <div className="flex-1 grid place-items-center bg-muted">
-      <Loader2 className="size-8 animate-spin text-muted-foreground" />
-    </div>
-  ),
+  // Пульсирующий блок вместо спиннера: карта занимает весь экран шторки,
+  // и скелет держит площадь, пока едет чанк с leaflet
+  loading: () => <Skeleton className="h-full w-full rounded-none motion-reduce:animate-none" aria-hidden />,
 });
 
 export interface MapPickerResult {

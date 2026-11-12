@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { ChevronDown, Compass, Loader2 } from "lucide-react";
+import { ChevronDown, Compass } from "lucide-react";
 import { useRouteDays, useTrip, useExpenses } from "@/hooks/use-trip";
 import { calculatePlannedRoute, expenseSelectableParticipants } from "@/lib/budget";
 import { CATEGORY_META } from "@/lib/types";
@@ -10,6 +10,7 @@ import { currencySymbol } from "@/lib/currencies";
 import { cn, plural } from "@/lib/utils";
 import { moneyWhole } from "@/lib/budget/format";
 import { fromCents, toCents } from "@/lib/budget/money";
+import { Skeleton } from "@/components/ui/skeleton";
 
 type PlanMode = "days" | "categories";
 
@@ -50,9 +51,17 @@ export function RoutePlanCard() {
   }, [expenses]);
 
   if (isLoading) {
+    // Скелет карточки (шапка + строки дней): держит высоту секции вместо спиннера
     return (
-      <div className="rounded-2xl bg-card border border-border p-4 flex items-center gap-2 text-muted-foreground text-sm">
-        <Loader2 className="size-4 animate-spin" /> Считаем план маршрута…
+      <div className="rounded-2xl bg-card border border-border p-4 space-y-2.5" aria-busy="true" aria-label="Считаем план маршрута">
+        <div className="flex items-center gap-2">
+          <Skeleton className="size-4 rounded-full motion-reduce:animate-none" />
+          <Skeleton className="h-4 w-36 motion-reduce:animate-none" />
+          <Skeleton className="ml-auto h-4 w-16 motion-reduce:animate-none" />
+        </div>
+        <Skeleton className="h-4 w-full motion-reduce:animate-none" />
+        <Skeleton className="h-4 w-3/4 motion-reduce:animate-none" />
+        <Skeleton className="h-4 w-1/2 motion-reduce:animate-none" />
       </div>
     );
   }

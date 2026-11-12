@@ -21,6 +21,7 @@ import { cn, plural } from "@/lib/utils";
 import { currencySymbol } from "@/lib/currencies";
 import { MobileBottomSheet } from "./mobile-bottom-sheet";
 import { AiKeyCard } from "./ai-key-help";
+import { Skeleton } from "@/components/ui/skeleton";
 import { useAiStatus } from "@/hooks/trip/use-ai-status";
 import { tripDaysElapsed } from "@/lib/trip-days";
 
@@ -370,9 +371,14 @@ function AISummaryInner({ tripId }: { tripId: string }) {
   }
 
   if (isLoading || !trip) {
+    // Скелет той же раскладки, что и страница (герой + студия + строка истории):
+    // вкладка держит высоту, и контент встаёт на место без прыжка
     return (
-      <div className="py-20 text-center text-muted-foreground flex items-center justify-center gap-2">
-        <Loader2 className="size-4 animate-spin" /> Загрузка…
+      <div className="space-y-4 animate-fade-up pb-20" aria-busy="true" aria-label="Загрузка рассказчика">
+        <span className="sr-only">Загружаем рассказчика…</span>
+        <Skeleton className="h-52 rounded-3xl motion-reduce:animate-none" />
+        <Skeleton className="h-72 rounded-3xl motion-reduce:animate-none" />
+        <Skeleton className="h-12 w-full rounded-2xl motion-reduce:animate-none" />
       </div>
     );
   }

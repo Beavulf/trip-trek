@@ -113,7 +113,7 @@ export function ExpenseHistory({
           <EmptyState
             emoji={EMPTY[filter].emoji}
             title={EMPTY[filter].text}
-            // «Записать трату» зовём только там, куда она логично ведёт: общий список и свой кошелёк
+            // «Записать трату» зовём только из общего списка («Все») — единственное место, куда она логично ведёт
             cta={onAdd && filter === "all" ? { label: "Записать трату", onClick: onAdd } : undefined}
           />
         ) : filter === "all" && visible.some(isPreTrip) ? (
