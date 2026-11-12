@@ -392,7 +392,13 @@ export function Achievements() {
           if (!v) setCelebration(null);
         }}
         emoji={celebration?.badges[0]?.emoji ?? "🏅"}
-        title={celebration?.mode === "count" ? `Новых наград: ${celebration.badges.length}` : "Новая награда!"}
+        title={
+          celebration
+            ? celebration.mode === "count" || celebration.badges.length > 1
+              ? `Новых наград: ${celebration.badges.length}`
+              : "Новая награда!"
+            : "Новая награда!"
+        }
         items={
           celebration?.mode === "list"
             ? celebration.badges.map((b) => ({ id: b.id, emoji: b.emoji, title: b.title, note: describeBadge(b, sym) }))

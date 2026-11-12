@@ -185,13 +185,16 @@ export function CelebrationOverlay({
                   {a.label}
                 </button>
               ))}
-              <button
-                type="button"
-                onClick={() => onOpenChange(false)}
-                className="inline-flex min-h-11 items-center rounded-xl border border-input px-4 text-sm font-medium text-muted-foreground transition-transform hover:text-foreground active:scale-[0.98]"
-              >
-                Понятно
-              </button>
+              {/* «Понятно» рисует сам примитив только когда consumer не передал свои действия — иначе кнопка закрытия дублируется */}
+              {!hasActions && (
+                <button
+                  type="button"
+                  onClick={() => onOpenChange(false)}
+                  className="inline-flex min-h-11 items-center rounded-xl border border-input px-4 text-sm font-medium text-muted-foreground transition-transform hover:text-foreground active:scale-[0.98]"
+                >
+                  Понятно
+                </button>
+              )}
             </div>
           </motion.div>
         </motion.div>
