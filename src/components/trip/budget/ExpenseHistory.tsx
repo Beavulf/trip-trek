@@ -115,6 +115,8 @@ export function ExpenseHistory({
             title={EMPTY[filter].text}
             // «Записать трату» зовём только из общего списка («Все») — единственное место, куда она логично ведёт
             cta={onAdd && filter === "all" ? { label: "Записать трату", onClick: onAdd } : undefined}
+            // внутри карточки списка — без собственной рамки и заливки, иначе двойная граница
+            className="border-0 bg-transparent"
           />
         ) : filter === "all" && visible.some(isPreTrip) ? (
           // Предпоездочная подготовка визуально отделена от трат в поездке

@@ -32,7 +32,7 @@
 - Consumes: `Expense` из `@/lib/types` (поля: `splitWith?: string`, `dayId: string | null`, `originalAmount/originalCurrency?: string | null`); POST /api/expenses контракт (`src/app/api/expenses/route.ts:40`, нормализация `src/lib/budget/expense-input.ts` — splitWith массивом, settlement требует `excludeSelf: true` + `settlementKey` с префиксом `settle-`).
 - Produces: `expenseRestorePayload(removed: Expense, tripId: string, keySuffix: string): ExpenseRestorePayload` — чистая функция; undo-тост централизован в `useDeleteExpense` (все три вызывающих — `ExpenseRow`, `split/expense-sheet.tsx`, `split/expense-detail-sheet.tsx` — получают его бесплатно).
 
-- [ ] **Step 1: Написать падающий тест**
+- [x] **Step 1: Написать падающий тест**
 
 `src/lib/budget/expense-undo.test.ts` (стиль — как `src/lib/celebrations.test.ts`):
 
@@ -95,9 +95,9 @@ describe("expenseRestorePayload", () => {
 });
 ```
 
-- [ ] **Step 2: Запустить — падает** (`bunx vitest run src/lib/budget/expense-undo.test.ts` → FAIL, модуля нет)
+- [x] **Step 2: Запустить — падает** (`bunx vitest run src/lib/budget/expense-undo.test.ts` → FAIL, модуля нет)
 
-- [ ] **Step 3: Реализация**
+- [x] **Step 3: Реализация**
 
 `src/lib/budget/expense-undo.ts`:
 
@@ -140,9 +140,9 @@ export function expenseRestorePayload(removed: Expense, tripId: string, keySuffi
 }
 ```
 
-- [ ] **Step 4: Тест зелёный** (`bunx vitest run src/lib/budget/expense-undo.test.ts` → PASS)
+- [x] **Step 4: Тест зелёный** (`bunx vitest run src/lib/budget/expense-undo.test.ts` → PASS)
 
-- [ ] **Step 5: Встроить undo в useDeleteExpense**
+- [x] **Step 5: Встроить undo в useDeleteExpense**
 
 `src/hooks/trip/use-expenses.ts`, `useDeleteExpense` — добавить `onSuccess` (после существующего `onError`/`onSettled` порядок не важен, но до `onSettled` логичнее) и импорт `getTripId` (уже в файле) + `expenseRestorePayload` + `toast` (проверить импорты файла):
 
@@ -181,13 +181,13 @@ export function expenseRestorePayload(removed: Expense, tripId: string, keySuffi
     },
 ```
 
-- [ ] **Step 6: Убрать дублирующий тост в ExpenseRow**
+- [x] **Step 6: Убрать дублирующий тост в ExpenseRow**
 
 `ExpenseRow.tsx:73-83` — в `handleDelete` удалить строку `toast.success("Удалено");` (undo-тост теперь приходит из хука всем вызывающим); `setConfirming(false)` и обработка ошибки остаются. Если `toast` используется в файле ещё где-то — импорт остаётся, иначе убрать.
 
-- [ ] **Step 7: Верификация** — `bun run lint` (0 ошибок), `bunx tsc --noEmit` (чисто), `bun run test` (suite зелёный)
+- [x] **Step 7: Верификация** — `bun run lint` (0 ошибок), `bunx tsc --noEmit` (чисто), `bun run test` (suite зелёный)
 
-- [ ] **Step 8: Коммит**
+- [x] **Step 8: Коммит**
 
 ```bash
 git add src/lib/budget/expense-undo.ts src/lib/budget/expense-undo.test.ts src/hooks/trip/use-expenses.ts src/components/trip/budget/ExpenseRow.tsx
@@ -207,7 +207,7 @@ git commit -m "feat: undo удаления траты — «Вернуть» и�
 - Consumes: `PLACE_PATCHABLE` из `@/lib/place-fields` (список полей Place, тип только — node-env безопасно); `queryKeys.route(tripId)` из `@/lib/query-keys`; read-модель маршрута (проверить форму: `src/lib/route.ts` — дни с массивами мест; место ищется по `id` во всех днях).
 - Produces: `placeRestorePayload(place: Place): Record<string, unknown>` — только поля `PLACE_PATCHABLE`, присутствующие в объекте.
 
-- [ ] **Step 1: Падающий тест** `src/lib/place-undo.test.ts`:
+- [x] **Step 1: Падающий тест** `src/lib/place-undo.test.ts`:
 
 ```ts
 import { describe, expect, it } from "vitest";
@@ -260,9 +260,9 @@ describe("placeRestorePayload", () => {
 });
 ```
 
-- [ ] **Step 2: Падает** (`bunx vitest run src/lib/place-undo.test.ts`)
+- [x] **Step 2: Падает** (`bunx vitest run src/lib/place-undo.test.ts`)
 
-- [ ] **Step 3: Реализация** `src/lib/place-undo.ts`:
+- [x] **Step 3: Реализация** `src/lib/place-undo.ts`:
 
 ```ts
 // Undo удаления места: из read-модели маршрута собираем POST-нагрузку строго
@@ -281,9 +281,9 @@ export function placeRestorePayload(place: PlaceLike): PlacePatch {
 }
 ```
 
-- [ ] **Step 4: Зелёный**
+- [x] **Step 4: Зелёный**
 
-- [ ] **Step 5: Встроить в useDeletePlace** (`src/hooks/trip/use-places.ts`) — хук получает `getTripId` (есть в файле? проверить; если нет — импорт из того же места, откуда берут остальные хуки файла) и `queryKeys`:
+- [x] **Step 5: Встроить в useDeletePlace** (`src/hooks/trip/use-places.ts`) — хук получает `getTripId` (есть в файле? проверить; если нет — импорт из того же места, откуда берут остальные хуки файла) и `queryKeys`:
 
 ```ts
 export function useDeletePlace() {
@@ -337,9 +337,9 @@ export function useDeletePlace() {
 
 ПРИМЕЧАНИЯ ИСПОЛНИТЕЛЮ: (а) форму read-модели (`days[].places`) сверь с `src/lib/route.ts` — если поле называется иначе (например, `placesByDay`), скорректируй flatMap по факту; (б) `onError` у мутации НЕТ — добавь `onError: () => invalidateRouteData(qc)` чтобы оптимистичный мир вернулся при неудаче? — НЕТ: сейчас хук не оптимистичен (место исчезает после рефетча) — снапшот в onMutate только для undo, откат не нужен; (в) тип `PlaceLike` — локальный, не экспортируй.
 
-- [ ] **Step 6: Верификация** — lint / tsc / suite
+- [x] **Step 6: Верификация** — lint / tsc / suite
 
-- [ ] **Step 7: Коммит**
+- [x] **Step 7: Коммит**
 
 ```bash
 git add src/lib/place-undo.ts src/lib/place-undo.test.ts src/hooks/trip/use-places.ts
@@ -357,7 +357,7 @@ git commit -m "feat: undo удаления места — восстановле
 - Consumes: `AnimatedNumber({ value, format })` из `../budget/AnimatedNumber`.
 - Produces: ничего.
 
-- [ ] **Step 1: Правки**
+- [x] **Step 1: Правки**
 
 Импорт: `import { AnimatedNumber } from "../budget/AnimatedNumber";`
 
@@ -401,8 +401,8 @@ StatCard: числовые вызовы (места ~:73, фото ~:79) — о�
 
 «Рядом» (строка) не трогается.
 
-- [ ] **Step 2: Верификация** — lint / tsc / suite
-- [ ] **Step 3: Коммит**
+- [x] **Step 2: Верификация** — lint / tsc / suite
+- [x] **Step 3: Коммит**
 
 ```bash
 git add src/components/trip/dashboard/DashboardStats.tsx
@@ -431,7 +431,7 @@ export function EmptyState(props: {
 }): JSX.Element
 ```
 
-- [ ] **Step 1: Примитив** `src/components/trip/empty-state.tsx`:
+- [x] **Step 1: Примитив** `src/components/trip/empty-state.tsx`:
 
 ```tsx
 "use client";
@@ -467,7 +467,7 @@ export function EmptyState({ emoji, title, hint, cta, className }: {
 }
 ```
 
-- [ ] **Step 2: BudgetPlanTab** — ветку `rows.length === 0` (`:137-145`) заменить на EmptyState (тексты сохранить смысл, оживить тон; CTA — на существующий в компоненте способ открыть быстрое добавление: проверить props компонента; если ready-канала нет — CTA опустить, только текст):
+- [x] **Step 2: BudgetPlanTab** — ветку `rows.length === 0` (`:137-145`) заменить на EmptyState (тексты сохранить смысл, оживить тон; CTA — на существующий в компоненте способ открыть быстрое добавление: проверить props компонента; если ready-канала нет — CTA опустить, только текст):
 
 ```tsx
 {rows.length === 0 ? (
@@ -490,7 +490,7 @@ export function EmptyState({ emoji, title, hint, cta, className }: {
 
 ПРИМЕЧАНИЕ: `onQuickAdd` — если у BudgetPlanTab нет такого пропа, НЕ добавлять новый проп через полкомпонента: вместо CTA использовать хук `useTripStore` (в файле проверить наличие `openBudget`/`setActiveTab`) или опустить CTA. Решение принять по факту и описать в отчёте.
 
-- [ ] **Step 3: ExpenseHistory** — `EMPTY_TEXT` дополнить эмодзи, пустую ветку рендера заменить на EmptyState (найти, где сейчас рендерится `EMPTY_TEXT[filter]`):
+- [x] **Step 3: ExpenseHistory** — `EMPTY_TEXT` дополнить эмодзи, пустую ветку рендера заменить на EmptyState (найти, где сейчас рендерится `EMPTY_TEXT[filter]`):
 
 ```tsx
 const EMPTY: Record<HistoryFilter, { emoji: string; text: string }> = {
@@ -504,8 +504,8 @@ const EMPTY: Record<HistoryFilter, { emoji: string; text: string }> = {
 
 CTA: если у компонента есть `onAdd` и зритель — показать «Записать трату» только на фильтре `all` (`onAdd && filter === "all"`).
 
-- [ ] **Step 4: Верификация** — lint / tsc / suite
-- [ ] **Step 5: Коммит**
+- [x] **Step 4: Верификация** — lint / tsc / suite
+- [x] **Step 5: Коммит**
 
 ```bash
 git add src/components/trip/empty-state.tsx src/components/trip/budget/BudgetPlanTab.tsx src/components/trip/budget/ExpenseHistory.tsx
@@ -522,18 +522,18 @@ git commit -m "feat: EmptyState с характером в бюджете (пл�
 
 **Interfaces:** Consumes: `Skeleton` из `@/components/ui/skeleton` (проверить путь импорта по готовым примерам `DashboardSkeleton`). Produces: ничего.
 
-- [ ] **Step 1: Выбрать точки по критерию**
+- [x] **Step 1: Выбрать точки по критерию**
 
 Критерий: `animate-spin`/`Loader2` держит ЦЕЛУЮ секцию/вкладку (загрузочная ветка компонента, минимум экрана на пару секунд) → заменить на строки `<Skeleton className="h-4 w-full" />` и блоки `h-20`, по образцу `DashboardSkeleton`. Кандидаты из grep (`rg -l "animate-spin" src/components/trip --glob '*.tsx'`): `weather-panel.tsx`, `ai-summary.tsx`, `phrasebook.tsx`, `budget/RoutePlanCard.tsx`, `map-picker.tsx` — проверить каждый и заменить только секционные загрузки. Кнопочные и инлайн-спиннеры (внутри кнопки/строки) НЕ трогать. Если по факту секционных меньше 4 — заменить сколько есть и честно написать в отчёте; не выдумывать.
 
-- [ ] **Step 2: Верификация** — lint / tsc / suite
-- [ ] **Step 3: Доки**
+- [x] **Step 2: Верификация** — lint / tsc / suite
+- [x] **Step 3: Доки**
 
 `AGENTS.md`, строка `src/lib/` карты: дописать `, ` + `` `expense-undo.ts` (undo трат: DTO→POST payload; тесты рядом) `` и `` `place-undo.ts` (undo мест: PLACE_PATCHABLE→POST; тесты рядом) ``. В строку `src/components/trip/` дописать `empty-state.tsx` упоминанием (формат ячейки соблюсти).
 
 `worklog.md`: запись в начало журнала по образцу (дата, «Сделано» по 4 пунктам, «Почему»: волна 3 карты delights — накопительное качество; ссылки на спеку/план).
 
-- [ ] **Step 4: Коммит**
+- [x] **Step 4: Коммит**
 
 ```bash
 git add -A src/components/trip AGENTS.md worklog.md

@@ -141,7 +141,8 @@ export function BudgetPlanTab({ expenses, people, currentUserId, canEdit }: Budg
               <EmptyState
                 emoji={scope === "me" ? "💸" : "🔍"}
                 title={scope === "me" ? "Твоих трат пока нет" : `У ${scopeName ?? "участника"} пока нет трат`}
-                hint="Запишите первую — бюджет оживёт, а долги посчитаются сами"
+                // подсказка адресует «тебя» — не к месту в чужом кошельке
+                hint={scope === "me" ? "Запишите первую — бюджет оживёт, а долги посчитаются сами" : undefined}
                 cta={scope === "me" && canEdit ? { label: "Записать трату", onClick: () => setBudgetAddOpen(true) } : undefined}
               />
             ) : (

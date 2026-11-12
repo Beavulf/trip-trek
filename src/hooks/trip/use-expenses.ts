@@ -142,7 +142,11 @@ export function useDeleteExpense() {
                 if (!r.ok) throw new Error((await r.json().catch(() => ({})))?.error || `Ошибка ${r.status}`);
                 toast.success("Трата возвращена");
               })
-              .catch((e) => toast.error("Не удалось вернуть", { description: e instanceof Error ? e.message : undefined }))
+              .catch((e) => {
+                // сброс гарда: без него повторный клик по «Вернуть» ничего не делает до конца тоста
+                restoring = false;
+                toast.error("Не удалось вернуть", { description: e instanceof Error ? e.message : undefined });
+              })
               .finally(() => {
                 qc.invalidateQueries({ queryKey: ["expenses"] });
                 qc.invalidateQueries({ queryKey: ["trip"] });
