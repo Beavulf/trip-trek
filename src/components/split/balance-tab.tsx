@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ArrowRight, BellRing, Copy, CreditCard, Trash2, Undo2 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -9,6 +9,8 @@ import { formatCents } from "@/lib/split/money";
 import type { Debt } from "@/lib/split/balances";
 import { isTmpId, useDeletePayment, useRemindDebtor, useSavePayment } from "@/hooks/split/use-split";
 import { agoLabel, lastReminderAt, manualCooldownLeft, reminderMessage } from "@/lib/split/reminders";
+import { splitClearSeenKey, splitHadKey, shouldCelebrateSplit } from "@/lib/celebrations";
+import { CelebrationOverlay } from "@/components/trip/celebration-overlay";
 import type { GroupModel } from "@/hooks/split/use-group-model";
 import { EmptyState, MemberAvatar, Money, PrimaryButton, SecondaryButton, balanceTone } from "./ui";
 import type { SettleTarget } from "./settle-sheet";
@@ -122,6 +124,38 @@ export function BalanceTab({ model, onSettle }: { model: GroupModel; onSettle: (
   const me = group.myMemberId;
   const del = useDeletePayment(group.id);
   const redo = useSavePayment(group.id, me);
+  // Момент «Чисто!»: были долги → все балансы стали нулевыми. Пороги и seen-ключи —
+  // в lib/celebrations; оптимистичные мутации двигают model в тот же кадр, что и список,
+  // так что момент срабатывает сразу после закрывающего перевода.
+  const [clearedOpen, setClearedOpen] = useState(false);
+  const hadActivity = model.expenses.length > 0 || model.payments.length > 0;
+  const nowClear = model.debts.length === 0 && [...model.balances.values()].every((v) => v === 0);
+
+  useEffect(() => {
+    if (model.status !== "ready") return;
+    const get = (k: string): string | null => {
+      try {
+        return localStorage.getItem(k);
+      } catch {
+        return null;
+      }
+    };
+    const mark = (k: string) => {
+      try {
+        localStorage.setItem(k, "1");
+      } catch {
+        /* приватный режим */
+      }
+    };
+    if (!nowClear) {
+      if (model.debts.length > 0) mark(splitHadKey(group.id));
+      return;
+    }
+    if (shouldCelebrateSplit(!!get(splitHadKey(group.id)), true, hadActivity, !!get(splitClearSeenKey(group.id)))) {
+      mark(splitClearSeenKey(group.id));
+      setClearedOpen(true);
+    }
+  }, [model.status, nowClear, hadActivity, group.id, model.debts.length]);
   const [showAllPayments, setShowAllPayments] = useState(false);
   const [detailsOpen, setDetailsOpen] = useState(false);
   const today = localDateKey();
@@ -279,6 +313,16 @@ export function BalanceTab({ model, onSettle }: { model: GroupModel; onSettle: (
           )}
         </section>
       )}
+      <CelebrationOverlay
+        compact
+        open={clearedOpen}
+        onOpenChange={(v) => {
+          if (!v) setClearedOpen(false);
+        }}
+        emoji="🤝"
+        title="Чисто!"
+        subtitle="Все расчёты по группе закрыты — никто никому не должен."
+      />
       <PaymentDetailsSheet open={detailsOpen} onOpenChange={setDetailsOpen} groupId={group.id} current={model.me?.paymentDetails ?? null} />
     </div>
   );
