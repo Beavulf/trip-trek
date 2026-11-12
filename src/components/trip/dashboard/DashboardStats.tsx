@@ -6,6 +6,7 @@ import { type TripSummary } from "@/lib/types";
 import { cn, fmtMoney } from "@/lib/utils";
 import { currencySymbol } from "@/lib/currencies";
 import { useTripStore } from "@/lib/trip-store";
+import { AnimatedNumber } from "../budget/AnimatedNumber";
 
 interface DashboardStatsProps {
   trip: TripSummary;
@@ -39,7 +40,10 @@ export function DashboardStats({ trip, daysRemaining }: DashboardStatsProps) {
           <TrendingDown className="size-4 text-muted-foreground group-hover:translate-x-1 transition-transform" />
         </div>
         <div className="flex items-end gap-2">
-          <span className="text-3xl font-bold leading-none tabular-nums">{sym}{trip.totalSpent.toFixed(0)}</span>
+          {/* Сумма «доезжает» до значения — при загрузке Обзора не прыгает (как в шапке бюджета) */}
+          <span className="text-3xl font-bold leading-none tabular-nums">
+            <AnimatedNumber value={trip.totalSpent} format={(v) => `${sym}${Math.round(v)}`} />
+          </span>
           {hasBudget && <span className="text-sm text-muted-foreground mb-0.5">/ {sym}{fmtMoney(budget)}</span>}
         </div>
         {hasBudget ? (
@@ -70,14 +74,14 @@ export function DashboardStats({ trip, daysRemaining }: DashboardStatsProps) {
 
       <StatCard
         icon={<MapPin className="size-5" />}
-        value={trip.visitedPlaces}
+        value={<AnimatedNumber value={trip.visitedPlaces} format={(v) => String(Math.round(v))} />}
         label={`из ${trip.totalPlaces} мест`}
         color="#f97316"
         onClick={() => setActiveTab("itinerary")}
       />
       <StatCard
         icon={<Camera className="size-5" />}
-        value={trip.totalPhotos}
+        value={<AnimatedNumber value={trip.totalPhotos} format={(v) => String(Math.round(v))} />}
         label="Фото"
         color="#06b6d4"
         onClick={() => setActiveTab("gallery")}
