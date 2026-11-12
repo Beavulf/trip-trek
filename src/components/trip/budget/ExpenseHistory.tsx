@@ -5,6 +5,7 @@ import { cn } from "@/lib/utils";
 import { isBeforeTripStart } from "@/lib/trip-days";
 import type { Expense, Participant } from "@/lib/types";
 import { ExpenseList } from "./ExpenseList";
+import { EmptyState } from "../empty-state";
 
 const PAGE = 30;
 
@@ -12,12 +13,12 @@ const PAGE = 30;
 // 2026-10: половина трат поездки была личной, и их хотелось смотреть отдельно)
 export type HistoryFilter = "all" | "mine" | "shared" | "personal" | "settlements";
 
-const EMPTY_TEXT: Record<HistoryFilter, string> = {
-  mine: "Здесь появятся траты, которые оплатишь ты",
-  shared: "Общих трат пока нет",
-  personal: "Личных трат пока нет",
-  settlements: "Переводов пока нет",
-  all: "Пока нет трат",
+const EMPTY: Record<HistoryFilter, { emoji: string; text: string }> = {
+  mine: { emoji: "💸", text: "Здесь появятся траты, которые оплатишь ты" },
+  shared: { emoji: "🤝", text: "Общих трат пока нет" },
+  personal: { emoji: "🙈", text: "Личных трат пока нет" },
+  settlements: { emoji: "🔁", text: "Переводов пока нет" },
+  all: { emoji: "🧾", text: "Пока нет трат" },
 };
 
 interface ExpenseHistoryProps {
@@ -109,7 +110,12 @@ export function ExpenseHistory({
 
       <div className="rounded-2xl border border-border bg-card p-2 sm:p-3">
         {filtered.length === 0 ? (
-          <p className="py-8 text-center text-sm text-muted-foreground">{EMPTY_TEXT[filter]}</p>
+          <EmptyState
+            emoji={EMPTY[filter].emoji}
+            title={EMPTY[filter].text}
+            // «Записать трату» зовём только там, куда она логично ведёт: общий список и свой кошелёк
+            cta={onAdd && filter === "all" ? { label: "Записать трату", onClick: onAdd } : undefined}
+          />
         ) : filter === "all" && visible.some(isPreTrip) ? (
           // Предпоездочная подготовка визуально отделена от трат в поездке
           <div className="space-y-3">

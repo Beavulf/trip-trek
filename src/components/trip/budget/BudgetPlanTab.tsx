@@ -10,7 +10,9 @@ import { budgetMeter, buildCategoryRows, type CategoryPlanRow } from "@/lib/budg
 import { moneyWhole } from "@/lib/budget/format";
 import { currencySymbol } from "@/lib/currencies";
 import { cn } from "@/lib/utils";
+import { useTripStore } from "@/lib/trip-store";
 import { UserAvatar } from "../user-avatar";
+import { EmptyState } from "../empty-state";
 import { BudgetMeter } from "./BudgetMeter";
 import { CategoryPlanSheet } from "./CategoryPlanSheet";
 import { RoutePlanCard } from "./RoutePlanCard";
@@ -52,6 +54,8 @@ export function BudgetPlanTab({ expenses, people, currentUserId, canEdit }: Budg
   // Скоуп: "all" — вся группа, "me" — текущий юзер, иначе userId участника
   const [scope, setScope] = useState("all");
   const [editOpen, setEditOpen] = useState(false);
+  // CTA пустого состояния открывает «Новую трату» — тот же шит, что и «+» бюджета (канал — стор)
+  const setBudgetAddOpen = useTripStore((s) => s.setBudgetAddOpen);
   const sym = currencySymbol(trip?.settings.currency);
 
   const real = useMemo(() => expenses.filter((e) => e.category !== "settlement"), [expenses]);
@@ -133,13 +137,20 @@ export function BudgetPlanTab({ expenses, people, currentUserId, canEdit }: Budg
           </div>
 
           {rows.length === 0 ? (
-            <p className="py-8 text-center text-sm text-pretty text-muted-foreground">
-              {isPersonal
-                ? scope === "me"
-                  ? "Твоих трат пока нет"
-                  : `Трат с участием ${scopeName ?? "участника"} пока нет`
-                : "Здесь появятся траты по категориям и план на поездку"}
-            </p>
+            isPersonal ? (
+              <EmptyState
+                emoji={scope === "me" ? "💸" : "🔍"}
+                title={scope === "me" ? "Твоих трат пока нет" : `У ${scopeName ?? "участника"} пока нет трат`}
+                hint="Запишите первую — бюджет оживёт, а долги посчитаются сами"
+                cta={scope === "me" && canEdit ? { label: "Записать трату", onClick: () => setBudgetAddOpen(true) } : undefined}
+              />
+            ) : (
+              <EmptyState
+                emoji="📊"
+                title="План появится с первой тратой"
+                hint="Здесь будут категории, бублик и план на поездку"
+              />
+            )
           ) : (
             <>
               <div className="mt-3 flex items-center gap-3 sm:gap-4">
