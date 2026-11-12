@@ -6,12 +6,17 @@ import { useTripStore } from "@/lib/trip-store";
 import { focusOnMap } from "@/lib/map-bus";
 import { useAuth } from "@/hooks/use-auth";
 import { motion, useReducedMotion } from "framer-motion";
-import { ArrowDownWideNarrow, ArrowUpNarrowWide, Camera, Columns3, EyeOff, LayoutGrid, Share2, Star } from "lucide-react";
+import { ArrowDownWideNarrow, ArrowUpNarrowWide, Camera, Columns3, EyeOff, LayoutGrid, Share2, SquareCheck, Star } from "lucide-react";
 import dynamic from "next/dynamic";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import type { Photo } from "@/lib/types";
-import { cn, plural } from "@/lib/utils";
+import { cn, haptic, plural } from "@/lib/utils";
+import { runBulk } from "@/lib/photo-bulk";
+import { invalidateRouteData } from "@/lib/query-keys";
+import { useBackDismiss } from "@/hooks/use-back-dismiss";
+import { GallerySelectBar } from "./gallery-select-bar";
 
 // YARL (ядро + captions/counter + css) нужен только с тапа по фото — не тащим
 // в первый бандл; чанк подгрузится к моменту открытия лайтбокса
@@ -79,7 +84,9 @@ export function Gallery() {
   const currentUserId = (session?.user as { id?: string } | undefined)?.id || "";
   const myRole = trip?.participants?.find((p) => p.id === currentUserId)?.role;
   const isOwner = myRole === "owner";
+  const isViewer = myRole === "viewer";
   const reduceMotion = useReducedMotion();
+  const qc = useQueryClient();
 
   const [lightbox, setLightbox] = useState<number | null>(null);
   const [dimension, setDimension] = useState<Dimension>("day");
@@ -90,6 +97,28 @@ export function Gallery() {
   const [layout, setLayout] = useState<LayoutMode>("masonry");
   // Порядок ленты: «сначала новые» (как отдаёт API) или «сначала старые» — просмотр с начала дня/поездки
   const [sortOrder, setSortOrder] = useState<SortOrder>(readStoredSortOrder);
+  // Мультивыбор: долгий тап по плитке или кнопка «Выбрать»; зрители режима не видят (мутации = 403)
+  const [selectMode, setSelectMode] = useState(false);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const exitSelectMode = useCallback(() => {
+    setSelectMode(false);
+    setSelected(new Set());
+  }, []);
+  // «Назад» на телефоне закрывает режим выбора, а не сворачивает PWA
+  useBackDismiss(selectMode, exitSelectMode);
+  const toggleSelect = useCallback((id: string) => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
+  const enterSelect = useCallback((id?: string) => {
+    setSelectMode(true);
+    setSelected(id ? new Set([id]) : new Set());
+    haptic(15);
+  }, []);
   const [addOpen, setAddOpen] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
   // Порционный рендер (аудит 2026-09-13): сотни motion-плиток на мобильном
@@ -180,6 +209,58 @@ export function Gallery() {
   );
   const shown = ordered.slice(0, visibleCount);
   const hasActiveFilters = favOnly || hiddenOnly || !!chipValue;
+
+  // Мультивыбор: производные для панели действий
+  const selectedPhotos = ordered.filter((p) => selected.has(p.id));
+  const allFavorite = selectedPhotos.length > 0 && selectedPhotos.every((p) => p.isFavorite);
+  const allHidden = selectedPhotos.length > 0 && selectedPhotos.every((p) => p.hiddenFromPublic);
+  const deletableCount = isOwner
+    ? selectedPhotos.length
+    : selectedPhotos.filter((p) => p.userId === currentUserId).length;
+
+  const [bulkPending, setBulkPending] = useState(false);
+  const runBulkAction = async (kind: "favorite" | "unfavorite" | "hide" | "unhide" | "delete") => {
+    const ids = [...selected];
+    if (ids.length === 0) return;
+    setBulkPending(true);
+    const { done, failed } = await runBulk(ids, async (id) => {
+      if (kind === "delete") {
+        const r = await fetch(`/api/photos?id=${id}`, { method: "DELETE" });
+        if (!r.ok) throw new Error("delete failed");
+      } else {
+        const patch =
+          kind === "favorite" ? { isFavorite: true }
+          : kind === "unfavorite" ? { isFavorite: false }
+          : kind === "hide" ? { hiddenFromPublic: true }
+          : { hiddenFromPublic: false };
+        const r = await fetch(`/api/photos/${id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(patch),
+        });
+        if (!r.ok) throw new Error("patch failed");
+      }
+    });
+    setBulkPending(false);
+    qc.invalidateQueries({ queryKey: ["photos"] });
+    qc.invalidateQueries({ queryKey: ["photos-geo"] });
+    invalidateRouteData(qc);
+    if (failed.length === 0) {
+      const n = done.length;
+      toast.success(
+        kind === "delete" ? `Удалено ${n} ${plural(n, "кадр", "кадра", "кадров")}`
+        : kind === "favorite" ? `В избранном ${n} ${plural(n, "кадр", "кадра", "кадров")}`
+        : kind === "unfavorite" ? `Убрано из избранного: ${n}`
+        : kind === "hide" ? `Скрыто от гостей: ${n}`
+        : `Возвращено гостям: ${n}`,
+      );
+      exitSelectMode();
+    } else {
+      // Неудачные остаются выбранными — можно повторить или выйти
+      setSelected(new Set(failed));
+      toast.error(`Готово ${done.length}, не удалось ${failed.length}`);
+    }
+  };
 
   const accent = useMemo(() => {
     if (!trip) return "#f97316";
@@ -389,7 +470,14 @@ export function Gallery() {
                     <button
                       key={p.id}
                       type="button"
-                      onClick={() => setLightbox(ordered.findIndex((q) => q.id === p.id))}
+                      onClick={() => {
+                        // В режиме выбора лента «Недавних» тоже выбирает, а не открывает лайтбокс
+                        if (selectMode) {
+                          toggleSelect(p.id);
+                          return;
+                        }
+                        setLightbox(ordered.findIndex((q) => q.id === p.id));
+                      }}
                       className="relative h-14 w-20 shrink-0 rounded-md overflow-hidden ring-1 ring-white/25 active:scale-95 transition-transform focus-visible:ring-2 focus-visible:ring-white/70"
                       aria-label={p.caption || `Фото ${i + 1}`}
                     >
@@ -442,6 +530,23 @@ export function Gallery() {
           {/* Кластер иконок переносится на второй ряд ЦЕЛИКОМ (ml-auto — прижать вправо),
               чтобы сортировка не оставалась одна на третьей строке */}
           <div className="ml-auto flex items-center gap-2">
+          {!isViewer && (
+            <button
+              type="button"
+              aria-pressed={selectMode}
+              aria-label={selectMode ? "Готово" : "Выбрать фото"}
+              title={selectMode ? "Готово" : "Выбрать фото"}
+              onClick={() => (selectMode ? exitSelectMode() : enterSelect())}
+              className={cn(
+                "size-11 shrink-0 rounded-xl border grid place-items-center active:scale-95 transition-all",
+                selectMode
+                  ? "bg-primary/10 border-primary/50 text-primary"
+                  : "bg-card border-border text-muted-foreground",
+              )}
+            >
+              <SquareCheck className="size-4" aria-hidden="true" />
+            </button>
+          )}
           <button
             type="button"
             aria-pressed={favOnly}
@@ -625,6 +730,10 @@ export function Gallery() {
               index={i}
               animate={!reduceMotion && i < ANIMATED_TILES}
               onOpen={setLightbox}
+              selecting={selectMode}
+              selected={selected.has(photo.id)}
+              onToggleSelect={toggleSelect}
+              onLongPress={selectMode ? undefined : enterSelect}
             />
           ))}
         </div>
@@ -632,7 +741,16 @@ export function Gallery() {
         /* Компактный режим: контактный лист 3×N — быстро просмотреть много кадров */
         <div className="grid grid-cols-3 gap-0.5">
           {shown.map((photo, i) => (
-            <CompactTile key={photo.id} photo={photo} index={i} onOpen={setLightbox} />
+            <CompactTile
+              key={photo.id}
+              photo={photo}
+              index={i}
+              onOpen={setLightbox}
+              selecting={selectMode}
+              selected={selected.has(photo.id)}
+              onToggleSelect={toggleSelect}
+              onLongPress={selectMode ? undefined : enterSelect}
+            />
           ))}
         </div>
       )}
@@ -647,6 +765,23 @@ export function Gallery() {
             Показать ещё · осталось {filtered.length - shown.length} фото
           </button>
         </div>
+      )}
+
+      {/* Панель мультивыбора — липкий низ над FAB */}
+      {selectMode && (
+        <GallerySelectBar
+          count={selected.size}
+          allFavorite={allFavorite}
+          allHidden={allHidden}
+          deletableCount={deletableCount}
+          pending={bulkPending}
+          onFavorite={() => runBulkAction(allFavorite ? "unfavorite" : "favorite")}
+          onHidden={() => runBulkAction(allHidden ? "unhide" : "hide")}
+          onDelete={() => runBulkAction("delete")}
+          onSelectAll={() => setSelected(new Set(ordered.map((p) => p.id)))}
+          onClear={() => setSelected(new Set())}
+          onDone={exitSelectMode}
+        />
       )}
 
       {/* Шторка добавления фото — прямо из галереи */}

@@ -6,18 +6,58 @@
 // рефетчами (structural sharing), поэтому memo реально срабатывает.
 import { memo } from "react";
 import { motion } from "framer-motion";
-import { EyeOff, MapPin, Star } from "lucide-react";
+import { Check, EyeOff, MapPin, Star } from "lucide-react";
 import type { Photo } from "@/lib/types";
 import { cn } from "@/lib/utils";
+import { useLongPress } from "@/hooks/use-long-press";
 
 interface TileProps {
   photo: Photo;
-  /** Индекс в отфильтрованном списке — им открывается лайтбокс */
   index: number;
   onOpen: (index: number) => void;
+  /** Режим мультивыбора: клик — toggle выбора, долгий тап включает его */
+  selecting?: boolean;
+  selected?: boolean;
+  /** Колбэки принимают id кадра — стабильные ссылки не ломают memo */
+  onToggleSelect?: (id: string) => void;
+  onLongPress?: (id: string) => void;
 }
 
-/** Плитка: фолбэк на оригинал, затем заглушка (thumb может отсутствовать/биться) */
+/** Чекбокс-уголок выбранного кадра (только в режиме мультивыбора) */
+function SelectBadge({ on }: { on: boolean }) {
+  return (
+    <span
+      className={cn(
+        "absolute top-1.5 left-1.5 z-10 size-6 rounded-md border grid place-items-center pointer-events-none",
+        on ? "bg-primary border-primary text-primary-foreground" : "bg-black/40 border-white/60",
+      )}
+      aria-hidden="true"
+    >
+      {on && <Check className="size-4" />}
+    </span>
+  );
+}
+
+/** Клик плитки: долгий тап уже включил выбор — его всплывающий click глушим */
+function tileClick(
+  selecting: boolean,
+  photoId: string,
+  firedRef: { current: boolean },
+  onToggleSelect: ((id: string) => void) | undefined,
+  onOpen: (index: number) => void,
+  index: number,
+) {
+  return () => {
+    if (firedRef.current) {
+      firedRef.current = false;
+      return;
+    }
+    if (selecting) onToggleSelect?.(photoId);
+    else onOpen(index);
+  };
+}
+
+/** Фолбэк на оригинал, затем заглушка (thumb может отсутствовать/биться) */
 function imgFallback(e: React.SyntheticEvent<HTMLImageElement>, photo: Photo) {
   const el = e.currentTarget;
   if (photo.url && el.src !== photo.url && !el.src.endsWith(photo.url)) {
@@ -42,17 +82,27 @@ export const MasonryTile = memo(function MasonryTile({
   index,
   onOpen,
   animate,
+  selecting,
+  selected,
+  onToggleSelect,
+  onLongPress,
 }: TileProps & { animate: boolean }) {
+  const longPress = useLongPress(() => onLongPress?.(photo.id), !!onLongPress);
   const hasDims = !!(photo.width && photo.height);
   const common = {
     type: "button" as const,
-    onClick: () => onOpen(index),
+    onClick: tileClick(!!selecting, photo.id, longPress.firedRef, onToggleSelect, onOpen, index),
+    onPointerDown: longPress.onPointerDown,
+    onPointerUp: longPress.onPointerUp,
+    onPointerLeave: longPress.onPointerLeave,
+    onPointerCancel: longPress.onPointerCancel,
     className:
       "masonry-item relative rounded-xl overflow-hidden bg-muted block w-full cursor-pointer active:scale-[0.98] transition-transform",
   };
 
   const body = (
     <>
+      {selecting && <SelectBadge on={!!selected} />}
       <img
         src={photo.thumbUrl || photo.url}
         alt={photo.caption || "Фото"}
@@ -67,7 +117,13 @@ export const MasonryTile = memo(function MasonryTile({
       />
       <FallbackNote className="min-h-[120px] grid" />
       {(photo.isFavorite || photo.hiddenFromPublic) && (
-        <span className="absolute top-1.5 left-1.5 flex gap-1">
+        <span
+          className={cn(
+            "absolute top-1.5 flex gap-1",
+            // В режиме выбора чекбокс занимает левый угол — значки уезжают вправо от него
+            selecting ? "left-9" : "left-1.5",
+          )}
+        >
           {photo.isFavorite && (
             <span className="size-6 rounded-full bg-black/50 grid place-items-center">
               <Star className="size-3.5 fill-yellow-300 text-yellow-300" aria-hidden="true" />
@@ -116,14 +172,28 @@ export const MasonryTile = memo(function MasonryTile({
   );
 });
 
-export const CompactTile = memo(function CompactTile({ photo, index, onOpen }: TileProps) {
+export const CompactTile = memo(function CompactTile({
+  photo,
+  index,
+  onOpen,
+  selecting,
+  selected,
+  onToggleSelect,
+  onLongPress,
+}: TileProps) {
+  const longPress = useLongPress(() => onLongPress?.(photo.id), !!onLongPress);
   return (
     <button
       type="button"
-      onClick={() => onOpen(index)}
+      onClick={tileClick(!!selecting, photo.id, longPress.firedRef, onToggleSelect, onOpen, index)}
+      onPointerDown={longPress.onPointerDown}
+      onPointerUp={longPress.onPointerUp}
+      onPointerLeave={longPress.onPointerLeave}
+      onPointerCancel={longPress.onPointerCancel}
       className="relative aspect-square overflow-hidden bg-muted active:scale-[0.97] transition-transform"
       aria-label={photo.caption || "Фото"}
     >
+      {selecting && <SelectBadge on={!!selected} />}
       <img
         src={photo.thumbUrl || photo.url}
         alt={photo.caption || "Фото"}
@@ -134,10 +204,8 @@ export const CompactTile = memo(function CompactTile({ photo, index, onOpen }: T
       />
       <FallbackNote className="absolute inset-0 grid" />
       {(photo.isFavorite || photo.hiddenFromPublic) && (
-        <span className="absolute top-1 left-1 flex gap-0.5">
-          {photo.isFavorite && (
-            <Star className="size-3.5 fill-yellow-300 text-yellow-300 drop-shadow" aria-hidden="true" />
-          )}
+        <span className={cn("absolute top-1 flex gap-0.5", selecting ? "left-9" : "left-1")}>
+          {photo.isFavorite && <Star className="size-3.5 fill-yellow-300 text-yellow-300 drop-shadow" aria-hidden="true" />}
           {photo.hiddenFromPublic && <EyeOff className="size-3.5 text-sky-300 drop-shadow" aria-label="Скрыто от гостей" />}
         </span>
       )}
