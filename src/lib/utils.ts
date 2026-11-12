@@ -5,8 +5,8 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
 }
 
-/** Короткая вибрация на мобильных (безопасно игнорируется, где не поддерживается) */
-export function haptic(ms = 8) {
+/** Короткая вибрация на мобильных: длительность или паттерн (безопасно игнорируется, где не поддерживается) */
+export function haptic(ms: number | number[] = 8) {
   if (typeof navigator !== "undefined" && "vibrate" in navigator) {
     try {
       navigator.vibrate(ms);
