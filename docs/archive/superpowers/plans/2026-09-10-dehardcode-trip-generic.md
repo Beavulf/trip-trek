@@ -1,5 +1,7 @@
 # De-hardcode: универсальность для любой поездки — Implementation Plan
 
+> **Исторический документ** (снимок на дату в имени файла): план/спека реализованы, чекбоксы не поддерживаются — не принимай за план. Актуальное поведение — код и [glossary.md](../../glossary.md).
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Убрать хардкод под Китай/демо-данные из 7 мест, чтобы все функции (конвертер, траты, курсы валют, достижения, шаблоны, брендинг PWA, приглашения) работали одинаково для любой новой поездки.

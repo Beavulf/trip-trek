@@ -1,8 +1,7 @@
 # Карта API TripTrek
 
-Все роуты — `src/app/api/**/route.ts` (App Router); исключение — публичные гостевые
-`src/app/p/[token]/photos|photos.zip|heart`. Документ-карта: что где лежит,
-кто может вызвать, какие лимиты. Роли участников: owner / member / **viewer**
+Все роуты — `src/app/api/**/route.ts` плюс гостевые `src/app/p/[token]/**/route.ts` (App Router).
+Документ-карта: что где лежит, кто может вызвать, какие лимиты. Роли участников: owner / member / **viewer**
 (зритель — read-only друг: все GET через `requireTripMember` пускают его,
 любые мутации — через `requireTripEditor` и получают 403; слот free-лимита
 участников зритель не занимает, переключает роль владелец в «О поездке»).
@@ -53,8 +52,8 @@
 |---|---|---|---|---|
 | `trips` | GET, POST | U | — | список своих поездок / создание (проверяет freeTripLimit); POST сразу создаёт `totalDays` дней (до 60, `buildInitialDays`: город = направление, даты от старта, `endDate` = конец последнего дня), иначе быстрое добавление отвечало «Нет дней в маршруте» |
 | `trips/[tripId]` | GET, PATCH, DELETE | M / O | — | карточка поездки; правка — M (частично O), удаление — O |
-| `trips/[tripId]/members/[memberId]` | PATCH | M + (сам или O) | — | правка бюджета/отображаемого имени/эмодзи/цвета участника (роль — через `participants/[id]`) |
-| `trips/join` | GET, POST | U | 30/мин/IP + userRateLimit | превью поездки по инвайт-коду / вступление (проверяет TripBan, freeMemberLimit) |
+| `trips/[tripId]/members/[memberId]` | PATCH | M (себя или владелец) | — | личные настройки участника: бюджет, имя (displayName), emoji, цвет; роль и передача владения — не здесь, а в `participants/[id]` |
+| `trips/join` | GET, POST | 🌐 GET / U POST | 30/мин/IP (+userRateLimit у POST) | превью поездки по инвайт-коду без сессии (титул/обложка/счётчики) / вступление (проверяет TripBan, freeMemberLimit) |
 | `trips/from-template` | POST | U | — | создать поездку из шаблона (`src/lib/trip-templates.ts`) |
 | `trip` | GET, PATCH | M / O | — | сводка поездки: участники, счётчики, дни-мета БЕЗ мест (слим-формат, аудит 2026-09-13); `email` участников — только владельцу; `formerParticipants` — вышедшие/исключённые, чьи id остались в тратах (для расчёта долгов); `settings.budgetSource` — `members` (общий бюджет = сумма личных, зрители не в счёт) или `trip`; при `allowMemberInvites:false` `inviteCode` отдаётся только владельцу; дни с местами — `route`; PATCH — только владелец: `{status}` и/или `{title}` и/или `{allowMemberInvites:boolean}` (переключатель «кто приглашает» из «О поездке») |
 | `trip/share` | GET, POST | GET E, POST O | — | публичная страница поездки `/p/<shareToken>` («живой журнал»: обложка, лучшие кадры, главы-дни, галерея, карта — без денег/чата/дневника). GET — состояние `{enabled, token, allowDownload, expiresAt, expired}`, участникам кроме зрителей: ссылку копируют и отправляют все, кто участвовал; POST (только владелец) `{enabled?, rotate?, allowDownload?, expiresInDays?}` — включить/выключить ссылку, перегенерировать токен (rotate мгновенно закрывает старую), тумблер скачивания фото гостями (независим от enabled), срок действия: `expiresInDays` 1/7/30/90 суток от сейчас или `null` — бессрочно (остальное → 400; токен при истечении не меняется — продлил, и ссылка снова работает). Истёкшая ссылка: страница показывает «срок действия закончился», `photos`/`photos.zip`/`heart` отвечают 404 — единое условие в `src/lib/public-share.ts` (`activeShareWhere`). Страница — RSC `src/app/p/[token]/page.tsx`, ходит в БД по токену без кэша; `generateMetadata` отдаёт og:image с обложкой (превью в мессенджерах); noindex |
@@ -104,12 +103,12 @@
 
 | Роут | Методы | Доступ | Лимит | Что делает |
 |---|---|---|---|---|
-| `geocode` | GET | U | — | Nominatim через `outbound.ts` |
+| `geocode` | GET | U | 60/ч/user | Nominatim через `outbound.ts` |
 | `city-search` | GET | 🌐 | rateLimitMiddleware | автодополнение городов (`src/lib/city-coords.ts` + Nominatim) |
-| `weather` | GET | 🌐 | — | Open-Meteo (публично: панель погоды без сессии не ломает UX) |
+| `weather` | GET | 🌐 | 30/мин/IP | Open-Meteo (публично: панель погоды без сессии не ломает UX) |
 | `currency` | GET | 🌐 | rateLimitMiddleware | курсы open.er-api.com (`src/lib/currencies.ts`); `approxCodes` — коды, чей курс взят из статичной таблицы (формы показывают «курс приблизительный»), `fallback` — API недоступен целиком |
-| `health` | GET | 🌐 | — | `{"status":"ok","db":"up"}` — для мониторинга/uptime |
-| `app-status` | GET | 🌐 | 120/мин/IP | публичный статус техработ/баннера (клиент опрашивает раз в минуту) |
+| `app-status` | GET | 🌐 | 120/мин/IP | публичный статус для клиента: баннер-объявление и заглушка техработ (`src/lib/maintenance.ts`); доступен и в режиме техработ (`isMaintenanceExempt`), клиент опрашивает раз в минуту; админу отдаёт служебные поля |
+| `health` | GET | 🌐 | 60/мин/IP | `{"status":"ok","db":"up"}` — для мониторинга/uptime |
 
 ## ИИ
 
@@ -216,6 +215,7 @@ In-memory, сбрасываются рестартом контейнера (ADR
 - «Сочтёмся»: напоминание о долге — 30 / ч / user и раз в 12 ч на пару; split/join — как join поездок; создание группы 20 / ч / user; траты 120 / мин, переводы 60 / мин, шаблоны 30 / мин, безаккаунтные участники 30 / ч (все — / user)
 - user PATCH — 300 / ч / user; user/password — 10 / ч / user; user/avatar — 10 / ч / user
 - health — 60 / мин / IP (БД-пинг кэшируется на 5 с)
+- app-status — 120 / мин / IP
 - weather — 30 / мин / IP
 - geocode — 60 / ч / user
 - search — 30 / мин / user

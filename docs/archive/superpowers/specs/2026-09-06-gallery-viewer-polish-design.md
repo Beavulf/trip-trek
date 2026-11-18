@@ -1,5 +1,7 @@
 # Gallery Viewer & Filters Polish — Design Spec
 
+> **Исторический документ** (снимок на дату в имени файла): план/спека реализованы, чекбоксы не поддерживаются — не принимай за план. Актуальное поведение — код и [glossary.md](../../glossary.md).
+
 **Date:** 2026-09-06
 **Scope:** Улучшение просмотра фото, сетки и фильтров на вкладке «Галерея».
 **Out of scope:** безопасность, EXIF, realtime (`photo:deleted`), upload, server-side миниатюры — отдельные тикеты из `docs/archive/audit-gallery-galereya.md`.

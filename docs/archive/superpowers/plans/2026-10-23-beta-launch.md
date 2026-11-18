@@ -1,5 +1,7 @@
 # Бета-запуск TripTrek — Implementation Plan
 
+> **Исторический документ** (снимок на дату в имени файла): план/спека реализованы, чекбоксы не поддерживаются — не принимай за план. Актуальное поведение — код и [glossary.md](../../glossary.md).
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Контролируемый публичный доступ в бету: инвайт-коды на регистрацию, страница-презентация `/landing`, метрика и контакт для связи.

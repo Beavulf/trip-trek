@@ -34,7 +34,7 @@ NEXTAUTH_URL=http://localhost:3000
 
 Тестовые аккаунты после сида: `you@` / `leha@` / `den@triptrek.com`, пароль `1234`.
 
-Юнит-тесты: `bun run test` · линтер: `bun run lint`.
+Юнит-тесты: `bun run test` · линтер: `bun run lint` · сверка доков с кодом: `bun run docs:check`.
 
 ## Документация
 

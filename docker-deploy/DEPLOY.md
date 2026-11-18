@@ -32,7 +32,7 @@ rclone config   # создать remote с именем triptrek-backup
 ```bash
 cd docker-deploy
 cp .env.example .env
-# заполнить: NEXTAUTH_SECRET (openssl rand -hex 32), POSTGRES_PASSWORD (openssl rand -hex 16),
+# заполнить: NEXTAUTH_SECRET (openssl rand -base64 32), POSTGRES_PASSWORD (openssl rand -hex 16),
 #            DOMAIN, ACME_EMAIL, NEXTAUTH_URL=https://<домен>, WS_ALLOWED_ORIGINS=https://<домен>,
 #            SMTP_* (для сброса пароля письмом — см. §0 и .env.example), LANDING_REDIRECT (опц.),
 #            (опц.) VAPID_* (npx web-push generate-vapid-keys), OPENAI_API_KEY,
@@ -329,4 +329,4 @@ curl -s https://<домен>/api/health                                # db up/d
   redeploy теряет все загруженные файлы при живых записях в БД; также помнить,
   что Caddy там отсутствует — см. первый пункт про XFF.
 - Docker-образ не содержит локальных артефактов: `.dockerignore` исключает
-  `prisma/db` (реальная dev-БД владельца), `*.db`, `.env*`.
+  `.env`/`.env.local`/`.env*.local` и корневой `db/`.

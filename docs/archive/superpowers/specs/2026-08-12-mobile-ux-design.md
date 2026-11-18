@@ -1,5 +1,7 @@
 # Mobile UX pass B — design (approved)
 
+> **Исторический документ** (снимок на дату в имени файла): план/спека реализованы, чекбоксы не поддерживаются — не принимай за план. Актуальное поведение — код и [glossary.md](../../glossary.md).
+
 **Scope:** Shell-first + Map + Budget. No tab redesign / no bottom-nav rebuild.
 
 ## Done in code (v0.2.3)

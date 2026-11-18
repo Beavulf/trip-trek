@@ -1,4 +1,4 @@
-# Read-only доступ к продy
+# Read-only доступ к проду
 
 Обновлённая версия плана из архивного
 `docs/archive/ai-team-v1/docs/readonly-production-access.md`: рабочий SSH-алиас —

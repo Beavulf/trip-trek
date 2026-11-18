@@ -41,6 +41,7 @@ server.close → `db.$disconnect`.
 | `socket-handlers.ts` | регистрация событий WS; канал **read-only** — клиент только слушает |
 | `rooms.ts` | учёт «какой сокет в какой trip-комнате» (`TripRooms`) |
 | `notification-map.ts` | конфиг WS-событие → emoji+текст для уведомлений |
+| `maintenance-gate.ts` | режим техработ: до остальной обработки отвечает 503-заглушкой (`handleMaintenance`; состояние — `src/lib/maintenance.ts`) |
 | `static-uploads.ts` | раздача `/uploads` с диска напрямую (том не попадает в standalone-сборку Next) |
 
 ## 2. Frontend
@@ -53,7 +54,7 @@ server.close → `db.$disconnect`.
   `budget/`, `map/`, `food/`, `phrases/`, `dashboard/`, `rest-chill/`, `profile/`,
   `quick-add/`, `onboarding/` (туры обучения, макеты, Центр обучения, §7).
 - **Слой данных — хуки** `src/hooks/trip/use-*.ts` поверх TanStack Query:
-  queryKey всегда включает `tripId` (из `use-trip-id`/`getTripId()`), иначе после
+  queryKey всегда включает `tripId` (из `src/hooks/trip/trip-id.ts`, `getTripId()`), иначе после
   переключения поездки показываются чужие данные. Компоненты не делают `fetch` сами.
   После WS-события хуки инвалидируют соответствующий query.
 - `src/hooks/` корневые: `use-auth.ts`, `use-websocket.ts`, `use-notifications.ts`,
@@ -147,7 +148,8 @@ User ──< TripMember >── Trip ──< Day ──< Place ──< Photo
                PushSubscription, UserNotification, PasswordResetToken, Feedback
                (──< FeedbackMessage: переписка обращения),
                AiUsage (учёт вызовов ИИ: feature/keySource/токены, без промптов),
-               Donation (донаты DonationAlerts, ADR-0011)
+               Donation (донаты DonationAlerts, ADR-0011),
+               WebMoneyPayment (заказ WebMoney Merchant → Donation, ADR-0012)
 ```
 
 «Сочтёмся» — отдельный контур данных, не связанный с Trip (ADR-0009):
@@ -190,7 +192,7 @@ User ──< SplitMember >── SplitGroup ──< SplitExpense ──< SplitSh
 - **Аналитика активации** — `Trip.creationSource` (`blank`/`custom`/`template`/`import`;
   `legacy` — поездки до включения трекинга) и nullable-метки первых шагов
   `firstUserPlaceAddedAt`/`firstDayAddedAt` (воронка acquisition, спека
-  `docs/ai-team/specs/2026-11-05-acquisition-funnel.md`). Цель срабатывает ровно один
+  `docs/archive/ai-team-v1/docs/specs/2026-11-05-acquisition-funnel.md`). Цель срабатывает ровно один
   раз на поездку — атомарный claim `updateMany` по `creationSource:"blank"` + флаг `null`
   в транзакции самой мутации (`src/lib/trip-activation.ts`); цель в Метрику шлёт клиент
   из ответа мутации (`src/lib/trip-analytics.ts`). Только для поездок, созданных с нуля.

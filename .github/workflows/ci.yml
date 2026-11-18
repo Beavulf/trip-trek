@@ -19,7 +19,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
+      # Полная история — для docs:check: на PR он сверяет символы диффа с базой ветки
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       # vitest 5 требует Node ^22.12; bun запускает скрипты (vitest, eslint) через node
       - uses: actions/setup-node@v4
@@ -49,3 +52,10 @@ jobs:
 
       - name: Unit tests
         run: bun run test
+
+      # Доки не разошлись с кодом: пути/ссылки/§-разделы, гейт свежести AGENTS.md
+      # и упоминание символов из диффа (роуты/модели/скрипты) в профильных доках
+      - name: Docs check
+        run: bun run docs:check ${BASE_REF:+--base "$BASE_REF"}
+        env:
+          BASE_REF: ${{ github.event.pull_request.base.sha }}

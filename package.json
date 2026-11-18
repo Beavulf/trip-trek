@@ -11,6 +11,7 @@
     "lint": "eslint .",
     "test": "vitest run",
     "test:watch": "vitest",
+    "docs:check": "bun scripts/docs-check.mjs",
     "test:tz": "TZ=America/New_York vitest run src/lib/trip-days.test.ts src/lib/lodging.test.ts && TZ=Asia/Shanghai vitest run src/lib/trip-days.test.ts src/lib/lodging.test.ts && TZ=Pacific/Auckland vitest run src/lib/trip-days.test.ts src/lib/lodging.test.ts",
     "db:up": "docker compose -f docker-compose.dev.yml up -d",
     "db:down": "docker compose -f docker-compose.dev.yml down",
