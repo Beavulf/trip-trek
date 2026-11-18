@@ -1,0 +1,70 @@
+pageType: final
+background:
+  type: image
+  src: media/album-night.png
+  fit: {mode: cover}
+elements:
+  - elementId: shade
+    elementType: shape
+    bounds: [0, 0, 720, 1280]
+    shapeName: rect
+    fill: {type: solid, color: "#11100FB8"}
+  - elementId: logo
+    elementType: image
+    bounds: [300, 90, 120, 120]
+    src: media/logo.png
+    cropShape: {shapeName: roundRect, adjustments: [22000]}
+    shadow: {blur: 16, color: "#00000066", offset: [0, 8]}
+  - elementId: brand
+    elementType: text
+    bounds: [110, 244, 500, 40]
+    content: {fontFamily: MiSans, fontSize: 29, bold: true, color: "$white", align: [center, middle], text: TripTrek, wrap: false}
+  - elementId: title
+    elementType: text
+    bounds: [50, 350, 620, 150]
+    content:
+      style: "$finalTitle"
+      color: "$white"
+      fontSize: 56
+      align: [center, middle]
+      text: |
+        СОБЕРИТЕ
+        ОБЩИЙ АЛЬБОМ
+  - elementId: subtitle
+    elementType: text
+    bounds: [90, 550, 540, 86]
+    content:
+      style: "$body"
+      color: "$white"
+      align: [center, top]
+      text: |
+        Фото всей компании —
+        в одной поездке
+  - elementId: camera-circle
+    elementType: shape
+    bounds: [304, 694, 112, 112]
+    shapeName: ellipse
+    fill: {type: solid, color: "#FFFFFF22"}
+  - elementId: camera-icon
+    elementType: icon
+    bounds: [334, 724, 52, 52]
+    iconName: "fas:camera"
+    fill: {type: solid, color: "#FFB38D"}
+  - elementId: cta-bg
+    elementType: shape
+    bounds: [110, 850, 500, 92]
+    shapeName: roundRect
+    adjustments: [24000]
+    fill: {type: solid, color: "$white"}
+  - elementId: cta
+    elementType: text
+    bounds: [130, 850, 460, 92]
+    content: {style: "$cta", color: "$ink", align: [center, middle], text: "СОЗДАТЬ ПОЕЗДКУ", wrap: false}
+  - elementId: profile-link
+    elementType: text
+    bounds: [110, 976, 500, 36]
+    content: {fontFamily: MiSans, fontSize: 24, color: "$white", align: [center, middle], text: "Ссылка в профиле", wrap: false}
+  - elementId: footer
+    elementType: text
+    bounds: [110, 1140, 500, 26]
+    content: {fontFamily: MiSans, fontSize: 20, color: "#FFFFFFCC", align: [center, middle], text: "Общие кадры. Общая история.", wrap: false}

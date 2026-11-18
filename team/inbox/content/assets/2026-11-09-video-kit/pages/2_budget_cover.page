@@ -1,0 +1,91 @@
+pageType: cover
+background: {type: solid, color: "$dark"}
+elements:
+  - elementId: top-accent
+    elementType: shape
+    bounds: [0, 0, 720, 16]
+    shapeName: rect
+    fill:
+      type: gradient
+      gradientType: linear
+      angle: 0
+      stops:
+        - {position: 0, color: "$primary"}
+        - {position: 1, color: "$accent"}
+  - elementId: logo
+    elementType: image
+    bounds: [58, 60, 54, 54]
+    src: media/logo.png
+    cropShape: {shapeName: roundRect, adjustments: [22000]}
+  - elementId: brand
+    elementType: text
+    bounds: [128, 67, 220, 38]
+    content: {fontFamily: MiSans, fontSize: 27, bold: true, color: "$white", text: TripTrek, wrap: false}
+  - elementId: issue
+    elementType: text
+    bounds: [530, 72, 130, 26]
+    content: {style: "$small", align: [right, middle], text: "02 / 03", wrap: false}
+  - elementId: currency-ghost
+    elementType: text
+    bounds: [500, 128, 150, 180]
+    content: {fontFamily: MiSans, fontSize: 170, bold: true, color: "#2B2521", align: [center, middle], text: "$", wrap: false}
+  - elementId: eyebrow
+    elementType: text
+    bounds: [60, 180, 480, 30]
+    content: {style: "$eyebrow", text: "БЮДЖЕТ ПОЕЗДКИ", wrap: false}
+  - elementId: title
+    elementType: text
+    bounds: [56, 238, 630, 170]
+    content:
+      style: "$coverTitle"
+      color: "$white"
+      fontSize: 72
+      text: |
+        КТО КОМУ
+        ДОЛЖЕН?
+  - elementId: title-mark
+    elementType: shape
+    bounds: [58, 431, 236, 10]
+    shapeName: rect
+    fill: {type: solid, color: "$primary"}
+  - elementId: subtitle
+    elementType: text
+    bounds: [60, 488, 390, 82]
+    content:
+      style: "$body"
+      color: "#D8CFC5"
+      text: |
+        Общие траты без
+        ручного подсчёта
+  - elementId: screenshot
+    elementType: image
+    bounds: [376, 590, 292, 632]
+    src: media/budget.png
+    rotation: -4
+    cropShape: {shapeName: roundRect, adjustments: [9000]}
+    fit: {mode: cover}
+    border: {style: solid, width: 7, color: "#3A302A"}
+    shadow: {blur: 24, color: "#00000088", offset: [0, 12]}
+  - elementId: wallet-icon
+    elementType: icon
+    bounds: [64, 680, 76, 76]
+    iconName: "fas:wallet"
+    fill: {type: solid, color: "$primary"}
+  - elementId: feature-list
+    elementType: text
+    bounds: [60, 810, 270, 150]
+    content:
+      fontFamily: MiSans
+      fontSize: 24
+      bold: true
+      lineHeight: 1.55
+      letterSpacing: 2
+      color: "$white"
+      text: |
+        ТРАТЫ
+        ДОЛИ
+        ПЕРЕВОДЫ
+  - elementId: bottom-note
+    elementType: text
+    bounds: [60, 1120, 260, 60]
+    content: {style: "$small", color: "#D8CFC5", text: "Считайте долги,\nа не спорьте о них"}

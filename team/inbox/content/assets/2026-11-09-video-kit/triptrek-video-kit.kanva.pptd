@@ -1,0 +1,56 @@
+version: v2
+title: TripTrek — обложки и финальные кадры, 9–15 ноября 2026
+size: [720, 1280]
+customFonts:
+  - family: MiSans
+    src: "https://statics.kimi.ai/neo-design-static/p-font/MiSans.ttf"
+theme:
+  colors:
+    primary: "#FF6B2C"
+    accent: "#FF3D7F"
+    ink: "#17130F"
+    paper: "#F5F0E8"
+    dark: "#11100F"
+    white: "#FFFFFF"
+    muted: "#A69E94"
+    pale: "#E9DED1"
+  textStyles:
+    eyebrow:
+      fontFamily: MiSans
+      fontSize: 20
+      bold: true
+      letterSpacing: 3
+      color: "$primary"
+    coverTitle:
+      fontFamily: MiSans
+      fontSize: 76
+      bold: true
+      lineHeight: 0.98
+      color: "$ink"
+    finalTitle:
+      fontFamily: MiSans
+      fontSize: 58
+      bold: true
+      lineHeight: 1.02
+      color: "$ink"
+    body:
+      fontFamily: MiSans
+      fontSize: 27
+      lineHeight: 1.25
+      color: "$ink"
+    small:
+      fontFamily: MiSans
+      fontSize: 20
+      color: "$muted"
+    cta:
+      fontFamily: MiSans
+      fontSize: 26
+      bold: true
+      color: "$white"
+pages:
+  - pages/1_route_cover.page
+  - pages/2_budget_cover.page
+  - pages/3_album_cover.page
+  - pages/4_route_final.page
+  - pages/5_budget_final.page
+  - pages/6_album_final.page

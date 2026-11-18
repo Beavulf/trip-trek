@@ -1,0 +1,72 @@
+pageType: final
+background: {type: solid, color: "$paper"}
+elements:
+  - elementId: accent-rail
+    elementType: shape
+    bounds: [0, 0, 18, 1280]
+    shapeName: rect
+    fill:
+      type: gradient
+      gradientType: linear
+      angle: 90
+      stops:
+        - {position: 0, color: "$primary"}
+        - {position: 1, color: "$accent"}
+  - elementId: logo
+    elementType: image
+    bounds: [300, 90, 120, 120]
+    src: media/logo.png
+    cropShape: {shapeName: roundRect, adjustments: [22000]}
+    shadow: {blur: 16, color: "#FF3D7F33", offset: [0, 8]}
+  - elementId: brand
+    elementType: text
+    bounds: [110, 244, 500, 40]
+    content: {fontFamily: MiSans, fontSize: 29, bold: true, color: "$ink", align: [center, middle], text: TripTrek, wrap: false}
+  - elementId: title
+    elementType: text
+    bounds: [60, 360, 600, 140]
+    content:
+      style: "$finalTitle"
+      align: [center, middle]
+      text: |
+        ОДИН МАРШРУТ
+        НА ВСЕХ
+  - elementId: subtitle
+    elementType: text
+    bounds: [100, 555, 520, 82]
+    content:
+      style: "$body"
+      align: [center, top]
+      text: |
+        Дни, места и карта
+        для всей компании
+  - elementId: route-line
+    elementType: line
+    bounds: [190, 690, 340, 76]
+    viewBox: [340, 76]
+    points: "0,55 90,5 220,70 340,18"
+    curve: smooth
+    border: {style: solid, width: 5, color: "$accent"}
+  - elementId: pin
+    elementType: icon
+    bounds: [514, 682, 44, 44]
+    iconName: "fas:location-dot"
+    fill: {type: solid, color: "$accent"}
+  - elementId: cta-bg
+    elementType: shape
+    bounds: [110, 850, 500, 92]
+    shapeName: roundRect
+    adjustments: [24000]
+    fill: {type: solid, color: "$ink"}
+  - elementId: cta
+    elementType: text
+    bounds: [130, 850, 460, 92]
+    content: {style: "$cta", align: [center, middle], text: "СОЗДАТЬ ПОЕЗДКУ", wrap: false}
+  - elementId: profile-link
+    elementType: text
+    bounds: [110, 976, 500, 36]
+    content: {fontFamily: MiSans, fontSize: 24, color: "$ink", align: [center, middle], text: "Ссылка в профиле", wrap: false}
+  - elementId: footer
+    elementType: text
+    bounds: [110, 1140, 500, 26]
+    content: {style: "$small", align: [center, middle], text: "Планируйте вместе", wrap: false}

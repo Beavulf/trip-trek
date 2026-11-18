@@ -1,0 +1,90 @@
+pageType: cover
+background: {type: solid, color: "$paper"}
+elements:
+  - elementId: accent-rail
+    elementType: shape
+    bounds: [0, 0, 18, 1280]
+    shapeName: rect
+    fill:
+      type: gradient
+      gradientType: linear
+      angle: 90
+      stops:
+        - {position: 0, color: "$primary"}
+        - {position: 1, color: "$accent"}
+  - elementId: logo
+    elementType: image
+    bounds: [58, 58, 54, 54]
+    src: media/logo.png
+    cropShape: {shapeName: roundRect, adjustments: [22000]}
+  - elementId: brand
+    elementType: text
+    bounds: [128, 65, 220, 38]
+    content: {fontFamily: MiSans, fontSize: 27, bold: true, color: "$ink", text: TripTrek, wrap: false}
+  - elementId: issue
+    elementType: text
+    bounds: [530, 70, 130, 26]
+    content: {style: "$small", align: [right, middle], text: "01 / 03", wrap: false}
+  - elementId: eyebrow
+    elementType: text
+    bounds: [60, 176, 480, 30]
+    content: {style: "$eyebrow", text: "ПЛАН ПОЕЗДКИ", wrap: false}
+  - elementId: title
+    elementType: text
+    bounds: [56, 226, 610, 170]
+    content:
+      style: "$coverTitle"
+      text: |
+        МАРШРУТ
+        НА ВСЕХ
+  - elementId: route-line
+    elementType: line
+    bounds: [62, 438, 320, 88]
+    viewBox: [320, 88]
+    points: "0,64 76,4 184,84 320,20"
+    curve: smooth
+    border: {style: solid, width: 5, color: "$accent"}
+  - elementId: route-pin
+    elementType: icon
+    bounds: [366, 433, 48, 48]
+    iconName: "fas:location-dot"
+    fill: {type: solid, color: "$accent"}
+  - elementId: subtitle
+    elementType: text
+    bounds: [60, 550, 285, 82]
+    content:
+      style: "$body"
+      text: |
+        Без поиска
+        по переписке
+  - elementId: screenshot
+    elementType: image
+    bounds: [350, 505, 310, 671]
+    src: media/itinerary.png
+    rotation: 4
+    cropShape: {shapeName: roundRect, adjustments: [9000]}
+    fit: {mode: cover}
+    border: {style: solid, width: 7, color: "$ink"}
+    shadow: {blur: 22, color: "#17130F44", offset: [0, 12]}
+  - elementId: chat-icon-circle
+    elementType: shape
+    bounds: [62, 735, 112, 112]
+    shapeName: ellipse
+    fill: {type: solid, color: "$pale"}
+  - elementId: chat-icon
+    elementType: icon
+    bounds: [91, 766, 54, 54]
+    iconName: "far:comments"
+    fill: {type: solid, color: "$ink"}
+  - elementId: footer
+    elementType: text
+    bounds: [60, 1120, 280, 70]
+    content:
+      fontFamily: MiSans
+      fontSize: 19
+      bold: true
+      letterSpacing: 2
+      color: "$ink"
+      text: |
+        ДНИ · МЕСТА
+        КАРТА · ДРУЗЬЯ

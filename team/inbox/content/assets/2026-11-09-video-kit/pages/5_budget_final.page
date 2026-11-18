@@ -1,0 +1,78 @@
+pageType: final
+background: {type: solid, color: "$dark"}
+elements:
+  - elementId: top-accent
+    elementType: shape
+    bounds: [0, 0, 720, 16]
+    shapeName: rect
+    fill:
+      type: gradient
+      gradientType: linear
+      angle: 0
+      stops:
+        - {position: 0, color: "$primary"}
+        - {position: 1, color: "$accent"}
+  - elementId: logo
+    elementType: image
+    bounds: [300, 90, 120, 120]
+    src: media/logo.png
+    cropShape: {shapeName: roundRect, adjustments: [22000]}
+    shadow: {blur: 16, color: "#FF3D7F44", offset: [0, 8]}
+  - elementId: brand
+    elementType: text
+    bounds: [110, 244, 500, 40]
+    content: {fontFamily: MiSans, fontSize: 29, bold: true, color: "$white", align: [center, middle], text: TripTrek, wrap: false}
+  - elementId: title
+    elementType: text
+    bounds: [60, 350, 600, 150]
+    content:
+      style: "$finalTitle"
+      color: "$white"
+      align: [center, middle]
+      text: |
+        ЗАПИШИТЕ
+        ПЕРВУЮ ТРАТУ
+  - elementId: subtitle
+    elementType: text
+    bounds: [90, 550, 540, 86]
+    content:
+      style: "$body"
+      color: "#D8CFC5"
+      align: [center, top]
+      text: |
+        TripTrek посчитает,
+        кто кому сколько должен
+  - elementId: wallet-circle
+    elementType: shape
+    bounds: [304, 694, 112, 112]
+    shapeName: ellipse
+    fill: {type: solid, color: "#2B2521"}
+  - elementId: wallet-icon
+    elementType: icon
+    bounds: [334, 724, 52, 52]
+    iconName: "fas:wallet"
+    fill: {type: solid, color: "$primary"}
+  - elementId: cta-bg
+    elementType: shape
+    bounds: [110, 850, 500, 92]
+    shapeName: roundRect
+    adjustments: [24000]
+    fill:
+      type: gradient
+      gradientType: linear
+      angle: 0
+      stops:
+        - {position: 0, color: "$primary"}
+        - {position: 1, color: "$accent"}
+  - elementId: cta
+    elementType: text
+    bounds: [130, 850, 460, 92]
+    content: {style: "$cta", align: [center, middle], text: "ОТКРЫТЬ TRIPTREK", wrap: false}
+  - elementId: profile-link
+    elementType: text
+    bounds: [110, 976, 500, 36]
+    content: {fontFamily: MiSans, fontSize: 24, color: "$white", align: [center, middle], text: "Ссылка в профиле", wrap: false}
+  - elementId: footer
+    elementType: text
+    bounds: [110, 1140, 500, 26]
+    content: {style: "$small", align: [center, middle], text: "Деньги без ручных расчётов", wrap: false}

@@ -6,7 +6,8 @@ services:
   pg:
     image: postgres:16-alpine
     container_name: triptrek-pg-dev
-    restart: unless-stopped
+    # Без автозапуска: поднимается только вручную через `npm run db:up`.
+    restart: "no"
     environment:
       - POSTGRES_USER=postgres
       - POSTGRES_PASSWORD=dev

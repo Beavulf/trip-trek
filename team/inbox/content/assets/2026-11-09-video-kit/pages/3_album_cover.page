@@ -1,0 +1,97 @@
+pageType: cover
+background: {type: solid, color: "$dark"}
+elements:
+  - elementId: photo-left
+    elementType: image
+    bounds: [0, 0, 240, 1280]
+    src: media/album-courtyard.png
+    fit: {mode: cover}
+  - elementId: photo-center
+    elementType: image
+    bounds: [240, 0, 240, 1280]
+    src: media/album-temple.png
+    fit: {mode: cover}
+  - elementId: photo-right
+    elementType: image
+    bounds: [480, 0, 240, 1280]
+    src: media/album-night.png
+    fit: {mode: cover}
+  - elementId: shade
+    elementType: shape
+    bounds: [0, 0, 720, 1280]
+    shapeName: rect
+    fill:
+      type: gradient
+      gradientType: linear
+      angle: 90
+      stops:
+        - {position: 0, color: "#11100FCC"}
+        - {position: 0.58, color: "#11100F55"}
+        - {position: 1, color: "#11100FDD"}
+  - elementId: logo
+    elementType: image
+    bounds: [58, 60, 54, 54]
+    src: media/logo.png
+    cropShape: {shapeName: roundRect, adjustments: [22000]}
+  - elementId: brand
+    elementType: text
+    bounds: [128, 67, 220, 38]
+    content: {fontFamily: MiSans, fontSize: 27, bold: true, color: "$white", text: TripTrek, wrap: false}
+  - elementId: issue
+    elementType: text
+    bounds: [530, 72, 130, 26]
+    content: {fontFamily: MiSans, fontSize: 20, color: "#FFFFFFCC", align: [right, middle], text: "03 / 03", wrap: false}
+  - elementId: eyebrow
+    elementType: text
+    bounds: [60, 190, 480, 30]
+    content: {style: "$eyebrow", color: "#FFB38D", text: "ОБЩИЙ АЛЬБОМ", wrap: false}
+  - elementId: title
+    elementType: text
+    bounds: [56, 250, 620, 230]
+    content:
+      style: "$coverTitle"
+      color: "$white"
+      fontSize: 68
+      text: |
+        ВСЕ ФОТО
+        В ОДНОМ
+        АЛЬБОМЕ
+  - elementId: subtitle
+    elementType: text
+    bounds: [60, 525, 440, 82]
+    content:
+      style: "$body"
+      color: "$white"
+      text: |
+        Без сбора по чатам
+        после поездки
+  - elementId: screenshot
+    elementType: image
+    bounds: [474, 680, 180, 390]
+    src: media/overview.png
+    rotation: 5
+    cropShape: {shapeName: roundRect, adjustments: [9000]}
+    fit: {mode: cover}
+    border: {style: solid, width: 5, color: "$white"}
+    shadow: {blur: 20, color: "#00000088", offset: [0, 10]}
+  - elementId: camera-icon
+    elementType: icon
+    bounds: [64, 770, 70, 70]
+    iconName: "fas:camera"
+    fill: {type: solid, color: "#FFB38D"}
+  - elementId: background-note
+    elementType: text
+    bounds: [60, 875, 360, 74]
+    content:
+      fontFamily: MiSans
+      fontSize: 25
+      bold: true
+      lineHeight: 1.25
+      color: "$white"
+      text: |
+        Несколько кадров сразу.
+        Загрузка — в фоне.
+  - elementId: footer
+    elementType: text
+    bounds: [60, 1120, 560, 28]
+    content: {fontFamily: MiSans, fontSize: 19, bold: true, letterSpacing: 2, color: "$white", text: "ПОЕЗДКА · ДРУЗЬЯ · ВОСПОМИНАНИЯ", wrap: false}
